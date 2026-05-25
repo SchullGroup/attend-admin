@@ -1,9 +1,10 @@
 "use client";
-import { CalendarDays, Users, FileText, Vote, TrendingUp, Calendar } from "lucide-react";
+import { CalendarDays, Users, FileText, Vote, TrendingUp, Calendar, Building2 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { StatCard } from "@/components/custom/stat-card";
 import { Card } from "@/components/ui/card";
 import { ModuleBadge } from "@/components/custom/module-badge";
+import { ACTIVITY_LOG } from "@/lib/mock-data";
 import type { EventModule } from "@/lib/mock-data";
 
 const MODULE_CONFIG = {
@@ -12,15 +13,6 @@ const MODULE_CONFIG = {
   HACKATHON: { color: "#7c22c9", bg: "#f8f0ff" },
   GENERAL:   { color: "#1d4ed8", bg: "#eff5ff" },
 };
-
-const ACTIVITY_LOG = [
-  { action: "Event published", user: "Stanley Jacob", event: "Zenith Bank 2026 AGM", time: "2026-05-01T09:00:00Z" },
-  { action: "KYC approved", user: "Stanley Jacob", event: "Ngozi Okafor verification", time: "2026-04-30T14:30:00Z" },
-  { action: "Document uploaded", user: "Stanley Jacob", event: "GTCo EGM Rights Issue Circular", time: "2026-05-15T09:00:00Z" },
-  { action: "Application shortlisted", user: "Stanley Jacob", event: "FinFlow — MeriHack 2026", time: "2026-07-01T11:00:00Z" },
-  { action: "Voting opened", user: "Stanley Jacob", event: "Re-election of Directors", time: "2026-05-21T10:45:00Z" },
-  { action: "Participant registered", user: "System", event: "Kola Adesanya joined platform", time: "2026-05-10T10:00:00Z" },
-];
 
 const KYC_ITEMS = [
   { label: "Full KYC", key: "full", color: "#16a34a" },
@@ -32,13 +24,18 @@ const KYC_ITEMS = [
 const FORMAT_COLORS: Record<string, string> = { virtual: "#2563eb", hybrid: "#9333ea", "in-person": "#1a6b3c" };
 
 export default function AnalyticsPage() {
-  const { events, participants, documents, liveVotes } = useStore();
+  const { events, participants, documents, liveVotes, stakeholders } = useStore();
 
   const totalRSVP = events.reduce((s, e) => s + e.rsvpCount, 0);
   const totalDownloads = documents.reduce((s, d) => s + d.downloadCount, 0);
   const totalVotes = liveVotes.reduce((s, v) => s + v.for + v.against + v.abstain, 0);
 
   const modules: EventModule[] = ["AGM", "LAUNCH", "HACKATHON", "GENERAL"];
+
+  const topStakeholders = [...stakeholders]
+    .sort((a, b) => b.eventsCount - a.eventsCount)
+    .slice(0, 3);
+  const maxEvents = topStakeholders[0]?.eventsCount ?? 1;
 
   return (
     <div>
@@ -85,6 +82,35 @@ export default function AnalyticsPage() {
           accent="#f97316"
         />
       </div>
+
+      {/* Stakeholders card */}
+      <Card className="attend-card p-5 mb-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Building2 className="h-4 w-4 text-[hsl(var(--primary))]" />
+          <div className="attend-section-title">Top Stakeholders by Events</div>
+        </div>
+        <div className="flex flex-col gap-4">
+          {topStakeholders.map((stk) => {
+            const pct = maxEvents > 0 ? Math.round((stk.eventsCount / maxEvents) * 100) : 0;
+            return (
+              <div key={stk.id} className="flex items-center gap-4">
+                <div className="w-36 shrink-0">
+                  <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{stk.name}</p>
+                </div>
+                <div className="flex-1 h-2.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${pct}%`, backgroundColor: "#1a6b3c" }}
+                  />
+                </div>
+                <span className="text-sm font-semibold tabular-nums w-6 text-right text-[hsl(var(--foreground))]">
+                  {stk.eventsCount}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
 
       <div className="grid grid-cols-2 gap-5 mb-5">
         <Card className="attend-card p-5">
@@ -161,9 +187,9 @@ export default function AnalyticsPage() {
           <thead>
             <tr className="attend-table-header">
               <th className="px-5 py-3 text-left">Action</th>
-              <th className="px-5 py-3 text-left">Performed by</th>
-              <th className="px-5 py-3 text-left">Event / Context</th>
-              <th className="px-5 py-3 text-left">Timestamp</th>
+              <th className="px-5 py-3 text-left">By</th>
+              <th className="px-5 py-3 text-left">Context</th>
+              <th className="px-5 py-3 text-left">Time</th>
             </tr>
           </thead>
           <tbody>
@@ -175,8 +201,8 @@ export default function AnalyticsPage() {
                     <span className="text-sm text-[hsl(var(--foreground))]">{log.action}</span>
                   </div>
                 </td>
-                <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{log.user}</td>
-                <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{log.event}</td>
+                <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{log.actor}</td>
+                <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{log.context}</td>
                 <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
                   {new Date(log.time).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })}
                 </td>

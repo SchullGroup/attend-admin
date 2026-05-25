@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Radio, Eye, MapPin, Monitor, Users2 } from "lucide-react";
+import { Radio, Eye, MapPin, Monitor, Users2 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { ModuleBadge } from "@/components/custom/module-badge";
@@ -37,12 +37,7 @@ export default function EventsPage() {
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Events</h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{events.length} total events across all modules</p>
         </div>
-        <Link href="/events/create">
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create Event
-          </Button>
-        </Link>
+        <span className="text-sm text-[hsl(var(--muted-foreground))]">Events are created by enrolled stakeholders</span>
       </div>
 
       <div className="flex items-center gap-1 mb-4 bg-[hsl(var(--muted))] rounded-full p-1 w-fit">
@@ -66,7 +61,7 @@ export default function EventsPage() {
           <thead>
             <tr className="attend-table-header">
               <th className="px-5 py-3 text-left">Event</th>
-              <th className="px-5 py-3 text-left">Organiser</th>
+              <th className="px-5 py-3 text-left">Stakeholder</th>
               <th className="px-5 py-3 text-left">Date</th>
               <th className="px-5 py-3 text-left">Format</th>
               <th className="px-5 py-3 text-left">RSVP</th>
@@ -112,10 +107,12 @@ export default function EventsPage() {
                   <td className="px-5 py-3"><StatusBadge status={event.status} /></td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5">
-                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
-                        <Eye className="h-3 w-3" />
-                        View
-                      </Button>
+                      <Link href={`/events/${event.id}`}>
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                          <Eye className="h-3 w-3" />
+                          View
+                        </Button>
+                      </Link>
                       {event.status === "live" && (
                         <Link href="/events/live">
                           <Button size="sm" className="h-7 text-xs gap-1">

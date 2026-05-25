@@ -64,7 +64,7 @@ export default function KYCQueuePage() {
           >
             {t}
             {t === "Pending" && pending.length > 0 && (
-              <span className="ml-1.5 bg-orange-100 text-orange-700 rounded-full px-1.5 py-0.5 text-[10px] font-bold">{pending.length}</span>
+              <span className="ml-1.5 bg-orange-100 text-orange-700 rounded-full px-1.5 py-0.5 text-xs font-bold">{pending.length}</span>
             )}
           </button>
         ))}

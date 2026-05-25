@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { Search, Shield, Users, ShieldCheck } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -128,7 +129,9 @@ export default function ParticipantsPage() {
                 <td className="px-5 py-3"><StatusBadge status={p.status} /></td>
                 <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{formatDate(p.registeredAt)}</td>
                 <td className="px-5 py-3">
-                  <Button size="sm" variant="outline" className="h-7 text-xs">View</Button>
+                  <Link href={`/participants/${p.id}`}>
+                    <Button size="sm" variant="outline" className="h-7 text-xs">View</Button>
+                  </Link>
                 </td>
               </tr>
             ))}

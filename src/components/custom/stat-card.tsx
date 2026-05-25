@@ -30,12 +30,12 @@ export function StatCard({ title, value, subtitle, icon: Icon, trend, accent }: 
       <div>
         <div className="text-3xl font-bold tabular-nums text-foreground">{value}</div>
         {trend && (
-          <div className={cn("text-[13px] mt-1 font-medium", trend.positive ? "text-green-600" : "text-red-600")}>
+          <div className={cn("text-sm mt-1 font-medium", trend.positive ? "text-green-600" : "text-red-600")}>
             {trend.value}
           </div>
         )}
         {subtitle && !trend && (
-          <div className="text-[13px] mt-1 text-muted-foreground">{subtitle}</div>
+          <div className="text-sm mt-1 text-muted-foreground">{subtitle}</div>
         )}
       </div>
     </Card>

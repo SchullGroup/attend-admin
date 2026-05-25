@@ -23,7 +23,7 @@ export function StatusBadge({ status }: { status: string }) {
   const c = config[status] ?? { label: status, bg: "#f3f4f6", color: "#6b7280" };
   return (
     <span
-      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
+      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-semibold"
       style={{ backgroundColor: c.bg, color: c.color }}
     >
       {c.label}

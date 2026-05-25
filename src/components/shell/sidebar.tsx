@@ -2,9 +2,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, CalendarDays, PlusCircle, Radio, Vote,
+  LayoutDashboard, CalendarDays, Radio, Vote,
   Lightbulb, FileText as FileApp, Star, Users, ShieldCheck,
   FolderOpen, BarChart3, Settings, UserCog, LogOut,
+  Building2, ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
@@ -17,10 +18,9 @@ const SECTIONS = [
     ],
   },
   {
-    label: "Events",
+    label: "Platform Events",
     items: [
       { title: "All Events", icon: CalendarDays, href: "/events" },
-      { title: "Create Event", icon: PlusCircle, href: "/events/create" },
       { title: "Live Control Room", icon: Radio, href: "/events/live" },
       { title: "Vote Results", icon: Vote, href: "/events/votes" },
     ],
@@ -31,6 +31,13 @@ const SECTIONS = [
       { title: "Challenges", icon: Lightbulb, href: "/hackathons" },
       { title: "Applications", icon: FileApp, href: "/hackathons/applications" },
       { title: "Judging", icon: Star, href: "/hackathons/judging" },
+    ],
+  },
+  {
+    label: "Stakeholders",
+    items: [
+      { title: "All Stakeholders", icon: Building2, href: "/stakeholders" },
+      { title: "Pending Enrollments", icon: ClipboardList, href: "/stakeholders/pending" },
     ],
   },
   {
@@ -51,6 +58,21 @@ const SECTIONS = [
   },
 ];
 
+const ALL_HREFS = [
+  ...SECTIONS.flatMap((s) => s.items.map((i) => i.href)),
+  "/stakeholders",
+  "/stakeholders/pending",
+];
+
+function isActive(href: string, pathname: string): boolean {
+  if (href === "/") return pathname === "/";
+  if (pathname !== href && !pathname.startsWith(href + "/")) return false;
+  // Inactive if a more specific nav item also matches
+  return !ALL_HREFS.some(
+    (other) => other !== href && other.startsWith(href + "/") && (pathname === other || pathname.startsWith(other + "/"))
+  );
+}
+
 function getInitials(name: string) {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
 }
@@ -65,7 +87,8 @@ const roleLabel: Record<string, string> = {
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentUser, logout } = useStore();
+  const { currentUser, logout, stakeholders } = useStore();
+  const pendingCount = stakeholders.filter((s) => s.status === "pending").length;
 
   return (
     <aside
@@ -86,7 +109,7 @@ export function Sidebar() {
           </div>
           <div className="flex items-baseline gap-1.5">
             <span className="text-base font-bold text-white tracking-tight">Attend</span>
-            <span className="text-[11px] font-medium" style={{ color: "#4ade80" }}>Admin</span>
+            <span className="text-xs font-medium" style={{ color: "#4ade80" }}>Admin</span>
           </div>
         </div>
       </div>
@@ -96,45 +119,40 @@ export function Sidebar() {
         {SECTIONS.map((section) => (
           <div key={section.label}>
             <p
-              className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest"
+              className="px-3 mb-1 text-xs font-semibold uppercase tracking-widest"
               style={{ color: "rgba(255,255,255,0.28)" }}
             >
               {section.label}
             </p>
             <div className="space-y-0.5">
               {section.items.map((item) => {
-                const isActive =
-                  item.href === "/"
-                    ? pathname === "/"
-                    : pathname === item.href || pathname.startsWith(item.href + "/");
+                const active = isActive(item.href, pathname);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     className={cn(
                       "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors group",
-                      isActive
-                        ? "font-medium"
-                        : "font-normal"
+                      active ? "font-medium" : "font-normal"
                     )}
                     style={{
-                      color: isActive ? "#ffffff" : "rgba(255,255,255,0.5)",
-                      backgroundColor: isActive ? "rgba(255,255,255,0.09)" : "transparent",
+                      color: active ? "#ffffff" : "rgba(255,255,255,0.5)",
+                      backgroundColor: active ? "rgba(255,255,255,0.09)" : "transparent",
                     }}
                     onMouseEnter={(e) => {
-                      if (!isActive) {
+                      if (!active) {
                         (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.05)";
                         (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.8)";
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (!isActive) {
+                      if (!active) {
                         (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
                         (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.5)";
                       }
                     }}
                   >
-                    {isActive && (
+                    {active && (
                       <span
                         className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full"
                         style={{ backgroundColor: "#4ade80" }}
@@ -142,7 +160,7 @@ export function Sidebar() {
                     )}
                     <item.icon
                       className="h-4 w-4 shrink-0"
-                      style={{ color: isActive ? "#4ade80" : "rgba(255,255,255,0.4)" }}
+                      style={{ color: active ? "#4ade80" : "rgba(255,255,255,0.4)" }}
                     />
                     {item.title}
                     {item.href === "/events/live" && (
@@ -150,6 +168,14 @@ export function Sidebar() {
                         className="ml-auto h-2 w-2 rounded-full"
                         style={{ backgroundColor: "#ef4444" }}
                       />
+                    )}
+                    {item.href === "/stakeholders/pending" && pendingCount > 0 && (
+                      <span
+                        className="ml-auto h-4 min-w-4 px-1 rounded-full text-xs font-bold flex items-center justify-center"
+                        style={{ backgroundColor: "#f59e0b", color: "white" }}
+                      >
+                        {pendingCount}
+                      </span>
                     )}
                   </Link>
                 );
@@ -174,7 +200,7 @@ export function Sidebar() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-white truncate">{currentUser.name}</p>
-              <p className="text-[11px] truncate" style={{ color: "rgba(255,255,255,0.4)" }}>
+              <p className="text-xs truncate" style={{ color: "rgba(255,255,255,0.4)" }}>
                 {roleLabel[currentUser.role] ?? currentUser.role}
               </p>
             </div>
