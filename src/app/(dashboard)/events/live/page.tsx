@@ -416,9 +416,9 @@ function WinnerCard({ session, onDeclare }: { session: LiveSession; onDeclare: (
 // ── Stream preview URLs (keyed by session id) ────────────────────────────────
 
 const DEFAULT_STREAM_URLS: Record<string, string> = {
-  live_001: "https://www.youtube.com/embed/9bZkp7q19f0?autoplay=0&controls=1&rel=0&modestbranding=1",
-  live_002: "https://www.youtube.com/embed/M7lc1UVf-VE?autoplay=0&controls=1&rel=0&modestbranding=1",
-  live_003: "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=0&controls=1&rel=0&modestbranding=1",
+  live_001: "https://www.youtube.com/embed/0VBkkEdBOgg?autoplay=0&controls=1&rel=0&modestbranding=1",
+  live_002: "https://www.youtube.com/embed/0VBkkEdBOgg?autoplay=0&controls=1&rel=0&modestbranding=1",
+  live_003: "https://www.youtube.com/embed/0VBkkEdBOgg?autoplay=0&controls=1&rel=0&modestbranding=1",
 };
 
 function parseYouTubeEmbed(url: string): string {
