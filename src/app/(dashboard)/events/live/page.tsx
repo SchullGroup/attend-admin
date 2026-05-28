@@ -1,10 +1,17 @@
 "use client";
+import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/custom/status-badge";
-import { Check, X, Users, Vote, MessageSquare, UserCheck, Clock, Wifi, Radio, Building2 } from "lucide-react";
-import type { LiveSession } from "@/lib/mock-data";
+import { toast } from "sonner";
+import {
+  Check, X, Users, Vote, MessageSquare, UserCheck, Clock,
+  Wifi, Radio, Building2, Tv2, Link2, ListOrdered, BarChart2,
+  Trophy, Package, ChevronRight,
+} from "lucide-react";
+import type { LiveSession, LivePoll } from "@/lib/mock-data";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,6 +35,24 @@ function VoteBar({ label, value, total, color }: { label: string; value: number;
       </div>
       <span className="text-sm font-semibold tabular-nums w-10 text-right">{pct}%</span>
       <span className="text-sm text-[hsl(var(--muted-foreground))] tabular-nums w-20 text-right">{value.toLocaleString()}</span>
+    </div>
+  );
+}
+
+// ── Poll option bar ───────────────────────────────────────────────────────────
+
+function PollOptionBar({ text, votes, total, color }: { text: string; votes: number; total: number; color: string }) {
+  const pct = total > 0 ? Math.round((votes / total) * 100) : 0;
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-[hsl(var(--foreground))] font-medium truncate max-w-[70%]">{text}</span>
+        <span className="text-[hsl(var(--muted-foreground))] tabular-nums font-semibold">{pct}%</span>
+      </div>
+      <div className="h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+      <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">{votes.toLocaleString()} votes</span>
     </div>
   );
 }
@@ -134,10 +159,288 @@ function ResolutionsPanel({ session, onOpen, onClose }: { session: LiveSession; 
   );
 }
 
+// ── Poll Management Panel ─────────────────────────────────────────────────────
+
+function PollManagementPanel({
+  session,
+  onLaunch,
+  onClose,
+}: {
+  session: LiveSession;
+  onLaunch: (pollId: string) => void;
+  onClose: (pollId: string) => void;
+}) {
+  if (session.module === "AGM") return null;
+  if (session.polls.length === 0) return null;
+
+  const statusBadge = (status: LivePoll["status"]) => {
+    if (status === "active") return (
+      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />Active
+      </span>
+    );
+    if (status === "closed") return (
+      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">Closed</span>
+    );
+    return (
+      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Draft</span>
+    );
+  };
+
+  return (
+    <Card className="attend-card overflow-hidden">
+      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+        <BarChart2 className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+        <h2 className="font-semibold text-[hsl(var(--foreground))]">Poll Management</h2>
+        <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">
+          {session.polls.filter((p) => p.status === "active").length} active
+        </span>
+      </div>
+      <div className="divide-y divide-[hsl(var(--border))]">
+        {session.polls.map((poll) => {
+          const total = poll.options.reduce((s, o) => s + o.votes, 0);
+          return (
+            <div key={poll.id} className="px-5 py-4">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    {statusBadge(poll.status)}
+                  </div>
+                  <p className="text-sm font-semibold text-[hsl(var(--foreground))] leading-snug">{poll.question}</p>
+                </div>
+                <div className="shrink-0">
+                  {poll.status === "draft" && (
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs"
+                      style={{ backgroundColor: session.color, color: "white" }}
+                      onClick={() => {
+                        onLaunch(poll.id);
+                        toast.success("Poll launched successfully");
+                      }}
+                    >
+                      Launch Poll
+                    </Button>
+                  )}
+                  {poll.status === "active" && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        onClose(poll.id);
+                        toast.success("Poll closed");
+                      }}
+                    >
+                      Close Poll
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {(poll.status === "active" || poll.status === "closed") && (
+                <div className="bg-[hsl(var(--muted)/0.4)] rounded-xl p-3 flex flex-col gap-3">
+                  {poll.options.map((opt) => (
+                    <PollOptionBar
+                      key={opt.id}
+                      text={opt.text}
+                      votes={opt.votes}
+                      total={total}
+                      color={session.color}
+                    />
+                  ))}
+                  {total > 0 && (
+                    <div className="pt-1 mt-1 border-t border-[hsl(var(--border))] text-xs text-[hsl(var(--muted-foreground))]">
+                      Total responses: <span className="font-semibold text-[hsl(var(--foreground))]">{total.toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {poll.status === "draft" && (
+                <p className="text-xs text-[hsl(var(--muted-foreground))] italic mt-1">Poll not yet launched to attendees.</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+// ── Live Agenda Tracker ───────────────────────────────────────────────────────
+
+function LiveAgendaTracker({ session }: { session: LiveSession }) {
+  if (session.agendaItems.length === 0) return null;
+
+  return (
+    <Card className="attend-card overflow-hidden">
+      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+        <ListOrdered className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+        <h2 className="font-semibold text-[hsl(var(--foreground))]">Live Agenda</h2>
+      </div>
+      <div className="divide-y divide-[hsl(var(--border))]">
+        {session.agendaItems.map((item) => (
+          <div
+            key={item.id}
+            className="px-4 py-3 flex items-center gap-3"
+            style={item.isCurrent ? { backgroundColor: `${session.color}10` } : {}}
+          >
+            <div className="shrink-0">
+              {item.isCurrent ? (
+                <span className="inline-flex items-center gap-1 text-xs font-bold" style={{ color: session.color }}>
+                  <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ backgroundColor: session.color }} />
+                  LIVE
+                </span>
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p
+                className={`text-xs font-medium truncate ${item.isCurrent ? "font-semibold" : "text-[hsl(var(--muted-foreground))]"}`}
+                style={item.isCurrent ? { color: session.color } : {}}
+              >
+                {item.title}
+              </p>
+            </div>
+            <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums shrink-0">{item.durationMinutes}m</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ── Press Kit Release Card ────────────────────────────────────────────────────
+
+function PressKitCard({ session, onRelease }: { session: LiveSession; onRelease: () => void }) {
+  if (session.module !== "LAUNCH") return null;
+  const released = session.pressKitReleased ?? false;
+
+  return (
+    <Card className="attend-card overflow-hidden">
+      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+        <Package className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+        <h2 className="font-semibold text-[hsl(var(--foreground))]">Press Kit Release</h2>
+      </div>
+      <div className="px-5 py-5 flex flex-col gap-4">
+        <div className="flex items-center gap-3">
+          <div
+            className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ backgroundColor: released ? "#16a34a18" : "#ea6c0018" }}
+          >
+            <Package className="h-5 w-5" style={{ color: released ? "#16a34a" : "#ea6c00" }} />
+          </div>
+          <div>
+            <p className="text-sm font-semibold" style={{ color: released ? "#16a34a" : "#ea6c00" }}>
+              {released ? "Released ✓" : "Embargoed — Not Yet Released"}
+            </p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+              {released ? "Press kit has been distributed to media contacts." : "Press kit will be sent to all registered media contacts."}
+            </p>
+          </div>
+        </div>
+        <Button
+          disabled={released}
+          onClick={() => {
+            onRelease();
+            toast.success("Press kit released to media contacts");
+          }}
+          className="w-full text-sm"
+          style={!released ? { backgroundColor: session.color, color: "white" } : {}}
+        >
+          {released ? "Press Kit Released" : "Release Press Kit Now"}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+// ── Winner Announcement Card ──────────────────────────────────────────────────
+
+function WinnerCard({ session, onDeclare }: { session: LiveSession; onDeclare: (team: string) => void }) {
+  const [teamInput, setTeamInput] = useState("");
+  if (session.module !== "HACKATHON") return null;
+
+  const declared = !!session.winnerTeam;
+
+  return (
+    <Card className="attend-card overflow-hidden">
+      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+        <Trophy className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+        <h2 className="font-semibold text-[hsl(var(--foreground))]">Winner Announcement</h2>
+      </div>
+      <div className="px-5 py-5">
+        {declared ? (
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <div className="text-3xl">🏆</div>
+            <p className="text-base font-bold" style={{ color: "#b45309" }}>
+              {session.winnerTeam} declared winner!
+            </p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">Winner has been announced to all attendees.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">Enter the winning team name and declare the winner to all attendees.</p>
+            <Input
+              placeholder="Team Name"
+              value={teamInput}
+              onChange={(e) => setTeamInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && teamInput.trim()) {
+                  onDeclare(teamInput.trim());
+                  toast.success(`${teamInput.trim()} declared as winner!`);
+                }
+              }}
+            />
+            <Button
+              disabled={!teamInput.trim()}
+              onClick={() => {
+                if (teamInput.trim()) {
+                  onDeclare(teamInput.trim());
+                  toast.success(`${teamInput.trim()} declared as winner!`);
+                }
+              }}
+              className="w-full"
+              style={{ backgroundColor: "#7c22c9", color: "white" }}
+            >
+              <Trophy className="h-4 w-4 mr-2" />
+              Declare Winner
+            </Button>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// ── Stream preview URLs (keyed by session id) ────────────────────────────────
+
+const DEFAULT_STREAM_URLS: Record<string, string> = {
+  live_001: "https://www.youtube.com/embed/9bZkp7q19f0?autoplay=0&controls=1&rel=0&modestbranding=1",
+  live_002: "https://www.youtube.com/embed/M7lc1UVf-VE?autoplay=0&controls=1&rel=0&modestbranding=1",
+  live_003: "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=0&controls=1&rel=0&modestbranding=1",
+};
+
+function parseYouTubeEmbed(url: string): string {
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|live\/))([A-Za-z0-9_-]{11})/);
+  if (match) return `https://www.youtube.com/embed/${match[1]}?autoplay=0&controls=1&rel=0&modestbranding=1`;
+  return url;
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function LiveControlPage() {
-  const { liveSessions, selectedLiveSessionId, setSelectedLiveSession, openVoting, closeVoting, approveQA, rejectQA } = useStore();
+  const { liveSessions, selectedLiveSessionId, setSelectedLiveSession, openVoting, closeVoting, approveQA, rejectQA, launchPoll, closePoll, releasePressKit, declareWinner } = useStore();
+  const [streamInputs, setStreamInputs] = useState<Record<string, string>>({});
+  const [streamUrls, setStreamUrls] = useState<Record<string, string>>(DEFAULT_STREAM_URLS);
+
+  function getStreamInput(sessionId: string) {
+    return streamInputs[sessionId] ?? streamUrls[sessionId] ?? "";
+  }
+  function applyStream(sessionId: string) {
+    const raw = streamInputs[sessionId] ?? streamUrls[sessionId] ?? "";
+    setStreamUrls((prev) => ({ ...prev, [sessionId]: parseYouTubeEmbed(raw) }));
+  }
 
   const session = liveSessions.find((s) => s.id === selectedLiveSessionId) ?? liveSessions[0];
   const totalAttendees = liveSessions.reduce((sum, s) => sum + s.attendees, 0);
@@ -227,19 +530,76 @@ export default function LiveControlPage() {
         </div>
       </div>
 
+      {/* ── Stream preview ── */}
+      <Card className="attend-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+          <Tv2 className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+          <h2 className="font-semibold text-[hsl(var(--foreground))]">Stream Preview</h2>
+          <span className="ml-auto text-xs font-semibold px-2.5 py-0.5 rounded-full" style={{ backgroundColor: session.color + "18", color: session.color }}>
+            {session.module}
+          </span>
+        </div>
+        <div className="relative bg-black" style={{ aspectRatio: "16/9" }}>
+          {streamUrls[session.id] ? (
+            <iframe
+              key={streamUrls[session.id]}
+              src={streamUrls[session.id]}
+              className="absolute inset-0 w-full h-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+              <Tv2 className="h-12 w-12 text-gray-600" />
+              <p className="text-sm text-gray-400">No stream configured for this session</p>
+            </div>
+          )}
+        </div>
+        <div className="px-5 py-4 border-t border-[hsl(var(--border))]">
+          <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] mb-2 uppercase tracking-wide">Stream URL</label>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+              <input
+                type="text"
+                value={getStreamInput(session.id)}
+                onChange={(e) => setStreamInputs((prev) => ({ ...prev, [session.id]: e.target.value }))}
+                placeholder="Paste YouTube URL or HLS stream endpoint…"
+                className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+                onKeyDown={(e) => e.key === "Enter" && applyStream(session.id)}
+              />
+            </div>
+            <Button size="sm" onClick={() => applyStream(session.id)} className="px-4 shrink-0">Apply</Button>
+          </div>
+        </div>
+      </Card>
+
       {/* ── Content grid ── */}
       <div className="grid grid-cols-3 gap-5">
 
-        {/* Left: Resolutions */}
-        <div className="col-span-2">
+        {/* Left col: Resolutions + Polls + Press Kit + Winner */}
+        <div className="col-span-2 flex flex-col gap-5">
           <ResolutionsPanel
             session={session}
             onOpen={(resId) => openVoting(session.id, resId)}
             onClose={(resId) => closeVoting(session.id, resId)}
           />
+          <PollManagementPanel
+            session={session}
+            onLaunch={(pollId) => launchPoll(session.id, pollId)}
+            onClose={(pollId) => closePoll(session.id, pollId)}
+          />
+          <PressKitCard
+            session={session}
+            onRelease={() => releasePressKit(session.id)}
+          />
+          <WinnerCard
+            session={session}
+            onDeclare={(team) => declareWinner(session.id, team)}
+          />
         </div>
 
-        {/* Right: Q&A + attendance */}
+        {/* Right: Q&A + Agenda + attendance */}
         <div className="col-span-1 flex flex-col gap-5">
 
           {/* Q&A Queue */}
@@ -285,6 +645,9 @@ export default function LiveControlPage() {
               ))}
             </div>
           </Card>
+
+          {/* Live Agenda Tracker */}
+          <LiveAgendaTracker session={session} />
 
           {/* Attendance log */}
           <Card className="attend-card overflow-hidden">

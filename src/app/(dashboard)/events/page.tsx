@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Radio, Eye, MapPin, Monitor, Users2 } from "lucide-react";
+import { Radio, Eye, MapPin, Monitor, Users2, Search } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ModuleBadge } from "@/components/custom/module-badge";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { Card } from "@/components/ui/card";
@@ -27,8 +28,10 @@ const FORMAT_ICON = {
 export default function EventsPage() {
   const { events } = useStore();
   const [activeTab, setActiveTab] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const filtered = activeTab === "all" ? events : events.filter((e) => e.module === activeTab);
+  const filtered = (activeTab === "all" ? events : events.filter((e) => e.module === activeTab))
+    .filter((e) => !searchQuery.trim() || e.title.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <div>
@@ -38,6 +41,16 @@ export default function EventsPage() {
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{events.length} total events across all modules</p>
         </div>
         <span className="text-sm text-[hsl(var(--muted-foreground))]">Events are created by enrolled stakeholders</span>
+      </div>
+
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+        <Input
+          placeholder="Search events by title…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9 max-w-sm"
+        />
       </div>
 
       <div className="flex items-center gap-1 mb-4 bg-[hsl(var(--muted))] rounded-full p-1 w-fit">

@@ -5,7 +5,7 @@ import {
   LayoutDashboard, CalendarDays, Radio, Vote,
   Lightbulb, FileText as FileApp, Star, Users, ShieldCheck,
   FolderOpen, BarChart3, Settings, UserCog, LogOut,
-  Building2, ClipboardList,
+  Building2, ClipboardList, QrCode,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
@@ -22,6 +22,7 @@ const SECTIONS = [
     items: [
       { title: "All Events", icon: CalendarDays, href: "/events" },
       { title: "Live Control Room", icon: Radio, href: "/events/live" },
+      { title: "QR Check-In", icon: QrCode, href: "/events/qr-checkin" },
       { title: "Vote Results", icon: Vote, href: "/events/votes" },
     ],
   },

@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import { CURRENT_ADMIN, MOCK_EVENTS, MOCK_PARTICIPANTS, MOCK_APPLICATIONS, MOCK_DOCUMENTS, MOCK_LIVE_VOTES, MOCK_LIVE_SESSIONS, MOCK_STAKEHOLDERS, type AdminUser, type AttendEvent, type Participant, type HackathonApplication, type AppDocument, type LiveVote, type LiveSession, type Stakeholder } from "./mock-data";
 
+
 interface AttendAdminStore {
   currentUser: AdminUser | null;
   events: AttendEvent[];
@@ -27,6 +28,10 @@ interface AttendAdminStore {
   deleteDocument: (id: string) => void;
   enrollStakeholder: (id: string) => void;
   suspendStakeholder: (id: string) => void;
+  launchPoll: (sessionId: string, pollId: string) => void;
+  closePoll: (sessionId: string, pollId: string) => void;
+  releasePressKit: (sessionId: string) => void;
+  declareWinner: (sessionId: string, teamName: string) => void;
 }
 
 export const useStore = create<AttendAdminStore>((set) => ({
@@ -87,4 +92,28 @@ export const useStore = create<AttendAdminStore>((set) => ({
   deleteDocument: (id) => set((s) => ({ documents: s.documents.filter((d) => d.id !== id) })),
   enrollStakeholder: (id) => set((s) => ({ stakeholders: s.stakeholders.map((stk) => stk.id === id ? { ...stk, status: "active" as const } : stk) })),
   suspendStakeholder: (id) => set((s) => ({ stakeholders: s.stakeholders.map((stk) => stk.id === id ? { ...stk, status: "suspended" as const } : stk) })),
+  launchPoll: (sessionId, pollId) => set((s) => ({
+    liveSessions: s.liveSessions.map((sess) =>
+      sess.id === sessionId
+        ? { ...sess, polls: sess.polls.map((p) => p.id === pollId ? { ...p, status: "active" as const } : p) }
+        : sess
+    ),
+  })),
+  closePoll: (sessionId, pollId) => set((s) => ({
+    liveSessions: s.liveSessions.map((sess) =>
+      sess.id === sessionId
+        ? { ...sess, polls: sess.polls.map((p) => p.id === pollId ? { ...p, status: "closed" as const } : p) }
+        : sess
+    ),
+  })),
+  releasePressKit: (sessionId) => set((s) => ({
+    liveSessions: s.liveSessions.map((sess) =>
+      sess.id === sessionId ? { ...sess, pressKitReleased: true } : sess
+    ),
+  })),
+  declareWinner: (sessionId, teamName) => set((s) => ({
+    liveSessions: s.liveSessions.map((sess) =>
+      sess.id === sessionId ? { ...sess, winnerTeam: teamName } : sess
+    ),
+  })),
 }));

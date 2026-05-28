@@ -87,6 +87,20 @@ export interface LiveVote {
   status: "pending" | "open" | "closed";
 }
 
+export interface LivePoll {
+  id: string;
+  question: string;
+  options: { id: string; text: string; votes: number }[];
+  status: "draft" | "active" | "closed";
+}
+
+export interface LiveAgendaItem {
+  id: string;
+  title: string;
+  durationMinutes: number;
+  isCurrent: boolean;
+}
+
 export interface LiveQAItem {
   id: string;
   name: string;
@@ -115,6 +129,10 @@ export interface LiveSession {
   elapsedMinutes: number;
   quorumPct: number | null;
   votes: LiveVote[];
+  polls: LivePoll[];
+  agendaItems: LiveAgendaItem[];
+  pressKitReleased?: boolean;
+  winnerTeam?: string;
   qaQueue: LiveQAItem[];
   recentJoins: LiveRecentJoin[];
 }
@@ -254,6 +272,14 @@ export const MOCK_LIVE_SESSIONS: LiveSession[] = [
       { resolutionId: "res_003", title: "Re-election of Directors", for: 2100000, against: 340000, abstain: 95000, status: "open" },
       { resolutionId: "res_004", title: "Appointment of PricewaterhouseCoopers as Auditors", for: 0, against: 0, abstain: 0, status: "pending" },
     ],
+    polls: [],
+    agendaItems: [
+      { id: "agi_1", title: "Call to Order & Opening Remarks", durationMinutes: 10, isCurrent: false },
+      { id: "agi_2", title: "Adoption of Financial Statements", durationMinutes: 20, isCurrent: false },
+      { id: "agi_3", title: "Declaration of Final Dividend", durationMinutes: 15, isCurrent: true },
+      { id: "agi_4", title: "Re-election of Directors", durationMinutes: 25, isCurrent: false },
+      { id: "agi_5", title: "Any Other Business & Close", durationMinutes: 10, isCurrent: false },
+    ],
     qaQueue: [
       { id: "qa_s1_001", name: "Ngozi Okafor", question: "What is the plan for dividend payments in Q3 2026 given the current forex environment?", approved: null, time: "2m ago" },
       { id: "qa_s1_002", name: "Emeka Eze", question: "Can management comment on the NPL ratio improvement mentioned in the annual report?", approved: null, time: "5m ago" },
@@ -281,6 +307,16 @@ export const MOCK_LIVE_SESSIONS: LiveSession[] = [
     elapsedMinutes: 135,
     quorumPct: null,
     votes: [],
+    polls: [
+      { id: "poll_s2_1", question: "How would you rate the quality of today's presentations?", options: [{ id: "o1", text: "Excellent", votes: 89 }, { id: "o2", text: "Good", votes: 120 }, { id: "o3", text: "Fair", votes: 34 }, { id: "o4", text: "Poor", votes: 8 }], status: "closed" },
+      { id: "poll_s2_2", question: "Which regulatory topic should be prioritised next quarter?", options: [{ id: "o1", text: "Open Banking", votes: 0 }, { id: "o2", text: "Digital Assets", votes: 0 }, { id: "o3", text: "SASE Framework", votes: 0 }], status: "draft" },
+    ],
+    agendaItems: [
+      { id: "agi_6", title: "Welcome & Opening", durationMinutes: 15, isCurrent: false },
+      { id: "agi_7", title: "Open Banking Framework Panel", durationMinutes: 45, isCurrent: true },
+      { id: "agi_8", title: "Digital Asset Regulations Update", durationMinutes: 30, isCurrent: false },
+      { id: "agi_9", title: "Networking & Close", durationMinutes: 20, isCurrent: false },
+    ],
     qaQueue: [
       { id: "qa_s2_001", name: "Gbenga Falola", question: "How will the proposed Open Banking framework affect PFI licensing timelines?", approved: null, time: "4m ago" },
       { id: "qa_s2_002", name: "Aisha Musa", question: "Is there a timeline for the SEC digital asset regulations to be gazetted?", approved: true, time: "12m ago" },
@@ -305,6 +341,14 @@ export const MOCK_LIVE_SESSIONS: LiveSession[] = [
     elapsedMinutes: 55,
     quorumPct: null,
     votes: [],
+    polls: [
+      { id: "poll_s3_1", question: "Which sector do you believe Seplat should prioritise for 2027 investment?", options: [{ id: "o1", text: "Upstream E&P", votes: 0 }, { id: "o2", text: "Renewables", votes: 0 }, { id: "o3", text: "Midstream Gas", votes: 0 }], status: "draft" },
+    ],
+    agendaItems: [
+      { id: "agi_10", title: "CEO Keynote", durationMinutes: 20, isCurrent: false },
+      { id: "agi_11", title: "Financial Results Presentation", durationMinutes: 35, isCurrent: true },
+      { id: "agi_12", title: "Q&A Session", durationMinutes: 30, isCurrent: false },
+    ],
     qaQueue: [
       { id: "qa_s3_001", name: "Chiamaka Eze", question: "What is Seplat's hedging strategy for crude oil prices below $70/bbl for the rest of 2026?", approved: null, time: "1m ago" },
       { id: "qa_s3_002", name: "Babatunde Lawal", question: "Can you provide an update on the MPNU acquisition integration timeline and expected synergies?", approved: null, time: "9m ago" },
@@ -315,6 +359,60 @@ export const MOCK_LIVE_SESSIONS: LiveSession[] = [
       { name: "Babatunde Lawal", time: "6m ago", method: "Virtual" },
       { name: "Yetunde Abiodun", time: "10m ago", method: "Virtual" },
       { name: "Sola Akintunde", time: "14m ago", method: "Virtual" },
+    ],
+  },
+  {
+    id: "sess_004",
+    eventId: "evt_005",
+    eventTitle: "MeriHack 2026 — FinTech Innovation Challenge",
+    organiser: "Meristem Securities",
+    module: "HACKATHON",
+    color: "#7c22c9",
+    format: "virtual",
+    attendees: 842,
+    elapsedMinutes: 42,
+    quorumPct: null,
+    votes: [],
+    pressKitReleased: false,
+    winnerTeam: undefined,
+    polls: [{ id: "poll_h1", question: "Which pitch was most innovative?", options: [{ id: "o1", text: "FinFlow", votes: 0 }, { id: "o2", text: "PayStack Mini", votes: 0 }, { id: "o3", text: "CropChain", votes: 0 }], status: "draft" }],
+    agendaItems: [
+      { id: "agi_13", title: "Opening & Briefing", durationMinutes: 15, isCurrent: false },
+      { id: "agi_14", title: "Team Pitches", durationMinutes: 60, isCurrent: true },
+      { id: "agi_15", title: "Judging Deliberation", durationMinutes: 20, isCurrent: false },
+      { id: "agi_16", title: "Winner Announcement", durationMinutes: 10, isCurrent: false },
+    ],
+    qaQueue: [{ id: "qa_h1", name: "Audience Member", question: "What was the biggest technical challenge your team faced?", approved: null, time: "5m ago" }],
+    recentJoins: [
+      { name: "Tolu Adeyemi", time: "just now", method: "Virtual" },
+      { name: "Ngozi Okafor", time: "3m ago", method: "Virtual" },
+    ],
+  },
+  {
+    id: "sess_005",
+    eventId: "evt_004",
+    eventTitle: "MeriSave Product Launch",
+    organiser: "Meristem Wealth Management",
+    module: "LAUNCH",
+    color: "#ea6c00",
+    format: "virtual",
+    attendees: 1843,
+    elapsedMinutes: 18,
+    quorumPct: null,
+    votes: [],
+    pressKitReleased: false,
+    winnerTeam: undefined,
+    polls: [{ id: "poll_l1", question: "How likely are you to open a MeriSave account?", options: [{ id: "o1", text: "Definitely will", votes: 0 }, { id: "o2", text: "Probably will", votes: 0 }, { id: "o3", text: "Not sure", votes: 0 }, { id: "o4", text: "Not interested", votes: 0 }], status: "draft" }],
+    agendaItems: [
+      { id: "agi_17", title: "Welcome & Brand Reveal", durationMinutes: 20, isCurrent: false },
+      { id: "agi_18", title: "CEO Keynote", durationMinutes: 15, isCurrent: true },
+      { id: "agi_19", title: "Product Demo", durationMinutes: 25, isCurrent: false },
+      { id: "agi_20", title: "Q&A Session", durationMinutes: 20, isCurrent: false },
+    ],
+    qaQueue: [{ id: "qa_l1", name: "Press Contact", question: "What interest rate does MeriSave offer?", approved: null, time: "2m ago" }],
+    recentJoins: [
+      { name: "Media Contact", time: "just now", method: "Virtual" },
+      { name: "VIP Guest", time: "1m ago", method: "Virtual" },
     ],
   },
 ];

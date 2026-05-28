@@ -1,5 +1,5 @@
 "use client";
-import { CalendarDays, Users, FileText, Vote, TrendingUp, Calendar, Building2 } from "lucide-react";
+import { CalendarDays, Users, FileText, Vote, TrendingUp, Calendar, Building2, Eye, MessageSquare, Download, BarChart2 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { StatCard } from "@/components/custom/stat-card";
 import { Card } from "@/components/ui/card";
@@ -178,6 +178,83 @@ export default function AnalyticsPage() {
           </div>
         </Card>
       </div>
+
+      {/* ── Engagement Metrics ── */}
+      <Card className="attend-card p-5 mb-5">
+        <div className="flex items-center gap-2 mb-4">
+          <BarChart2 className="h-4 w-4 text-[hsl(var(--primary))]" />
+          <div className="attend-section-title">Engagement Metrics</div>
+        </div>
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          {[
+            { label: "Avg Watch Time", value: "47 min", icon: Eye, accent: "#2563eb", subtitle: "per attendee" },
+            { label: "Poll Response Rate", value: "68%", icon: BarChart2, accent: "#16a34a", subtitle: "of active polls" },
+            { label: "Q&A Participation", value: "12%", icon: MessageSquare, accent: "#9333ea", subtitle: "of attendees" },
+            { label: "Document Downloads", value: "2,341", icon: Download, accent: "#f97316", subtitle: "total downloads" },
+          ].map((stat) => (
+            <StatCard
+              key={stat.label}
+              title={stat.label}
+              value={stat.value}
+              subtitle={stat.subtitle}
+              icon={stat.icon}
+              accent={stat.accent}
+            />
+          ))}
+        </div>
+
+        <div className="attend-section-title mb-3">Per-Event Breakdown</div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="attend-table-header">
+                <th className="px-4 py-3 text-left">Event</th>
+                <th className="px-4 py-3 text-right">RSVPs</th>
+                <th className="px-4 py-3 text-right">Attended</th>
+                <th className="px-4 py-3 text-right">Attendance Rate</th>
+                <th className="px-4 py-3 text-right">Avg Watch</th>
+                <th className="px-4 py-3 text-right">Poll Responses</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { event: events.find((e) => e.id === "evt_001"), attended: 1247, avgWatch: "83 min", pollResponses: 0 },
+                { event: events.find((e) => e.id === "evt_006"), attended: 289, avgWatch: "135 min", pollResponses: 251 },
+                { event: events.find((e) => e.id === "evt_018"), attended: 1042, avgWatch: "55 min", pollResponses: 0 },
+                { event: events.find((e) => e.id === "evt_004"), attended: 1843, avgWatch: "18 min", pollResponses: 0 },
+              ].map(({ event, attended, avgWatch, pollResponses }) => {
+                if (!event) return null;
+                const rate = event.rsvpCount > 0 ? Math.round((attended / event.rsvpCount) * 100) : 0;
+                return (
+                  <tr key={event.id} className="attend-table-row">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: event.color }} />
+                        <span className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[240px] truncate">{event.title}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-right tabular-nums text-[hsl(var(--muted-foreground))]">{event.rsvpCount.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-sm text-right tabular-nums font-medium">{attended.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span
+                        className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                        style={{
+                          backgroundColor: rate >= 80 ? "#16a34a18" : rate >= 50 ? "#2563eb18" : "#f9731618",
+                          color: rate >= 80 ? "#16a34a" : rate >= 50 ? "#2563eb" : "#f97316",
+                        }}
+                      >
+                        {rate}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-right tabular-nums text-[hsl(var(--muted-foreground))]">{avgWatch}</td>
+                    <td className="px-4 py-3 text-sm text-right tabular-nums text-[hsl(var(--muted-foreground))]">{pollResponses.toLocaleString()}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       <Card className="attend-card overflow-hidden">
         <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
