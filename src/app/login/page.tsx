@@ -5,12 +5,14 @@ import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, seedStore } = useStore();
   const [email, setEmail] = useState("stanley.jacob@meristem.com");
   const [password, setPassword] = useState("password");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   function handleSubmit(e: React.FormEvent) {
@@ -34,7 +36,7 @@ export default function LoginPage() {
 
           <div className="max-w-sm">
             <h1 className="text-3xl font-bold text-[hsl(var(--foreground))] mb-2">Admin Portal</h1>
-            <p className="text-[hsl(var(--muted-foreground))] mb-8">Sign in to manage the Attend enterprise event platform.</p>
+            <p className="text-[hsl(var(--muted-foreground))] mb-8">Sign in to access the Enterprise Events Management Platform.</p>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div>
@@ -50,14 +52,25 @@ export default function LoginPage() {
               </div>
               <div>
                 <Label htmlFor="password" className="mb-2 block">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pr-10"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -74,7 +87,7 @@ export default function LoginPage() {
         </div>
 
         <div className="text-xs text-[hsl(var(--muted-foreground))]">
-          Powered by <span className="font-semibold text-[hsl(var(--foreground))]">Meristem Group</span> · Attend v1.0
+          Attend v1.0 · Enterprise Events Management Platform
         </div>
       </div>
 
@@ -92,7 +105,7 @@ export default function LoginPage() {
             <span className="text-2xl font-bold text-white">A</span>
           </div>
           <h2 className="text-3xl font-bold text-white mb-3 leading-tight">Enterprise Event Management Platform</h2>
-          <p className="text-green-200 text-sm mb-8">Powering AGMs, product launches, hackathons, and enterprise events for Nigeria's capital markets.</p>
+          <p className="text-green-200 text-sm mb-8">Powering AGMs, product launches, innovation challenges, and enterprise events for Nigeria's capital markets.</p>
 
           <div className="grid grid-cols-2 gap-3">
             {[

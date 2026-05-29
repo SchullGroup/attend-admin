@@ -44,7 +44,7 @@ const SECTIONS = [
   {
     label: "People",
     items: [
-      { title: "All Participants", icon: Users, href: "/participants" },
+      { title: "All Users", icon: Users, href: "/participants" },
       { title: "KYC Queue", icon: ShieldCheck, href: "/participants/kyc" },
     ],
   },
