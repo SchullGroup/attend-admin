@@ -104,13 +104,13 @@ export function Sidebar() {
         <div className="flex items-center gap-2">
           <div
             className="h-7 w-7 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: "#1a6b3c" }}
+            style={{ backgroundColor: "#111827" }}
           >
             <span className="text-white text-xs font-bold">A</span>
           </div>
           <div className="flex items-baseline gap-1.5">
             <span className="text-base font-bold text-white tracking-tight">Attend</span>
-            <span className="text-xs font-medium" style={{ color: "#4ade80" }}>Admin</span>
+            <span className="text-xs font-medium" style={{ color: "#9ca3af" }}>Admin</span>
           </div>
         </div>
       </div>
@@ -156,12 +156,12 @@ export function Sidebar() {
                     {active && (
                       <span
                         className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full"
-                        style={{ backgroundColor: "#4ade80" }}
+                        style={{ backgroundColor: "#ffffff" }}
                       />
                     )}
                     <item.icon
                       className="h-4 w-4 shrink-0"
-                      style={{ color: active ? "#4ade80" : "rgba(255,255,255,0.4)" }}
+                      style={{ color: active ? "#ffffff" : "rgba(255,255,255,0.4)" }}
                     />
                     {item.title}
                     {item.href === "/events/live" && (
@@ -195,7 +195,7 @@ export function Sidebar() {
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
             <div
               className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-              style={{ backgroundColor: "rgba(26,107,60,0.35)", color: "#4ade80" }}
+              style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "#ffffff" }}
             >
               {getInitials(currentUser.name)}
             </div>

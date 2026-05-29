@@ -30,8 +30,8 @@ export default function LoginPage() {
       <div className="w-1/2 flex flex-col justify-between p-12">
         <div>
           <div className="flex items-baseline gap-1.5 mb-12">
-            <span className="text-2xl font-bold text-[#1a6b3c] tracking-tight">Attend</span>
-            <span className="text-sm text-[hsl(var(--muted-foreground))] font-medium">by Meristem</span>
+            <span className="text-2xl font-bold text-[#111827] tracking-tight">Attend</span>
+            <span className="text-xs font-semibold px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(17,24,39,0.08)", color: "#374151" }}>Admin</span>
           </div>
 
           <div className="max-w-sm">
@@ -91,7 +91,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <div className="w-1/2 relative overflow-hidden flex flex-col items-center justify-center" style={{ backgroundColor: "#1a6b3c" }}>
+      <div className="w-1/2 relative overflow-hidden flex flex-col items-center justify-center" style={{ backgroundColor: "#111827" }}>
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute -top-20 -right-20 h-80 w-80 rounded-full bg-white/5" />
           <div className="absolute top-1/4 -left-20 h-64 w-64 rounded-full bg-white/5" />
@@ -105,7 +105,7 @@ export default function LoginPage() {
             <span className="text-2xl font-bold text-white">A</span>
           </div>
           <h2 className="text-3xl font-bold text-white mb-3 leading-tight">Enterprise Event Management Platform</h2>
-          <p className="text-green-200 text-sm mb-8">Powering AGMs, product launches, innovation challenges, and enterprise events for Nigeria's capital markets.</p>
+          <p className="text-slate-300 text-sm mb-8">Powering AGMs, product launches, innovation challenges, and enterprise events for Nigeria's capital markets.</p>
 
           <div className="grid grid-cols-2 gap-3">
             {[
@@ -116,7 +116,7 @@ export default function LoginPage() {
             ].map((pill) => (
               <div key={pill.label} className="rounded-xl bg-white/10 border border-white/15 p-3 text-left">
                 <div className="text-sm font-semibold text-white">{pill.label}</div>
-                <div className="text-xs text-green-200 mt-0.5">{pill.desc}</div>
+                <div className="text-xs text-slate-300 mt-0.5">{pill.desc}</div>
               </div>
             ))}
           </div>
