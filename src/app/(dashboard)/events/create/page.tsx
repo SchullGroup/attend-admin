@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 const MODULES = [
   { id: "AGM", label: "AGM", desc: "Annual General Meeting", icon: Vote, color: "#1a6b3c", bg: "#edf7f2" },
   { id: "LAUNCH", label: "Launch", desc: "Product Launch Event", icon: Rocket, color: "#ea6c00", bg: "#fff4eb" },
-  { id: "HACKATHON", label: "Hackathon", desc: "Innovation Challenge", icon: Lightbulb, color: "#7c22c9", bg: "#f8f0ff" },
+  { id: "HACKATHON", label: "Innovation Challenge", desc: "Tech challenge or competition", icon: Lightbulb, color: "#7c22c9", bg: "#f8f0ff" },
   { id: "GENERAL", label: "General", desc: "General Event", icon: CalendarDays, color: "#1d4ed8", bg: "#eff5ff" },
 ];
 

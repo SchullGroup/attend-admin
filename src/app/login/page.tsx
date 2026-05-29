@@ -98,7 +98,7 @@ export default function LoginPage() {
             {[
               { label: "Virtual AGMs", desc: "Secure shareholder voting" },
               { label: "Live Events", desc: "Real-time attendance & Q&A" },
-              { label: "Hackathons", desc: "Manage innovation challenges" },
+              { label: "Innovation Challenges", desc: "Manage innovation challenges" },
               { label: "Analytics", desc: "Insights & compliance reports" },
             ].map((pill) => (
               <div key={pill.label} className="rounded-xl bg-white/10 border border-white/15 p-3 text-left">

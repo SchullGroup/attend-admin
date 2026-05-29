@@ -27,7 +27,7 @@ const SECTIONS = [
     ],
   },
   {
-    label: "Hackathons",
+    label: "Innovation Challenges",
     items: [
       { title: "Challenges", icon: Lightbulb, href: "/hackathons" },
       { title: "Applications", icon: FileApp, href: "/hackathons/applications" },

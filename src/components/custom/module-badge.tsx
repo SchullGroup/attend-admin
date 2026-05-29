@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 const config = {
   AGM:       { label: "AGM",       bg: "#edf7f2", color: "#1a6b3c" },
   LAUNCH:    { label: "Launch",    bg: "#fff4eb", color: "#ea6c00" },
-  HACKATHON: { label: "Hackathon", bg: "#f8f0ff", color: "#7c22c9" },
+  HACKATHON: { label: "Innovation Challenge", bg: "#f8f0ff", color: "#7c22c9" },
   GENERAL:   { label: "General",   bg: "#eff5ff", color: "#1d4ed8" },
 };
 

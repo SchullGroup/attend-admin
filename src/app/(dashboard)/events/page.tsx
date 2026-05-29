@@ -15,7 +15,7 @@ const TABS: { label: string; value: string }[] = [
   { label: "All", value: "all" },
   { label: "AGM", value: "AGM" },
   { label: "Launch", value: "LAUNCH" },
-  { label: "Hackathon", value: "HACKATHON" },
+  { label: "Innovation Challenge", value: "HACKATHON" },
   { label: "General", value: "GENERAL" },
 ];
 
