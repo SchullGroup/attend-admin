@@ -29,8 +29,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex">
       <div className="w-1/2 flex flex-col justify-between p-12">
         <div>
-          <div className="flex items-baseline gap-1.5 mb-12">
-            <span className="text-2xl font-bold text-[#111827] tracking-tight">Attend</span>
+          <div className="flex items-center gap-2 mb-12">
+            <img src="/attend-logo.png" alt="Attend" style={{ height: 32 }} />
             <span className="text-xs font-semibold px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(17,24,39,0.08)", color: "#374151" }}>Admin</span>
           </div>
 
@@ -102,7 +102,7 @@ export default function LoginPage() {
 
         <div className="relative z-10 px-12 text-center max-w-md">
           <div className="h-16 w-16 rounded-2xl bg-white/15 flex items-center justify-center mx-auto mb-6">
-            <span className="text-2xl font-bold text-white">A</span>
+            <img src="/attend-logo.png" alt="Attend" style={{ height: 28, filter: "brightness(0) invert(1)" }} />
           </div>
           <h2 className="text-3xl font-bold text-white mb-3 leading-tight">Enterprise Event Management Platform</h2>
           <p className="text-slate-300 text-sm mb-8">Powering AGMs, product launches, innovation challenges, and enterprise events for Nigeria's capital markets.</p>

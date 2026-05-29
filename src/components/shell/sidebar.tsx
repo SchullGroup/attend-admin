@@ -102,16 +102,8 @@ export function Sidebar() {
         style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
       >
         <div className="flex items-center gap-2">
-          <div
-            className="h-7 w-7 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: "#111827" }}
-          >
-            <span className="text-white text-xs font-bold">A</span>
-          </div>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-base font-bold text-white tracking-tight">Attend</span>
-            <span className="text-xs font-medium" style={{ color: "#9ca3af" }}>Admin</span>
-          </div>
+          <img src="/attend-logo.png" alt="Attend" style={{ height: 18, filter: "brightness(0) invert(1)" }} />
+          <span className="text-xs font-medium" style={{ color: "#9ca3af" }}>Admin</span>
         </div>
       </div>
 
