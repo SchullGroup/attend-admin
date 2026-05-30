@@ -143,7 +143,7 @@ export default function StakeholderDetailPage({ params }: { params: Promise<{ id
           {/* Summary stats */}
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: "Events", value: orgEvents.length, color: "#1a6b3c" },
+              { label: "Events", value: orgEvents.length, color: "#374151" },
               { label: "Documents", value: orgDocs.length, color: "#2563eb" },
             ].map(({ label, value, color }) => (
               <Card key={label} className="attend-card p-4 flex flex-col">

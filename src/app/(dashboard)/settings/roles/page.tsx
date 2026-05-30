@@ -21,8 +21,8 @@ const ROLES = [
     name: "Super Admin",
     desc: "Full platform access including settings, user management, and all modules",
     permissions: ["Events", "Participants", "KYC", "Documents", "Analytics", "Settings", "Roles"],
-    color: "#1a6b3c",
-    bg: "#edf7f2",
+    color: "#374151",
+    bg: "#f3f4f6",
     icon: Shield,
   },
   {

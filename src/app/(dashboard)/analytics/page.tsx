@@ -8,7 +8,7 @@ import { ACTIVITY_LOG } from "@/lib/mock-data";
 import type { EventModule } from "@/lib/mock-data";
 
 const MODULE_CONFIG = {
-  AGM:       { color: "#1a6b3c", bg: "#edf7f2" },
+  AGM:       { color: "#374151", bg: "#f3f4f6" },
   LAUNCH:    { color: "#ea6c00", bg: "#fff4eb" },
   HACKATHON: { color: "#7c22c9", bg: "#f8f0ff" },
   GENERAL:   { color: "#1d4ed8", bg: "#eff5ff" },
@@ -21,7 +21,7 @@ const KYC_ITEMS = [
   { label: "No KYC", key: "none", color: "#9ca3af" },
 ];
 
-const FORMAT_COLORS: Record<string, string> = { virtual: "#2563eb", hybrid: "#9333ea", "in-person": "#1a6b3c" };
+const FORMAT_COLORS: Record<string, string> = { virtual: "#2563eb", hybrid: "#9333ea", "in-person": "#374151" };
 
 export default function AnalyticsPage() {
   const { events, participants, documents, liveVotes, stakeholders } = useStore();
@@ -64,7 +64,7 @@ export default function AnalyticsPage() {
           value={events.length}
           subtitle="All time"
           icon={CalendarDays}
-          accent="#1a6b3c"
+          accent="#374151"
         />
         <StatCard
           title="Docs Distributed"
@@ -100,7 +100,7 @@ export default function AnalyticsPage() {
                 <div className="flex-1 h-2.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
                   <div
                     className="h-full rounded-full"
-                    style={{ width: `${pct}%`, backgroundColor: "#1a6b3c" }}
+                    style={{ width: `${pct}%`, backgroundColor: "#374151" }}
                   />
                 </div>
                 <span className="text-sm font-semibold tabular-nums w-6 text-right text-[hsl(var(--foreground))]">

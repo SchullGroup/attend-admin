@@ -55,7 +55,7 @@ export default function VoteResultsPage() {
       {/* Summary strip */}
       <div className="grid grid-cols-4 divide-x divide-[hsl(var(--border))] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden mb-6">
         {[
-          { label: "Resolutions", value: totalResolutions, icon: Vote, color: "#1a6b3c" },
+          { label: "Resolutions", value: totalResolutions, icon: Vote, color: "#374151" },
           { label: "Voting Open", value: openCount, icon: Play, color: "#2563eb" },
           { label: "Closed", value: closedCount, icon: Square, color: "#6b7280" },
           { label: "Total Votes Cast", value: totalVotes.toLocaleString(), icon: CheckCircle2, color: "#16a34a" },

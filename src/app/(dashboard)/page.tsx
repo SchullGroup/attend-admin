@@ -110,7 +110,7 @@ export default function DashboardPage() {
       {/* ── Stats strip (single card, 4 inline stats) ── */}
       <div className="grid grid-cols-4 divide-x divide-[hsl(var(--border))] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
         {[
-          { label: "Enrolled Stakeholders", value: activeStakeholders.length, sub: "Active organisations", icon: Building2, color: "#1a6b3c" },
+          { label: "Enrolled Stakeholders", value: activeStakeholders.length, sub: "Active organisations", icon: Building2, color: "#374151" },
           { label: "Total Events", value: events.length, sub: "Across all stakeholders", icon: CalendarDays, color: "#2563eb" },
           { label: "Live Now", value: liveEvents.length, sub: liveEvents.length > 0 ? `${liveAttendees.toLocaleString()} online` : "No active sessions", icon: Radio, color: liveEvents.length > 0 ? "#dc2626" : "#9ca3af" },
           { label: "Pending KYC", value: pendingKYC, sub: "Awaiting verification", icon: ShieldAlert, color: pendingKYC > 0 ? "#f97316" : "#9ca3af" },
@@ -169,7 +169,7 @@ export default function DashboardPage() {
                 <div key={stk.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.3)] transition-colors">
                   <div
                     className="h-7 w-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
-                    style={{ backgroundColor: "#1a6b3c18", color: "#1a6b3c" }}
+                    style={{ backgroundColor: "rgba(55,65,81,0.08)", color: "#374151" }}
                   >
                     <Building2 className="h-3.5 w-3.5" />
                   </div>
