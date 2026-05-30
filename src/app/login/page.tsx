@@ -5,7 +5,14 @@ import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, ShieldCheck, BarChart3, Radio, Vote } from "lucide-react";
+
+const FEATURES = [
+  { icon: ShieldCheck, label: "KYC & Compliance", desc: "Identity verification & audit trails" },
+  { icon: Radio,       label: "Live Control Room", desc: "Real-time event management" },
+  { icon: Vote,        label: "AGM Voting",         desc: "Binding electronic shareholder votes" },
+  { icon: BarChart3,   label: "Analytics",           desc: "Insights across all platform events" },
+];
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,27 +27,39 @@ export default function LoginPage() {
     setLoading(true);
     seedStore();
     login(email);
-    setTimeout(() => {
-      router.push("/");
-    }, 400);
+    setTimeout(() => router.push("/"), 400);
   }
 
   return (
-    <div className="min-h-screen flex">
-      <div className="w-1/2 flex flex-col justify-between p-12">
-        <div>
-          <div className="flex items-center gap-2 mb-12">
-            <img src="/attend-logo.png" alt="Attend" style={{ height: 32 }} />
-            <span className="text-xs font-semibold px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(17,24,39,0.08)", color: "#374151" }}>Admin</span>
-          </div>
+    <div className="min-h-screen flex bg-white">
+      {/* ── Left panel ── */}
+      <div className="w-full md:w-[52%] flex flex-col min-h-screen" style={{ borderRight: "1px solid #f1f5f9" }}>
+        {/* Top logo bar */}
+        <div className="flex items-center gap-2 px-10 pt-10 pb-0">
+          <img src="/attend-logo.png" alt="Attend" style={{ height: 40 }} />
+          <span
+            className="text-xs font-semibold px-2 py-0.5 rounded-md"
+            style={{ backgroundColor: "rgba(17,24,39,0.07)", color: "#6b7280" }}
+          >
+            Admin
+          </span>
+        </div>
 
-          <div className="max-w-sm">
-            <h1 className="text-3xl font-bold text-[hsl(var(--foreground))] mb-2">Admin Portal</h1>
-            <p className="text-[hsl(var(--muted-foreground))] mb-8">Sign in to access the Enterprise Events Management Platform.</p>
+        {/* Centred form */}
+        <div className="flex-1 flex items-center justify-center px-10">
+          <div className="w-full max-w-[380px]">
+            <h1 className="text-[2rem] font-bold tracking-tight mb-1" style={{ color: "#111827" }}>
+              Welcome back
+            </h1>
+            <p className="text-sm mb-8" style={{ color: "#9ca3af" }}>
+              Sign in to access the Attend Admin Portal.
+            </p>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <div>
-                <Label htmlFor="email" className="mb-2 block">Email address</Label>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="email" className="text-sm font-medium" style={{ color: "#374151" }}>
+                  Email address
+                </Label>
                 <Input
                   id="email"
                   type="email"
@@ -48,10 +67,23 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  className="h-11"
                 />
               </div>
-              <div>
-                <Label htmlFor="password" className="mb-2 block">Password</Label>
+
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password" className="text-sm font-medium" style={{ color: "#374151" }}>
+                    Password
+                  </Label>
+                  <button
+                    type="button"
+                    className="text-xs hover:underline"
+                    style={{ color: "#6b7280" }}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
                 <div className="relative">
                   <Input
                     id="password"
@@ -59,64 +91,91 @@ export default function LoginPage() {
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pr-10"
+                    className="h-11 pr-10"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
+                    style={{ color: "#9ca3af" }}
                     tabIndex={-1}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="rounded" defaultChecked />
-                  <span className="text-[hsl(var(--muted-foreground))]">Remember me</span>
+
+              <div className="flex items-center gap-2 text-sm">
+                <input type="checkbox" id="remember" className="rounded" defaultChecked />
+                <label htmlFor="remember" className="cursor-pointer" style={{ color: "#6b7280" }}>
+                  Keep me signed in
                 </label>
-                <button type="button" className="text-[hsl(var(--primary))] hover:underline">Forgot password?</button>
               </div>
-              <Button type="submit" className="w-full h-11 text-base mt-2" disabled={loading}>
-                {loading ? "Signing in..." : "Sign In"}
+
+              <Button
+                type="submit"
+                className="w-full h-11 text-sm font-semibold mt-1"
+                disabled={loading}
+                style={{ backgroundColor: "#111827" }}
+              >
+                {loading ? "Signing in…" : "Sign In"}
               </Button>
             </form>
           </div>
         </div>
 
-        <div className="text-xs text-[hsl(var(--muted-foreground))]">
+        {/* Footer */}
+        <div className="px-10 pb-8 text-xs" style={{ color: "#d1d5db" }}>
           Attend v1.0 · Enterprise Events Management Platform
         </div>
       </div>
 
-      <div className="w-1/2 relative overflow-hidden flex flex-col items-center justify-center" style={{ backgroundColor: "#111827" }}>
+      {/* ── Right panel ── */}
+      <div
+        className="hidden md:flex w-[48%] relative overflow-hidden flex-col items-center justify-center"
+        style={{ backgroundColor: "#111827" }}
+      >
+        {/* Decorative rings */}
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute -top-20 -right-20 h-80 w-80 rounded-full bg-white/5" />
-          <div className="absolute top-1/4 -left-20 h-64 w-64 rounded-full bg-white/5" />
-          <div className="absolute bottom-10 right-1/4 h-48 w-48 rounded-full bg-white/8" />
-          <div className="absolute -bottom-10 -left-10 h-72 w-72 rounded-full bg-white/5" />
-          <div className="absolute top-1/2 right-10 h-32 w-32 rounded-full bg-white/6" />
+          <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full border border-white/5" />
+          <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full border border-white/5" />
+          <div className="absolute bottom-0 -left-20 h-80 w-80 rounded-full border border-white/5" />
+          <div className="absolute top-1/2 right-12 h-40 w-40 rounded-full bg-white/[0.03]" />
         </div>
 
-        <div className="relative z-10 px-12 text-center max-w-md">
-          <div className="h-16 w-16 rounded-2xl bg-white/15 flex items-center justify-center mx-auto mb-6">
-            <img src="/attend-logo.png" alt="Attend" style={{ height: 28, filter: "brightness(0) invert(1)" }} />
+        <div className="relative z-10 px-14 max-w-md w-full">
+          {/* Logo lockup */}
+          <div className="mb-10">
+            <img
+              src="/attend-logo.png"
+              alt="Attend"
+              style={{ height: 36, filter: "brightness(0) invert(1)", opacity: 0.9 }}
+            />
           </div>
-          <h2 className="text-3xl font-bold text-white mb-3 leading-tight">Enterprise Event Management Platform</h2>
-          <p className="text-slate-300 text-sm mb-8">Powering AGMs, product launches, innovation challenges, and enterprise events for Nigeria's capital markets.</p>
+
+          <h2 className="text-2xl font-bold text-white mb-3 leading-snug">
+            The platform powering Nigeria&apos;s capital market events
+          </h2>
+          <p className="text-sm mb-10" style={{ color: "#94a3b8" }}>
+            AGMs, innovation challenges, product launches — managed end-to-end from a single admin console.
+          </p>
 
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: "Virtual AGMs", desc: "Secure shareholder voting" },
-              { label: "Live Events", desc: "Real-time attendance & Q&A" },
-              { label: "Innovation Challenges", desc: "Manage innovation challenges" },
-              { label: "Analytics", desc: "Insights & compliance reports" },
-            ].map((pill) => (
-              <div key={pill.label} className="rounded-xl bg-white/10 border border-white/15 p-3 text-left">
-                <div className="text-sm font-semibold text-white">{pill.label}</div>
-                <div className="text-xs text-slate-300 mt-0.5">{pill.desc}</div>
+            {FEATURES.map((f) => (
+              <div
+                key={f.label}
+                className="rounded-xl p-4 text-left"
+                style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)" }}
+              >
+                <div
+                  className="h-8 w-8 rounded-lg flex items-center justify-center mb-3"
+                  style={{ backgroundColor: "rgba(255,255,255,0.1)" }}
+                >
+                  <f.icon className="h-4 w-4 text-white" />
+                </div>
+                <div className="text-sm font-semibold text-white mb-0.5">{f.label}</div>
+                <div className="text-xs" style={{ color: "#64748b" }}>{f.desc}</div>
               </div>
             ))}
           </div>

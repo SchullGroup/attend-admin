@@ -68,7 +68,6 @@ const ALL_HREFS = [
 function isActive(href: string, pathname: string): boolean {
   if (href === "/") return pathname === "/";
   if (pathname !== href && !pathname.startsWith(href + "/")) return false;
-  // Inactive if a more specific nav item also matches
   return !ALL_HREFS.some(
     (other) => other !== href && other.startsWith(href + "/") && (pathname === other || pathname.startsWith(other + "/"))
   );
@@ -94,16 +93,21 @@ export function Sidebar() {
   return (
     <aside
       className="fixed left-0 top-0 z-40 h-screen w-[272px] flex flex-col"
-      style={{ backgroundColor: "#0f172a" }}
+      style={{ backgroundColor: "#f8fafc", borderRight: "1px solid #e2e8f0" }}
     >
       {/* Logo */}
       <div
         className="h-14 flex items-center px-5 shrink-0"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+        style={{ borderBottom: "1px solid #e2e8f0" }}
       >
         <div className="flex items-center gap-2">
-          <img src="/attend-logo.png" alt="Attend" style={{ height: 18, filter: "brightness(0) invert(1)" }} />
-          <span className="text-xs font-medium" style={{ color: "#9ca3af" }}>Admin</span>
+          <img src="/attend-logo.png" alt="Attend" style={{ height: 26 }} />
+          <span
+            className="text-xs font-semibold px-1.5 py-0.5 rounded"
+            style={{ backgroundColor: "rgba(17,24,39,0.07)", color: "#6b7280" }}
+          >
+            Admin
+          </span>
         </div>
       </div>
 
@@ -113,7 +117,7 @@ export function Sidebar() {
           <div key={section.label}>
             <p
               className="px-3 mb-1 text-xs font-semibold uppercase tracking-widest"
-              style={{ color: "rgba(255,255,255,0.28)" }}
+              style={{ color: "#94a3b8" }}
             >
               {section.label}
             </p>
@@ -125,35 +129,35 @@ export function Sidebar() {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors group",
+                      "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
                       active ? "font-medium" : "font-normal"
                     )}
                     style={{
-                      color: active ? "#ffffff" : "rgba(255,255,255,0.5)",
-                      backgroundColor: active ? "rgba(255,255,255,0.09)" : "transparent",
+                      color: active ? "#111827" : "#6b7280",
+                      backgroundColor: active ? "rgba(17,24,39,0.06)" : "transparent",
                     }}
                     onMouseEnter={(e) => {
                       if (!active) {
-                        (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.05)";
-                        (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.8)";
+                        (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(17,24,39,0.04)";
+                        (e.currentTarget as HTMLElement).style.color = "#374151";
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!active) {
                         (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                        (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.5)";
+                        (e.currentTarget as HTMLElement).style.color = "#6b7280";
                       }
                     }}
                   >
                     {active && (
                       <span
                         className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full"
-                        style={{ backgroundColor: "#ffffff" }}
+                        style={{ backgroundColor: "#111827" }}
                       />
                     )}
                     <item.icon
                       className="h-4 w-4 shrink-0"
-                      style={{ color: active ? "#ffffff" : "rgba(255,255,255,0.4)" }}
+                      style={{ color: active ? "#111827" : "#9ca3af" }}
                     />
                     {item.title}
                     {item.href === "/events/live" && (
@@ -182,27 +186,27 @@ export function Sidebar() {
       {currentUser && (
         <div
           className="p-3 shrink-0"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
+          style={{ borderTop: "1px solid #e2e8f0" }}
         >
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
             <div
               className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-              style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "#ffffff" }}
+              style={{ backgroundColor: "rgba(17,24,39,0.08)", color: "#374151" }}
             >
               {getInitials(currentUser.name)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-white truncate">{currentUser.name}</p>
-              <p className="text-xs truncate" style={{ color: "rgba(255,255,255,0.4)" }}>
+              <p className="text-sm font-semibold truncate" style={{ color: "#111827" }}>{currentUser.name}</p>
+              <p className="text-xs truncate" style={{ color: "#9ca3af" }}>
                 {roleLabel[currentUser.role] ?? currentUser.role}
               </p>
             </div>
             <button
               onClick={() => { logout(); router.push("/login"); }}
               className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors"
-              style={{ color: "rgba(255,255,255,0.35)" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.08)"; (e.currentTarget as HTMLElement).style.color = "#f87171"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)"; }}
+              style={{ color: "#9ca3af" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(17,24,39,0.06)"; (e.currentTarget as HTMLElement).style.color = "#ef4444"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; (e.currentTarget as HTMLElement).style.color = "#9ca3af"; }}
               title="Sign out"
             >
               <LogOut className="h-3.5 w-3.5" />
