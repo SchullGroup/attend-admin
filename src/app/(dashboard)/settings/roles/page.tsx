@@ -47,7 +47,7 @@ const ROLES = [
     id: "judge",
     name: "Judge",
     desc: "Access hackathon applications and submit scores for assigned challenges",
-    permissions: ["Hackathon Applications (read)", "Judging"],
+    permissions: ["Innovation Challenge Applications (read)", "Judging"],
     color: "#9333ea",
     bg: "#f8f0ff",
     icon: Vote,

@@ -63,7 +63,7 @@ export default function LoginPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="you@meristem.com"
+                  placeholder="you@yourorganisation.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -117,7 +117,7 @@ export default function LoginPage() {
                 type="submit"
                 className="w-full h-11 text-sm font-semibold mt-1"
                 disabled={loading}
-                style={{ backgroundColor: "#111827" }}
+                style={{ backgroundColor: "#2563eb" }}
               >
                 {loading ? "Signing in…" : "Sign In"}
               </Button>

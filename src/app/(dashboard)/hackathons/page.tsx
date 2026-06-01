@@ -20,7 +20,7 @@ export default function HackathonsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Hackathons & Challenges</h1>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Innovation Challenges</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">Manage innovation challenges, review applications, and coordinate judging</p>
       </div>
 
@@ -33,7 +33,7 @@ export default function HackathonsPage() {
                   <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center">
                     <Lightbulb className="h-4 w-4 text-white" />
                   </div>
-                  <span className="text-sm font-semibold text-purple-200">Hackathon Challenge</span>
+                  <span className="text-sm font-semibold text-purple-200">Innovation Challenge</span>
                 </div>
                 <h2 className="text-2xl font-bold mb-1">{hackathonEvent.title}</h2>
                 <p className="text-purple-200 text-sm mb-4">{hackathonEvent.organiser} · {hackathonEvent.date} · {hackathonEvent.format === "in-person" ? hackathonEvent.venue : "Virtual"}</p>
