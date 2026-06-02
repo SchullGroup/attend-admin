@@ -6,7 +6,7 @@ import { StatusBadge } from "@/components/custom/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
-import { ArrowLeft, Mail, Phone, Calendar, ShieldCheck, CalendarDays } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Calendar, ShieldCheck, CalendarDays, ShieldOff } from "lucide-react";
 
 function maskBVN(bvn?: string) {
   if (!bvn) return "Not provided";
@@ -21,17 +21,17 @@ function maskCHN(chn?: string) {
 export default function ParticipantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { participants } = useStore();
+  const { participants, suspendParticipant, restoreParticipant } = useStore();
 
   const participant = participants.find((p) => p.id === id);
 
   if (!participant) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="text-lg font-semibold text-[hsl(var(--foreground))]">Participant not found</p>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">This participant may not exist.</p>
+        <p className="text-lg font-semibold text-[hsl(var(--foreground))]">User not found</p>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">This user may not exist.</p>
         <Button variant="outline" className="mt-4 gap-2" onClick={() => router.push("/participants")}>
-          <ArrowLeft className="h-4 w-4" /> Back to Participants
+          <ArrowLeft className="h-4 w-4" /> Back to Users
         </Button>
       </div>
     );
@@ -53,7 +53,7 @@ export default function ParticipantDetailPage({ params }: { params: Promise<{ id
         className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-5 transition-colors"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        All Participants
+        All Users
       </button>
 
       <div className="grid grid-cols-3 gap-5">
@@ -71,6 +71,27 @@ export default function ParticipantDetailPage({ params }: { params: Promise<{ id
             <div className="flex items-center gap-2 mt-3">
               <StatusBadge status={participant.kycStatus} />
               <StatusBadge status={participant.status} />
+            </div>
+            <div className="mt-4 w-full border-t border-[hsl(var(--border))] pt-4">
+              {participant.status === "suspended" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-green-700 border-green-200 hover:bg-green-50 gap-2"
+                  onClick={() => restoreParticipant(participant.id)}
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" /> Restore Account
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-red-600 border-red-200 hover:bg-red-50 gap-2"
+                  onClick={() => suspendParticipant(participant.id)}
+                >
+                  <ShieldOff className="h-3.5 w-3.5" /> Suspend Account
+                </Button>
+              )}
             </div>
           </Card>
 

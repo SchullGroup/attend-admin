@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Search, Shield, Users, ShieldCheck } from "lucide-react";
+import { Search, Shield, Users, ShieldCheck, ShieldOff } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ const KYC_FILTERS = [
 ];
 
 export default function ParticipantsPage() {
-  const { participants } = useStore();
+  const { participants, suspendParticipant, restoreParticipant } = useStore();
   const [search, setSearch] = useState("");
   const [kycFilter, setKycFilter] = useState("all");
 
@@ -37,7 +37,7 @@ export default function ParticipantsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Participants</h1>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Users</h1>
         <div className="flex items-center gap-6 mt-3">
           <div className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-lg bg-blue-50 flex items-center justify-center">
@@ -100,7 +100,7 @@ export default function ParticipantsPage() {
         <table className="w-full">
           <thead>
             <tr className="attend-table-header">
-              <th className="px-5 py-3 text-left">Participant</th>
+              <th className="px-5 py-3 text-left">User</th>
               <th className="px-5 py-3 text-left">Phone</th>
               <th className="px-5 py-3 text-left">KYC Status</th>
               <th className="px-5 py-3 text-left">Events Attended</th>
@@ -129,16 +129,37 @@ export default function ParticipantsPage() {
                 <td className="px-5 py-3"><StatusBadge status={p.status} /></td>
                 <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{formatDate(p.registeredAt)}</td>
                 <td className="px-5 py-3">
-                  <Link href={`/participants/${p.id}`}>
-                    <Button size="sm" variant="outline" className="h-7 text-xs">View</Button>
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <Link href={`/participants/${p.id}`}>
+                      <Button size="sm" variant="outline" className="h-7 text-xs">View</Button>
+                    </Link>
+                    {p.status === "suspended" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs text-green-700 border-green-200 hover:bg-green-50"
+                        onClick={() => restoreParticipant(p.id)}
+                      >
+                        Restore
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                        onClick={() => suspendParticipant(p.id)}
+                      >
+                        <ShieldOff className="h-3 w-3 mr-1" />Suspend
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">No participants match your search.</div>
+          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">No users match your search.</div>
         )}
       </Card>
     </div>

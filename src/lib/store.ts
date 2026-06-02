@@ -28,6 +28,8 @@ interface AttendAdminStore {
   deleteDocument: (id: string) => void;
   enrollStakeholder: (id: string) => void;
   suspendStakeholder: (id: string) => void;
+  suspendParticipant: (id: string) => void;
+  restoreParticipant: (id: string) => void;
   launchPoll: (sessionId: string, pollId: string) => void;
   closePoll: (sessionId: string, pollId: string) => void;
   releasePressKit: (sessionId: string) => void;
@@ -92,6 +94,8 @@ export const useStore = create<AttendAdminStore>((set) => ({
   deleteDocument: (id) => set((s) => ({ documents: s.documents.filter((d) => d.id !== id) })),
   enrollStakeholder: (id) => set((s) => ({ stakeholders: s.stakeholders.map((stk) => stk.id === id ? { ...stk, status: "active" as const } : stk) })),
   suspendStakeholder: (id) => set((s) => ({ stakeholders: s.stakeholders.map((stk) => stk.id === id ? { ...stk, status: "suspended" as const } : stk) })),
+  suspendParticipant: (id) => set((s) => ({ participants: s.participants.map((p) => p.id === id ? { ...p, status: "suspended" as const } : p) })),
+  restoreParticipant: (id) => set((s) => ({ participants: s.participants.map((p) => p.id === id ? { ...p, status: "active" as const } : p) })),
   launchPoll: (sessionId, pollId) => set((s) => ({
     liveSessions: s.liveSessions.map((sess) =>
       sess.id === sessionId

@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import {
   Check, X, Users, Vote, MessageSquare, UserCheck, Clock,
   Wifi, Radio, Building2, Tv2, Link2, ListOrdered, BarChart2,
-  Trophy, Package, ChevronRight,
+  Trophy, Package, ChevronRight, ExternalLink,
 } from "lucide-react";
 import type { LiveSession, LivePoll } from "@/lib/mock-data";
 
@@ -421,9 +421,13 @@ const DEFAULT_STREAM_URLS: Record<string, string> = {
   live_003: "https://www.youtube.com/embed/0VBkkEdBOgg?autoplay=0&controls=1&rel=0&modestbranding=1",
 };
 
-function parseYouTubeEmbed(url: string): string {
-  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|live\/))([A-Za-z0-9_-]{11})/);
-  if (match) return `https://www.youtube.com/embed/${match[1]}?autoplay=0&controls=1&rel=0&modestbranding=1`;
+function isZoomUrl(url: string) {
+  return /zoom\.us\/j\/|zoomus\.cn\/j\//.test(url);
+}
+
+function parseStreamUrl(url: string): string {
+  const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|live\/))([A-Za-z0-9_-]{11})/);
+  if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=0&controls=1&rel=0&modestbranding=1`;
   return url;
 }
 
@@ -439,7 +443,7 @@ export default function LiveControlPage() {
   }
   function applyStream(sessionId: string) {
     const raw = streamInputs[sessionId] ?? streamUrls[sessionId] ?? "";
-    setStreamUrls((prev) => ({ ...prev, [sessionId]: parseYouTubeEmbed(raw) }));
+    setStreamUrls((prev) => ({ ...prev, [sessionId]: parseStreamUrl(raw) }));
   }
 
   const session = liveSessions.find((s) => s.id === selectedLiveSessionId) ?? liveSessions[0];
@@ -541,13 +545,35 @@ export default function LiveControlPage() {
         </div>
         <div className="relative bg-black" style={{ aspectRatio: "16/9" }}>
           {streamUrls[session.id] ? (
-            <iframe
-              key={streamUrls[session.id]}
-              src={streamUrls[session.id]}
-              className="absolute inset-0 w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
+            isZoomUrl(streamUrls[session.id]) ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+                <div className="rounded-2xl bg-[#0B5CFF]/15 p-4">
+                  <svg viewBox="0 0 40 40" className="h-10 w-10 fill-[#0B5CFF]">
+                    <path d="M20 0C8.954 0 0 8.954 0 20s8.954 20 20 20 20-8.954 20-20S31.046 0 20 0zm9.714 25.714a1.429 1.429 0 0 1-1.428 1.429H9.286a1.429 1.429 0 0 1-1.429-1.429V16.43a1.429 1.429 0 0 1 1.429-1.429h2.857v5.714l5-3.571v7.142l-5-3.571v2.857h11.428v-8.571h2.143v8.714zm-2.857-12.857a2.857 2.857 0 1 1-5.714 0 2.857 2.857 0 0 1 5.714 0z"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">Zoom Meeting</p>
+                  <p className="text-xs text-gray-400 mt-1">This AGM is hosted on Zoom — cannot be previewed inline.</p>
+                </div>
+                <a
+                  href={streamUrls[session.id]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#0B5CFF] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0B5CFF]/90"
+                >
+                  <ExternalLink className="h-4 w-4" /> Join Zoom Meeting
+                </a>
+              </div>
+            ) : (
+              <iframe
+                key={streamUrls[session.id]}
+                src={streamUrls[session.id]}
+                className="absolute inset-0 w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            )
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
               <Tv2 className="h-12 w-12 text-gray-600" />
@@ -564,7 +590,7 @@ export default function LiveControlPage() {
                 type="text"
                 value={getStreamInput(session.id)}
                 onChange={(e) => setStreamInputs((prev) => ({ ...prev, [session.id]: e.target.value }))}
-                placeholder="Paste YouTube URL or HLS stream endpoint…"
+                placeholder="Paste YouTube or Zoom URL…"
                 className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
                 onKeyDown={(e) => e.key === "Enter" && applyStream(session.id)}
               />
