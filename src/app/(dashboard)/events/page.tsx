@@ -30,17 +30,28 @@ export default function EventsPage() {
   const [activeTab, setActiveTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filtered = (activeTab === "all" ? events : events.filter((e) => e.module === activeTab))
-    .filter((e) => !searchQuery.trim() || e.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filtered = (
+    activeTab === "all" ? events : events.filter((e) => e.module === activeTab)
+  ).filter(
+    (e) =>
+      !searchQuery.trim() ||
+      e.title.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Events</h1>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{events.length} total events across all modules</p>
+          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
+            Events
+          </h1>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+            {events.length} total events across all modules
+          </p>
         </div>
-        <span className="text-sm text-[hsl(var(--muted-foreground))]">Events are created by enrolled stakeholders</span>
+        <span className="text-sm text-[hsl(var(--muted-foreground))]">
+          Events are created by enrolled stakeholders
+        </span>
       </div>
 
       <div className="relative mb-4">
@@ -84,24 +95,33 @@ export default function EventsPage() {
           </thead>
           <tbody>
             {filtered.map((event) => {
-              const FormatIcon = FORMAT_ICON[event.format];
+              const FormatIcon = FORMAT_ICON[event.format as keyof typeof FORMAT_ICON];
               return (
                 <tr key={event.id} className="attend-table-row">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2.5">
-                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: event.color }} />
+                      <span
+                        className="h-2 w-2 rounded-full shrink-0"
+                        style={{ backgroundColor: event.color }}
+                      />
                       <div>
                         <div className="flex items-center gap-2 mb-0.5">
                           <ModuleBadge module={event.module as EventModule} />
                         </div>
-                        <div className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[260px] truncate">{event.title}</div>
+                        <div className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[260px] truncate">
+                          {event.title}
+                        </div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{event.organiser}</td>
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                    {event.organiser}
+                  </td>
                   <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] whitespace-nowrap">
                     {formatDate(event.date)}
-                    <div className="text-xs">{event.startTime}–{event.endTime}</div>
+                    <div className="text-xs">
+                      {event.startTime}–{event.endTime}
+                    </div>
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))]">
@@ -117,11 +137,17 @@ export default function EventsPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-5 py-3"><StatusBadge status={event.status} /></td>
+                  <td className="px-5 py-3">
+                    <StatusBadge status={event.status} />
+                  </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5">
                       <Link href={`/events/${event.id}`}>
-                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1"
+                        >
                           <Eye className="h-3 w-3" />
                           View
                         </Button>
@@ -142,7 +168,9 @@ export default function EventsPage() {
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">No events found for this filter.</div>
+          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            No events found for this filter.
+          </div>
         )}
       </Card>
     </div>

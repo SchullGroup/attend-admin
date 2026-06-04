@@ -4,7 +4,11 @@ import { useStore } from "@/lib/store";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Header } from "@/components/shell/header";
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const { seedStore } = useStore();
   const [mounted, setMounted] = useState(false);
 

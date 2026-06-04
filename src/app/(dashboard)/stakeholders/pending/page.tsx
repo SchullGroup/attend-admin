@@ -25,12 +25,22 @@ export default function PendingEnrollmentsPage() {
   }
 
   function handleSendInvitation() {
-    if (!form.name.trim() || !form.rcNumber.trim() || !form.contactEmail.trim()) {
+    if (
+      !form.name.trim() ||
+      !form.rcNumber.trim() ||
+      !form.contactEmail.trim()
+    ) {
       toast.error("Please fill in all required fields.");
       return;
     }
     toast.success(`Invitation sent to ${form.name}`);
-    setForm({ name: "", industry: "", rcNumber: "", contactEmail: "", plan: "starter" });
+    setForm({
+      name: "",
+      industry: "",
+      rcNumber: "",
+      contactEmail: "",
+      plan: "starter",
+    });
   }
 
   function handleApprove(id: string, name: string) {
@@ -45,7 +55,9 @@ export default function PendingEnrollmentsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Pending Enrollments</h1>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
+          Pending Enrollments
+        </h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
           Stakeholders awaiting review and activation
         </p>
@@ -53,7 +65,9 @@ export default function PendingEnrollmentsPage() {
 
       {/* Enroll New Organisation form */}
       <Card className="attend-card p-6">
-        <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">Enroll New Organisation</h2>
+        <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">
+          Enroll New Organisation
+        </h2>
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
@@ -68,7 +82,9 @@ export default function PendingEnrollmentsPage() {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Industry</label>
+            <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
+              Industry
+            </label>
             <input
               type="text"
               value={form.industry}
@@ -102,14 +118,18 @@ export default function PendingEnrollmentsPage() {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Plan</label>
+            <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
+              Plan
+            </label>
             <select
               value={form.plan}
               onChange={(e) => handleFormChange("plan", e.target.value)}
               className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] transition-shadow capitalize"
             >
               {PLAN_OPTIONS.map((p) => (
-                <option key={p} value={p} className="capitalize">{p.charAt(0).toUpperCase() + p.slice(1)}</option>
+                <option key={p} value={p} className="capitalize">
+                  {p.charAt(0).toUpperCase() + p.slice(1)}
+                </option>
               ))}
             </select>
           </div>
@@ -123,7 +143,9 @@ export default function PendingEnrollmentsPage() {
       {pending.length > 0 ? (
         <Card className="attend-card overflow-hidden">
           <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
-            <h2 className="font-semibold text-[hsl(var(--foreground))]">Pending Requests</h2>
+            <h2 className="font-semibold text-[hsl(var(--foreground))]">
+              Pending Requests
+            </h2>
           </div>
           <table className="w-full">
             <thead>
@@ -139,13 +161,25 @@ export default function PendingEnrollmentsPage() {
               {pending.map((stk) => (
                 <tr key={stk.id} className="attend-table-row">
                   <td className="px-5 py-3">
-                    <p className="text-sm font-medium text-[hsl(var(--foreground))]">{stk.name}</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))]">{stk.industry}</p>
+                    <p className="text-sm font-medium text-[hsl(var(--foreground))]">
+                      {stk.name}
+                    </p>
+                    <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                      {stk.industry}
+                    </p>
                   </td>
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{stk.rcNumber}</td>
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{stk.contactEmail}</td>
                   <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-                    {new Date(stk.enrolledAt).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
+                    {stk.rcNumber}
+                  </td>
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                    {stk.contactEmail}
+                  </td>
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                    {new Date(stk.enrolledAt).toLocaleDateString("en-NG", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5">
@@ -173,7 +207,9 @@ export default function PendingEnrollmentsPage() {
         </Card>
       ) : (
         <Card className="attend-card p-10 text-center">
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">No pending enrollment requests.</p>
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            No pending enrollment requests.
+          </p>
         </Card>
       )}
     </div>

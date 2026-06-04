@@ -16,21 +16,34 @@ const STATUS_TABS = [
   { label: "Selected", value: "selected" },
 ];
 
-const STATUS_OPTIONS: ApplicationStatus[] = ["submitted", "under_review", "shortlisted", "selected", "not_progressed"];
+const STATUS_OPTIONS: ApplicationStatus[] = [
+  "submitted",
+  "under_review",
+  "shortlisted",
+  "selected",
+  "not_progressed",
+];
 
 export default function ApplicationsPage() {
   const { applications, updateApplicationStatus } = useStore();
   const [activeTab, setActiveTab] = useState("all");
   const [openMenu, setOpenMenu] = useState<string | null>(null);
 
-  const filtered = activeTab === "all" ? applications : applications.filter((a) => a.status === activeTab);
+  const filtered =
+    activeTab === "all"
+      ? applications
+      : applications.filter((a) => a.status === activeTab);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Applications — MeriHack 2026</h1>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{applications.length} total applications received</p>
+          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
+            Applications — MeriHack 2026
+          </h1>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+            {applications.length} total applications received
+          </p>
         </div>
       </div>
 
@@ -68,31 +81,52 @@ export default function ApplicationsPage() {
             {filtered.map((app) => (
               <tr key={app.id} className="attend-table-row">
                 <td className="px-5 py-3">
-                  <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{app.teamName}</div>
+                  <div className="text-sm font-semibold text-[hsl(var(--foreground))]">
+                    {app.teamName}
+                  </div>
                 </td>
                 <td className="px-5 py-3">
-                  <div className="text-sm text-[hsl(var(--foreground))] max-w-[220px] truncate">{app.ideaTitle}</div>
+                  <div className="text-sm text-[hsl(var(--foreground))] max-w-[220px] truncate">
+                    {app.ideaTitle}
+                  </div>
                 </td>
                 <td className="px-5 py-3">
-                  <span className="text-xs bg-purple-50 text-purple-700 rounded-full px-2.5 py-0.5 font-medium">{app.track}</span>
+                  <span className="text-xs bg-purple-50 text-purple-700 rounded-full px-2.5 py-0.5 font-medium">
+                    {app.track}
+                  </span>
                 </td>
-                <td className="px-5 py-3 text-sm font-medium tabular-nums text-center">{app.memberCount}</td>
-                <td className="px-5 py-3"><StatusBadge status={app.status} /></td>
+                <td className="px-5 py-3 text-sm font-medium tabular-nums text-center">
+                  {app.memberCount}
+                </td>
+                <td className="px-5 py-3">
+                  <StatusBadge status={app.status} />
+                </td>
                 <td className="px-5 py-3 text-sm font-semibold tabular-nums">
                   {app.score != null ? (
-                    <span className="text-[hsl(var(--foreground))]">{app.score}<span className="text-[hsl(var(--muted-foreground))] font-normal">/100</span></span>
+                    <span className="text-[hsl(var(--foreground))]">
+                      {app.score}
+                      <span className="text-[hsl(var(--muted-foreground))] font-normal">
+                        /100
+                      </span>
+                    </span>
                   ) : (
-                    <span className="text-[hsl(var(--muted-foreground))]">—</span>
+                    <span className="text-[hsl(var(--muted-foreground))]">
+                      —
+                    </span>
                   )}
                 </td>
-                <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{formatDate(app.submittedAt)}</td>
+                <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                  {formatDate(app.submittedAt)}
+                </td>
                 <td className="px-5 py-3">
                   <div className="relative">
                     <Button
                       size="sm"
                       variant="outline"
                       className="h-7 text-xs gap-1"
-                      onClick={() => setOpenMenu(openMenu === app.id ? null : app.id)}
+                      onClick={() =>
+                        setOpenMenu(openMenu === app.id ? null : app.id)
+                      }
                     >
                       Update Status
                       <ChevronDown className="h-3 w-3" />
@@ -120,7 +154,9 @@ export default function ApplicationsPage() {
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">No applications found.</div>
+          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            No applications found.
+          </div>
         )}
       </Card>
     </div>

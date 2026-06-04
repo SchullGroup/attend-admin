@@ -12,16 +12,22 @@ const TABS: { label: string; value: string }[] = [
   { label: "Suspended", value: "suspended" },
 ];
 
-const PLAN_STYLE: Record<Stakeholder["plan"], { label: string; color: string; bg: string }> = {
+const PLAN_STYLE: Record<
+  Stakeholder["plan"],
+  { label: string; color: string; bg: string }
+> = {
   enterprise: { label: "Enterprise", color: "#166534", bg: "#dcfce7" },
-  growth:     { label: "Growth",     color: "#1d4ed8", bg: "#dbeafe" },
-  starter:    { label: "Starter",    color: "#6b7280", bg: "#f3f4f6" },
+  growth: { label: "Growth", color: "#1d4ed8", bg: "#dbeafe" },
+  starter: { label: "Starter", color: "#6b7280", bg: "#f3f4f6" },
 };
 
-const STATUS_DOT: Record<Stakeholder["status"], { dot: string; label: string }> = {
-  active:    { dot: "#16a34a", label: "Active" },
+const STATUS_DOT: Record<
+  Stakeholder["status"],
+  { dot: string; label: string }
+> = {
+  active: { dot: "#16a34a", label: "Active" },
   suspended: { dot: "#dc2626", label: "Suspended" },
-  pending:   { dot: "#f59e0b", label: "Pending" },
+  pending: { dot: "#f59e0b", label: "Pending" },
 };
 
 export default function StakeholdersPage() {
@@ -37,7 +43,9 @@ export default function StakeholdersPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Stakeholders</h1>
+          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
+            Stakeholders
+          </h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
             Enrolled organisations on the Attend platform
           </p>
@@ -83,10 +91,16 @@ export default function StakeholdersPage() {
               return (
                 <tr key={stk.id} className="attend-table-row">
                   <td className="px-5 py-3">
-                    <p className="text-sm font-medium text-[hsl(var(--foreground))]">{stk.name}</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))]">{stk.industry}</p>
+                    <p className="text-sm font-medium text-[hsl(var(--foreground))]">
+                      {stk.name}
+                    </p>
+                    <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                      {stk.industry}
+                    </p>
                   </td>
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{stk.rcNumber}</td>
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                    {stk.rcNumber}
+                  </td>
                   <td className="px-5 py-3">
                     <span
                       className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
@@ -100,17 +114,32 @@ export default function StakeholdersPage() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: statusInfo.dot }} />
-                      <span className="text-sm text-[hsl(var(--foreground))]">{statusInfo.label}</span>
+                      <span
+                        className="h-2 w-2 rounded-full shrink-0"
+                        style={{ backgroundColor: statusInfo.dot }}
+                      />
+                      <span className="text-sm text-[hsl(var(--foreground))]">
+                        {statusInfo.label}
+                      </span>
                     </div>
                   </td>
                   <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-                    {new Date(stk.enrolledAt).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
+                    {new Date(stk.enrolledAt).toLocaleDateString("en-NG", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5">
                       <Link href={`/stakeholders/${stk.id}`}>
-                        <Button size="sm" variant="outline" className="h-7 text-xs">View</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                        >
+                          View
+                        </Button>
                       </Link>
                       {stk.status === "active" && (
                         <Button

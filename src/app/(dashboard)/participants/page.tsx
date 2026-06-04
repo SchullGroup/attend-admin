@@ -23,7 +23,9 @@ export default function ParticipantsPage() {
   const [kycFilter, setKycFilter] = useState("all");
 
   const fullKYC = participants.filter((p) => p.kycStatus === "full").length;
-  const pendingKYC = participants.filter((p) => p.kycStatus === "pending").length;
+  const pendingKYC = participants.filter(
+    (p) => p.kycStatus === "pending",
+  ).length;
 
   const filtered = participants.filter((p) => {
     const matchSearch =
@@ -37,15 +39,21 @@ export default function ParticipantsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Users</h1>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
+          Users
+        </h1>
         <div className="flex items-center gap-6 mt-3">
           <div className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-lg bg-blue-50 flex items-center justify-center">
               <Users className="h-3.5 w-3.5 text-blue-600" />
             </div>
             <div>
-              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">{participants.length}</div>
-              <div className="text-xs text-[hsl(var(--muted-foreground))]">Total Users</div>
+              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">
+                {participants.length}
+              </div>
+              <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                Total Users
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -53,8 +61,12 @@ export default function ParticipantsPage() {
               <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
             </div>
             <div>
-              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">{fullKYC}</div>
-              <div className="text-xs text-[hsl(var(--muted-foreground))]">Full KYC</div>
+              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">
+                {fullKYC}
+              </div>
+              <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                Full KYC
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -62,8 +74,12 @@ export default function ParticipantsPage() {
               <Shield className="h-3.5 w-3.5 text-yellow-600" />
             </div>
             <div>
-              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">{pendingKYC}</div>
-              <div className="text-xs text-[hsl(var(--muted-foreground))]">Pending KYC</div>
+              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">
+                {pendingKYC}
+              </div>
+              <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                Pending KYC
+              </div>
             </div>
           </div>
         </div>
@@ -115,23 +131,47 @@ export default function ParticipantsPage() {
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-2.5">
                     <div className="h-8 w-8 rounded-full bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-[hsl(var(--primary))] text-xs font-bold shrink-0">
-                      {p.fullName.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                      {p.fullName
+                        .split(" ")
+                        .map((n: string) => n[0])
+                        .join("")
+                        .slice(0, 2)}
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-[hsl(var(--foreground))]">{p.fullName}</div>
-                      <div className="text-xs text-[hsl(var(--muted-foreground))]">{p.email}</div>
+                      <div className="text-sm font-medium text-[hsl(var(--foreground))]">
+                        {p.fullName}
+                      </div>
+                      <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                        {p.email}
+                      </div>
                     </div>
                   </div>
                 </td>
-                <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{p.phone}</td>
-                <td className="px-5 py-3"><StatusBadge status={p.kycStatus} /></td>
-                <td className="px-5 py-3 text-sm font-medium tabular-nums text-center">{p.eventsAttended}</td>
-                <td className="px-5 py-3"><StatusBadge status={p.status} /></td>
-                <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{formatDate(p.registeredAt)}</td>
+                <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                  {p.phone}
+                </td>
+                <td className="px-5 py-3">
+                  <StatusBadge status={p.kycStatus} />
+                </td>
+                <td className="px-5 py-3 text-sm font-medium tabular-nums text-center">
+                  {p.eventsAttended}
+                </td>
+                <td className="px-5 py-3">
+                  <StatusBadge status={p.status} />
+                </td>
+                <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                  {formatDate(p.registeredAt)}
+                </td>
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-2">
                     <Link href={`/participants/${p.id}`}>
-                      <Button size="sm" variant="outline" className="h-7 text-xs">View</Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                      >
+                        View
+                      </Button>
                     </Link>
                     {p.status === "suspended" ? (
                       <Button
@@ -149,7 +189,8 @@ export default function ParticipantsPage() {
                         className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50"
                         onClick={() => suspendParticipant(p.id)}
                       >
-                        <ShieldOff className="h-3 w-3 mr-1" />Suspend
+                        <ShieldOff className="h-3 w-3 mr-1" />
+                        Suspend
                       </Button>
                     )}
                   </div>
@@ -159,7 +200,9 @@ export default function ParticipantsPage() {
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">No users match your search.</div>
+          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            No users match your search.
+          </div>
         )}
       </Card>
     </div>

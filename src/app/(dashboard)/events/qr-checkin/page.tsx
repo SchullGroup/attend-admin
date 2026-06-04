@@ -4,28 +4,95 @@ import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { QrCode, CheckCircle2, ShieldCheck, Clock, Users, Wifi } from "lucide-react";
+import {
+  QrCode,
+  CheckCircle2,
+  ShieldCheck,
+  Clock,
+  Users,
+  Wifi,
+} from "lucide-react";
 
 // ── Mock attendee pool to cycle through when scanning ────────────────────────
 
 const MOCK_ATTENDEES = [
-  { name: "Ngozi Okafor", email: "ngozi.okafor@email.com", seatRef: "A-14", kycStatus: "Full KYC" },
-  { name: "Emeka Eze", email: "emeka.eze@gtco.com", seatRef: "B-07", kycStatus: "Full KYC" },
-  { name: "Chidera Obi", email: "chidera.obi@fintech.ng", seatRef: "C-22", kycStatus: "Basic KYC" },
-  { name: "Tolu Adeyemi", email: "tolu@unilag.edu.ng", seatRef: "D-03", kycStatus: "None" },
-  { name: "Biodun Adeola", email: "biodun.adeola@insurance.ng", seatRef: "A-31", kycStatus: "Pending" },
-  { name: "Adaeze Nwosu", email: "adaeze.nwosu@gmail.com", seatRef: "B-19", kycStatus: "Full KYC" },
-  { name: "Babatunde Lawal", email: "babatunde.lawal@access.ng", seatRef: "E-08", kycStatus: "Full KYC" },
+  {
+    name: "Ngozi Okafor",
+    email: "ngozi.okafor@email.com",
+    seatRef: "A-14",
+    kycStatus: "Full KYC",
+  },
+  {
+    name: "Emeka Eze",
+    email: "emeka.eze@gtco.com",
+    seatRef: "B-07",
+    kycStatus: "Full KYC",
+  },
+  {
+    name: "Chidera Obi",
+    email: "chidera.obi@fintech.ng",
+    seatRef: "C-22",
+    kycStatus: "Basic KYC",
+  },
+  {
+    name: "Tolu Adeyemi",
+    email: "tolu@unilag.edu.ng",
+    seatRef: "D-03",
+    kycStatus: "None",
+  },
+  {
+    name: "Biodun Adeola",
+    email: "biodun.adeola@insurance.ng",
+    seatRef: "A-31",
+    kycStatus: "Pending",
+  },
+  {
+    name: "Adaeze Nwosu",
+    email: "adaeze.nwosu@gmail.com",
+    seatRef: "B-19",
+    kycStatus: "Full KYC",
+  },
+  {
+    name: "Babatunde Lawal",
+    email: "babatunde.lawal@access.ng",
+    seatRef: "E-08",
+    kycStatus: "Full KYC",
+  },
 ];
 
 // ── Pre-seeded recent check-ins ───────────────────────────────────────────────
 
 const SEED_CHECKINS = [
-  { name: "Yetunde Abiodun", time: "09:14 AM", method: "QR Scan", status: "Verified" },
-  { name: "Gbenga Falola", time: "09:11 AM", method: "QR Scan", status: "Verified" },
-  { name: "Aisha Musa", time: "09:08 AM", method: "QR Scan", status: "Verified" },
-  { name: "Chiamaka Eze", time: "09:05 AM", method: "QR Scan", status: "Verified" },
-  { name: "Nnamdi Obi", time: "09:01 AM", method: "QR Scan", status: "Verified" },
+  {
+    name: "Yetunde Abiodun",
+    time: "09:14 AM",
+    method: "QR Scan",
+    status: "Verified",
+  },
+  {
+    name: "Gbenga Falola",
+    time: "09:11 AM",
+    method: "QR Scan",
+    status: "Verified",
+  },
+  {
+    name: "Aisha Musa",
+    time: "09:08 AM",
+    method: "QR Scan",
+    status: "Verified",
+  },
+  {
+    name: "Chiamaka Eze",
+    time: "09:05 AM",
+    method: "QR Scan",
+    status: "Verified",
+  },
+  {
+    name: "Nnamdi Obi",
+    time: "09:01 AM",
+    method: "QR Scan",
+    status: "Verified",
+  },
 ];
 
 interface CheckIn {
@@ -43,17 +110,21 @@ interface ScannedAttendee {
 }
 
 const KYC_COLORS: Record<string, { bg: string; text: string }> = {
-  "Full KYC":  { bg: "#16a34a18", text: "#16a34a" },
+  "Full KYC": { bg: "#16a34a18", text: "#16a34a" },
   "Basic KYC": { bg: "#2563eb18", text: "#2563eb" },
-  "Pending":   { bg: "#f59e0b18", text: "#d97706" },
-  "None":      { bg: "#9ca3af18", text: "#6b7280" },
+  Pending: { bg: "#f59e0b18", text: "#d97706" },
+  None: { bg: "#9ca3af18", text: "#6b7280" },
 };
 
 export default function QRCheckInPage() {
   const { events } = useStore();
-  const liveEvents = events.filter((e) => e.status === "live" || e.status === "published");
+  const liveEvents = events.filter(
+    (e) => e.status === "live" || e.status === "published",
+  );
 
-  const [selectedEventId, setSelectedEventId] = useState(liveEvents[0]?.id ?? "");
+  const [selectedEventId, setSelectedEventId] = useState(
+    liveEvents[0]?.id ?? "",
+  );
   const [scanIndex, setScanIndex] = useState(0);
   const [lastScan, setLastScan] = useState<ScannedAttendee | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -69,7 +140,10 @@ export default function QRCheckInPage() {
       setScanning(false);
 
       const now = new Date();
-      const time = now.toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" });
+      const time = now.toLocaleTimeString("en-NG", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
       const newCheckin: CheckIn = {
         name: attendee.name,
         time,
@@ -84,16 +158,18 @@ export default function QRCheckInPage() {
 
   const verified = checkins.filter((c) => c.status === "Verified").length;
   const pending = checkins.filter((c) => c.status === "Pending KYC").length;
-  const verifiedPct = checkins.length > 0 ? Math.round((verified / checkins.length) * 100) : 0;
+  const verifiedPct =
+    checkins.length > 0 ? Math.round((verified / checkins.length) * 100) : 0;
 
   const selectedEvent = events.find((e) => e.id === selectedEventId);
 
   return (
     <div className="flex flex-col gap-6">
-
       {/* ── Header ── */}
       <div>
-        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">QR Check-In Dashboard</h1>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
+          QR Check-In Dashboard
+        </h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
           Scan attendee QR codes to verify and log check-ins in real time.
         </p>
@@ -102,11 +178,29 @@ export default function QRCheckInPage() {
       {/* ── Stats strip ── */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Today's Check-Ins", value: totalToday, icon: Users, accent: "#2563eb" },
-          { label: "Verified %", value: `${verifiedPct}%`, icon: ShieldCheck, accent: "#16a34a" },
-          { label: "Pending KYC", value: pending, icon: Clock, accent: "#f59e0b" },
+          {
+            label: "Today's Check-Ins",
+            value: totalToday,
+            icon: Users,
+            accent: "#2563eb",
+          },
+          {
+            label: "Verified %",
+            value: `${verifiedPct}%`,
+            icon: ShieldCheck,
+            accent: "#16a34a",
+          },
+          {
+            label: "Pending KYC",
+            value: pending,
+            icon: Clock,
+            accent: "#f59e0b",
+          },
         ].map((stat) => (
-          <Card key={stat.label} className="attend-card p-4 flex items-center gap-4">
+          <Card
+            key={stat.label}
+            className="attend-card p-4 flex items-center gap-4"
+          >
             <div
               className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
               style={{ backgroundColor: stat.accent + "18" }}
@@ -114,8 +208,12 @@ export default function QRCheckInPage() {
               <stat.icon className="h-5 w-5" style={{ color: stat.accent }} />
             </div>
             <div>
-              <p className="text-xs text-[hsl(var(--muted-foreground))] font-medium">{stat.label}</p>
-              <p className="text-2xl font-bold tabular-nums text-[hsl(var(--foreground))]">{stat.value}</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] font-medium">
+                {stat.label}
+              </p>
+              <p className="text-2xl font-bold tabular-nums text-[hsl(var(--foreground))]">
+                {stat.value}
+              </p>
             </div>
           </Card>
         ))}
@@ -123,10 +221,8 @@ export default function QRCheckInPage() {
 
       {/* ── Main grid ── */}
       <div className="grid grid-cols-3 gap-5">
-
         {/* Left: Scanner */}
         <div className="col-span-1 flex flex-col gap-4">
-
           {/* Event selector */}
           <Card className="attend-card p-4">
             <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-2">
@@ -138,7 +234,9 @@ export default function QRCheckInPage() {
               className="w-full text-sm rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
             >
               {liveEvents.map((evt) => (
-                <option key={evt.id} value={evt.id}>{evt.title}</option>
+                <option key={evt.id} value={evt.id}>
+                  {evt.title}
+                </option>
               ))}
             </select>
             {selectedEvent && (
@@ -161,7 +259,9 @@ export default function QRCheckInPage() {
           <Card className="attend-card overflow-hidden">
             <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
               <QrCode className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
-              <h2 className="font-semibold text-[hsl(var(--foreground))]">Scanner</h2>
+              <h2 className="font-semibold text-[hsl(var(--foreground))]">
+                Scanner
+              </h2>
               <span className="ml-auto flex items-center gap-1 text-xs text-green-600 font-semibold">
                 <Wifi className="h-3 w-3" /> Ready
               </span>
@@ -177,14 +277,27 @@ export default function QRCheckInPage() {
                       className="h-16 w-16 rounded-2xl animate-pulse flex items-center justify-center"
                       style={{ backgroundColor: "#16a34a18" }}
                     >
-                      <QrCode className="h-8 w-8" style={{ color: "#16a34a" }} />
+                      <QrCode
+                        className="h-8 w-8"
+                        style={{ color: "#16a34a" }}
+                      />
                     </div>
-                    <p className="text-sm font-semibold" style={{ color: "#16a34a" }}>Scanning…</p>
+                    <p
+                      className="text-sm font-semibold"
+                      style={{ color: "#16a34a" }}
+                    >
+                      Scanning…
+                    </p>
                   </>
                 ) : (
                   <>
-                    <QrCode className="h-12 w-12" style={{ color: "#16a34a" }} />
-                    <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Scan Attendee QR Code</p>
+                    <QrCode
+                      className="h-12 w-12"
+                      style={{ color: "#16a34a" }}
+                    />
+                    <p className="text-sm font-semibold text-[hsl(var(--foreground))]">
+                      Scan Attendee QR Code
+                    </p>
                     <p className="text-xs text-[hsl(var(--muted-foreground))] text-center px-4">
                       Point scanner at attendee&apos;s QR code to check in
                     </p>
@@ -208,25 +321,36 @@ export default function QRCheckInPage() {
             <Card className="attend-card overflow-hidden">
               <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <h2 className="font-semibold text-[hsl(var(--foreground))]">Last Scan</h2>
+                <h2 className="font-semibold text-[hsl(var(--foreground))]">
+                  Last Scan
+                </h2>
               </div>
               <div className="px-5 py-4 flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-[hsl(var(--foreground))]">{lastScan.name}</span>
+                  <span className="text-sm font-bold text-[hsl(var(--foreground))]">
+                    {lastScan.name}
+                  </span>
                   <span
                     className="text-xs font-semibold px-2 py-0.5 rounded-full"
                     style={{
-                      backgroundColor: KYC_COLORS[lastScan.kycStatus]?.bg ?? "#9ca3af18",
+                      backgroundColor:
+                        KYC_COLORS[lastScan.kycStatus]?.bg ?? "#9ca3af18",
                       color: KYC_COLORS[lastScan.kycStatus]?.text ?? "#6b7280",
                     }}
                   >
                     {lastScan.kycStatus}
                   </span>
                 </div>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">{lastScan.email}</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  {lastScan.email}
+                </p>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-xs text-[hsl(var(--muted-foreground))]">Seat:</span>
-                  <span className="text-xs font-semibold text-[hsl(var(--foreground))]">{lastScan.seatRef}</span>
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                    Seat:
+                  </span>
+                  <span className="text-xs font-semibold text-[hsl(var(--foreground))]">
+                    {lastScan.seatRef}
+                  </span>
                 </div>
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-green-600 font-medium">
                   <CheckCircle2 className="h-3.5 w-3.5" />
@@ -241,8 +365,12 @@ export default function QRCheckInPage() {
         <div className="col-span-2">
           <Card className="attend-card overflow-hidden">
             <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
-              <h2 className="font-semibold text-[hsl(var(--foreground))]">Recent Check-Ins</h2>
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">{checkins.length} total</span>
+              <h2 className="font-semibold text-[hsl(var(--foreground))]">
+                Recent Check-Ins
+              </h2>
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                {checkins.length} total
+              </span>
             </div>
             <table className="w-full">
               <thead>
@@ -262,13 +390,24 @@ export default function QRCheckInPage() {
                           className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
                           style={{ backgroundColor: "#16a34a" }}
                         >
-                          {c.name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
+                          {c.name
+                            .split(" ")
+                            .slice(0, 2)
+                            .map((n) => n[0])
+                            .join("")
+                            .toUpperCase()}
                         </div>
-                        <span className="text-sm font-medium text-[hsl(var(--foreground))]">{c.name}</span>
+                        <span className="text-sm font-medium text-[hsl(var(--foreground))]">
+                          {c.name}
+                        </span>
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] tabular-nums">{c.time}</td>
-                    <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{c.method}</td>
+                    <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] tabular-nums">
+                      {c.time}
+                    </td>
+                    <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                      {c.method}
+                    </td>
                     <td className="px-5 py-3">
                       <span
                         className="text-xs font-semibold px-2 py-0.5 rounded-full"

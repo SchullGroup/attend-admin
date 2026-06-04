@@ -26,22 +26,35 @@ export default function KYCQueuePage() {
   const [rejected, setRejected] = useState<string[]>([]);
 
   const pending = participants.filter(
-    (p) => p.kycStatus === "pending" && !approved.includes(p.id) && !rejected.includes(p.id)
+    (p) =>
+      p.kycStatus === "pending" &&
+      !approved.includes(p.id) &&
+      !rejected.includes(p.id),
   );
   const approvedList = participants.filter(
-    (p) => p.kycStatus === "full" || approved.includes(p.id)
+    (p) => p.kycStatus === "full" || approved.includes(p.id),
   );
   const rejectedList = participants.filter((p) => rejected.includes(p.id));
 
-  const displayed = tab === "Pending" ? pending : tab === "Approved" ? approvedList : rejectedList;
+  const displayed =
+    tab === "Pending"
+      ? pending
+      : tab === "Approved"
+        ? approvedList
+        : rejectedList;
 
   return (
     <div>
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">KYC Verification Queue</h1>
+          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
+            KYC Verification Queue
+          </h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-            <span className="font-semibold text-[hsl(var(--foreground))]">{pending.length}</span> pending verifications require review
+            <span className="font-semibold text-[hsl(var(--foreground))]">
+              {pending.length}
+            </span>{" "}
+            pending verifications require review
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -64,7 +77,9 @@ export default function KYCQueuePage() {
           >
             {t}
             {t === "Pending" && pending.length > 0 && (
-              <span className="ml-1.5 bg-orange-100 text-orange-700 rounded-full px-1.5 py-0.5 text-xs font-bold">{pending.length}</span>
+              <span className="ml-1.5 bg-orange-100 text-orange-700 rounded-full px-1.5 py-0.5 text-xs font-bold">
+                {pending.length}
+              </span>
             )}
           </button>
         ))}
@@ -74,7 +89,9 @@ export default function KYCQueuePage() {
         <div className="text-center py-16 text-[hsl(var(--muted-foreground))]">
           <ShieldAlert className="h-10 w-10 mx-auto mb-3 opacity-30" />
           <p className="font-medium">No pending verifications</p>
-          <p className="text-sm mt-1">All KYC submissions have been reviewed.</p>
+          <p className="text-sm mt-1">
+            All KYC submissions have been reviewed.
+          </p>
         </div>
       )}
 
@@ -84,11 +101,19 @@ export default function KYCQueuePage() {
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-[hsl(var(--primary))] font-bold text-sm shrink-0">
-                  {p.fullName.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                  {p.fullName
+                    .split(" ")
+                    .map((n: string) => n[0])
+                    .join("")
+                    .slice(0, 2)}
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{p.fullName}</div>
-                  <div className="text-xs text-[hsl(var(--muted-foreground))]">{p.email}</div>
+                  <div className="text-sm font-semibold text-[hsl(var(--foreground))]">
+                    {p.fullName}
+                  </div>
+                  <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                    {p.email}
+                  </div>
                 </div>
               </div>
               <StatusBadge status={p.kycStatus} />
@@ -97,15 +122,21 @@ export default function KYCQueuePage() {
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="rounded-lg bg-[hsl(var(--muted)/0.5)] p-3">
                 <div className="attend-section-title mb-1">BVN</div>
-                <div className="text-sm font-mono font-medium text-[hsl(var(--foreground))]">{maskBVN(p.bvn)}</div>
+                <div className="text-sm font-mono font-medium text-[hsl(var(--foreground))]">
+                  {maskBVN(p.bvn)}
+                </div>
               </div>
               <div className="rounded-lg bg-[hsl(var(--muted)/0.5)] p-3">
                 <div className="attend-section-title mb-1">CHN</div>
-                <div className="text-sm font-mono font-medium text-[hsl(var(--foreground))]">{maskCHN(p.chn)}</div>
+                <div className="text-sm font-mono font-medium text-[hsl(var(--foreground))]">
+                  {maskCHN(p.chn)}
+                </div>
               </div>
               <div className="rounded-lg bg-[hsl(var(--muted)/0.5)] p-3 col-span-2">
                 <div className="attend-section-title mb-1">Submitted</div>
-                <div className="text-sm text-[hsl(var(--foreground))]">{formatDate(p.registeredAt)}</div>
+                <div className="text-sm text-[hsl(var(--foreground))]">
+                  {formatDate(p.registeredAt)}
+                </div>
               </div>
             </div>
 
