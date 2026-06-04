@@ -2,20 +2,33 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, CalendarDays, Radio, Vote,
-  Lightbulb, FileText as FileApp, Star, Users, ShieldCheck,
-  FolderOpen, BarChart3, Settings, UserCog, LogOut,
-  Building2, ClipboardList, QrCode,
+  LayoutDashboard,
+  CalendarDays,
+  Radio,
+  Vote,
+  Lightbulb,
+  FileText as FileApp,
+  Star,
+  Users,
+  ShieldCheck,
+  FolderOpen,
+  BarChart3,
+  Settings,
+  UserCog,
+  LogOut,
+  Building2,
+  ClipboardList,
+  QrCode,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
+import { useGetMe, useLogout } from "@/api/auth/hooks";
+import Cookies from "js-cookie";
 
 const SECTIONS = [
   {
     label: "Platform",
-    items: [
-      { title: "Dashboard", icon: LayoutDashboard, href: "/" },
-    ],
+    items: [{ title: "Dashboard", icon: LayoutDashboard, href: "/" }],
   },
   {
     label: "Platform Events",
@@ -30,7 +43,11 @@ const SECTIONS = [
     label: "Innovation Challenges",
     items: [
       { title: "Challenges", icon: Lightbulb, href: "/hackathons" },
-      { title: "Applications", icon: FileApp, href: "/hackathons/applications" },
+      {
+        title: "Applications",
+        icon: FileApp,
+        href: "/hackathons/applications",
+      },
       { title: "Judging", icon: Star, href: "/hackathons/judging" },
     ],
   },
@@ -38,7 +55,11 @@ const SECTIONS = [
     label: "Stakeholders",
     items: [
       { title: "All Stakeholders", icon: Building2, href: "/stakeholders" },
-      { title: "Pending Enrollments", icon: ClipboardList, href: "/stakeholders/pending" },
+      {
+        title: "Pending Enrollments",
+        icon: ClipboardList,
+        href: "/stakeholders/pending",
+      },
     ],
   },
   {
@@ -69,12 +90,20 @@ function isActive(href: string, pathname: string): boolean {
   if (href === "/") return pathname === "/";
   if (pathname !== href && !pathname.startsWith(href + "/")) return false;
   return !ALL_HREFS.some(
-    (other) => other !== href && other.startsWith(href + "/") && (pathname === other || pathname.startsWith(other + "/"))
+    (other) =>
+      other !== href &&
+      other.startsWith(href + "/") &&
+      (pathname === other || pathname.startsWith(other + "/")),
   );
 }
 
 function getInitials(name: string) {
-  return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 }
 
 const roleLabel: Record<string, string> = {
@@ -87,8 +116,18 @@ const roleLabel: Record<string, string> = {
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentUser, logout, stakeholders } = useStore();
-  const pendingCount = stakeholders.filter((s) => s.status === "pending").length;
+  const { stakeholders } = useStore();
+  const { data: userResponse } = useGetMe();
+  const currentUser = userResponse?.data;
+  const { mutate: logout } = useLogout();
+  const pendingCount = stakeholders.filter(
+    (s) => s.status === "pending",
+  ).length;
+
+  const hasToken = typeof window !== "undefined" && !!Cookies.get("accessToken");
+  const displayName = currentUser?.fullName || "Admin User";
+  const displayRole = currentUser?.role ? (roleLabel[currentUser.role] ?? currentUser.role) : "Administrator";
+  const displayInitials = currentUser?.initials || getInitials(displayName);
 
   return (
     <aside
@@ -130,22 +169,28 @@ export function Sidebar() {
                     href={item.href}
                     className={cn(
                       "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                      active ? "font-medium" : "font-normal"
+                      active ? "font-medium" : "font-normal",
                     )}
                     style={{
                       color: active ? "#2563eb" : "#6b7280",
-                      backgroundColor: active ? "rgba(37,99,235,0.07)" : "transparent",
+                      backgroundColor: active
+                        ? "rgba(37,99,235,0.07)"
+                        : "transparent",
                     }}
                     onMouseEnter={(e) => {
                       if (!active) {
-                        (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(37,99,235,0.04)";
-                        (e.currentTarget as HTMLElement).style.color = "#374151";
+                        (e.currentTarget as HTMLElement).style.backgroundColor =
+                          "rgba(37,99,235,0.04)";
+                        (e.currentTarget as HTMLElement).style.color =
+                          "#374151";
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!active) {
-                        (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                        (e.currentTarget as HTMLElement).style.color = "#6b7280";
+                        (e.currentTarget as HTMLElement).style.backgroundColor =
+                          "transparent";
+                        (e.currentTarget as HTMLElement).style.color =
+                          "#6b7280";
                       }
                     }}
                   >
@@ -166,14 +211,15 @@ export function Sidebar() {
                         style={{ backgroundColor: "#ef4444" }}
                       />
                     )}
-                    {item.href === "/stakeholders/pending" && pendingCount > 0 && (
-                      <span
-                        className="ml-auto h-4 min-w-4 px-1 rounded-full text-xs font-bold flex items-center justify-center"
-                        style={{ backgroundColor: "#f59e0b", color: "white" }}
-                      >
-                        {pendingCount}
-                      </span>
-                    )}
+                    {item.href === "/stakeholders/pending" &&
+                      pendingCount > 0 && (
+                        <span
+                          className="ml-auto h-4 min-w-4 px-1 rounded-full text-xs font-bold flex items-center justify-center"
+                          style={{ backgroundColor: "#f59e0b", color: "white" }}
+                        >
+                          {pendingCount}
+                        </span>
+                      )}
                   </Link>
                 );
               })}
@@ -182,8 +228,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* User footer */}
-      {currentUser && (
+      {hasToken && (
         <div
           className="p-3 shrink-0"
           style={{ borderTop: "1px solid #e2e8f0" }}
@@ -191,22 +236,40 @@ export function Sidebar() {
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
             <div
               className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-              style={{ backgroundColor: "rgba(37,99,235,0.10)", color: "#2563eb" }}
+              style={{
+                backgroundColor: "rgba(37,99,235,0.10)",
+                color: "#2563eb",
+              }}
             >
-              {getInitials(currentUser.name)}
+              {displayInitials}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate" style={{ color: "#111827" }}>{currentUser.name}</p>
-              <p className="text-xs truncate" style={{ color: "#9ca3af" }}>
-                {roleLabel[currentUser.role] ?? currentUser.role}
+              <p className="text-sm font-semibold truncate" style={{ color: "#0f172a" }}>
+                {displayName}
+              </p>
+              <p
+                className="text-xs truncate"
+                style={{ color: "#64748b" }}
+              >
+                {displayRole}
               </p>
             </div>
             <button
-              onClick={() => { logout(); router.push("/login"); }}
+              onClick={() => {
+                logout();
+              }}
               className="h-7 w-7 rounded-lg flex items-center justify-center transition-colors"
               style={{ color: "#9ca3af" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(17,24,39,0.06)"; (e.currentTarget as HTMLElement).style.color = "#ef4444"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; (e.currentTarget as HTMLElement).style.color = "#9ca3af"; }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.backgroundColor =
+                  "rgba(17,24,39,0.06)";
+                (e.currentTarget as HTMLElement).style.color = "#ef4444";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.backgroundColor =
+                  "transparent";
+                (e.currentTarget as HTMLElement).style.color = "#9ca3af";
+              }}
               title="Sign out"
             >
               <LogOut className="h-3.5 w-3.5" />

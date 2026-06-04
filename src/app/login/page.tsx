@@ -2,38 +2,72 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
+import { useLogin } from "@/api/auth/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, ShieldCheck, BarChart3, Radio, Vote } from "lucide-react";
+import { toast } from "sonner";
 
 const FEATURES = [
-  { icon: ShieldCheck, label: "KYC & Compliance", desc: "Identity verification & audit trails" },
-  { icon: Radio,       label: "Live Control Room", desc: "Real-time event management" },
-  { icon: Vote,        label: "AGM Voting",         desc: "Binding electronic shareholder votes" },
-  { icon: BarChart3,   label: "Analytics",           desc: "Insights across all platform events" },
+  {
+    icon: ShieldCheck,
+    label: "KYC & Compliance",
+    desc: "Identity verification & audit trails",
+  },
+  {
+    icon: Radio,
+    label: "Live Control Room",
+    desc: "Real-time event management",
+  },
+  {
+    icon: Vote,
+    label: "AGM Voting",
+    desc: "Binding electronic shareholder votes",
+  },
+  {
+    icon: BarChart3,
+    label: "Analytics",
+    desc: "Insights across all platform events",
+  },
 ];
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, seedStore } = useStore();
+  const { seedStore } = useStore();
+  const { mutate: loginMutation, isPending } = useLogin();
   const [email, setEmail] = useState("stanley.jacob@meristem.com");
   const [password, setPassword] = useState("password");
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
-    seedStore();
-    login(email);
-    setTimeout(() => router.push("/"), 400);
+    seedStore(); // Retain mock data for events etc.
+    loginMutation(
+      { email, password },
+      {
+        onSuccess: () => {
+          toast.success("Login successful");
+          router.push("/");
+        },
+        onError: (err: any) => {
+          toast.error(
+            err?.response?.data?.message ||
+              err?.message ||
+              "Invalid email or password"
+          );
+        },
+      }
+    );
   }
 
   return (
     <div className="min-h-screen flex bg-white">
       {/* ── Left panel ── */}
-      <div className="w-full md:w-[52%] flex flex-col min-h-screen" style={{ borderRight: "1px solid #f1f5f9" }}>
+      <div
+        className="w-full md:w-[52%] flex flex-col min-h-screen"
+        style={{ borderRight: "1px solid #f1f5f9" }}
+      >
         {/* Top logo bar */}
         <div className="flex items-center gap-2 px-10 pt-10 pb-0">
           <img src="/attend-logo.png" alt="Attend" style={{ height: 40 }} />
@@ -48,7 +82,10 @@ export default function LoginPage() {
         {/* Centred form */}
         <div className="flex-1 flex items-center justify-center px-10">
           <div className="w-full max-w-[380px]">
-            <h1 className="text-[2rem] font-bold tracking-tight mb-1" style={{ color: "#111827" }}>
+            <h1
+              className="text-[2rem] font-bold tracking-tight mb-1"
+              style={{ color: "#111827" }}
+            >
               Welcome back
             </h1>
             <p className="text-sm mb-8" style={{ color: "#9ca3af" }}>
@@ -57,7 +94,11 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="email" className="text-sm font-medium" style={{ color: "#374151" }}>
+                <Label
+                  htmlFor="email"
+                  className="text-sm font-medium"
+                  style={{ color: "#374151" }}
+                >
                   Email address
                 </Label>
                 <Input
@@ -73,7 +114,11 @@ export default function LoginPage() {
 
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-sm font-medium" style={{ color: "#374151" }}>
+                  <Label
+                    htmlFor="password"
+                    className="text-sm font-medium"
+                    style={{ color: "#374151" }}
+                  >
                     Password
                   </Label>
                   <button
@@ -101,14 +146,27 @@ export default function LoginPage() {
                     style={{ color: "#9ca3af" }}
                     tabIndex={-1}
                   >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 text-sm">
-                <input type="checkbox" id="remember" className="rounded" defaultChecked />
-                <label htmlFor="remember" className="cursor-pointer" style={{ color: "#6b7280" }}>
+                <input
+                  type="checkbox"
+                  id="remember"
+                  className="rounded"
+                  defaultChecked
+                />
+                <label
+                  htmlFor="remember"
+                  className="cursor-pointer"
+                  style={{ color: "#6b7280" }}
+                >
                   Keep me signed in
                 </label>
               </div>
@@ -116,10 +174,10 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 className="w-full h-11 text-sm font-semibold mt-1"
-                disabled={loading}
+                disabled={isPending}
                 style={{ backgroundColor: "#2563eb" }}
               >
-                {loading ? "Signing in…" : "Sign In"}
+                {isPending ? "Signing in…" : "Sign In"}
               </Button>
             </form>
           </div>
@@ -141,7 +199,7 @@ export default function LoginPage() {
           <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full border border-white/5" />
           <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full border border-white/5" />
           <div className="absolute bottom-0 -left-20 h-80 w-80 rounded-full border border-white/5" />
-          <div className="absolute top-1/2 right-12 h-40 w-40 rounded-full bg-white/[0.03]" />
+          <div className="absolute top-1/2 right-12 h-40 w-40 rounded-full bg-white/3" />
         </div>
 
         <div className="relative z-10 px-14 max-w-md w-full">
@@ -150,7 +208,11 @@ export default function LoginPage() {
             <img
               src="/attend-logo.png"
               alt="Attend"
-              style={{ height: 36, filter: "brightness(0) invert(1)", opacity: 0.9 }}
+              style={{
+                height: 36,
+                filter: "brightness(0) invert(1)",
+                opacity: 0.9,
+              }}
             />
           </div>
 
@@ -158,7 +220,8 @@ export default function LoginPage() {
             The platform powering Nigeria&apos;s capital market events
           </h2>
           <p className="text-sm mb-10" style={{ color: "#94a3b8" }}>
-            AGMs, innovation challenges, product launches — managed end-to-end from a single admin console.
+            AGMs, innovation challenges, product launches — managed end-to-end
+            from a single admin console.
           </p>
 
           <div className="grid grid-cols-2 gap-3">
@@ -166,7 +229,10 @@ export default function LoginPage() {
               <div
                 key={f.label}
                 className="rounded-xl p-4 text-left"
-                style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)" }}
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.09)",
+                }}
               >
                 <div
                   className="h-8 w-8 rounded-lg flex items-center justify-center mb-3"
@@ -174,8 +240,12 @@ export default function LoginPage() {
                 >
                   <f.icon className="h-4 w-4 text-white" />
                 </div>
-                <div className="text-sm font-semibold text-white mb-0.5">{f.label}</div>
-                <div className="text-xs" style={{ color: "#64748b" }}>{f.desc}</div>
+                <div className="text-sm font-semibold text-white mb-0.5">
+                  {f.label}
+                </div>
+                <div className="text-xs" style={{ color: "#64748b" }}>
+                  {f.desc}
+                </div>
               </div>
             ))}
           </div>
