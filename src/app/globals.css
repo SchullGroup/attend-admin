@@ -1,0 +1,66 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 221 83% 53%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 15% 22%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 210 20% 96%;
+  --muted-foreground: 215 14% 47%;
+  --accent: 210 20% 96%;
+  --accent-foreground: 222 47% 11%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 221 83% 53%;
+  --radius: 0.5rem;
+  --sidebar-width: 272px;
+}
+
+@theme {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+}
+
+* { border-color: hsl(var(--border)); box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: "Outfit", ui-sans-serif, system-ui, sans-serif; }
+input, textarea, select, button { font-family: "Outfit", ui-sans-serif, system-ui, sans-serif; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.attend-card { border-radius: 12px; border: 1px solid hsl(var(--border)); background: hsl(var(--card)); }
+.attend-table-header { background: transparent; border-bottom: 2px solid hsl(var(--border)); font-size: 13px; font-weight: 500; color: hsl(var(--muted-foreground)); }
+.attend-table-row { border-bottom: 1px solid hsl(var(--border) / 0.6); transition: background 0.1s; }
+.attend-table-row:hover { background: hsl(var(--primary) / 0.04); }
+.attend-table-row:last-child { border-bottom: none; }
+.attend-section-title { font-size: 13px; font-weight: 600; color: hsl(var(--muted-foreground)); }
