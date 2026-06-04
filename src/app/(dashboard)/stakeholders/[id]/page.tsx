@@ -9,36 +9,66 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
 import {
-  ArrowLeft, Building2, Mail, Globe, Hash,
-  CalendarDays, FileText, Eye,
+  ArrowLeft,
+  Building2,
+  Mail,
+  Globe,
+  Hash,
+  CalendarDays,
+  FileText,
+  Eye,
 } from "lucide-react";
-import type { EventModule } from "@/lib/mock-data";
+import type { EventModule, Stakeholder } from "@/lib/mock-data";
 
-const PLAN_STYLE = {
+const PLAN_STYLE: Record<
+  Stakeholder["plan"],
+  { label: string; color: string; bg: string }
+> = {
   enterprise: { label: "Enterprise", color: "#166534", bg: "#dcfce7" },
-  growth:     { label: "Growth",     color: "#1d4ed8", bg: "#dbeafe" },
-  starter:    { label: "Starter",    color: "#6b7280", bg: "#f3f4f6" },
+  growth: { label: "Growth", color: "#1d4ed8", bg: "#dbeafe" },
+  starter: { label: "Starter", color: "#6b7280", bg: "#f3f4f6" },
 };
 
-const STATUS_DOT = {
-  active:    { dot: "#16a34a", label: "Active" },
+const STATUS_DOT: Record<
+  Stakeholder["status"],
+  { dot: string; label: string }
+> = {
+  active: { dot: "#16a34a", label: "Active" },
   suspended: { dot: "#dc2626", label: "Suspended" },
-  pending:   { dot: "#f59e0b", label: "Pending" },
+  pending: { dot: "#f59e0b", label: "Pending" },
 };
 
-export default function StakeholderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function StakeholderDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = use(params);
   const router = useRouter();
-  const { stakeholders, events, documents, enrollStakeholder, suspendStakeholder } = useStore();
+  const {
+    stakeholders,
+    events,
+    documents,
+    enrollStakeholder,
+    suspendStakeholder,
+  } = useStore();
 
   const stakeholder = stakeholders.find((s) => s.id === id);
 
   if (!stakeholder) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="text-lg font-semibold text-[hsl(var(--foreground))]">Stakeholder not found</p>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">This organisation may have been removed.</p>
-        <Button variant="outline" className="mt-4 gap-2" onClick={() => router.push("/stakeholders")}>
+        <p className="text-lg font-semibold text-[hsl(var(--foreground))]">
+          Stakeholder not found
+        </p>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+          This organisation may have been removed.
+        </p>
+        <Button
+          variant="outline"
+          className="mt-4 gap-2"
+          onClick={() => router.push("/stakeholders")}
+        >
           <ArrowLeft className="h-4 w-4" /> Back to Stakeholders
         </Button>
       </div>
@@ -48,8 +78,15 @@ export default function StakeholderDetailPage({ params }: { params: Promise<{ id
   const plan = PLAN_STYLE[stakeholder.plan];
   const statusInfo = STATUS_DOT[stakeholder.status];
   const orgEvents = events.filter((e) => e.organiser === stakeholder.name);
-  const orgDocs = documents.filter((d) => orgEvents.some((e) => e.id === d.eventId));
-  const initials = stakeholder.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+  const orgDocs = documents.filter((d) =>
+    orgEvents.some((e) => e.id === d.eventId),
+  );
+  const initials = stakeholder.name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <div>
@@ -66,13 +103,18 @@ export default function StakeholderDetailPage({ params }: { params: Promise<{ id
         <div className="flex items-center gap-4">
           <div
             className="h-14 w-14 rounded-xl flex items-center justify-center text-lg font-bold shrink-0"
-            style={{ backgroundColor: "hsl(var(--primary)/0.1)", color: "hsl(var(--primary))" }}
+            style={{
+              backgroundColor: "hsl(var(--primary)/0.1)",
+              color: "hsl(var(--primary))",
+            }}
           >
             {initials}
           </div>
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{stakeholder.name}</h1>
+              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
+                {stakeholder.name}
+              </h1>
               <span
                 className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
                 style={{ color: plan.color, backgroundColor: plan.bg }}
@@ -84,7 +126,10 @@ export default function StakeholderDetailPage({ params }: { params: Promise<{ id
               <span>{stakeholder.industry}</span>
               <span>·</span>
               <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: statusInfo.dot }} />
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: statusInfo.dot }}
+                />
                 <span>{statusInfo.label}</span>
               </div>
             </div>
@@ -118,14 +163,28 @@ export default function StakeholderDetailPage({ params }: { params: Promise<{ id
         {/* Left: org info */}
         <div className="col-span-1 flex flex-col gap-4">
           <Card className="attend-card p-5">
-            <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">Organisation Details</h2>
+            <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">
+              Organisation Details
+            </h2>
             <div className="flex flex-col gap-3">
               {[
                 { icon: Hash, label: "RC Number", value: stakeholder.rcNumber },
-                { icon: Mail, label: "Contact Email", value: stakeholder.contactEmail },
-                { icon: Building2, label: "Industry", value: stakeholder.industry },
+                {
+                  icon: Mail,
+                  label: "Contact Email",
+                  value: stakeholder.contactEmail,
+                },
+                {
+                  icon: Building2,
+                  label: "Industry",
+                  value: stakeholder.industry,
+                },
                 { icon: Globe, label: "Plan", value: plan.label },
-                { icon: CalendarDays, label: "Enrolled", value: formatDate(stakeholder.enrolledAt) },
+                {
+                  icon: CalendarDays,
+                  label: "Enrolled",
+                  value: formatDate(stakeholder.enrolledAt),
+                },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="flex items-start gap-3">
                   <div className="h-7 w-7 rounded-lg bg-[hsl(var(--muted))] flex items-center justify-center shrink-0 mt-0.5">
@@ -133,7 +192,9 @@ export default function StakeholderDetailPage({ params }: { params: Promise<{ id
                   </div>
                   <div>
                     <p className="attend-section-title">{label}</p>
-                    <p className="text-sm font-medium text-[hsl(var(--foreground))] mt-0.5">{value}</p>
+                    <p className="text-sm font-medium text-[hsl(var(--foreground))] mt-0.5">
+                      {value}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -147,8 +208,15 @@ export default function StakeholderDetailPage({ params }: { params: Promise<{ id
               { label: "Documents", value: orgDocs.length, color: "#2563eb" },
             ].map(({ label, value, color }) => (
               <Card key={label} className="attend-card p-4 flex flex-col">
-                <span className="text-2xl font-bold tabular-nums" style={{ color }}>{value}</span>
-                <span className="text-xs text-[hsl(var(--muted-foreground))] mt-1">{label}</span>
+                <span
+                  className="text-2xl font-bold tabular-nums"
+                  style={{ color }}
+                >
+                  {value}
+                </span>
+                <span className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                  {label}
+                </span>
               </Card>
             ))}
           </div>
@@ -159,11 +227,18 @@ export default function StakeholderDetailPage({ params }: { params: Promise<{ id
           {/* Events */}
           <Card className="attend-card overflow-hidden">
             <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
-              <h2 className="font-semibold text-[hsl(var(--foreground))]">Events</h2>
-              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{orgEvents.length} event{orgEvents.length !== 1 ? "s" : ""} created by this organisation</p>
+              <h2 className="font-semibold text-[hsl(var(--foreground))]">
+                Events
+              </h2>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                {orgEvents.length} event{orgEvents.length !== 1 ? "s" : ""}{" "}
+                created by this organisation
+              </p>
             </div>
             {orgEvents.length === 0 ? (
-              <div className="py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">No events created yet.</div>
+              <div className="py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
+                No events created yet.
+              </div>
             ) : (
               <table className="w-full">
                 <thead>
@@ -180,19 +255,34 @@ export default function StakeholderDetailPage({ params }: { params: Promise<{ id
                     <tr key={e.id} className="attend-table-row">
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: e.color }} />
+                          <span
+                            className="h-2 w-2 rounded-full shrink-0"
+                            style={{ backgroundColor: e.color }}
+                          />
                           <div>
                             <ModuleBadge module={e.module as EventModule} />
-                            <p className="text-sm font-medium text-[hsl(var(--foreground))] mt-0.5 max-w-[220px] truncate">{e.title}</p>
+                            <p className="text-sm font-medium text-[hsl(var(--foreground))] mt-0.5 max-w-[220px] truncate">
+                              {e.title}
+                            </p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{formatDate(e.date)}</td>
-                      <td className="px-5 py-3 text-sm font-medium tabular-nums">{e.rsvpCount.toLocaleString()}</td>
-                      <td className="px-5 py-3"><StatusBadge status={e.status} /></td>
+                      <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                        {formatDate(e.date)}
+                      </td>
+                      <td className="px-5 py-3 text-sm font-medium tabular-nums">
+                        {e.rsvpCount.toLocaleString()}
+                      </td>
+                      <td className="px-5 py-3">
+                        <StatusBadge status={e.status} />
+                      </td>
                       <td className="px-5 py-3">
                         <Link href={`/events/${e.id}`}>
-                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs gap-1"
+                          >
                             <Eye className="h-3 w-3" />
                             View
                           </Button>
@@ -208,11 +298,18 @@ export default function StakeholderDetailPage({ params }: { params: Promise<{ id
           {/* Documents */}
           <Card className="attend-card overflow-hidden">
             <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
-              <h2 className="font-semibold text-[hsl(var(--foreground))]">Documents</h2>
-              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{orgDocs.length} document{orgDocs.length !== 1 ? "s" : ""} uploaded</p>
+              <h2 className="font-semibold text-[hsl(var(--foreground))]">
+                Documents
+              </h2>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                {orgDocs.length} document{orgDocs.length !== 1 ? "s" : ""}{" "}
+                uploaded
+              </p>
             </div>
             {orgDocs.length === 0 ? (
-              <div className="py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">No documents uploaded.</div>
+              <div className="py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
+                No documents uploaded.
+              </div>
             ) : (
               <table className="w-full">
                 <thead>
@@ -230,13 +327,23 @@ export default function StakeholderDetailPage({ params }: { params: Promise<{ id
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4 text-[hsl(var(--primary))] shrink-0" />
-                          <span className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[180px] truncate">{d.title}</span>
+                          <span className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[180px] truncate">
+                            {d.title}
+                          </span>
                         </div>
                       </td>
-                      <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[140px] truncate">{d.eventTitle}</td>
-                      <td className="px-5 py-3 text-sm font-mono text-[hsl(var(--muted-foreground))]">{d.fileSize}</td>
-                      <td className="px-5 py-3 text-sm font-medium tabular-nums">{d.downloadCount.toLocaleString()}</td>
-                      <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{formatDate(d.uploadedAt)}</td>
+                      <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[140px] truncate">
+                        {d.eventTitle}
+                      </td>
+                      <td className="px-5 py-3 text-sm font-mono text-[hsl(var(--muted-foreground))]">
+                        {d.fileSize}
+                      </td>
+                      <td className="px-5 py-3 text-sm font-medium tabular-nums">
+                        {d.downloadCount.toLocaleString()}
+                      </td>
+                      <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                        {formatDate(d.uploadedAt)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

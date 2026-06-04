@@ -2,9 +2,17 @@
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, Search, ChevronRight } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useStore } from "@/lib/store";
+import { useGetMe, useLogout } from "@/api/auth/hooks";
 
 const ROUTE_LABELS: Record<string, string> = {
   "/": "Dashboard",
@@ -31,25 +39,32 @@ function getBreadcrumbs(pathname: string) {
   let current = "";
   for (const part of parts) {
     current += "/" + part;
-    const label = ROUTE_LABELS[current] ?? part.charAt(0).toUpperCase() + part.slice(1);
+    const label =
+      ROUTE_LABELS[current] ?? part.charAt(0).toUpperCase() + part.slice(1);
     crumbs.push({ label, href: current });
   }
   return crumbs;
 }
 
 function getInitials(name: string) {
-  return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 }
 
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentUser, logout } = useStore();
+  const { data: userResponse } = useGetMe();
+  const currentUser = userResponse?.data;
+  const { mutate: logout } = useLogout();
   const breadcrumbs = getBreadcrumbs(pathname);
 
   function handleLogout() {
     logout();
-    router.push("/login");
   }
 
   return (
@@ -57,7 +72,9 @@ export function Header() {
       <div className="flex items-center gap-1.5 text-sm min-w-0 flex-1">
         {breadcrumbs.map((crumb, i) => (
           <span key={crumb.href} className="flex items-center gap-1.5">
-            {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />}
+            {i > 0 && (
+              <ChevronRight className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+            )}
             <span
               className={
                 i === breadcrumbs.length - 1
@@ -89,17 +106,25 @@ export function Header() {
             <DropdownMenuTrigger asChild>
               <button className="focus:outline-none">
                 <Avatar className="h-8 w-8 cursor-pointer">
-                  <AvatarFallback className="text-xs">{getInitials(currentUser.name)}</AvatarFallback>
+                  <AvatarFallback className="text-xs">
+                    {currentUser.initials || getInitials(currentUser.fullName)}
+                  </AvatarFallback>
                 </Avatar>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel>{currentUser.name}</DropdownMenuLabel>
-              <DropdownMenuLabel className="font-normal -mt-1">{currentUser.email}</DropdownMenuLabel>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuLabel>{currentUser.fullName}</DropdownMenuLabel>
+              <DropdownMenuLabel className="font-normal -mt-1">
+                {currentUser.email}
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/settings")}>
+                Settings
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout} className="text-red-600">Sign out</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+                Sign out
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}

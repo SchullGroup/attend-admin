@@ -12,7 +12,11 @@ export function formatCurrency(n: number) {
 }
 
 export function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString("en-NG", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 export function timeAgo(iso: string) {
