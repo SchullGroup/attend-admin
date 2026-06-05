@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -85,6 +85,34 @@ function SessionTab({ session, active, onClick }: { session: LiveSession; active
 // ── Resolution panel ──────────────────────────────────────────────────────────
 
 function ResolutionsPanel({ session, onOpen, onClose }: { session: LiveSession; onOpen: (resId: string) => void; onClose: (resId: string) => void }) {
+  const [durations, setDurations] = useState<Record<string, string>>(() =>
+    Object.fromEntries(session.votes.map((v) => [v.resolutionId, "30"]))
+  );
+  const [countdowns, setCountdowns] = useState<Record<string, number>>({});
+  const timers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+
+  function startCountdown(resId: string) {
+    const secs = Math.max(1, parseInt(durations[resId] ?? "30", 10) || 30);
+    setCountdowns((prev) => ({ ...prev, [resId]: secs }));
+    onOpen(resId);
+    timers.current[resId] = setInterval(() => {
+      setCountdowns((prev) => {
+        const remaining = (prev[resId] ?? 0) - 1;
+        if (remaining <= 0) {
+          clearInterval(timers.current[resId]);
+          onClose(resId);
+          return { ...prev, [resId]: 0 };
+        }
+        return { ...prev, [resId]: remaining };
+      });
+    }, 1000);
+  }
+
+  useEffect(() => {
+    const t = timers.current;
+    return () => { Object.values(t).forEach(clearInterval); };
+  }, []);
+
   if (session.votes.length === 0) {
     return (
       <Card className="attend-card overflow-hidden">
@@ -127,14 +155,35 @@ function ResolutionsPanel({ session, onOpen, onClose }: { session: LiveSession; 
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {v.status === "pending" && (
-                    <Button size="sm" className="h-7 text-xs" onClick={() => onOpen(v.resolutionId)}>
-                      Open Voting
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min={5}
+                          max={300}
+                          value={durations[v.resolutionId] ?? "30"}
+                          onChange={(e) => setDurations((prev) => ({ ...prev, [v.resolutionId]: e.target.value }))}
+                          className="h-7 w-16 text-xs text-center px-1"
+                        />
+                        <span className="text-xs text-[hsl(var(--muted-foreground))]">sec</span>
+                      </div>
+                      <Button size="sm" className="h-7 text-xs" onClick={() => startCountdown(v.resolutionId)}>
+                        Open Voting
+                      </Button>
+                    </div>
                   )}
                   {v.status === "open" && (
-                    <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => onClose(v.resolutionId)}>
-                      Close Voting
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {countdowns[v.resolutionId] != null && countdowns[v.resolutionId] > 0 && (
+                        <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200">
+                          <Clock className="h-3.5 w-3.5 text-amber-600" />
+                          <span className="text-sm font-bold tabular-nums text-amber-700">{countdowns[v.resolutionId]}s</span>
+                        </div>
+                      )}
+                      <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => { clearInterval(timers.current[v.resolutionId]); onClose(v.resolutionId); }}>
+                        Close Voting
+                      </Button>
+                    </div>
                   )}
                 </div>
               </div>

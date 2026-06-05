@@ -61,7 +61,7 @@ type Format = typeof FORMATS[number];
 const STEPS: Record<ModuleId, { label: string; optional?: true }[]> = {
   AGM: [
     { label: "Meeting Basics" },
-    { label: "Notice & Agenda" },
+    { label: "Notice & Resolutions" },
     { label: "Proxy & Voting" },
     { label: "Shareholders" },
     { label: "Review" },
@@ -318,7 +318,7 @@ function AgmStep1({ f }: { f: AgmFields }) {
       </div>
       <div>
         <div className="flex items-center justify-between mb-3">
-          <Label>Resolutions / Agenda Items</Label>
+          <Label>Resolutions</Label>
           <button type="button" onClick={f.addResolution}
             className="flex items-center gap-1 text-sm font-medium text-[hsl(var(--primary))] hover:opacity-70">
             <Plus className="h-3.5 w-3.5" /> Add resolution
