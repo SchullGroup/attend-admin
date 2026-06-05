@@ -4,43 +4,25 @@ import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { QrCode, CheckCircle2, ShieldCheck, Clock, Users, Wifi } from "lucide-react";
-
-// ── Mock attendee pool to cycle through when scanning ────────────────────────
+import { QrCode, CheckCircle2, ShieldCheck, Clock, Users, Wifi, ChevronRight } from "lucide-react";
 
 const MOCK_ATTENDEES = [
-  { name: "Ngozi Okafor", email: "ngozi.okafor@email.com", seatRef: "A-14", kycStatus: "Full KYC" },
-  { name: "Emeka Eze", email: "emeka.eze@gtco.com", seatRef: "B-07", kycStatus: "Full KYC" },
-  { name: "Chidera Obi", email: "chidera.obi@fintech.ng", seatRef: "C-22", kycStatus: "Basic KYC" },
-  { name: "Tolu Adeyemi", email: "tolu@unilag.edu.ng", seatRef: "D-03", kycStatus: "None" },
-  { name: "Biodun Adeola", email: "biodun.adeola@insurance.ng", seatRef: "A-31", kycStatus: "Pending" },
-  { name: "Adaeze Nwosu", email: "adaeze.nwosu@gmail.com", seatRef: "B-19", kycStatus: "Full KYC" },
-  { name: "Babatunde Lawal", email: "babatunde.lawal@access.ng", seatRef: "E-08", kycStatus: "Full KYC" },
+  { name: "Ngozi Okafor",    email: "ngozi.okafor@email.com",     seatRef: "A-14", kycStatus: "Full KYC" },
+  { name: "Emeka Eze",       email: "emeka.eze@gtco.com",         seatRef: "B-07", kycStatus: "Full KYC" },
+  { name: "Chidera Obi",     email: "chidera.obi@fintech.ng",     seatRef: "C-22", kycStatus: "Basic KYC" },
+  { name: "Tolu Adeyemi",    email: "tolu@unilag.edu.ng",         seatRef: "D-03", kycStatus: "None" },
+  { name: "Biodun Adeola",   email: "biodun.adeola@insurance.ng", seatRef: "A-31", kycStatus: "Pending" },
+  { name: "Adaeze Nwosu",    email: "adaeze.nwosu@gmail.com",     seatRef: "B-19", kycStatus: "Full KYC" },
+  { name: "Babatunde Lawal", email: "babatunde.lawal@access.ng",  seatRef: "E-08", kycStatus: "Full KYC" },
 ];
-
-// ── Pre-seeded recent check-ins ───────────────────────────────────────────────
 
 const SEED_CHECKINS = [
   { name: "Yetunde Abiodun", time: "09:14 AM", method: "QR Scan", status: "Verified" },
-  { name: "Gbenga Falola", time: "09:11 AM", method: "QR Scan", status: "Verified" },
-  { name: "Aisha Musa", time: "09:08 AM", method: "QR Scan", status: "Verified" },
-  { name: "Chiamaka Eze", time: "09:05 AM", method: "QR Scan", status: "Verified" },
-  { name: "Nnamdi Obi", time: "09:01 AM", method: "QR Scan", status: "Verified" },
+  { name: "Gbenga Falola",   time: "09:11 AM", method: "QR Scan", status: "Verified" },
+  { name: "Aisha Musa",      time: "09:08 AM", method: "QR Scan", status: "Verified" },
+  { name: "Chiamaka Eze",    time: "09:05 AM", method: "QR Scan", status: "Verified" },
+  { name: "Nnamdi Obi",      time: "09:01 AM", method: "QR Scan", status: "Verified" },
 ];
-
-interface CheckIn {
-  name: string;
-  time: string;
-  method: string;
-  status: string;
-}
-
-interface ScannedAttendee {
-  name: string;
-  email: string;
-  seatRef: string;
-  kycStatus: string;
-}
 
 const KYC_COLORS: Record<string, { bg: string; text: string }> = {
   "Full KYC":  { bg: "#16a34a18", text: "#16a34a" },
@@ -49,15 +31,24 @@ const KYC_COLORS: Record<string, { bg: string; text: string }> = {
   "None":      { bg: "#9ca3af18", text: "#6b7280" },
 };
 
-export default function QRCheckInPage() {
-  const { events } = useStore();
-  const liveEvents = events.filter((e) => e.status === "live" || e.status === "published");
+const MODULE_COLORS: Record<string, string> = {
+  AGM: "#111827", LAUNCH: "#ea6c00", HACKATHON: "#7c22c9", GENERAL: "#0891b2",
+};
 
-  const [selectedEventId, setSelectedEventId] = useState(liveEvents[0]?.id ?? "");
-  const [scanIndex, setScanIndex] = useState(0);
-  const [lastScan, setLastScan] = useState<ScannedAttendee | null>(null);
-  const [scanning, setScanning] = useState(false);
-  const [checkins, setCheckins] = useState<CheckIn[]>(SEED_CHECKINS);
+interface CheckIn { name: string; time: string; method: string; status: string; }
+interface ScannedAttendee { name: string; email: string; seatRef: string; kycStatus: string; }
+
+function initials(name: string) {
+  return name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+}
+
+// ── Level 2: scanner detail ───────────────────────────────────────────────────
+
+function ScannerView({ event, onBack }: { event: any; onBack: () => void }) {
+  const [scanIndex, setScanIndex]   = useState(0);
+  const [lastScan, setLastScan]     = useState<ScannedAttendee | null>(null);
+  const [scanning, setScanning]     = useState(false);
+  const [checkins, setCheckins]     = useState<CheckIn[]>(SEED_CHECKINS);
   const [totalToday, setTotalToday] = useState(SEED_CHECKINS.length);
 
   function simulateScan() {
@@ -67,97 +58,57 @@ export default function QRCheckInPage() {
       setScanIndex((i) => i + 1);
       setLastScan(attendee);
       setScanning(false);
-
-      const now = new Date();
-      const time = now.toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" });
-      const newCheckin: CheckIn = {
-        name: attendee.name,
-        time,
-        method: "QR Scan",
-        status: attendee.kycStatus === "None" ? "Pending KYC" : "Verified",
-      };
-      setCheckins((prev) => [newCheckin, ...prev]);
+      const time = new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" });
+      setCheckins((prev) => [
+        { name: attendee.name, time, method: "QR Scan", status: attendee.kycStatus === "None" ? "Pending KYC" : "Verified" },
+        ...prev,
+      ]);
       setTotalToday((n) => n + 1);
       toast.success(`${attendee.name} checked in successfully`);
     }, 900);
   }
 
-  const verified = checkins.filter((c) => c.status === "Verified").length;
-  const pending = checkins.filter((c) => c.status === "Pending KYC").length;
+  const verified    = checkins.filter((c) => c.status === "Verified").length;
+  const pending     = checkins.filter((c) => c.status === "Pending KYC").length;
   const verifiedPct = checkins.length > 0 ? Math.round((verified / checkins.length) * 100) : 0;
-
-  const selectedEvent = events.find((e) => e.id === selectedEventId);
 
   return (
     <div className="flex flex-col gap-6">
-
-      {/* ── Header ── */}
+      {/* Back + header */}
       <div>
-        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">QR Check-In Dashboard</h1>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-          Scan attendee QR codes to verify and log check-ins in real time.
-        </p>
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-4 transition-colors"
+        >
+          <ChevronRight className="h-4 w-4 rotate-180" />
+          Back to Events
+        </button>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{event.title}</h1>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">{event.organiser} · {event.format}</p>
       </div>
 
-      {/* ── Stats strip ── */}
+      {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Today's Check-Ins", value: totalToday, icon: Users, accent: "#111827" },
-          { label: "Verified %", value: `${verifiedPct}%`, icon: ShieldCheck, accent: "#16a34a" },
-          { label: "Pending KYC", value: pending, icon: Clock, accent: "#f59e0b" },
+          { label: "Today's Check-Ins", value: totalToday,         icon: Users,       accent: "#111827" },
+          { label: "Verified %",         value: `${verifiedPct}%`, icon: ShieldCheck, accent: "#16a34a" },
+          { label: "Pending KYC",        value: pending,           icon: Clock,       accent: "#f59e0b" },
         ].map((stat) => (
-          <Card key={stat.label} className="attend-card p-4 flex items-center gap-4">
-            <div
-              className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
-              style={{ backgroundColor: stat.accent + "18" }}
-            >
-              <stat.icon className="h-5 w-5" style={{ color: stat.accent }} />
+          <Card key={stat.label} className="attend-card p-4 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: stat.accent + "18" }}>
+              <stat.icon className="h-4.5 w-4.5" style={{ color: stat.accent }} />
             </div>
             <div>
-              <p className="text-xs text-[hsl(var(--muted-foreground))] font-medium">{stat.label}</p>
-              <p className="text-2xl font-bold tabular-nums text-[hsl(var(--foreground))]">{stat.value}</p>
+              <p className="text-lg font-bold text-[hsl(var(--foreground))]">{stat.value}</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">{stat.label}</p>
             </div>
           </Card>
         ))}
       </div>
 
-      {/* ── Main grid ── */}
+      {/* Grid */}
       <div className="grid grid-cols-3 gap-5">
-
-        {/* Left: Scanner */}
         <div className="col-span-1 flex flex-col gap-4">
-
-          {/* Event selector */}
-          <Card className="attend-card p-4">
-            <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-2">
-              Select Event
-            </label>
-            <select
-              value={selectedEventId}
-              onChange={(e) => setSelectedEventId(e.target.value)}
-              className="w-full text-sm rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
-            >
-              {liveEvents.map((evt) => (
-                <option key={evt.id} value={evt.id}>{evt.title}</option>
-              ))}
-            </select>
-            {selectedEvent && (
-              <div className="mt-2 flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))]">
-                <span
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold capitalize"
-                  style={{
-                    backgroundColor: selectedEvent.color + "18",
-                    color: selectedEvent.color,
-                  }}
-                >
-                  {selectedEvent.status}
-                </span>
-                <span>{selectedEvent.format}</span>
-              </div>
-            )}
-          </Card>
-
-          {/* QR Scanner area */}
           <Card className="attend-card overflow-hidden">
             <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
               <QrCode className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
@@ -173,10 +124,7 @@ export default function QRCheckInPage() {
               >
                 {scanning ? (
                   <>
-                    <div
-                      className="h-16 w-16 rounded-2xl animate-pulse flex items-center justify-center"
-                      style={{ backgroundColor: "#16a34a18" }}
-                    >
+                    <div className="h-16 w-16 rounded-2xl animate-pulse flex items-center justify-center" style={{ backgroundColor: "#16a34a18" }}>
                       <QrCode className="h-8 w-8" style={{ color: "#16a34a" }} />
                     </div>
                     <p className="text-sm font-semibold" style={{ color: "#16a34a" }}>Scanning…</p>
@@ -191,19 +139,13 @@ export default function QRCheckInPage() {
                   </>
                 )}
               </div>
-              <Button
-                className="w-full"
-                disabled={scanning}
-                onClick={simulateScan}
-                style={{ backgroundColor: "#16a34a", color: "white" }}
-              >
+              <Button className="w-full" disabled={scanning} onClick={simulateScan} style={{ backgroundColor: "#16a34a", color: "white" }}>
                 <QrCode className="h-4 w-4 mr-2" />
                 {scanning ? "Scanning…" : "Simulate Scan"}
               </Button>
             </div>
           </Card>
 
-          {/* Last scan result */}
           {lastScan && (
             <Card className="attend-card overflow-hidden">
               <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
@@ -215,10 +157,7 @@ export default function QRCheckInPage() {
                   <span className="text-sm font-bold text-[hsl(var(--foreground))]">{lastScan.name}</span>
                   <span
                     className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                    style={{
-                      backgroundColor: KYC_COLORS[lastScan.kycStatus]?.bg ?? "#9ca3af18",
-                      color: KYC_COLORS[lastScan.kycStatus]?.text ?? "#6b7280",
-                    }}
+                    style={{ backgroundColor: KYC_COLORS[lastScan.kycStatus]?.bg ?? "#9ca3af18", color: KYC_COLORS[lastScan.kycStatus]?.text ?? "#6b7280" }}
                   >
                     {lastScan.kycStatus}
                   </span>
@@ -229,15 +168,13 @@ export default function QRCheckInPage() {
                   <span className="text-xs font-semibold text-[hsl(var(--foreground))]">{lastScan.seatRef}</span>
                 </div>
                 <div className="mt-2 flex items-center gap-1.5 text-xs text-green-600 font-medium">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Check-in successful
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Check-in successful
                 </div>
               </div>
             </Card>
           )}
         </div>
 
-        {/* Right: Recent check-ins table */}
         <div className="col-span-2">
           <Card className="attend-card overflow-hidden">
             <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
@@ -258,11 +195,8 @@ export default function QRCheckInPage() {
                   <tr key={i} className="attend-table-row">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2.5">
-                        <div
-                          className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                          style={{ backgroundColor: "#16a34a" }}
-                        >
-                          {c.name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase()}
+                        <div className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: "#16a34a" }}>
+                          {initials(c.name)}
                         </div>
                         <span className="text-sm font-medium text-[hsl(var(--foreground))]">{c.name}</span>
                       </div>
@@ -272,11 +206,9 @@ export default function QRCheckInPage() {
                     <td className="px-5 py-3">
                       <span
                         className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                        style={
-                          c.status === "Verified"
-                            ? { backgroundColor: "#16a34a18", color: "#16a34a" }
-                            : { backgroundColor: "#f59e0b18", color: "#d97706" }
-                        }
+                        style={c.status === "Verified"
+                          ? { backgroundColor: "#16a34a18", color: "#16a34a" }
+                          : { backgroundColor: "#f59e0b18", color: "#d97706" }}
                       >
                         {c.status}
                       </span>
@@ -288,6 +220,116 @@ export default function QRCheckInPage() {
           </Card>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Level 1: events table ─────────────────────────────────────────────────────
+
+export default function QRCheckInPage() {
+  const { events } = useStore();
+  const liveEvents = events.filter((e) => e.status === "live" || e.status === "published");
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
+  const selectedEvent = liveEvents.find((e) => e.id === selectedEventId);
+  if (selectedEvent) return <ScannerView event={selectedEvent} onBack={() => setSelectedEventId(null)} />;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">QR Check-In</h1>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">Select an event to open the check-in scanner</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: "Active Events",         value: liveEvents.length,                       icon: QrCode,      accent: "#111827" },
+          { label: "Total Check-Ins Today", value: SEED_CHECKINS.length * liveEvents.length, icon: Users,       accent: "#7c22c9" },
+          { label: "Avg. KYC Verified",     value: "96%",                                   icon: ShieldCheck, accent: "#16a34a" },
+        ].map((stat) => (
+          <Card key={stat.label} className="attend-card p-4 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: stat.accent + "18" }}>
+              <stat.icon className="h-4.5 w-4.5" style={{ color: stat.accent }} />
+            </div>
+            <div>
+              <p className="text-lg font-bold text-[hsl(var(--foreground))]">{stat.value}</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">{stat.label}</p>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="attend-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
+          <h2 className="font-semibold text-[hsl(var(--foreground))]">Events</h2>
+          <span className="text-xs text-[hsl(var(--muted-foreground))]">{liveEvents.length} available</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px]">
+            <thead>
+              <tr className="attend-table-header">
+                <th className="px-5 py-3 text-left">Event</th>
+                <th className="px-5 py-3 text-left">Module</th>
+                <th className="px-5 py-3 text-left">Format</th>
+                <th className="px-5 py-3 text-left">Status</th>
+                <th className="px-5 py-3 text-left">Check-Ins</th>
+                <th className="px-5 py-3 text-left"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {liveEvents.map((evt) => {
+                const modColor = MODULE_COLORS[evt.module] ?? "#111827";
+                return (
+                  <tr key={evt.id} className="attend-table-row">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
+                          style={{ backgroundColor: evt.color ?? "#111827" }}
+                        >
+                          {initials(evt.organiser ?? evt.title)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[220px]">{evt.title}</p>
+                          <p className="text-xs text-[hsl(var(--muted-foreground))]">{evt.organiser}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span
+                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold text-white"
+                        style={{ backgroundColor: modColor }}
+                      >
+                        {evt.module}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-sm text-[hsl(var(--foreground))] capitalize">{evt.format}</td>
+                    <td className="px-5 py-4">
+                      <span
+                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                        style={evt.status === "live"
+                          ? { backgroundColor: "#16a34a18", color: "#16a34a" }
+                          : { backgroundColor: "#11182710", color: "#374151" }}
+                      >
+                        {evt.status === "live" && <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />}
+                        <span className="capitalize">{evt.status}</span>
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-sm font-semibold tabular-nums text-[hsl(var(--foreground))]">
+                      {SEED_CHECKINS.length}
+                    </td>
+                    <td className="px-5 py-4">
+                      <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setSelectedEventId(evt.id)}>
+                        Open Check-In <ChevronRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 }
