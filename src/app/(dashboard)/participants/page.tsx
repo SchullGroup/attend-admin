@@ -21,6 +21,7 @@ export default function ParticipantsPage() {
   const { participants, suspendParticipant, restoreParticipant } = useStore();
   const [search, setSearch] = useState("");
   const [kycFilter, setKycFilter] = useState("all");
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const fullKYC = participants.filter((p) => p.kycStatus === "full").length;
   const pendingKYC = participants.filter((p) => p.kycStatus === "pending").length;
@@ -142,12 +143,21 @@ export default function ParticipantsPage() {
                       >
                         Restore
                       </Button>
+                    ) : confirmId === p.id ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs text-red-600 border-red-400 bg-red-50"
+                        onClick={() => { suspendParticipant(p.id); setConfirmId(null); }}
+                      >
+                        Confirm?
+                      </Button>
                     ) : (
                       <Button
                         size="sm"
                         variant="outline"
                         className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50"
-                        onClick={() => suspendParticipant(p.id)}
+                        onClick={() => setConfirmId(p.id)}
                       >
                         <ShieldOff className="h-3 w-3 mr-1" />Suspend
                       </Button>

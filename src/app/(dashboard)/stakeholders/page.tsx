@@ -27,6 +27,7 @@ const STATUS_DOT: Record<Stakeholder["status"], { dot: string; label: string }> 
 export default function StakeholdersPage() {
   const { stakeholders, enrollStakeholder, suspendStakeholder } = useStore();
   const [activeTab, setActiveTab] = useState("all");
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const filtered =
     activeTab === "all"
@@ -113,14 +114,25 @@ export default function StakeholdersPage() {
                         <Button size="sm" variant="outline" className="h-7 text-xs">View</Button>
                       </Link>
                       {stk.status === "active" && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => suspendStakeholder(stk.id)}
-                        >
-                          Suspend
-                        </Button>
+                        confirmId === stk.id ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs text-red-600 bg-red-50 font-semibold"
+                            onClick={() => { suspendStakeholder(stk.id); setConfirmId(null); }}
+                          >
+                            Confirm?
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => setConfirmId(stk.id)}
+                          >
+                            Suspend
+                          </Button>
+                        )
                       )}
                       {stk.status === "suspended" && (
                         <Button
