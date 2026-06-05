@@ -26,39 +26,39 @@ const STATUS_DOT = {
   pending:   { dot: "#f59e0b", label: "Pending" },
 };
 
-export default function RegistrarDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function OrganiserDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { registrars, events, documents, enrollRegistrar, suspendRegistrar } = useStore();
+  const { organisers, events, documents, enrollOrganiser, suspendOrganiser } = useStore();
 
-  const registrar = registrars.find((s) => s.id === id);
+  const organiser = organisers.find((s) => s.id === id);
 
-  if (!registrar) {
+  if (!organiser) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="text-lg font-semibold text-[hsl(var(--foreground))]">Registrar not found</p>
+        <p className="text-lg font-semibold text-[hsl(var(--foreground))]">Organiser not found</p>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">This organisation may have been removed.</p>
-        <Button variant="outline" className="mt-4 gap-2" onClick={() => router.push("/registrars")}>
-          <ArrowLeft className="h-4 w-4" /> Back to Registrars
+        <Button variant="outline" className="mt-4 gap-2" onClick={() => router.push("/organisers")}>
+          <ArrowLeft className="h-4 w-4" /> Back to Organisers
         </Button>
       </div>
     );
   }
 
-  const plan = PLAN_STYLE[registrar.plan];
-  const statusInfo = STATUS_DOT[registrar.status];
-  const orgEvents = events.filter((e) => e.organiser === registrar.name);
+  const plan = PLAN_STYLE[organiser.plan];
+  const statusInfo = STATUS_DOT[organiser.status];
+  const orgEvents = events.filter((e) => e.organiser === organiser.name);
   const orgDocs = documents.filter((d) => orgEvents.some((e) => e.id === d.eventId));
-  const initials = registrar.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+  const initials = organiser.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 
   return (
     <div className="flex flex-col gap-5">
       <button
-        onClick={() => router.push("/registrars")}
+        onClick={() => router.push("/organisers")}
         className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors w-fit"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        All Registrars
+        All Organisers
       </button>
 
       {/* Profile header card — full width */}
@@ -73,7 +73,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
             </div>
             <div>
               <div className="flex items-center gap-2.5 mb-1">
-                <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{registrar.name}</h1>
+                <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{organiser.name}</h1>
                 <span
                   className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
                   style={{ color: plan.color, backgroundColor: plan.bg }}
@@ -82,7 +82,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                 </span>
               </div>
               <div className="flex items-center gap-3 text-sm text-[hsl(var(--muted-foreground))]">
-                <span>{registrar.industry}</span>
+                <span>{organiser.industry}</span>
                 <span>·</span>
                 <div className="flex items-center gap-1.5">
                   <span className="h-2 w-2 rounded-full" style={{ backgroundColor: statusInfo.dot }} />
@@ -92,22 +92,22 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {registrar.status === "active" && (
+            {organiser.status === "active" && (
               <Button
                 size="sm"
                 variant="outline"
                 className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                onClick={() => suspendRegistrar(registrar.id)}
+                onClick={() => suspendOrganiser(organiser.id)}
               >
                 Suspend
               </Button>
             )}
-            {registrar.status === "suspended" && (
+            {organiser.status === "suspended" && (
               <Button
                 size="sm"
                 variant="outline"
                 className="text-green-700 border-green-200 hover:bg-green-50"
-                onClick={() => enrollRegistrar(registrar.id)}
+                onClick={() => enrollOrganiser(organiser.id)}
               >
                 Reactivate
               </Button>
@@ -118,11 +118,11 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
         {/* Detail fields in a horizontal row */}
         <div className="mt-5 pt-5 border-t border-[hsl(var(--border))] grid grid-cols-5 gap-4">
           {[
-            { icon: Hash, label: "RC Number", value: registrar.rcNumber },
-            { icon: Mail, label: "Contact Email", value: registrar.contactEmail },
-            { icon: Building2, label: "Industry", value: registrar.industry },
+            { icon: Hash, label: "RC Number", value: organiser.rcNumber },
+            { icon: Mail, label: "Contact Email", value: organiser.contactEmail },
+            { icon: Building2, label: "Industry", value: organiser.industry },
             { icon: Globe, label: "Plan", value: plan.label },
-            { icon: CalendarDays, label: "Enrolled", value: formatDate(registrar.enrolledAt) },
+            { icon: CalendarDays, label: "Enrolled", value: formatDate(organiser.enrolledAt) },
           ].map(({ icon: Icon, label, value }) => (
             <div key={label} className="flex items-start gap-2.5">
               <div className="h-7 w-7 rounded-lg bg-[hsl(var(--muted))] flex items-center justify-center shrink-0 mt-0.5">

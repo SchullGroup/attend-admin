@@ -36,10 +36,10 @@ const SECTIONS = [
     ],
   },
   {
-    label: "Registrars",
+    label: "Organisers",
     items: [
-      { title: "All Registrars", icon: Building2, href: "/registrars" },
-      { title: "Pending Enrollments", icon: ClipboardList, href: "/registrars/pending" },
+      { title: "All Organisers", icon: Building2, href: "/organisers" },
+      { title: "Pending Enrollments", icon: ClipboardList, href: "/organisers/pending" },
     ],
   },
   {
@@ -63,8 +63,8 @@ const SECTIONS = [
 
 const ALL_HREFS = [
   ...SECTIONS.flatMap((s) => s.items.map((i) => i.href)),
-  "/registrars",
-  "/registrars/pending",
+  "/organisers",
+  "/organisers/pending",
   "/settings/team",
 ];
 
@@ -90,8 +90,8 @@ const roleLabel: Record<string, string> = {
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentUser, logout, registrars } = useStore();
-  const pendingCount = registrars.filter((s) => s.status === "pending").length;
+  const { currentUser, logout, organisers } = useStore();
+  const pendingCount = organisers.filter((s) => s.status === "pending").length;
 
   return (
     <aside
@@ -169,7 +169,7 @@ export function Sidebar() {
                         style={{ backgroundColor: "#ef4444" }}
                       />
                     )}
-                    {item.href === "/registrars/pending" && pendingCount > 0 && (
+                    {item.href === "/organisers/pending" && pendingCount > 0 && (
                       <span
                         className="ml-auto h-4 min-w-4 px-1 rounded-full text-xs font-bold flex items-center justify-center"
                         style={{ backgroundColor: "#f59e0b", color: "white" }}

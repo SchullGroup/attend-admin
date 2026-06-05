@@ -4,9 +4,9 @@ import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import type { Registrar } from "@/lib/mock-data";
+import type { Organiser } from "@/lib/mock-data";
 
-const PLAN_OPTIONS: Registrar["plan"][] = ["enterprise", "growth", "starter"];
+const PLAN_OPTIONS: Organiser["plan"][] = ["enterprise", "growth", "starter"];
 
 const INDUSTRY_OPTIONS = [
   "Banking & Finance",
@@ -25,15 +25,15 @@ const INDUSTRY_OPTIONS = [
 ];
 
 export default function PendingEnrollmentsPage() {
-  const { registrars, enrollRegistrar } = useStore();
-  const pending = registrars.filter((s) => s.status === "pending");
+  const { organisers, enrollOrganiser } = useStore();
+  const pending = organisers.filter((s) => s.status === "pending");
 
   const [form, setForm] = useState({
     name: "",
     industry: "",
     rcNumber: "",
     contactEmail: "",
-    plan: "starter" as Registrar["plan"],
+    plan: "starter" as Organiser["plan"],
   });
 
   function handleFormChange(field: keyof typeof form, value: string) {
@@ -50,7 +50,7 @@ export default function PendingEnrollmentsPage() {
   }
 
   function handleApprove(id: string, name: string) {
-    enrollRegistrar(id);
+    enrollOrganiser(id);
     toast.success(`${name} has been approved and activated.`);
   }
 
@@ -63,13 +63,13 @@ export default function PendingEnrollmentsPage() {
       <div>
         <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Pending Enrollments</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-          Registrars awaiting review and activation
+          Organisers awaiting review and activation
         </p>
       </div>
 
       {/* Enroll New Organisation form */}
       <Card className="attend-card p-6">
-        <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">Enroll New Organisation</h2>
+        <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">Enroll New Organiser</h2>
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">

@@ -67,7 +67,7 @@ function EventRow({ event }: { event: AttendEvent }) {
 }
 
 export default function DashboardPage() {
-  const { events, participants, liveAttendees, registrars } = useStore();
+  const { events, participants, liveAttendees, organisers } = useStore();
 
   const liveEvents = events.filter((e) => e.status === "live");
   const pendingKYC = participants.filter((p) => p.kycStatus === "pending").length;
@@ -76,8 +76,8 @@ export default function DashboardPage() {
     .sort((a, b) => new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime())
     .slice(0, 6);
 
-  const activeRegistrars = registrars.filter((s) => s.status === "active");
-  const topRegistrars = [...activeRegistrars]
+  const activeOrganisers = organisers.filter((s) => s.status === "active");
+  const topOrganisers = [...activeOrganisers]
     .sort((a, b) => b.eventsCount - a.eventsCount)
     .slice(0, 4);
 
@@ -110,8 +110,8 @@ export default function DashboardPage() {
       {/* ── Stats strip (single card, 4 inline stats) ── */}
       <div className="grid grid-cols-4 divide-x divide-[hsl(var(--border))] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
         {[
-          { label: "Enrolled Registrars", value: activeRegistrars.length, sub: "Active organisations", icon: Building2, color: "#374151" },
-          { label: "Total Events", value: events.length, sub: "Across all registrars", icon: CalendarDays, color: "#111827" },
+          { label: "Enrolled Organisers", value: activeOrganisers.length, sub: "Active organisations", icon: Building2, color: "#374151" },
+          { label: "Total Events", value: events.length, sub: "Across all organisers", icon: CalendarDays, color: "#111827" },
           { label: "Live Now", value: liveEvents.length, sub: liveEvents.length > 0 ? `${liveAttendees.toLocaleString()} online` : "No active sessions", icon: Radio, color: liveEvents.length > 0 ? "#dc2626" : "#9ca3af" },
           { label: "Pending KYC", value: pendingKYC, sub: "Awaiting verification", icon: ShieldAlert, color: pendingKYC > 0 ? "#f97316" : "#9ca3af" },
         ].map(({ label, value, sub, icon: Icon, color }) => (
@@ -136,7 +136,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border)/0.6)]">
             <div>
               <h2 className="font-semibold text-[hsl(var(--foreground))]">Platform Events</h2>
-              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{upcoming.length} active or upcoming across all registrars</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{upcoming.length} active or upcoming across all organisers</p>
             </div>
             <Link href="/events">
               <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-[hsl(var(--muted-foreground))]">
@@ -151,21 +151,21 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Right: Registrars card + recent users */}
+        {/* Right: Organisers card + recent users */}
         <div className="col-span-2 flex flex-col gap-5">
 
-          {/* Registrars card */}
+          {/* Organisers card */}
           <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-[hsl(var(--border)/0.6)]">
-              <h2 className="font-semibold text-[hsl(var(--foreground))] text-sm">Registrars</h2>
-              <Link href="/registrars">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] text-sm">Organisers</h2>
+              <Link href="/organisers">
                 <Button variant="ghost" size="sm" className="h-6 text-xs gap-1 text-[hsl(var(--muted-foreground))] px-2">
                   All <ArrowRight className="h-2.5 w-2.5" />
                 </Button>
               </Link>
             </div>
             <div className="divide-y divide-[hsl(var(--border)/0.5)]">
-              {topRegistrars.map((stk) => (
+              {topOrganisers.map((stk) => (
                 <div key={stk.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.3)] transition-colors">
                   <div
                     className="h-7 w-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
@@ -237,7 +237,7 @@ export default function DashboardPage() {
               )}
             </Button>
           </Link>
-          <Link href="/registrars/pending"><Button size="sm" variant="outline" className="h-8 text-xs">Enroll Registrar</Button></Link>
+          <Link href="/organisers/pending"><Button size="sm" variant="outline" className="h-8 text-xs">Enroll Organiser</Button></Link>
           <Link href="/documents"><Button size="sm" variant="outline" className="h-8 text-xs">Documents</Button></Link>
           <Link href="/analytics"><Button size="sm" variant="outline" className="h-8 text-xs">Analytics</Button></Link>
         </div>

@@ -515,7 +515,7 @@ export default function LiveControlPage() {
     );
   }
 
-  // ── Registrars table ────────────────────────────────────────────────────────
+  // ── Organisers table ────────────────────────────────────────────────────────
   if (!session) {
     return (
       <div className="flex flex-col gap-6">
@@ -554,17 +554,17 @@ export default function LiveControlPage() {
           ))}
         </div>
 
-        {/* Registrars table */}
+        {/* Organisers table */}
         <Card className="attend-card overflow-hidden">
           <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
-            <h2 className="font-semibold text-[hsl(var(--foreground))]">Live Registrars</h2>
+            <h2 className="font-semibold text-[hsl(var(--foreground))]">Live Organisers</h2>
             <span className="text-xs text-[hsl(var(--muted-foreground))]">{liveSessions.length} sessions running</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px]">
               <thead>
                 <tr className="attend-table-header">
-                  <th className="px-5 py-3 text-left">Registrar</th>
+                  <th className="px-5 py-3 text-left">Organiser</th>
                   <th className="px-5 py-3 text-left">Module</th>
                   <th className="px-5 py-3 text-left">Format</th>
                   <th className="px-5 py-3 text-left">Attendees</th>

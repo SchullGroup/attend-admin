@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import type { Registrar } from "@/lib/mock-data";
+import type { Organiser } from "@/lib/mock-data";
 
 const TABS: { label: string; value: string }[] = [
   { label: "All", value: "all" },
@@ -12,39 +12,39 @@ const TABS: { label: string; value: string }[] = [
   { label: "Suspended", value: "suspended" },
 ];
 
-const PLAN_STYLE: Record<Registrar["plan"], { label: string; color: string; bg: string }> = {
+const PLAN_STYLE: Record<Organiser["plan"], { label: string; color: string; bg: string }> = {
   enterprise: { label: "Enterprise", color: "#166534", bg: "#dcfce7" },
   growth:     { label: "Growth",     color: "#374151", bg: "#dbeafe" },
   starter:    { label: "Starter",    color: "#6b7280", bg: "#f3f4f6" },
 };
 
-const STATUS_DOT: Record<Registrar["status"], { dot: string; label: string }> = {
+const STATUS_DOT: Record<Organiser["status"], { dot: string; label: string }> = {
   active:    { dot: "#16a34a", label: "Active" },
   suspended: { dot: "#dc2626", label: "Suspended" },
   pending:   { dot: "#f59e0b", label: "Pending" },
 };
 
-export default function RegistrarsPage() {
-  const { registrars, enrollRegistrar, suspendRegistrar } = useStore();
+export default function OrganisersPage() {
+  const { organisers, enrollOrganiser, suspendOrganiser } = useStore();
   const [activeTab, setActiveTab] = useState("all");
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const filtered =
     activeTab === "all"
-      ? registrars
-      : registrars.filter((s) => s.status === activeTab);
+      ? organisers
+      : organisers.filter((s) => s.status === activeTab);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Registrars</h1>
+          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Organisers</h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
             Enrolled organisations on the Attend platform
           </p>
         </div>
-        <Link href="/registrars/pending">
-          <Button className="gap-2">Enroll New Registrar</Button>
+        <Link href="/organisers/pending">
+          <Button className="gap-2">Enroll New Organiser</Button>
         </Link>
       </div>
 
@@ -110,7 +110,7 @@ export default function RegistrarsPage() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5">
-                      <Link href={`/registrars/${stk.id}`}>
+                      <Link href={`/organisers/${stk.id}`}>
                         <Button size="sm" variant="outline" className="h-7 text-xs">View</Button>
                       </Link>
                       {stk.status === "active" && (
@@ -119,7 +119,7 @@ export default function RegistrarsPage() {
                             size="sm"
                             variant="ghost"
                             className="h-7 text-xs text-red-600 bg-red-50 font-semibold"
-                            onClick={() => { suspendRegistrar(stk.id); setConfirmId(null); }}
+                            onClick={() => { suspendOrganiser(stk.id); setConfirmId(null); }}
                           >
                             Confirm?
                           </Button>
@@ -139,7 +139,7 @@ export default function RegistrarsPage() {
                           size="sm"
                           variant="ghost"
                           className="h-7 text-xs text-green-700 hover:text-green-800 hover:bg-green-50"
-                          onClick={() => enrollRegistrar(stk.id)}
+                          onClick={() => enrollOrganiser(stk.id)}
                         >
                           Activate
                         </Button>
@@ -153,7 +153,7 @@ export default function RegistrarsPage() {
         </table>
         {filtered.length === 0 && (
           <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
-            No registrars found for this filter.
+            No organisers found for this filter.
           </div>
         )}
       </Card>

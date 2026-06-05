@@ -229,7 +229,7 @@ export default function TeamPage() {
                 { perm: "Upload Documents", admin: true, manager: true, viewer: false },
                 { perm: "Manage Participants", admin: true, manager: true, viewer: false },
                 { perm: "Publish / Go Live Events", admin: true, manager: true, viewer: false },
-                { perm: "Manage Registrars", admin: true, manager: false, viewer: false },
+                { perm: "Manage Organisers", admin: true, manager: false, viewer: false },
                 { perm: "Manage Team Members", admin: true, manager: false, viewer: false },
                 { perm: "Platform Settings", admin: true, manager: false, viewer: false },
               ].map((row) => (
