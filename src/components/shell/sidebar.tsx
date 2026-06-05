@@ -3,9 +3,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, CalendarDays, Radio, Vote,
-  Lightbulb, FileText as FileApp, Star, Users, ShieldCheck,
+  Lightbulb, FileText as FileApp, Star, Users, Users2,
   FolderOpen, BarChart3, Settings, UserCog, LogOut,
-  Building2, ClipboardList, QrCode, ScrollText,
+  Building2, ClipboardList, QrCode, ScrollText, PlusCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
@@ -20,6 +20,7 @@ const SECTIONS = [
   {
     label: "Platform Events",
     items: [
+      { title: "Create Event", icon: PlusCircle, href: "/events/create" },
       { title: "All Events", icon: CalendarDays, href: "/events" },
       { title: "Live Control Room", icon: Radio, href: "/events/live" },
       { title: "QR Check-In", icon: QrCode, href: "/events/qr-checkin" },
@@ -35,17 +36,16 @@ const SECTIONS = [
     ],
   },
   {
-    label: "Stakeholders",
+    label: "Registrars",
     items: [
-      { title: "All Stakeholders", icon: Building2, href: "/stakeholders" },
-      { title: "Pending Enrollments", icon: ClipboardList, href: "/stakeholders/pending" },
+      { title: "All Registrars", icon: Building2, href: "/registrars" },
+      { title: "Pending Enrollments", icon: ClipboardList, href: "/registrars/pending" },
     ],
   },
   {
     label: "People",
     items: [
       { title: "All Users", icon: Users, href: "/participants" },
-      { title: "KYC Queue", icon: ShieldCheck, href: "/participants/kyc" },
     ],
   },
   {
@@ -56,14 +56,16 @@ const SECTIONS = [
       { title: "Audit Log", icon: ScrollText, href: "/audit" },
       { title: "Settings", icon: Settings, href: "/settings" },
       { title: "Roles & Access", icon: UserCog, href: "/settings/roles" },
+      { title: "Team Members", icon: Users2, href: "/settings/team" },
     ],
   },
 ];
 
 const ALL_HREFS = [
   ...SECTIONS.flatMap((s) => s.items.map((i) => i.href)),
-  "/stakeholders",
-  "/stakeholders/pending",
+  "/registrars",
+  "/registrars/pending",
+  "/settings/team",
 ];
 
 function isActive(href: string, pathname: string): boolean {
@@ -88,8 +90,8 @@ const roleLabel: Record<string, string> = {
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentUser, logout, stakeholders } = useStore();
-  const pendingCount = stakeholders.filter((s) => s.status === "pending").length;
+  const { currentUser, logout, registrars } = useStore();
+  const pendingCount = registrars.filter((s) => s.status === "pending").length;
 
   return (
     <aside
@@ -167,7 +169,7 @@ export function Sidebar() {
                         style={{ backgroundColor: "#ef4444" }}
                       />
                     )}
-                    {item.href === "/stakeholders/pending" && pendingCount > 0 && (
+                    {item.href === "/registrars/pending" && pendingCount > 0 && (
                       <span
                         className="ml-auto h-4 min-w-4 px-1 rounded-full text-xs font-bold flex items-center justify-center"
                         style={{ backgroundColor: "#f59e0b", color: "white" }}

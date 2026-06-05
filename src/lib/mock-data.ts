@@ -3,9 +3,9 @@ export type EventStatus = "draft" | "published" | "live" | "ended" | "cancelled"
 export type ParticipantStatus = "active" | "pending" | "suspended";
 export type KYCStatus = "none" | "basic" | "pending" | "full";
 export type ApplicationStatus = "submitted" | "under_review" | "shortlisted" | "selected" | "not_progressed";
-export type StakeholderStatus = "active" | "suspended" | "pending";
+export type RegistrarStatus = "active" | "suspended" | "pending";
 
-export interface Stakeholder {
+export interface Registrar {
   id: string;
   name: string;
   industry: string;
@@ -13,7 +13,7 @@ export interface Stakeholder {
   contactEmail: string;
   plan: "enterprise" | "growth" | "starter";
   eventsCount: number;
-  status: StakeholderStatus;
+  status: RegistrarStatus;
   enrolledAt: string;
 }
 
@@ -159,7 +159,7 @@ export const CURRENT_ADMIN: AdminUser = {
   orgEmail: "corp@meristem.com",
 };
 
-export const MOCK_STAKEHOLDERS: Stakeholder[] = [
+export const MOCK_REGISTRARS: Registrar[] = [
   { id: "stk_001", name: "Zenith Bank Plc", industry: "Banking", rcNumber: "RC 84269", contactEmail: "corp@zenithbank.com", plan: "enterprise", eventsCount: 3, status: "active", enrolledAt: "2025-11-01" },
   { id: "stk_002", name: "GTCo Holdings", industry: "Banking", rcNumber: "RC 152321", contactEmail: "ir@gtcoplc.com", plan: "enterprise", eventsCount: 2, status: "active", enrolledAt: "2025-12-01" },
   { id: "stk_003", name: "Dangote Cement Plc", industry: "Manufacturing", rcNumber: "RC 177839", contactEmail: "investor.relations@dangote.com", plan: "growth", eventsCount: 1, status: "active", enrolledAt: "2026-01-15" },
@@ -532,7 +532,7 @@ export const MOCK_AGM_VOTE_RECORDS: {
 ];
 
 export type AuditSeverity = "info" | "warning" | "critical";
-export type AuditCategory = "auth" | "events" | "stakeholders" | "kyc" | "voting" | "documents" | "system";
+export type AuditCategory = "auth" | "events" | "registrars" | "kyc" | "voting" | "documents" | "system";
 
 export interface AuditLogEntry {
   id: string;
@@ -551,7 +551,7 @@ export interface AuditLogEntry {
 export const MOCK_AUDIT_LOG: AuditLogEntry[] = [
   { id: "aud_001", timestamp: "2026-06-05T08:12:44Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Signed in", category: "auth", resource: "Admin Portal", ip: "197.210.54.12", severity: "info" },
   { id: "aud_002", timestamp: "2026-06-05T08:12:51Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "2FA verified", category: "auth", resource: "Admin Portal", details: "TOTP code accepted", ip: "197.210.54.12", severity: "info" },
-  { id: "aud_003", timestamp: "2026-06-05T08:35:02Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Stakeholder enrolled", category: "stakeholders", resource: "AIICO Insurance Plc", details: "Status changed: pending → active", ip: "197.210.54.12", severity: "info" },
+  { id: "aud_003", timestamp: "2026-06-05T08:35:02Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Registrar enrolled", category: "registrars", resource: "AIICO Insurance Plc", details: "Status changed: pending → active", ip: "197.210.54.12", severity: "info" },
   { id: "aud_004", timestamp: "2026-06-05T09:01:18Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "KYC approved", category: "kyc", resource: "Ngozi Okafor (usr_001)", details: "Full verification — BVN + CHN confirmed", ip: "197.210.54.12", severity: "info" },
   { id: "aud_005", timestamp: "2026-06-05T09:14:30Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "KYC rejected", category: "kyc", resource: "Rukayat Oduola (usr_017)", details: "Reason: NIN document expired", ip: "197.210.54.12", severity: "warning" },
   { id: "aud_006", timestamp: "2026-06-04T11:22:05Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Voting opened", category: "voting", resource: "Adoption of Financial Statements — Zenith Bank 2026 AGM", ip: "197.210.54.12", severity: "info" },
@@ -567,15 +567,15 @@ export const MOCK_AUDIT_LOG: AuditLogEntry[] = [
   { id: "aud_016", timestamp: "2026-06-02T16:45:21Z", actor: "Bode Mensah", actorEmail: "bode.mensah@meristem.com", actorRole: "kyc_officer", action: "KYC flagged for review", category: "kyc", resource: "Kola Adesanya (usr_007)", details: "Suspicious CHN — forwarded to compliance team", ip: "197.210.54.99", severity: "warning" },
   { id: "aud_017", timestamp: "2026-06-02T17:10:00Z", actor: "Bode Mensah", actorEmail: "bode.mensah@meristem.com", actorRole: "kyc_officer", action: "KYC approved", category: "kyc", resource: "Yetunde Abiodun (usr_010)", details: "Full verification completed", ip: "197.210.54.99", severity: "info" },
   { id: "aud_018", timestamp: "2026-06-02T17:12:00Z", actor: "Bode Mensah", actorEmail: "bode.mensah@meristem.com", actorRole: "kyc_officer", action: "Signed out", category: "auth", resource: "Admin Portal", ip: "197.210.54.99", severity: "info" },
-  { id: "aud_019", timestamp: "2026-06-01T13:00:00Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Stakeholder suspended", category: "stakeholders", resource: "Nigerian Breweries Plc", details: "Reason: Non-payment of platform fees", ip: "197.210.54.12", severity: "warning" },
-  { id: "aud_020", timestamp: "2026-06-01T11:20:00Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Stakeholder application rejected", category: "stakeholders", resource: "BUA Foods Plc", details: "Reason: Incomplete regulatory documentation", ip: "197.210.54.12", severity: "info" },
+  { id: "aud_019", timestamp: "2026-06-01T13:00:00Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Registrar suspended", category: "registrars", resource: "Nigerian Breweries Plc", details: "Reason: Non-payment of platform fees", ip: "197.210.54.12", severity: "warning" },
+  { id: "aud_020", timestamp: "2026-06-01T11:20:00Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Registrar application rejected", category: "registrars", resource: "BUA Foods Plc", details: "Reason: Incomplete regulatory documentation", ip: "197.210.54.12", severity: "info" },
   { id: "aud_021", timestamp: "2026-05-31T10:05:00Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Document deleted", category: "documents", resource: "Draft AGM Notice v0.1 — Dangote Cement", details: "Replaced by final version", ip: "197.210.54.12", severity: "warning" },
   { id: "aud_022", timestamp: "2026-05-30T09:00:00Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "2FA policy enforced", category: "system", resource: "All admin accounts", details: "System-wide 2FA requirement enabled", ip: "197.210.54.12", severity: "warning" },
   { id: "aud_023", timestamp: "2026-05-29T14:30:00Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Innovation Challenge shortlisted", category: "events", resource: "FinFlow — MeriHack 2026", details: "Score: 82 / 100", ip: "197.210.54.12", severity: "info" },
   { id: "aud_024", timestamp: "2026-05-29T14:35:00Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Innovation Challenge winner selected", category: "events", resource: "CreditSense — MeriHack 2026", details: "Final score: 91 / 100", ip: "197.210.54.12", severity: "info" },
   { id: "aud_025", timestamp: "2026-05-28T12:00:00Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Vote audit log exported", category: "documents", resource: "Zenith Bank 2026 AGM — All Resolutions", ip: "197.210.54.12", severity: "info" },
   { id: "aud_026", timestamp: "2026-05-27T09:15:00Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Live session started", category: "events", resource: "Zenith Bank Plc — 2026 Annual General Meeting", ip: "197.210.54.12", severity: "info" },
-  { id: "aud_027", timestamp: "2026-05-26T16:00:00Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Stakeholder enrolled", category: "stakeholders", resource: "FintechNGR Association", details: "Plan: Starter · Contact: admin@fintechngr.org", ip: "197.210.54.12", severity: "info" },
+  { id: "aud_027", timestamp: "2026-05-26T16:00:00Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Registrar enrolled", category: "registrars", resource: "FintechNGR Association", details: "Plan: Starter · Contact: admin@fintechngr.org", ip: "197.210.54.12", severity: "info" },
   { id: "aud_028", timestamp: "2026-05-25T08:45:00Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Event published", category: "events", resource: "Access Bank Plc — 2026 Annual General Meeting (evt_007)", ip: "197.210.54.12", severity: "info" },
   { id: "aud_029", timestamp: "2026-05-24T15:30:00Z", actor: "Bode Mensah", actorEmail: "bode.mensah@meristem.com", actorRole: "kyc_officer", action: "Bulk KYC review completed", category: "kyc", resource: "3 accounts reviewed", details: "2 approved, 1 flagged", ip: "197.210.54.99", severity: "info" },
   { id: "aud_030", timestamp: "2026-05-23T11:00:00Z", actor: "Stanley Jacob", actorEmail: "stanley.jacob@meristem.com", actorRole: "super_admin", action: "Analytics report exported", category: "system", resource: "Platform-wide Q2 2026 Report", ip: "197.210.54.12", severity: "info" },
@@ -588,13 +588,30 @@ export const ACTIVITY_LOG = [
   { action: "Event published", actor: "GTCo Holdings", context: "2026 EGM: Rights Issue Approval", time: "2026-04-15T10:00:00Z" },
   { action: "Document uploaded", actor: "GTCo Holdings", context: "Rights Issue Circular (2.1 MB)", time: "2026-05-15T09:00:00Z" },
   { action: "Event created (draft)", actor: "Dangote Cement Plc", context: "2026 Annual General Meeting", time: "2026-05-01T09:00:00Z" },
-  { action: "Stakeholder enrolled", actor: "Admin", context: "FintechNGR Association", time: "2026-04-10T08:30:00Z" },
+  { action: "Registrar enrolled", actor: "Admin", context: "FintechNGR Association", time: "2026-04-10T08:30:00Z" },
   { action: "Application shortlisted", actor: "Admin", context: "FinFlow — MeriHack 2026", time: "2026-07-01T11:00:00Z" },
   { action: "Application selected", actor: "Admin", context: "CreditSense — MeriHack 2026 (score: 91)", time: "2026-07-01T14:00:00Z" },
   { action: "Event published", actor: "Access Bank Plc", context: "2026 Annual General Meeting", time: "2026-05-20T09:00:00Z" },
   { action: "KYC submitted", actor: "Kola Adesanya", context: "Pending review — BVN & CHN uploaded", time: "2026-05-10T10:00:00Z" },
-  { action: "Stakeholder enrolled", actor: "Admin", context: "AIICO Insurance Plc — pending review", time: "2026-05-22T08:30:00Z" },
+  { action: "Registrar enrolled", actor: "Admin", context: "AIICO Insurance Plc — pending review", time: "2026-05-22T08:30:00Z" },
   { action: "Event went live", actor: "System", context: "FintechNGR Regulatory Roundtable 2026", time: "2026-05-25T09:00:00Z" },
   { action: "Event went live", actor: "System", context: "Seplat Energy — Investor Day 2026", time: "2026-05-25T10:00:00Z" },
   { action: "Document uploaded", actor: "Stanbic IBTC Holdings", context: "2026 AGM Notice (1.4 MB)", time: "2026-05-15T09:00:00Z" },
+];
+
+export type TeamRole = "Admin" | "Event Manager" | "Viewer";
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: TeamRole;
+  joinedAt: string;
+}
+
+export const MOCK_TEAM: TeamMember[] = [
+  { id: "tm_001", name: "Stanley Jacob", email: "stanley.jacob@meristem.com", role: "Admin", joinedAt: "2025-10-01T09:00:00Z" },
+  { id: "tm_002", name: "Adaeze Okonkwo", email: "adaeze.okonkwo@meristem.com", role: "Event Manager", joinedAt: "2025-11-15T09:00:00Z" },
+  { id: "tm_003", name: "Bode Mensah", email: "bode.mensah@meristem.com", role: "Event Manager", joinedAt: "2026-01-10T09:00:00Z" },
+  { id: "tm_004", name: "Chioma Eze", email: "chioma.eze@meristem.com", role: "Viewer", joinedAt: "2026-03-01T09:00:00Z" },
 ];

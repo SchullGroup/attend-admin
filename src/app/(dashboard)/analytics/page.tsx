@@ -24,7 +24,7 @@ const KYC_ITEMS = [
 const FORMAT_COLORS: Record<string, string> = { virtual: "#111827", hybrid: "#9333ea", "in-person": "#374151" };
 
 export default function AnalyticsPage() {
-  const { events, participants, documents, liveVotes, stakeholders } = useStore();
+  const { events, participants, documents, liveVotes, registrars } = useStore();
 
   const totalRSVP = events.reduce((s, e) => s + e.rsvpCount, 0);
   const totalDownloads = documents.reduce((s, d) => s + d.downloadCount, 0);
@@ -32,10 +32,10 @@ export default function AnalyticsPage() {
 
   const modules: EventModule[] = ["AGM", "LAUNCH", "HACKATHON", "GENERAL"];
 
-  const topStakeholders = [...stakeholders]
+  const topRegistrars = [...registrars]
     .sort((a, b) => b.eventsCount - a.eventsCount)
     .slice(0, 3);
-  const maxEvents = topStakeholders[0]?.eventsCount ?? 1;
+  const maxEvents = topRegistrars[0]?.eventsCount ?? 1;
 
   return (
     <div>
@@ -83,14 +83,14 @@ export default function AnalyticsPage() {
         />
       </div>
 
-      {/* Stakeholders card */}
+      {/* Registrars card */}
       <Card className="attend-card p-5 mb-5">
         <div className="flex items-center gap-2 mb-4">
           <Building2 className="h-4 w-4 text-[hsl(var(--primary))]" />
-          <div className="attend-section-title">Top Stakeholders by Events</div>
+          <div className="attend-section-title">Top Registrars by Events</div>
         </div>
         <div className="flex flex-col gap-4">
-          {topStakeholders.map((stk) => {
+          {topRegistrars.map((stk) => {
             const pct = maxEvents > 0 ? Math.round((stk.eventsCount / maxEvents) * 100) : 0;
             return (
               <div key={stk.id} className="flex items-center gap-4">

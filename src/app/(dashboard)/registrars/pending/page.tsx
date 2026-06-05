@@ -4,9 +4,9 @@ import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import type { Stakeholder } from "@/lib/mock-data";
+import type { Registrar } from "@/lib/mock-data";
 
-const PLAN_OPTIONS: Stakeholder["plan"][] = ["enterprise", "growth", "starter"];
+const PLAN_OPTIONS: Registrar["plan"][] = ["enterprise", "growth", "starter"];
 
 const INDUSTRY_OPTIONS = [
   "Banking & Finance",
@@ -25,15 +25,15 @@ const INDUSTRY_OPTIONS = [
 ];
 
 export default function PendingEnrollmentsPage() {
-  const { stakeholders, enrollStakeholder } = useStore();
-  const pending = stakeholders.filter((s) => s.status === "pending");
+  const { registrars, enrollRegistrar } = useStore();
+  const pending = registrars.filter((s) => s.status === "pending");
 
   const [form, setForm] = useState({
     name: "",
     industry: "",
     rcNumber: "",
     contactEmail: "",
-    plan: "starter" as Stakeholder["plan"],
+    plan: "starter" as Registrar["plan"],
   });
 
   function handleFormChange(field: keyof typeof form, value: string) {
@@ -50,7 +50,7 @@ export default function PendingEnrollmentsPage() {
   }
 
   function handleApprove(id: string, name: string) {
-    enrollStakeholder(id);
+    enrollRegistrar(id);
     toast.success(`${name} has been approved and activated.`);
   }
 
@@ -63,7 +63,7 @@ export default function PendingEnrollmentsPage() {
       <div>
         <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Pending Enrollments</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-          Stakeholders awaiting review and activation
+          Registrars awaiting review and activation
         </p>
       </div>
 

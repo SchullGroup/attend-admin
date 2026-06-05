@@ -7,7 +7,7 @@ import type { AuditCategory, AuditSeverity } from "@/lib/mock-data";
 const CATEGORY_LABELS: Record<AuditCategory, string> = {
   auth: "Auth",
   kyc: "KYC",
-  stakeholders: "Stakeholders",
+  registrars: "Registrars",
   events: "Events",
   voting: "Voting",
   documents: "Documents",
@@ -15,13 +15,13 @@ const CATEGORY_LABELS: Record<AuditCategory, string> = {
 };
 
 const CATEGORY_COLORS: Record<AuditCategory, { bg: string; text: string }> = {
-  auth:         { bg: "rgba(17,24,39,0.08)",   text: "#374151" },
-  kyc:          { bg: "rgba(124,58,237,0.08)",  text: "#6d28d9" },
-  stakeholders: { bg: "rgba(79,70,229,0.08)",   text: "#4338ca" },
-  events:       { bg: "rgba(22,163,74,0.08)",   text: "#15803d" },
-  voting:       { bg: "rgba(217,119,6,0.08)",   text: "#b45309" },
-  documents:    { bg: "rgba(234,88,12,0.08)",   text: "#c2410c" },
-  system:       { bg: "rgba(100,116,139,0.1)",  text: "#475569" },
+  auth:       { bg: "rgba(17,24,39,0.08)",   text: "#374151" },
+  kyc:        { bg: "rgba(124,58,237,0.08)",  text: "#6d28d9" },
+  registrars: { bg: "rgba(79,70,229,0.08)",   text: "#4338ca" },
+  events:     { bg: "rgba(22,163,74,0.08)",   text: "#15803d" },
+  voting:     { bg: "rgba(217,119,6,0.08)",   text: "#b45309" },
+  documents:  { bg: "rgba(234,88,12,0.08)",   text: "#c2410c" },
+  system:     { bg: "rgba(100,116,139,0.1)",  text: "#475569" },
 };
 
 const SEVERITY_CONFIG: Record<AuditSeverity, { bg: string; text: string; label: string; dot: string }> = {
@@ -30,7 +30,7 @@ const SEVERITY_CONFIG: Record<AuditSeverity, { bg: string; text: string; label: 
   critical: { bg: "rgba(239,68,68,0.1)",   text: "#dc2626", label: "Critical", dot: "#ef4444" },
 };
 
-const ALL_CATEGORIES: ("all" | AuditCategory)[] = ["all", "auth", "kyc", "stakeholders", "events", "voting", "documents", "system"];
+const ALL_CATEGORIES: ("all" | AuditCategory)[] = ["all", "auth", "kyc", "registrars", "events", "voting", "documents", "system"];
 const ALL_SEVERITIES: ("all" | AuditSeverity)[] = ["all", "info", "warning", "critical"];
 
 function formatTimestamp(iso: string) {
