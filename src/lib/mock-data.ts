@@ -29,6 +29,13 @@ export interface AdminUser {
   logoUrl?: string;
 }
 
+export interface AgendaItem {
+  id: string;
+  time: string;
+  title: string;
+  speaker?: string;
+}
+
 export interface AttendEvent {
   id: string;
   module: EventModule;
@@ -44,6 +51,7 @@ export interface AttendEvent {
   capacity?: number;
   color: string;
   createdAt: string;
+  agenda?: AgendaItem[];
 }
 
 export interface Participant {
