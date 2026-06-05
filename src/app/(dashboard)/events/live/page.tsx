@@ -433,8 +433,16 @@ function parseStreamUrl(url: string): string {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+const MODULE_COLORS: Record<string, string> = {
+  AGM:      "#111827",
+  LAUNCH:   "#ea6c00",
+  HACKATHON:"#7c22c9",
+  GENERAL:  "#0891b2",
+};
+
 export default function LiveControlPage() {
-  const { liveSessions, selectedLiveSessionId, setSelectedLiveSession, openVoting, closeVoting, approveQA, rejectQA, launchPoll, closePoll, releasePressKit, declareWinner } = useStore();
+  const { liveSessions, openVoting, closeVoting, approveQA, rejectQA, launchPoll, closePoll, releasePressKit, declareWinner } = useStore();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [streamInputs, setStreamInputs] = useState<Record<string, string>>({});
   const [streamUrls, setStreamUrls] = useState<Record<string, string>>(DEFAULT_STREAM_URLS);
 
@@ -446,10 +454,10 @@ export default function LiveControlPage() {
     setStreamUrls((prev) => ({ ...prev, [sessionId]: parseStreamUrl(raw) }));
   }
 
-  const session = liveSessions.find((s) => s.id === selectedLiveSessionId) ?? liveSessions[0];
   const totalAttendees = liveSessions.reduce((sum, s) => sum + s.attendees, 0);
+  const session = liveSessions.find((s) => s.id === selectedId);
 
-  if (!session) {
+  if (liveSessions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <Radio className="h-8 w-8 text-[hsl(var(--muted-foreground))]" />
@@ -458,35 +466,162 @@ export default function LiveControlPage() {
     );
   }
 
+  // ── Stakeholders table ────────────────────────────────────────────────────────
+  if (!session) {
+    return (
+      <div className="flex flex-col gap-6">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Live Control Room</h1>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                {liveSessions.length} LIVE
+              </span>
+            </div>
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+              {totalAttendees.toLocaleString()} total attendees connected across all sessions
+            </p>
+          </div>
+        </div>
+
+        {/* Summary stat cards */}
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { label: "Active Sessions",   value: liveSessions.length,    icon: Radio,  color: "#dc2626" },
+            { label: "Total Attendees",   value: totalAttendees.toLocaleString(), icon: Users,  color: "#7c22c9" },
+            { label: "Open Resolutions",  value: liveSessions.reduce((n, s) => n + s.votes.filter((v) => v.status === "open").length, 0), icon: Vote, color: "#16a34a" },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <Card key={label} className="attend-card p-4 flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}18` }}>
+                <Icon className="h-4.5 w-4.5" style={{ color }} />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-[hsl(var(--foreground))]">{value}</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">{label}</p>
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        {/* Stakeholders table */}
+        <Card className="attend-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
+            <h2 className="font-semibold text-[hsl(var(--foreground))]">Live Stakeholders</h2>
+            <span className="text-xs text-[hsl(var(--muted-foreground))]">{liveSessions.length} sessions running</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px]">
+              <thead>
+                <tr className="attend-table-header">
+                  <th className="px-5 py-3 text-left">Stakeholder</th>
+                  <th className="px-5 py-3 text-left">Module</th>
+                  <th className="px-5 py-3 text-left">Format</th>
+                  <th className="px-5 py-3 text-left">Attendees</th>
+                  <th className="px-5 py-3 text-left">Elapsed</th>
+                  <th className="px-5 py-3 text-left">Quorum</th>
+                  <th className="px-5 py-3 text-left"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {liveSessions.map((sess) => {
+                  const modColor = MODULE_COLORS[sess.module] ?? "#111827";
+                  return (
+                    <tr key={sess.id} className="attend-table-row">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
+                            style={{ backgroundColor: sess.color }}
+                          >
+                            {initials(sess.organiser)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{sess.organiser}</p>
+                            <p className="text-xs text-[hsl(var(--muted-foreground))] truncate max-w-[220px]">{sess.eventTitle}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span
+                          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold text-white"
+                          style={{ backgroundColor: modColor }}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                          {sess.module}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="text-sm text-[hsl(var(--foreground))] capitalize">{sess.format}</span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-1.5">
+                          <Users className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+                          <span className="text-sm font-semibold text-[hsl(var(--foreground))] tabular-nums">
+                            {sess.attendees.toLocaleString()}
+                          </span>
+                          {sess.capacity && (
+                            <span className="text-xs text-[hsl(var(--muted-foreground))]">/ {sess.capacity.toLocaleString()}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+                          <span className="text-sm tabular-nums text-[hsl(var(--foreground))]">{formatElapsed(sess.elapsedMinutes)}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        {sess.quorumPct != null ? (
+                          <span className={`text-sm font-semibold tabular-nums ${sess.quorumPct >= 50 ? "text-green-600" : "text-amber-600"}`}>
+                            {sess.quorumPct}%
+                          </span>
+                        ) : (
+                          <span className="text-xs text-[hsl(var(--muted-foreground))]">N/A</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        <Button
+                          size="sm"
+                          className="h-8 gap-1.5 text-xs"
+                          onClick={() => setSelectedId(sess.id)}
+                        >
+                          Manage <ChevronRight className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // ── Session detail (control room) ─────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-6">
 
-      {/* ── Page header ── */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Live Control Room</h1>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-              {liveSessions.length} LIVE
-            </span>
-          </div>
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            {totalAttendees.toLocaleString()} total attendees connected across all sessions
-          </p>
+      {/* Header with back button */}
+      <div>
+        <button
+          onClick={() => setSelectedId(null)}
+          className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-4 transition-colors"
+        >
+          <ChevronRight className="h-4 w-4 rotate-180" />
+          Back to Live Sessions
+        </button>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{session.organiser}</h1>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">
+            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+            LIVE
+          </span>
         </div>
-      </div>
-
-      {/* ── Session tabs ── */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {liveSessions.map((sess) => (
-          <SessionTab
-            key={sess.id}
-            session={sess}
-            active={sess.id === session.id}
-            onClick={() => setSelectedLiveSession(sess.id)}
-          />
-        ))}
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">{session.eventTitle}</p>
       </div>
 
       {/* ── Selected session header card ── */}
