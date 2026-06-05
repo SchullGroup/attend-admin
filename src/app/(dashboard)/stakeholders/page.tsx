@@ -14,7 +14,7 @@ const TABS: { label: string; value: string }[] = [
 
 const PLAN_STYLE: Record<Stakeholder["plan"], { label: string; color: string; bg: string }> = {
   enterprise: { label: "Enterprise", color: "#166534", bg: "#dcfce7" },
-  growth:     { label: "Growth",     color: "#1d4ed8", bg: "#dbeafe" },
+  growth:     { label: "Growth",     color: "#374151", bg: "#dbeafe" },
   starter:    { label: "Starter",    color: "#6b7280", bg: "#f3f4f6" },
 };
 

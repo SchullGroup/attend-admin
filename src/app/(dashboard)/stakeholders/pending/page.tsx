@@ -8,6 +8,22 @@ import type { Stakeholder } from "@/lib/mock-data";
 
 const PLAN_OPTIONS: Stakeholder["plan"][] = ["enterprise", "growth", "starter"];
 
+const INDUSTRY_OPTIONS = [
+  "Banking & Finance",
+  "Insurance",
+  "Oil & Gas",
+  "FMCG",
+  "Telecommunications",
+  "Technology / Fintech",
+  "Healthcare",
+  "Real Estate",
+  "Manufacturing",
+  "Agriculture",
+  "Financial Services",
+  "Education",
+  "Other",
+];
+
 export default function PendingEnrollmentsPage() {
   const { stakeholders, enrollStakeholder } = useStore();
   const pending = stakeholders.filter((s) => s.status === "pending");
@@ -69,13 +85,16 @@ export default function PendingEnrollmentsPage() {
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Industry</label>
-            <input
-              type="text"
+            <select
               value={form.industry}
               onChange={(e) => handleFormChange("industry", e.target.value)}
-              placeholder="e.g. Banking"
-              className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] transition-shadow"
-            />
+              className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] transition-shadow"
+            >
+              <option value="">Select industry…</option>
+              {INDUSTRY_OPTIONS.map((i) => (
+                <option key={i} value={i}>{i}</option>
+              ))}
+            </select>
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">

@@ -126,7 +126,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             {/* Stats strip */}
             <div className="grid grid-cols-3 divide-x divide-[hsl(var(--border))] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
               {[
-                { label: "RSVPs", value: event.rsvpCount.toLocaleString(), icon: Users, color: "#2563eb" },
+                { label: "RSVPs", value: event.rsvpCount.toLocaleString(), icon: Users, color: "#111827" },
                 { label: "Capacity", value: event.capacity ? event.capacity.toLocaleString() : "Unlimited", icon: Users2, color: "#1a6b3c" },
                 { label: "Fill Rate", value: fill !== null ? `${fill}%` : "—", icon: Radio, color: fill !== null && fill >= 80 ? "#dc2626" : "#f97316" },
               ].map(({ label, value, icon: Icon, color }) => (
@@ -408,7 +408,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           <div className="grid grid-cols-4 divide-x divide-[hsl(var(--border))] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
             {[
               { label: "Resolutions Passed", value: `${liveVotes.filter((v) => v.for > v.against).length} / ${liveVotes.length}`, icon: Vote, color: "#1a6b3c" },
-              { label: "Total Votes Cast", value: liveVotes.reduce((s, v) => s + v.for + v.against + v.abstain, 0).toLocaleString(), icon: CheckCircle2, color: "#2563eb" },
+              { label: "Total Votes Cast", value: liveVotes.reduce((s, v) => s + v.for + v.against + v.abstain, 0).toLocaleString(), icon: CheckCircle2, color: "#111827" },
               { label: "Attendees Present", value: event.rsvpCount.toLocaleString(), icon: Users, color: "#7c22c9" },
               { label: "Minutes Status", value: "Draft", icon: BookOpen, color: "#d97706" },
             ].map(({ label, value, icon: Icon, color }) => (

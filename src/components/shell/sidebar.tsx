@@ -5,7 +5,7 @@ import {
   LayoutDashboard, CalendarDays, Radio, Vote,
   Lightbulb, FileText as FileApp, Star, Users, ShieldCheck,
   FolderOpen, BarChart3, Settings, UserCog, LogOut,
-  Building2, ClipboardList, QrCode,
+  Building2, ClipboardList, QrCode, ScrollText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/lib/store";
@@ -53,6 +53,7 @@ const SECTIONS = [
     items: [
       { title: "Documents", icon: FolderOpen, href: "/documents" },
       { title: "Analytics", icon: BarChart3, href: "/analytics" },
+      { title: "Audit Log", icon: ScrollText, href: "/audit" },
       { title: "Settings", icon: Settings, href: "/settings" },
       { title: "Roles & Access", icon: UserCog, href: "/settings/roles" },
     ],
@@ -133,12 +134,12 @@ export function Sidebar() {
                       active ? "font-medium" : "font-normal"
                     )}
                     style={{
-                      color: active ? "#2563eb" : "#6b7280",
-                      backgroundColor: active ? "rgba(37,99,235,0.07)" : "transparent",
+                      color: active ? "#111827" : "#6b7280",
+                      backgroundColor: active ? "rgba(17,24,39,0.07)" : "transparent",
                     }}
                     onMouseEnter={(e) => {
                       if (!active) {
-                        (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(37,99,235,0.04)";
+                        (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(17,24,39,0.04)";
                         (e.currentTarget as HTMLElement).style.color = "#374151";
                       }
                     }}
@@ -152,12 +153,12 @@ export function Sidebar() {
                     {active && (
                       <span
                         className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full"
-                        style={{ backgroundColor: "#2563eb" }}
+                        style={{ backgroundColor: "#111827" }}
                       />
                     )}
                     <item.icon
                       className="h-4 w-4 shrink-0"
-                      style={{ color: active ? "#2563eb" : "#9ca3af" }}
+                      style={{ color: active ? "#111827" : "#9ca3af" }}
                     />
                     {item.title}
                     {item.href === "/events/live" && (
@@ -191,7 +192,7 @@ export function Sidebar() {
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
             <div
               className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-              style={{ backgroundColor: "rgba(37,99,235,0.10)", color: "#2563eb" }}
+              style={{ backgroundColor: "rgba(17,24,39,0.10)", color: "#111827" }}
             >
               {getInitials(currentUser.name)}
             </div>

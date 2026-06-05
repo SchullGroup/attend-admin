@@ -4,7 +4,7 @@ const config = {
   AGM:       { label: "AGM",       bg: "#eff6ff", color: "#1e40af" },
   LAUNCH:    { label: "Launch",    bg: "#fff4eb", color: "#ea6c00" },
   HACKATHON: { label: "Innovation Challenge", bg: "#f8f0ff", color: "#7c22c9" },
-  GENERAL:   { label: "General",   bg: "#eff5ff", color: "#1d4ed8" },
+  GENERAL:   { label: "General",   bg: "#eff5ff", color: "#374151" },
 };
 
 export function ModuleBadge({ module, className }: { module: keyof typeof config; className?: string }) {

@@ -16,7 +16,7 @@ import type { EventModule } from "@/lib/mock-data";
 
 const PLAN_STYLE = {
   enterprise: { label: "Enterprise", color: "#166534", bg: "#dcfce7" },
-  growth:     { label: "Growth",     color: "#1d4ed8", bg: "#dbeafe" },
+  growth:     { label: "Growth",     color: "#374151", bg: "#dbeafe" },
   starter:    { label: "Starter",    color: "#6b7280", bg: "#f3f4f6" },
 };
 
@@ -140,7 +140,7 @@ export default function StakeholderDetailPage({ params }: { params: Promise<{ id
         <div className="mt-4 pt-4 border-t border-[hsl(var(--border))] flex items-center gap-6">
           {[
             { label: "Events", value: orgEvents.length, color: "#374151" },
-            { label: "Documents", value: orgDocs.length, color: "#2563eb" },
+            { label: "Documents", value: orgDocs.length, color: "#111827" },
           ].map(({ label, value, color }) => (
             <div key={label} className="flex items-baseline gap-2">
               <span className="text-3xl font-bold tabular-nums" style={{ color }}>{value}</span>

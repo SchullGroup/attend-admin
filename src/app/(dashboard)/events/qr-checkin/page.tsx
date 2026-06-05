@@ -44,7 +44,7 @@ interface ScannedAttendee {
 
 const KYC_COLORS: Record<string, { bg: string; text: string }> = {
   "Full KYC":  { bg: "#16a34a18", text: "#16a34a" },
-  "Basic KYC": { bg: "#2563eb18", text: "#2563eb" },
+  "Basic KYC": { bg: "#11182718", text: "#111827" },
   "Pending":   { bg: "#f59e0b18", text: "#d97706" },
   "None":      { bg: "#9ca3af18", text: "#6b7280" },
 };
@@ -102,7 +102,7 @@ export default function QRCheckInPage() {
       {/* ── Stats strip ── */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Today's Check-Ins", value: totalToday, icon: Users, accent: "#2563eb" },
+          { label: "Today's Check-Ins", value: totalToday, icon: Users, accent: "#111827" },
           { label: "Verified %", value: `${verifiedPct}%`, icon: ShieldCheck, accent: "#16a34a" },
           { label: "Pending KYC", value: pending, icon: Clock, accent: "#f59e0b" },
         ].map((stat) => (

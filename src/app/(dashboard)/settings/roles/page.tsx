@@ -30,7 +30,7 @@ const ROLES = [
     name: "Event Manager",
     desc: "Create and manage events, upload documents, control live sessions",
     permissions: ["Events", "Documents", "Analytics (read)"],
-    color: "#2563eb",
+    color: "#111827",
     bg: "#eff5ff",
     icon: Settings,
   },

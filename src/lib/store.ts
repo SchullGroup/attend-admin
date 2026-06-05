@@ -1,6 +1,6 @@
 "use client";
 import { create } from "zustand";
-import { CURRENT_ADMIN, MOCK_EVENTS, MOCK_PARTICIPANTS, MOCK_APPLICATIONS, MOCK_DOCUMENTS, MOCK_LIVE_VOTES, MOCK_LIVE_SESSIONS, MOCK_STAKEHOLDERS, type AdminUser, type AttendEvent, type Participant, type HackathonApplication, type AppDocument, type LiveVote, type LiveSession, type Stakeholder } from "./mock-data";
+import { CURRENT_ADMIN, MOCK_EVENTS, MOCK_PARTICIPANTS, MOCK_APPLICATIONS, MOCK_DOCUMENTS, MOCK_LIVE_VOTES, MOCK_LIVE_SESSIONS, MOCK_STAKEHOLDERS, MOCK_AUDIT_LOG, type AdminUser, type AttendEvent, type Participant, type HackathonApplication, type AppDocument, type LiveVote, type LiveSession, type Stakeholder, type AuditLogEntry, type AuditSeverity, type AuditCategory } from "./mock-data";
 
 
 interface AttendAdminStore {
@@ -16,6 +16,8 @@ interface AttendAdminStore {
   // Multi-session live control room
   liveSessions: LiveSession[];
   selectedLiveSessionId: string;
+  auditLog: AuditLogEntry[];
+  addAuditEntry: (entry: Omit<AuditLogEntry, "id" | "timestamp">) => void;
   setSelectedLiveSession: (id: string) => void;
   login: (email: string) => void;
   logout: () => void;
@@ -48,7 +50,11 @@ export const useStore = create<AttendAdminStore>((set) => ({
   liveAttendees: MOCK_LIVE_SESSIONS.reduce((s, sess) => s + sess.attendees, 0),
   liveSessions: MOCK_LIVE_SESSIONS,
   selectedLiveSessionId: MOCK_LIVE_SESSIONS[0]?.id ?? "",
+  auditLog: MOCK_AUDIT_LOG,
   setSelectedLiveSession: (id) => set({ selectedLiveSessionId: id }),
+  addAuditEntry: (entry) => set((s) => ({
+    auditLog: [{ ...entry, id: `aud_${Date.now()}`, timestamp: new Date().toISOString() }, ...s.auditLog],
+  })),
   login: (email) => set({ currentUser: { ...CURRENT_ADMIN, email } }),
   logout: () => set({ currentUser: null }),
   seedStore: () => set({
@@ -60,6 +66,7 @@ export const useStore = create<AttendAdminStore>((set) => ({
     liveVotes: MOCK_LIVE_VOTES,
     liveSessions: MOCK_LIVE_SESSIONS,
     stakeholders: MOCK_STAKEHOLDERS,
+    auditLog: MOCK_AUDIT_LOG,
   }),
   openVoting: (sessionId, resolutionId) => set((s) => ({
     liveVotes: s.liveVotes.map((v) => v.resolutionId === resolutionId ? { ...v, status: "open" as const } : v),

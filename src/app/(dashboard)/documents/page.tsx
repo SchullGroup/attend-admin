@@ -21,7 +21,7 @@ const TYPE_FILTERS = [
 ];
 
 const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; color: string }> = {
-  notice: { label: "Notice", icon: Bell, bg: "#dbeafe", color: "#1d4ed8" },
+  notice: { label: "Notice", icon: Bell, bg: "#dbeafe", color: "#374151" },
   agenda: { label: "Agenda", icon: BookOpen, bg: "#dcfce7", color: "#16a34a" },
   minutes: { label: "Minutes", icon: FileText, bg: "#f3f4f6", color: "#6b7280" },
   report: { label: "Report", icon: FileBarChart, bg: "#fef9c3", color: "#a16207" },

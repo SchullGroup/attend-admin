@@ -111,7 +111,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-4 divide-x divide-[hsl(var(--border))] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
         {[
           { label: "Enrolled Stakeholders", value: activeStakeholders.length, sub: "Active organisations", icon: Building2, color: "#374151" },
-          { label: "Total Events", value: events.length, sub: "Across all stakeholders", icon: CalendarDays, color: "#2563eb" },
+          { label: "Total Events", value: events.length, sub: "Across all stakeholders", icon: CalendarDays, color: "#111827" },
           { label: "Live Now", value: liveEvents.length, sub: liveEvents.length > 0 ? `${liveAttendees.toLocaleString()} online` : "No active sessions", icon: Radio, color: liveEvents.length > 0 ? "#dc2626" : "#9ca3af" },
           { label: "Pending KYC", value: pendingKYC, sub: "Awaiting verification", icon: ShieldAlert, color: pendingKYC > 0 ? "#f97316" : "#9ca3af" },
         ].map(({ label, value, sub, icon: Icon, color }) => (

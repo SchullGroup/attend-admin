@@ -1,33 +1,111 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, ShieldCheck, BarChart3, Radio, Vote } from "lucide-react";
+import { Eye, EyeOff, ShieldCheck, BarChart3, Radio, Vote, Shield } from "lucide-react";
+
+const DEMO_OTP = "123456";
 
 const FEATURES = [
-  { icon: ShieldCheck, label: "KYC & Compliance", desc: "Identity verification & audit trails" },
+  { icon: ShieldCheck, label: "KYC & Compliance",  desc: "Identity verification & audit trails" },
   { icon: Radio,       label: "Live Control Room", desc: "Real-time event management" },
-  { icon: Vote,        label: "AGM Voting",         desc: "Binding electronic shareholder votes" },
-  { icon: BarChart3,   label: "Analytics",           desc: "Insights across all platform events" },
+  { icon: Vote,        label: "AGM Voting",        desc: "Binding electronic shareholder votes" },
+  { icon: BarChart3,   label: "Analytics",         desc: "Insights across all platform events" },
 ];
+
+function OtpInput({ onComplete, onAnyChange }: { onComplete: (code: string) => void; onAnyChange?: () => void }) {
+  const [digits, setDigits] = useState(["", "", "", "", "", ""]);
+  const refs = useRef<(HTMLInputElement | null)[]>([]);
+
+  function handleChange(i: number, val: string) {
+    const d = val.replace(/\D/g, "").slice(-1);
+    const next = digits.map((v, idx) => (idx === i ? d : v));
+    setDigits(next);
+    onAnyChange?.();
+    if (d && i < 5) refs.current[i + 1]?.focus();
+    if (next.every(Boolean)) onComplete(next.join(""));
+  }
+
+  function handleKeyDown(i: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace" && !digits[i] && i > 0) refs.current[i - 1]?.focus();
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const next = ["", "", "", "", "", ""].map((_, i) => pasted[i] ?? "");
+    setDigits(next);
+    refs.current[Math.min(pasted.length, 5)]?.focus();
+    if (pasted.length === 6) onComplete(pasted);
+  }
+
+  return (
+    <div className="flex gap-2" onPaste={handlePaste}>
+      {digits.map((d, i) => (
+        <input
+          key={i}
+          ref={(el) => { refs.current[i] = el; }}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={d}
+          onChange={(e) => handleChange(i, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(i, e)}
+          className="h-12 w-12 rounded-lg text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-gray-900 transition-all"
+          style={{
+            border: `1.5px solid ${d ? "#111827" : "#e5e7eb"}`,
+            color: "#111827",
+            backgroundColor: d ? "rgba(17,24,39,0.04)" : "#ffffff",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, seedStore } = useStore();
+  const { login, seedStore, addAuditEntry } = useStore();
+  const [step, setStep] = useState<"credentials" | "otp">("credentials");
   const [email, setEmail] = useState("stanley.jacob@meristem.com");
   const [password, setPassword] = useState("password");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [otpError, setOtpError] = useState("");
+  const [otpResetKey, setOtpResetKey] = useState(0);
+  const [countdown, setCountdown] = useState(60);
+  const [resendKey, setResendKey] = useState(0);
 
-  function handleSubmit(e: React.FormEvent) {
+  useEffect(() => {
+    if (step !== "otp") return;
+    setCountdown(60);
+    const interval = setInterval(() => setCountdown((c) => Math.max(0, c - 1)), 1000);
+    return () => clearInterval(interval);
+  }, [step, resendKey]);
+
+  function handleCredentials(e: React.FormEvent) {
     e.preventDefault();
+    setLoading(true);
+    setTimeout(() => { setLoading(false); setStep("otp"); }, 600);
+  }
+
+  function handleOtp(code: string) {
+    if (code !== DEMO_OTP) {
+      setOtpError("Incorrect code. Please try again.");
+      setOtpResetKey((k) => k + 1);
+      return;
+    }
+    setOtpError("");
     setLoading(true);
     seedStore();
     login(email);
+    addAuditEntry({ actor: "Admin User", actorEmail: email, actorRole: "super_admin", action: "Signed in", category: "auth", resource: "Admin Portal", details: "Successful credential verification", ip: "197.210.xx.xx", severity: "info" });
+    addAuditEntry({ actor: "Admin User", actorEmail: email, actorRole: "super_admin", action: "2FA verified", category: "auth", resource: "Admin Portal", details: "OTP authentication completed successfully", ip: "197.210.xx.xx", severity: "info" });
     setTimeout(() => router.push("/"), 400);
   }
 
@@ -35,111 +113,97 @@ export default function LoginPage() {
     <div className="min-h-screen flex bg-white">
       {/* ── Left panel ── */}
       <div className="w-full md:w-[52%] flex flex-col min-h-screen" style={{ borderRight: "1px solid #f1f5f9" }}>
-        {/* Top logo bar */}
         <div className="px-10 pt-10 pb-0">
           <div className="flex items-end gap-2">
             <img src="/attend-logo.png" alt="Attend" className="h-[120px] w-auto shrink-0" />
-            <span
-              className="text-xs font-semibold px-2 py-0.5 rounded-md mb-2"
-              style={{ backgroundColor: "rgba(17,24,39,0.07)", color: "#6b7280" }}
-            >
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-md mb-2" style={{ backgroundColor: "rgba(17,24,39,0.07)", color: "#6b7280" }}>
               Admin
             </span>
           </div>
         </div>
 
-        {/* Centred form */}
         <div className="flex-1 flex items-center justify-center px-10">
           <div className="w-full max-w-[380px]">
-            <h1 className="text-[2rem] font-bold tracking-tight mb-1" style={{ color: "#111827" }}>
-              Welcome back
-            </h1>
-            <p className="text-sm mb-8" style={{ color: "#9ca3af" }}>
-              Sign in to access the Attend Admin Portal.
-            </p>
+            {step === "credentials" ? (
+              <>
+                <h1 className="text-[2rem] font-bold tracking-tight mb-1" style={{ color: "#111827" }}>Welcome back</h1>
+                <p className="text-sm mb-8" style={{ color: "#9ca3af" }}>Sign in to access the Attend Admin Portal.</p>
 
-            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="email" className="text-sm font-medium" style={{ color: "#374151" }}>
-                  Email address
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@yourorganisation.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="h-11"
-                />
-              </div>
+                <form onSubmit={handleCredentials} className="flex flex-col gap-5">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="email" className="text-sm font-medium" style={{ color: "#374151" }}>Email address</Label>
+                    <Input id="email" type="email" placeholder="you@yourorganisation.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-11" />
+                  </div>
 
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-sm font-medium" style={{ color: "#374151" }}>
-                    Password
-                  </Label>
-                  <Link
-                    href="/forgot-password"
-                    className="text-xs hover:underline"
-                    style={{ color: "#6b7280" }}
-                  >
-                    Forgot password?
-                  </Link>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password" className="text-sm font-medium" style={{ color: "#374151" }}>Password</Label>
+                      <Link href="/forgot-password" className="text-xs hover:underline" style={{ color: "#6b7280" }}>Forgot password?</Link>
+                    </div>
+                    <div className="relative">
+                      <Input id="password" type={showPassword ? "text" : "password"} placeholder="Enter your password" value={password} onChange={(e) => setPassword(e.target.value)} className="h-11 pr-10" required />
+                      <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors" style={{ color: "#9ca3af" }} tabIndex={-1}>
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" id="remember" className="rounded" defaultChecked />
+                    <label htmlFor="remember" className="cursor-pointer" style={{ color: "#6b7280" }}>Keep me signed in</label>
+                  </div>
+
+                  <Button type="submit" className="w-full h-11 text-sm font-semibold mt-1" disabled={loading} style={{ backgroundColor: "#111827" }}>
+                    {loading ? "Verifying…" : "Continue"}
+                  </Button>
+                </form>
+              </>
+            ) : (
+              <>
+                <div className="h-12 w-12 rounded-xl flex items-center justify-center mb-6" style={{ backgroundColor: "rgba(17,24,39,0.08)" }}>
+                  <Shield className="h-6 w-6" style={{ color: "#111827" }} />
                 </div>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="h-11 pr-10"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
-                    style={{ color: "#9ca3af" }}
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                <h1 className="text-[1.75rem] font-bold tracking-tight mb-1" style={{ color: "#111827" }}>
+                  Two-factor authentication
+                </h1>
+                <p className="text-sm mb-6" style={{ color: "#9ca3af" }}>
+                  Enter the 6-digit code sent to{" "}
+                  <span className="font-medium" style={{ color: "#374151" }}>{email}</span>
+                </p>
+
+                <div className="rounded-xl px-4 py-3 mb-6 text-xs" style={{ backgroundColor: "rgba(17,24,39,0.06)", border: "1px solid rgba(17,24,39,0.15)", color: "#374151" }}>
+                  <span className="font-semibold">Demo code: </span>
+                  <span className="font-mono font-bold tracking-[0.25em]">123456</span>
+                </div>
+
+                <OtpInput key={otpResetKey} onComplete={handleOtp} onAnyChange={() => setOtpError("")} />
+
+                {otpError && <p className="text-xs text-red-500 mt-3">{otpError}</p>}
+
+                <div className="flex items-center justify-between mt-6">
+                  <button type="button" onClick={() => { setStep("credentials"); setOtpError(""); }} className="text-xs hover:underline" style={{ color: "#6b7280" }}>
+                    ← Back
                   </button>
+                  {countdown > 0 ? (
+                    <p className="text-xs" style={{ color: "#9ca3af" }}>Resend in {countdown}s</p>
+                  ) : (
+                    <button type="button" onClick={() => setResendKey((k) => k + 1)} className="text-xs font-medium hover:underline" style={{ color: "#111827" }}>
+                      Resend code
+                    </button>
+                  )}
                 </div>
-              </div>
-
-              <div className="flex items-center gap-2 text-sm">
-                <input type="checkbox" id="remember" className="rounded" defaultChecked />
-                <label htmlFor="remember" className="cursor-pointer" style={{ color: "#6b7280" }}>
-                  Keep me signed in
-                </label>
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full h-11 text-sm font-semibold mt-1"
-                disabled={loading}
-                style={{ backgroundColor: "#2563eb" }}
-              >
-                {loading ? "Signing in…" : "Sign In"}
-              </Button>
-            </form>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Footer */}
         <div className="px-10 pb-8 text-xs" style={{ color: "#d1d5db" }}>
           Attend v1.0 · Enterprise Events Management Platform
         </div>
       </div>
 
       {/* ── Right panel ── */}
-      <div
-        className="hidden md:flex w-[48%] relative overflow-hidden flex-col items-center justify-center"
-        style={{ backgroundColor: "#111827" }}
-      >
-        {/* Decorative rings */}
+      <div className="hidden md:flex w-[48%] relative overflow-hidden flex-col items-center justify-center" style={{ backgroundColor: "#111827" }}>
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full border border-white/5" />
           <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full border border-white/5" />
@@ -148,33 +212,19 @@ export default function LoginPage() {
         </div>
 
         <div className="relative z-10 px-14 max-w-md w-full">
-          {/* Logo lockup */}
           <div className="mb-10">
-            <img
-              src="/attend-logo.png"
-              alt="Attend"
-              className="h-[72px] w-auto brightness-0 invert opacity-90"
-            />
+            <img src="/attend-logo.png" alt="Attend" className="h-[72px] w-auto brightness-0 invert opacity-90" />
           </div>
-
           <h2 className="text-2xl font-bold text-white mb-3 leading-snug">
             The platform powering Nigeria&apos;s capital market events
           </h2>
           <p className="text-sm mb-10" style={{ color: "#94a3b8" }}>
             AGMs, innovation challenges, product launches — managed end-to-end from a single admin console.
           </p>
-
           <div className="grid grid-cols-2 gap-3">
             {FEATURES.map((f) => (
-              <div
-                key={f.label}
-                className="rounded-xl p-4 text-left"
-                style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)" }}
-              >
-                <div
-                  className="h-8 w-8 rounded-lg flex items-center justify-center mb-3"
-                  style={{ backgroundColor: "rgba(255,255,255,0.1)" }}
-                >
+              <div key={f.label} className="rounded-xl p-4 text-left" style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)" }}>
+                <div className="h-8 w-8 rounded-lg flex items-center justify-center mb-3" style={{ backgroundColor: "rgba(255,255,255,0.1)" }}>
                   <f.icon className="h-4 w-4 text-white" />
                 </div>
                 <div className="text-sm font-semibold text-white mb-0.5">{f.label}</div>

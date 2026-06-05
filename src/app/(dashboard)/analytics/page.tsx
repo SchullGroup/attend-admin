@@ -11,7 +11,7 @@ const MODULE_CONFIG = {
   AGM:       { color: "#374151", bg: "#f3f4f6" },
   LAUNCH:    { color: "#ea6c00", bg: "#fff4eb" },
   HACKATHON: { color: "#7c22c9", bg: "#f8f0ff" },
-  GENERAL:   { color: "#1d4ed8", bg: "#eff5ff" },
+  GENERAL:   { color: "#374151", bg: "#eff5ff" },
 };
 
 const KYC_ITEMS = [
@@ -21,7 +21,7 @@ const KYC_ITEMS = [
   { label: "No KYC", key: "none", color: "#9ca3af" },
 ];
 
-const FORMAT_COLORS: Record<string, string> = { virtual: "#2563eb", hybrid: "#9333ea", "in-person": "#374151" };
+const FORMAT_COLORS: Record<string, string> = { virtual: "#111827", hybrid: "#9333ea", "in-person": "#374151" };
 
 export default function AnalyticsPage() {
   const { events, participants, documents, liveVotes, stakeholders } = useStore();
@@ -56,7 +56,7 @@ export default function AnalyticsPage() {
           value={totalRSVP.toLocaleString()}
           subtitle="RSVPs across all events"
           icon={Users}
-          accent="#2563eb"
+          accent="#111827"
           trend={{ value: "+14% vs last period", positive: true }}
         />
         <StatCard
@@ -187,7 +187,7 @@ export default function AnalyticsPage() {
         </div>
         <div className="grid grid-cols-4 gap-4 mb-6">
           {[
-            { label: "Avg Watch Time", value: "47 min", icon: Eye, accent: "#2563eb", subtitle: "per attendee" },
+            { label: "Avg Watch Time", value: "47 min", icon: Eye, accent: "#111827", subtitle: "per attendee" },
             { label: "Poll Response Rate", value: "68%", icon: BarChart2, accent: "#16a34a", subtitle: "of active polls" },
             { label: "Q&A Participation", value: "12%", icon: MessageSquare, accent: "#9333ea", subtitle: "of attendees" },
             { label: "Document Downloads", value: "2,341", icon: Download, accent: "#f97316", subtitle: "total downloads" },
@@ -239,8 +239,8 @@ export default function AnalyticsPage() {
                       <span
                         className="text-xs font-semibold px-2 py-0.5 rounded-full"
                         style={{
-                          backgroundColor: rate >= 80 ? "#16a34a18" : rate >= 50 ? "#2563eb18" : "#f9731618",
-                          color: rate >= 80 ? "#16a34a" : rate >= 50 ? "#2563eb" : "#f97316",
+                          backgroundColor: rate >= 80 ? "#16a34a18" : rate >= 50 ? "#11182718" : "#f9731618",
+                          color: rate >= 80 ? "#16a34a" : rate >= 50 ? "#111827" : "#f97316",
                         }}
                       >
                         {rate}%
