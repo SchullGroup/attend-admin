@@ -1,6 +1,8 @@
 "use client";
-import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { useState, useEffect, useRef } from "react";
+import { useEvents, useEventDetail, useGoLive, useEndEvent, useCancelEvent } from "@/api/super-admin";
+import { useQueryClient } from "@tanstack/react-query";
+import { Loader } from "@/components/ui/Loader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,7 +28,7 @@ import {
   ChevronRight,
   ExternalLink,
 } from "lucide-react";
-import type { LiveSession, LivePoll } from "@/lib/mock-data";
+import type { LiveSession, LivePoll, EventModule } from "@/types/mock";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -126,6 +128,11 @@ function SessionTab({
   active: boolean;
   onClick: () => void;
 }) {
+  const isLive = session.status === "LIVE";
+  const dotColor = isLive 
+    ? (active ? "#ffffff" : "#dc2626") 
+    : (active ? "#ffffff" : "#94a3b8");
+
   return (
     <button
       onClick={onClick}
@@ -141,13 +148,15 @@ function SessionTab({
       }
     >
       <span className="relative flex h-2 w-2 shrink-0">
-        <span
-          className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
-          style={{ backgroundColor: active ? "#ffffff" : "#dc2626" }}
-        />
+        {isLive && (
+          <span
+            className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+            style={{ backgroundColor: dotColor }}
+          />
+        )}
         <span
           className="relative inline-flex rounded-full h-2 w-2"
-          style={{ backgroundColor: active ? "#ffffff" : "#dc2626" }}
+          style={{ backgroundColor: dotColor }}
         />
       </span>
       <span className="max-w-[180px] truncate">{session.organiser}</span>
@@ -604,15 +613,6 @@ function WinnerCard({
 
 // ── Stream preview URLs (keyed by session id) ────────────────────────────────
 
-const DEFAULT_STREAM_URLS: Record<string, string> = {
-  live_001:
-    "https://www.youtube.com/embed/0VBkkEdBOgg?autoplay=0&controls=1&rel=0&modestbranding=1",
-  live_002:
-    "https://www.youtube.com/embed/0VBkkEdBOgg?autoplay=0&controls=1&rel=0&modestbranding=1",
-  live_003:
-    "https://www.youtube.com/embed/0VBkkEdBOgg?autoplay=0&controls=1&rel=0&modestbranding=1",
-};
-
 function isZoomUrl(url: string) {
   return /zoom\.us\/j\/|zoomus\.cn\/j\//.test(url);
 }
@@ -628,23 +628,177 @@ function parseStreamUrl(url: string): string {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+
+
+function getEventColor(mod: string) {
+  if (mod === "AGM") return "#1a6b3c";
+  if (mod === "LAUNCH") return "#f97316";
+  if (mod === "HACKATHON") return "#9333ea";
+  return "#2563eb";
+}
+
+function getModuleFromEvent(event: any): EventModule {
+  if (event.eventType === "AGM_EGM") return "AGM";
+  if (event.eventType === "PRODUCT_LAUNCH") return "LAUNCH";
+  if (event.eventType === "INNOVATION_CHALLENGE" || event.eventType === "HACKATHON") {
+    return "HACKATHON";
+  }
+  return "GENERAL";
+}
+
 export default function LiveControlPage() {
-  const {
-    liveSessions,
-    selectedLiveSessionId,
-    setSelectedLiveSession,
-    openVoting,
-    closeVoting,
-    approveQA,
-    rejectQA,
-    launchPoll,
-    closePoll,
-    releasePressKit,
-    declareWinner,
-  } = useStore();
+  const { data: eventsData, isLoading } = useEvents("", 0, 100);
+  const [sessions, setSessions] = useState<LiveSession[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string>("");
   const [streamInputs, setStreamInputs] = useState<Record<string, string>>({});
-  const [streamUrls, setStreamUrls] =
-    useState<Record<string, string>>(DEFAULT_STREAM_URLS);
+  const [streamUrls, setStreamUrls] = useState<Record<string, string>>({});
+
+  const { data: detailRes } = useEventDetail(selectedSessionId);
+  const detailData = detailRes?.data;
+
+  const queryClient = useQueryClient();
+  const goLiveMutation = useGoLive();
+  const endMutation = useEndEvent();
+  const cancelMutation = useCancelEvent();
+
+  const isMutating =
+    goLiveMutation.isPending ||
+    endMutation.isPending ||
+    cancelMutation.isPending;
+
+  const sessionsRef = useRef(sessions);
+  useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
+
+  // Merge detailed API data into the selected session
+  useEffect(() => {
+    if (!detailData || !selectedSessionId) return;
+
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== selectedSessionId) return s;
+
+        // Only initialize votes if they are empty (to preserve local simulation state if already interacting)
+        const votes = s.votes.length > 0
+          ? s.votes
+          : (detailData.agmConfig?.resolutions?.map((r: any) => ({
+              resolutionId: r.id,
+              title: r.title,
+              for: 0,
+              against: 0,
+              abstain: 0,
+              status: "pending",
+            })) || []);
+
+        const agendaItems = s.agendaItems.length > 0
+          ? s.agendaItems
+          : (detailData.agenda?.map((a: any) => ({
+              id: a.id,
+              title: a.title,
+              durationMinutes: a.durationMinutes || 15,
+              isCurrent: a.isCurrent || false,
+            })) || []);
+
+        return {
+          ...s,
+          venue: detailData.location || s.venue,
+          capacity: detailData.maximumCapacity || s.capacity,
+          votes,
+          agendaItems,
+        };
+      })
+    );
+
+    if (detailData.streamUrl) {
+      setStreamUrls((prev) => ({
+        ...prev,
+        [selectedSessionId]: parseStreamUrl(detailData.streamUrl!),
+      }));
+    }
+  }, [detailData, selectedSessionId]);
+
+  useEffect(() => {
+    // Generate/sync sessions list
+    const apiEvents = eventsData?.data?.content || [];
+    const liveApiEvents = apiEvents.filter(
+      (e: any) => e.status === "LIVE" || e.status === "PUBLISHED"
+    );
+
+    const apiSessions: LiveSession[] = liveApiEvents.map((e: any) => {
+      const existing = sessionsRef.current.find((s) => s.eventId === e.id);
+      if (existing) {
+        return { ...existing, status: e.status };
+      }
+
+      const mod = getModuleFromEvent(e);
+      const color = getEventColor(mod);
+      const deliveryFormat = (e.format || "VIRTUAL").toLowerCase() as any;
+
+      return {
+        id: e.id,
+        eventId: e.id,
+        eventTitle: e.title,
+        organiser: e.organizerName || "Platform Stakeholder",
+        module: mod,
+        color: color,
+        format: deliveryFormat,
+        venue: e.location || "Virtual (no physical venue)",
+        attendees: e.registrationCount || 0,
+        capacity: e.maximumCapacity || 5000,
+        elapsedMinutes: 0,
+        quorumPct: mod === "AGM" ? 0 : null,
+        status: e.status,
+        votes: e.agmConfig?.resolutions?.map((r: any) => ({
+          resolutionId: r.id,
+          title: r.title,
+          for: 0,
+          against: 0,
+          abstain: 0,
+          status: "pending",
+        })) || [],
+        polls: [],
+        agendaItems: e.agenda?.map((a: any) => ({
+          id: a.id,
+          title: a.title,
+          durationMinutes: a.durationMinutes || 15,
+          isCurrent: a.isCurrent || false,
+        })) || [],
+        pressKitReleased: false,
+        qaQueue: [],
+        recentJoins: [],
+      };
+    });
+
+    setSessions(apiSessions);
+    if (!selectedSessionId && apiSessions[0]) {
+      setSelectedSessionId(apiSessions[0].id);
+    }
+  }, [eventsData, selectedSessionId]);
+
+  const handleGoLive = (eventId: string) => {
+    goLiveMutation.mutate(eventId, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["super-admin", "events"] });
+      },
+    });
+  };
+
+  const handleEndEvent = (eventId: string) => {
+    endMutation.mutate(eventId, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["super-admin", "events"] });
+      },
+    });
+  };
+
+  const handleCancelEvent = (eventId: string) => {
+    cancelMutation.mutate(eventId, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["super-admin", "events"] });
+      },
+    });
+  };
 
   function getStreamInput(sessionId: string) {
     return streamInputs[sessionId] ?? streamUrls[sessionId] ?? "";
@@ -654,9 +808,148 @@ export default function LiveControlPage() {
     setStreamUrls((prev) => ({ ...prev, [sessionId]: parseStreamUrl(raw) }));
   }
 
-  const session =
-    liveSessions.find((s) => s.id === selectedLiveSessionId) ?? liveSessions[0];
-  const totalAttendees = liveSessions.reduce((sum, s) => sum + s.attendees, 0);
+  const openVoting = (sessId: string, resId: string) => {
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessId) return s;
+        return {
+          ...s,
+          votes: s.votes.map((v) =>
+            v.resolutionId === resId ? { ...v, status: "open" } : v
+          ),
+        };
+      })
+    );
+    toast.success("Voting opened for this resolution");
+  };
+
+  const closeVoting = (sessId: string, resId: string) => {
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessId) return s;
+        return {
+          ...s,
+          votes: s.votes.map((v) => {
+            if (v.resolutionId !== resId) return v;
+            const total = s.attendees || 1000;
+            const forCount = Math.round(total * 0.82);
+            const againstCount = Math.round((total - forCount) * 0.4);
+            const abstainCount = total - forCount - againstCount;
+            return {
+              ...v,
+              status: "closed",
+              for: forCount,
+              against: againstCount,
+              abstain: abstainCount,
+            };
+          }),
+        };
+      })
+    );
+    toast.success("Voting closed — results are final");
+  };
+
+  const approveQA = (sessId: string, qaId: string) => {
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessId) return s;
+        return {
+          ...s,
+          qaQueue: s.qaQueue.map((q) =>
+            q.id === qaId ? { ...q, approved: true } : q
+          ),
+        };
+      })
+    );
+    toast.success("Question approved");
+  };
+
+  const rejectQA = (sessId: string, qaId: string) => {
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessId) return s;
+        return {
+          ...s,
+          qaQueue: s.qaQueue.map((q) =>
+            q.id === qaId ? { ...q, approved: false } : q
+          ),
+        };
+      })
+    );
+    toast.success("Question rejected");
+  };
+
+  const launchPoll = (sessId: string, pollId: string) => {
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessId) return s;
+        return {
+          ...s,
+          polls: s.polls.map((p) =>
+            p.id === pollId ? { ...p, status: "active" } : p
+          ),
+        };
+      })
+    );
+    toast.success("Poll launched successfully");
+  };
+
+  const closePoll = (sessId: string, pollId: string) => {
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessId) return s;
+        return {
+          ...s,
+          polls: s.polls.map((p) => {
+            if (p.id !== pollId) return p;
+            const total = Math.round(s.attendees * 0.45);
+            return {
+              ...p,
+              status: "closed",
+              options: p.options.map((o, idx) => {
+                const votes =
+                  idx === 0
+                    ? Math.round(total * 0.58)
+                    : idx === 1
+                      ? Math.round(total * 0.32)
+                      : total - Math.round(total * 0.58) - Math.round(total * 0.32);
+                return { ...o, votes };
+              }),
+            };
+          }),
+        };
+      })
+    );
+    toast.success("Poll closed");
+  };
+
+  const releasePressKit = (sessId: string) => {
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessId) return s;
+        return { ...s, pressKitReleased: true };
+      })
+    );
+    toast.success("Press kit released to media contacts");
+  };
+
+  const declareWinner = (sessId: string, team: string) => {
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessId) return s;
+        return { ...s, winnerTeam: team };
+      })
+    );
+  };
+
+  if (isLoading && sessions.length === 0) {
+    return <Loader variant="page" text="Loading Control Room Sessions..." />;
+  }
+
+  const liveSessions = sessions;
+  const session = liveSessions.find((s: LiveSession) => s.id === selectedSessionId) ?? liveSessions[0];
+  const totalAttendees = liveSessions.reduce((sum: number, s: LiveSession) => sum + s.attendees, 0);
+  const setSelectedLiveSession = setSelectedSessionId;
 
   if (!session) {
     return (
@@ -670,7 +963,9 @@ export default function LiveControlPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="relative">
+      {isMutating && <Loader variant="overlay" text="Updating event status..." />}
+      <div className="flex flex-col gap-6">
       {/* ── Page header ── */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -692,7 +987,7 @@ export default function LiveControlPage() {
 
       {/* ── Session tabs ── */}
       <div className="flex items-center gap-2 flex-wrap">
-        {liveSessions.map((sess) => (
+        {liveSessions.map((sess: LiveSession) => (
           <SessionTab
             key={sess.id}
             session={sess}
@@ -729,9 +1024,51 @@ export default function LiveControlPage() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-1.5 bg-white/15 rounded-xl px-3 py-2 shrink-0">
-            <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
-            <span className="text-sm font-bold">LIVE</span>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 bg-white/15 rounded-xl px-3 py-2">
+              {session.status === "LIVE" ? (
+                <>
+                  <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+                  <span className="text-sm font-bold">LIVE</span>
+                </>
+              ) : (
+                <span className="text-sm font-bold">PUBLISHED</span>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {session.status === "PUBLISHED" && (
+                <Button
+                  size="sm"
+                  className="bg-white text-[hsl(var(--foreground))] hover:bg-white/90 gap-1.5 text-xs h-8 px-3"
+                  onClick={() => handleGoLive(session.eventId)}
+                  disabled={isMutating}
+                >
+                  <Radio className="h-3.5 w-3.5" /> Go Live
+                </Button>
+              )}
+              {session.status === "LIVE" && (
+                <>
+                  <Button
+                    size="sm"
+                    className="bg-white text-[hsl(var(--foreground))] hover:bg-white/90 gap-1.5 text-xs h-8 px-3"
+                    onClick={() => handleEndEvent(session.eventId)}
+                    disabled={isMutating}
+                  >
+                    End Event
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-white/40 text-white hover:bg-white/10 hover:text-white gap-1.5 text-xs h-8 px-3"
+                    onClick={() => handleCancelEvent(session.eventId)}
+                    disabled={isMutating}
+                  >
+                    Cancel Event
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -759,7 +1096,7 @@ export default function LiveControlPage() {
               label: "Resolutions",
               value:
                 session.votes.length > 0
-                  ? `${session.votes.filter((v) => v.status === "closed").length} / ${session.votes.length}`
+                  ? `${session.votes.filter((v: any) => v.status === "closed").length} / ${session.votes.length}`
                   : "—",
               sub: session.votes.length > 0 ? "closed" : "no votes",
             },
@@ -909,7 +1246,7 @@ export default function LiveControlPage() {
                 Q&A Queue
               </h2>
               <span className="ml-auto text-xs bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))] rounded-full px-2 py-0.5 font-semibold">
-                {session.qaQueue.filter((q) => q.approved === null).length}{" "}
+                {session.qaQueue.filter((q: any) => q.approved === null).length}{" "}
                 pending
               </span>
             </div>
@@ -919,7 +1256,7 @@ export default function LiveControlPage() {
                   No questions yet.
                 </p>
               ) : (
-                session.qaQueue.map((q) => (
+                session.qaQueue.map((q: any) => (
                   <div key={q.id} className="px-5 py-4">
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-xs font-semibold text-[hsl(var(--foreground))]">
@@ -979,7 +1316,7 @@ export default function LiveControlPage() {
               </h2>
             </div>
             <div className="divide-y divide-[hsl(var(--border))]">
-              {session.recentJoins.map((join, i) => (
+              {session.recentJoins.map((join: any, i: number) => (
                 <div
                   key={i}
                   className="px-5 py-3 flex items-center justify-between"
@@ -1009,6 +1346,7 @@ export default function LiveControlPage() {
           </Card>
         </div>
       </div>
+    </div>
     </div>
   );
 }

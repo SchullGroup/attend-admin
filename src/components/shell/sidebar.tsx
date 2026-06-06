@@ -21,8 +21,8 @@ import {
   QrCode,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useStore } from "@/lib/store";
 import { useGetMe, useLogout } from "@/api/auth/hooks";
+import { usePendingEnrollments } from "@/api/super-admin";
 import Cookies from "js-cookie";
 
 const SECTIONS = [
@@ -116,13 +116,12 @@ const roleLabel: Record<string, string> = {
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { stakeholders } = useStore();
   const { data: userResponse } = useGetMe();
   const currentUser = userResponse?.data;
   const { mutate: logout } = useLogout();
-  const pendingCount = stakeholders.filter(
-    (s) => s.status === "pending",
-  ).length;
+  
+  const { data: pendingEnrollmentsData } = usePendingEnrollments(0, 1);
+  const pendingCount = pendingEnrollmentsData?.data?.totalCount ?? 0;
 
   const hasToken = typeof window !== "undefined" && !!Cookies.get("accessToken");
   const displayName = currentUser?.fullName || "Admin User";

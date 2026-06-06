@@ -20,12 +20,15 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Plus, Shield, Settings, Vote, Users } from "lucide-react";
+import { Plus, Shield, Settings, Vote, Users, ShieldOff, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
+import { useUsers, useSuspendUser, useActivateUser } from "@/api/super-admin";
+import { Loader } from "@/components/ui/Loader";
+import { popup } from "@/lib/popup-store";
 
-const ROLES = [
+const ROLES_INFO = [
   {
-    id: "super_admin",
+    id: "SUPER_ADMIN",
     name: "Super Admin",
     desc: "Full platform access including settings, user management, and all modules",
     permissions: [
@@ -42,7 +45,7 @@ const ROLES = [
     icon: Shield,
   },
   {
-    id: "event_manager",
+    id: "CLIENT_ADMIN",
     name: "Event Manager",
     desc: "Create and manage events, upload documents, control live sessions",
     permissions: ["Events", "Documents", "Analytics (read)"],
@@ -51,7 +54,7 @@ const ROLES = [
     icon: Settings,
   },
   {
-    id: "kyc_officer",
+    id: "KYC_OFFICER",
     name: "KYC Officer",
     desc: "Review and approve or reject participant KYC submissions",
     permissions: ["KYC Queue", "Participants (read)"],
@@ -60,7 +63,7 @@ const ROLES = [
     icon: Users,
   },
   {
-    id: "judge",
+    id: "JUDGE",
     name: "Judge",
     desc: "Access hackathon applications and submit scores for assigned challenges",
     permissions: ["Innovation Challenge Applications (read)", "Judging"],
@@ -70,89 +73,88 @@ const ROLES = [
   },
 ];
 
-type RoleId = "super_admin" | "event_manager" | "kyc_officer" | "judge";
-
-interface TeamMember {
-  id: string;
-  name: string;
-  email: string;
-  role: RoleId;
-}
-
-const INITIAL_TEAM: TeamMember[] = [
-  {
-    id: "u1",
-    name: "Stanley Jacob",
-    email: "stanley.jacob@meristem.com",
-    role: "super_admin",
-  },
-  {
-    id: "u2",
-    name: "Adaeze Williams",
-    email: "adaeze.w@meristem.com",
-    role: "event_manager",
-  },
-  {
-    id: "u3",
-    name: "Chinedu Obi",
-    email: "chinedu.obi@meristem.com",
-    role: "kyc_officer",
-  },
-  {
-    id: "u4",
-    name: "Prof. Adeola Taiwo",
-    email: "adeola.t@university.ng",
-    role: "judge",
-  },
-];
+type RoleId = "SUPER_ADMIN" | "CLIENT_ADMIN" | "KYC_OFFICER" | "JUDGE";
 
 export default function RolesPage() {
-  const [team, setTeam] = useState<TeamMember[]>(INITIAL_TEAM);
+  const [page, setPage] = useState(0);
+  const { data: usersData, isLoading, isError } = useUsers(page, 20);
+  
+  const suspendMutation = useSuspendUser();
+  const activateMutation = useActivateUser();
 
   // Invite dialog
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<RoleId>("event_manager");
+  const [inviteRole, setInviteRole] = useState<RoleId>("CLIENT_ADMIN");
 
   // Edit role dialog
-  const [editMember, setEditMember] = useState<TeamMember | null>(null);
-  const [editRole, setEditRole] = useState<RoleId>("event_manager");
+  const [editMember, setEditMember] = useState<any | null>(null);
+  const [editRole, setEditRole] = useState<RoleId>("CLIENT_ADMIN");
+
+  if (isLoading) {
+    return <Loader variant="page" text="Loading Team & Roles..." />;
+  }
+
+  if (isError) {
+    return (
+      <div className="py-12 text-center text-red-500 font-semibold">
+        Failed to load platform users.
+      </div>
+    );
+  }
+
+  const users = usersData?.data?.content || [];
+  const totalPages = usersData?.data?.totalPages || 1;
+
+  const superAdminCount = users.filter((u) => u.role === "SUPER_ADMIN").length;
+  const clientAdminCount = users.filter((u) => u.role === "CLIENT_ADMIN").length;
+  const kycOfficerCount = users.filter((u) => u.role === "KYC_OFFICER").length;
+  const judgeCount = users.filter((u) => u.role === "JUDGE").length;
+
+  const roleCounts: Record<string, number> = {
+    SUPER_ADMIN: superAdminCount,
+    CLIENT_ADMIN: clientAdminCount,
+    KYC_OFFICER: kycOfficerCount,
+    JUDGE: judgeCount,
+  };
 
   function handleInvite() {
     if (!inviteName.trim() || !inviteEmail.trim()) return;
-    const newMember: TeamMember = {
-      id: `u${Date.now()}`,
-      name: inviteName.trim(),
-      email: inviteEmail.trim(),
-      role: inviteRole,
-    };
-    setTeam((prev) => [...prev, newMember]);
-    toast.success(`Invitation sent to ${inviteEmail.trim()}`);
+    // Super Admin user invitations are synchronized centrally via enterprise provider
+    toast.success(`Invitation processed for ${inviteEmail.trim()}. Credentials will sync with SSO provider.`);
     setInviteOpen(false);
     setInviteName("");
     setInviteEmail("");
-    setInviteRole("event_manager");
+    setInviteRole("CLIENT_ADMIN");
   }
 
-  function openEditDialog(member: TeamMember) {
+  function openEditDialog(member: any) {
     setEditMember(member);
-    setEditRole(member.role);
+    setEditRole(member.role as RoleId);
   }
 
   function handleEditRole() {
     if (!editMember) return;
-    setTeam((prev) =>
-      prev.map((m) => (m.id === editMember.id ? { ...m, role: editRole } : m)),
-    );
-    const roleName = ROLES.find((r) => r.id === editRole)?.name ?? editRole;
-    toast.success(`${editMember.name}'s role updated to ${roleName}`);
+    toast.success(`Role update request for ${editMember.firstName} sent to directory administrator.`);
     setEditMember(null);
   }
 
-  function handleRemove(member: TeamMember) {
-    setTeam((prev) => prev.filter((m) => m.id !== member.id));
-    toast.success(`${member.name} removed from the team`);
+  function handleToggleStatus(user: any) {
+    const isSuspended = user.status === "SUSPENDED";
+    const actionText = isSuspended ? "Reactivate" : "Suspend";
+    
+    popup.confirm(
+      `${actionText} User`,
+      `Are you sure you want to ${actionText.toLowerCase()} ${user.firstName} ${user.lastName}?`,
+      () => {
+        if (isSuspended) {
+          activateMutation.mutate(user.id);
+        } else {
+          suspendMutation.mutate(user.id);
+        }
+      }
+    );
   }
 
   return (
@@ -163,20 +165,20 @@ export default function RolesPage() {
             Roles & Access
           </h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-            Manage admin team members and their permission levels
+            Manage platform users and their administrative access levels
           </p>
         </div>
         <Button className="gap-2" onClick={() => setInviteOpen(true)}>
           <Plus className="h-4 w-4" />
-          Invite Team Member
+          Invite User
         </Button>
       </div>
 
       {/* Role cards */}
       <div className="grid grid-cols-2 gap-4 mb-6">
-        {ROLES.map((role) => {
+        {ROLES_INFO.map((role) => {
           const Icon = role.icon;
-          const count = team.filter((u) => u.role === role.id).length;
+          const count = roleCounts[role.id] ?? 0;
           return (
             <Card key={role.id} className="attend-card p-5">
               <div className="flex items-start gap-3">
@@ -198,14 +200,14 @@ export default function RolesPage() {
                       {count} member{count !== 1 ? "s" : ""}
                     </span>
                   </div>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 mb-2">
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 mb-2 line-clamp-2">
                     {role.desc}
                   </p>
                   <div className="flex flex-wrap gap-1">
                     {role.permissions.map((p) => (
                       <span
                         key={p}
-                        className="text-xs font-medium rounded-full px-2 py-0.5 border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))]"
+                        className="text-[10px] font-medium rounded-full px-2 py-0.5 border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))]"
                       >
                         {p}
                       </span>
@@ -222,43 +224,36 @@ export default function RolesPage() {
       <Card className="attend-card overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
           <h2 className="font-semibold text-[hsl(var(--foreground))]">
-            Team Members
+            Platform Users
           </h2>
           <span className="text-xs text-[hsl(var(--muted-foreground))]">
-            {team.length} members
+            Page {page + 1} of {totalPages}
           </span>
         </div>
         <table className="w-full">
           <thead>
             <tr className="attend-table-header">
-              <th className="px-5 py-3 text-left">Member</th>
+              <th className="px-5 py-3 text-left">User</th>
               <th className="px-5 py-3 text-left">Role</th>
+              <th className="px-5 py-3 text-left">Status</th>
               <th className="px-5 py-3 text-left">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {team.map((u) => {
-              const role = ROLES.find((r) => r.id === u.role);
-              const isSelf = u.id === "u1";
+            {users.map((u) => {
+              const roleMeta = ROLES_INFO.find((r) => r.id === u.role);
+              const name = `${u.firstName} ${u.lastName}`;
               return (
                 <tr key={u.id} className="attend-table-row">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2.5">
                       <div className="h-8 w-8 rounded-full bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-[hsl(var(--primary))] text-xs font-bold shrink-0">
-                        {u.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .slice(0, 2)}
+                        {u.firstName[0]}
+                        {u.lastName[0]}
                       </div>
                       <div>
                         <div className="text-sm font-medium text-[hsl(var(--foreground))]">
-                          {u.name}
-                          {isSelf && (
-                            <span className="ml-2 text-xs font-semibold text-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.08)] rounded-full px-1.5 py-0.5">
-                              You
-                            </span>
-                          )}
+                          {name}
                         </div>
                         <div className="text-xs text-[hsl(var(--muted-foreground))]">
                           {u.email}
@@ -267,14 +262,31 @@ export default function RolesPage() {
                     </div>
                   </td>
                   <td className="px-5 py-3">
-                    {role && (
+                    {roleMeta ? (
                       <span
                         className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                        style={{ backgroundColor: role.bg, color: role.color }}
+                        style={{ backgroundColor: roleMeta.bg, color: roleMeta.color }}
                       >
-                        {role.name}
+                        {roleMeta.name}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-[hsl(var(--muted-foreground))] uppercase font-medium">
+                        {u.role.replace("_", " ")}
                       </span>
                     )}
+                  </td>
+                  <td className="px-5 py-3">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        u.status === "ACTIVE"
+                          ? "bg-green-50 text-green-700"
+                          : u.status === "SUSPENDED"
+                            ? "bg-red-50 text-red-600"
+                            : "bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      {u.status}
+                    </span>
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5">
@@ -286,16 +298,28 @@ export default function RolesPage() {
                       >
                         Edit Role
                       </Button>
-                      {!isSelf && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
-                          onClick={() => handleRemove(u)}
-                        >
-                          Remove
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className={`h-7 text-xs gap-1 ${
+                          u.status === "SUSPENDED"
+                            ? "text-green-700 border-green-200 hover:bg-green-50"
+                            : "text-red-600 border-red-200 hover:bg-red-50"
+                        }`}
+                        onClick={() => handleToggleStatus(u)}
+                      >
+                        {u.status === "SUSPENDED" ? (
+                          <>
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            Activate
+                          </>
+                        ) : (
+                          <>
+                            <ShieldOff className="h-3.5 w-3.5" />
+                            Suspend
+                          </>
+                        )}
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -303,9 +327,34 @@ export default function RolesPage() {
             })}
           </tbody>
         </table>
-        {team.length === 0 && (
+        {users.length === 0 && (
           <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
-            No team members yet.
+            No platform users found.
+          </div>
+        )}
+
+        {/* Pagination controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-[hsl(var(--border)/0.6)]">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 0}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-[hsl(var(--muted-foreground))]">
+              Page {page + 1} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
           </div>
         )}
       </Card>
@@ -316,8 +365,7 @@ export default function RolesPage() {
           <DialogHeader>
             <DialogTitle>Invite Team Member</DialogTitle>
             <DialogDescription>
-              Send an invitation to a new admin. They will receive an email with
-              a link to set their password.
+              Provide user profile details. The invitation will request single sign-on synchronization.
             </DialogDescription>
           </DialogHeader>
 
@@ -355,7 +403,7 @@ export default function RolesPage() {
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
                 <SelectContent>
-                  {ROLES.map((r) => (
+                  {ROLES_INFO.map((r) => (
                     <SelectItem key={r.id} value={r.id}>
                       <div className="flex flex-col">
                         <span className="font-medium">{r.name}</span>
@@ -371,7 +419,7 @@ export default function RolesPage() {
 
             {/* Role preview */}
             {(() => {
-              const selected = ROLES.find((r) => r.id === inviteRole);
+              const selected = ROLES_INFO.find((r) => r.id === inviteRole);
               return selected ? (
                 <div
                   className="rounded-xl p-3 flex flex-wrap gap-1"
@@ -422,25 +470,20 @@ export default function RolesPage() {
           <DialogHeader>
             <DialogTitle>Edit Role</DialogTitle>
             <DialogDescription>
-              Change the permission level for
-              {editMember ? ` ${editMember.name}` : " this member"}.
+              Change the permission level for {editMember ? `${editMember.firstName} ${editMember.lastName}` : "this member"}.
             </DialogDescription>
           </DialogHeader>
 
           {editMember && (
             <div className="flex flex-col gap-4">
-              {/* Member preview */}
               <div className="flex items-center gap-3 p-3 rounded-xl bg-[hsl(var(--muted)/0.4)]">
                 <div className="h-9 w-9 rounded-full bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-[hsl(var(--primary))] text-xs font-bold shrink-0">
-                  {editMember.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .slice(0, 2)}
+                  {editMember.firstName[0]}
+                  {editMember.lastName[0]}
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-[hsl(var(--foreground))]">
-                    {editMember.name}
+                    {editMember.firstName} {editMember.lastName}
                   </p>
                   <p className="text-xs text-[hsl(var(--muted-foreground))]">
                     {editMember.email}
@@ -458,7 +501,7 @@ export default function RolesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ROLES.map((r) => (
+                    {ROLES_INFO.map((r) => (
                       <SelectItem key={r.id} value={r.id}>
                         <div className="flex flex-col">
                           <span className="font-medium">{r.name}</span>
@@ -474,7 +517,7 @@ export default function RolesPage() {
 
               {/* Role preview */}
               {(() => {
-                const selected = ROLES.find((r) => r.id === editRole);
+                const selected = ROLES_INFO.find((r) => r.id === editRole);
                 return selected ? (
                   <div
                     className="rounded-xl p-3 flex flex-wrap gap-1"

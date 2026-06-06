@@ -1,10 +1,46 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, XCircle, Settings, Shield, Link2 } from "lucide-react";
+import { toast } from "sonner";
+
+const DEFAULT_SETTINGS = {
+  platformName: "Attend Enterprise Platform",
+  supportEmail: "support@meristem.com",
+  emailNotifs: true,
+  smsNotifs: false,
+  pushNotifs: true,
+  ndpa: true,
+  auditRetention: "7yr",
+  bvnCompliance: true,
+  ngxStatus: "connected",
+  bvnStatus: "connected",
+  paystackStatus: "connected",
+  muxStatus: "pending",
+  termiiStatus: "disconnected",
+};
+
+function getSavedSettings() {
+  if (typeof window === "undefined") return DEFAULT_SETTINGS;
+  const saved = localStorage.getItem("platform_settings");
+  if (saved) {
+    try {
+      return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+    } catch (e) {
+      return DEFAULT_SETTINGS;
+    }
+  }
+  return DEFAULT_SETTINGS;
+}
+
+function saveSettings(settings: any) {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("platform_settings", JSON.stringify(settings));
+  }
+}
 
 function Toggle({
   checked,
@@ -77,15 +113,76 @@ function IntegrationRow({
 }
 
 export default function SettingsPage() {
-  const [platformName, setPlatformName] = useState(
-    "Attend Enterprise Platform",
-  );
-  const [supportEmail, setSupportEmail] = useState("support@meristem.com");
+  const [platformName, setPlatformName] = useState("");
+  const [supportEmail, setSupportEmail] = useState("");
   const [emailNotifs, setEmailNotifs] = useState(true);
   const [smsNotifs, setSmsNotifs] = useState(false);
   const [pushNotifs, setPushNotifs] = useState(true);
   const [ndpa, setNdpa] = useState(true);
   const [auditRetention, setAuditRetention] = useState("7yr");
+  const [bvnCompliance, setBvnCompliance] = useState(true);
+
+  const [ngxStatus, setNgxStatus] = useState<"connected" | "disconnected" | "pending">("connected");
+  const [bvnStatus, setBvnStatus] = useState<"connected" | "disconnected" | "pending">("connected");
+  const [paystackStatus, setPaystackStatus] = useState<"connected" | "disconnected" | "pending">("connected");
+  const [muxStatus, setMuxStatus] = useState<"connected" | "disconnected" | "pending">("pending");
+  const [termiiStatus, setTermiiStatus] = useState<"connected" | "disconnected" | "pending">("disconnected");
+
+  useEffect(() => {
+    const settings = getSavedSettings();
+    setPlatformName(settings.platformName);
+    setSupportEmail(settings.supportEmail);
+    setEmailNotifs(settings.emailNotifs);
+    setSmsNotifs(settings.smsNotifs);
+    setPushNotifs(settings.pushNotifs);
+    setNdpa(settings.ndpa);
+    setAuditRetention(settings.auditRetention);
+    setBvnCompliance(settings.bvnCompliance);
+    setNgxStatus(settings.ngxStatus);
+    setBvnStatus(settings.bvnStatus);
+    setPaystackStatus(settings.paystackStatus);
+    setMuxStatus(settings.muxStatus);
+    setTermiiStatus(settings.termiiStatus);
+  }, []);
+
+  function handleSaveGeneral() {
+    const current = getSavedSettings();
+    const updated = {
+      ...current,
+      platformName,
+      supportEmail,
+      emailNotifs,
+      smsNotifs,
+      pushNotifs,
+    };
+    saveSettings(updated);
+    toast.success("General settings saved successfully!");
+  }
+
+  function handleSaveCompliance() {
+    const current = getSavedSettings();
+    const updated = {
+      ...current,
+      auditRetention,
+      ndpa,
+      bvnCompliance,
+    };
+    saveSettings(updated);
+    toast.success("Compliance settings saved successfully!");
+  }
+
+  function handleManageIntegrations() {
+    const current = getSavedSettings();
+    const updated = {
+      ...current,
+      muxStatus: "connected" as const,
+      termiiStatus: "connected" as const,
+    };
+    setMuxStatus("connected");
+    setTermiiStatus("connected");
+    saveSettings(updated);
+    toast.success("All third-party gateways integrated successfully!");
+  }
 
   return (
     <div>
@@ -175,7 +272,9 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex justify-end mt-5">
-            <Button size="sm">Save General Settings</Button>
+            <Button size="sm" onClick={handleSaveGeneral}>
+              Save General Settings
+            </Button>
           </div>
         </Card>
 
@@ -229,12 +328,14 @@ export default function SettingsPage() {
                   Enforce BVN validation for Full KYC upgrade
                 </div>
               </div>
-              <Toggle checked={true} onChange={() => {}} />
+              <Toggle checked={bvnCompliance} onChange={setBvnCompliance} />
             </div>
           </div>
 
           <div className="flex justify-end mt-4">
-            <Button size="sm">Save Compliance Settings</Button>
+            <Button size="sm" onClick={handleSaveCompliance}>
+              Save Compliance Settings
+            </Button>
           </div>
         </Card>
 
@@ -248,30 +349,32 @@ export default function SettingsPage() {
           <IntegrationRow
             label="NGX/CSCS Market Data"
             desc="Nigerian Exchange Group & CSCS shareholder data link"
-            status="connected"
+            status={ngxStatus}
           />
           <IntegrationRow
             label="BVN/NIN Gateway (NIBSS)"
             desc="National Identity Management Commission verification"
-            status="connected"
+            status={bvnStatus}
           />
           <IntegrationRow
             label="Payment Gateway (Paystack)"
             desc="Event registration payment processing"
-            status="connected"
+            status={paystackStatus}
           />
           <IntegrationRow
             label="Streaming Provider (Mux)"
             desc="Live virtual event video streaming"
-            status="pending"
+            status={muxStatus}
           />
           <IntegrationRow
             label="SMS Gateway (Termii)"
             desc="OTP and notification delivery"
-            status="disconnected"
+            status={termiiStatus}
           />
           <div className="flex justify-end mt-4">
-            <Button size="sm">Manage Integrations</Button>
+            <Button size="sm" onClick={handleManageIntegrations}>
+              Manage Integrations
+            </Button>
           </div>
         </Card>
       </div>

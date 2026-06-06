@@ -1,11 +1,12 @@
 "use client";
 import { use } from "react";
 import { useRouter } from "next/navigation";
-import { useStore } from "@/lib/store";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
+import { Loader } from "@/components/ui/Loader";
+import { popup } from "@/lib/popup-store";
 import {
   ArrowLeft,
   Mail,
@@ -15,15 +16,15 @@ import {
   CalendarDays,
   ShieldOff,
 } from "lucide-react";
+import { 
+  useParticipantDetail, 
+  useSuspendParticipant, 
+  useReactivateParticipant 
+} from "@/api/participants";
 
-function maskBVN(bvn?: string) {
-  if (!bvn) return "Not provided";
-  return bvn.slice(0, 3) + " **** " + bvn.slice(-3);
-}
-
-function maskCHN(chn?: string) {
-  if (!chn) return "Not provided";
-  return chn.slice(0, 3) + " **** " + chn.slice(-3);
+function maskValue(val?: string) {
+  if (!val) return "Not provided";
+  return val.length > 6 ? val.slice(0, 3) + " **** " + val.slice(-3) : val;
 }
 
 export default function ParticipantDetailPage({
@@ -33,9 +34,35 @@ export default function ParticipantDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const { participants, suspendParticipant, restoreParticipant } = useStore();
+  
+  const { data, isLoading } = useParticipantDetail(id);
+  const suspendMutation = useSuspendParticipant();
+  const reactivateMutation = useReactivateParticipant();
 
-  const participant = participants.find((p) => p.id === id);
+  const handleSuspend = (id: string, name: string) => {
+    popup.confirm(
+      "Suspend Participant",
+      `Are you sure you want to suspend ${name}?`,
+      () => suspendMutation.mutate({ id, data: { reason: "Suspended by admin" } }),
+      undefined,
+      "Suspend",
+      "Cancel"
+    );
+  };
+
+  const handleReactivate = (id: string, name: string) => {
+    popup.confirm(
+      "Reactivate Participant",
+      `Are you sure you want to reactivate ${name}?`,
+      () => reactivateMutation.mutate(id),
+    );
+  };
+
+  if (isLoading) {
+    return <Loader variant="page" text="Loading User Details..." />;
+  }
+
+  const participant = data?.data;
 
   if (!participant) {
     return (
@@ -44,7 +71,7 @@ export default function ParticipantDetailPage({
           User not found
         </p>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-          This user may not exist.
+          This user may not exist or has been removed.
         </p>
         <Button
           variant="outline"
@@ -57,22 +84,12 @@ export default function ParticipantDetailPage({
     );
   }
 
-  const initials = participant.fullName
-    .split(" ")
-    .map((n: string) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
-  const KYC_LEVEL_DESC: Record<string, string> = {
-    full: "Full KYC verified — BVN, NIN, and CHN confirmed.",
-    basic: "Basic verification complete — email and phone confirmed.",
-    pending: "KYC documents submitted and awaiting review.",
-    none: "No identity verification has been completed.",
-  };
+  const isMutating = suspendMutation.isPending || reactivateMutation.isPending;
 
   return (
-    <div>
+    <div className="relative">
+      {isMutating && <Loader variant="overlay" text="Processing..." />}
+      
       <button
         onClick={() => router.push("/participants")}
         className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-5 transition-colors"
@@ -88,11 +105,11 @@ export default function ParticipantDetailPage({
             <div
               className="h-16 w-16 rounded-full flex items-center justify-center text-xl font-bold mb-4"
               style={{
-                backgroundColor: "hsl(var(--primary)/0.12)",
+                backgroundColor: participant.avatarColor || "hsl(var(--primary)/0.12)",
                 color: "hsl(var(--primary))",
               }}
             >
-              {initials}
+              {participant.initials}
             </div>
             <h1 className="text-lg font-bold text-[hsl(var(--foreground))]">
               {participant.fullName}
@@ -102,15 +119,16 @@ export default function ParticipantDetailPage({
             </p>
             <div className="flex items-center gap-2 mt-3">
               <StatusBadge status={participant.kycStatus} />
-              <StatusBadge status={participant.status} />
+              <StatusBadge status={participant.accountStatus} />
             </div>
             <div className="mt-4 w-full border-t border-[hsl(var(--border))] pt-4">
-              {participant.status === "suspended" ? (
+              {participant.accountStatus === "SUSPENDED" ? (
                 <Button
                   variant="outline"
                   size="sm"
                   className="w-full text-green-700 border-green-200 hover:bg-green-50 gap-2"
-                  onClick={() => restoreParticipant(participant.id)}
+                  onClick={() => handleReactivate(participant.id, participant.fullName)}
+                  disabled={isMutating}
                 >
                   <ShieldCheck className="h-3.5 w-3.5" /> Restore Account
                 </Button>
@@ -119,7 +137,8 @@ export default function ParticipantDetailPage({
                   variant="outline"
                   size="sm"
                   className="w-full text-red-600 border-red-200 hover:bg-red-50 gap-2"
-                  onClick={() => suspendParticipant(participant.id)}
+                  onClick={() => handleSuspend(participant.id, participant.fullName)}
+                  disabled={isMutating}
                 >
                   <ShieldOff className="h-3.5 w-3.5" /> Suspend Account
                 </Button>
@@ -141,13 +160,13 @@ export default function ParticipantDetailPage({
               <div className="flex items-center gap-3">
                 <Phone className="h-4 w-4 text-[hsl(var(--muted-foreground))] shrink-0" />
                 <span className="text-sm text-[hsl(var(--foreground))]">
-                  {participant.phone}
+                  {participant.phone || "Not provided"}
                 </span>
               </div>
               <div className="flex items-center gap-3">
                 <Calendar className="h-4 w-4 text-[hsl(var(--muted-foreground))] shrink-0" />
                 <span className="text-sm text-[hsl(var(--foreground))]">
-                  Joined {formatDate(participant.registeredAt)}
+                  Joined {participant.joinedLabel || (participant.joinedAt ? formatDate(participant.joinedAt) : "N/A")}
                 </span>
               </div>
             </div>
@@ -165,28 +184,28 @@ export default function ParticipantDetailPage({
               </h2>
             </div>
             <div className="rounded-xl border border-[hsl(var(--border))] p-3 mb-4 flex items-start gap-3 bg-[hsl(var(--muted)/0.3)]">
-              <StatusBadge status={participant.kycStatus} />
+              <StatusBadge status={participant.kyc?.status || participant.kycStatus} />
               <p className="text-sm text-[hsl(var(--muted-foreground))] flex-1">
-                {KYC_LEVEL_DESC[participant.kycStatus]}
+                {participant.kyc?.description || "Verification information unavailable."}
               </p>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-xl bg-[hsl(var(--muted)/0.5)] p-4">
                 <p className="attend-section-title mb-2">BVN</p>
                 <p className="text-sm font-mono font-semibold text-[hsl(var(--foreground))]">
-                  {maskBVN(participant.bvn)}
+                  {maskValue(participant.kyc?.bvn)}
                 </p>
               </div>
               <div className="rounded-xl bg-[hsl(var(--muted)/0.5)] p-4">
                 <p className="attend-section-title mb-2">CHN</p>
                 <p className="text-sm font-mono font-semibold text-[hsl(var(--foreground))]">
-                  {maskCHN(participant.chn)}
+                  {maskValue(participant.kyc?.chn)}
                 </p>
               </div>
               <div className="rounded-xl bg-[hsl(var(--muted)/0.5)] p-4">
                 <p className="attend-section-title mb-2">NIN</p>
                 <p className="text-sm font-mono font-semibold text-[hsl(var(--foreground))]">
-                  Not provided
+                  {maskValue(participant.kyc?.nin)}
                 </p>
               </div>
             </div>
@@ -203,7 +222,7 @@ export default function ParticipantDetailPage({
             <div className="grid grid-cols-2 gap-4">
               <div className="rounded-xl border border-[hsl(var(--border))] p-4">
                 <p className="text-3xl font-bold tabular-nums text-[hsl(var(--foreground))]">
-                  {participant.eventsAttended}
+                  {participant.platformActivity?.eventsAttended || 0}
                 </p>
                 <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
                   Events attended
@@ -211,11 +230,7 @@ export default function ParticipantDetailPage({
               </div>
               <div className="rounded-xl border border-[hsl(var(--border))] p-4">
                 <p className="text-3xl font-bold tabular-nums text-[hsl(var(--foreground))]">
-                  {participant.kycStatus === "full"
-                    ? "3"
-                    : participant.kycStatus === "basic"
-                      ? "1"
-                      : "0"}
+                  {participant.platformActivity?.credentialsVerified || 0}
                 </p>
                 <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
                   Credentials verified
@@ -231,22 +246,18 @@ export default function ParticipantDetailPage({
             </h2>
             <div className="grid grid-cols-2 gap-4 text-sm">
               {[
-                { label: "Account ID", value: participant.id },
+                { label: "Account ID", value: participant.accountInfo?.accountId || participant.id },
                 {
                   label: "Account Status",
-                  value:
-                    participant.status.charAt(0).toUpperCase() +
-                    participant.status.slice(1),
+                  value: participant.accountInfo?.accountStatus || participant.accountStatus,
                 },
                 {
                   label: "Registered",
-                  value: formatDate(participant.registeredAt),
+                  value: participant.accountInfo?.registeredLabel || (participant.accountInfo?.registeredAt ? formatDate(participant.accountInfo?.registeredAt) : "N/A"),
                 },
                 {
                   label: "KYC Level",
-                  value:
-                    participant.kycStatus.charAt(0).toUpperCase() +
-                    participant.kycStatus.slice(1),
+                  value: participant.accountInfo?.kycLevel || participant.kycLevel,
                 },
               ].map(({ label, value }) => (
                 <div key={label} className="flex flex-col gap-0.5">

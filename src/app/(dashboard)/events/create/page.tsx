@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useCreateEvent } from "@/api/super-admin";
+import { toast } from "sonner";
 
 const MODULES = [
   {
@@ -47,6 +49,8 @@ const FORMATS = ["virtual", "hybrid", "in-person"];
 
 export default function CreateEventPage() {
   const router = useRouter();
+  const createMutation = useCreateEvent();
+  
   const [module, setModule] = useState("");
   const [format, setFormat] = useState("virtual");
   const [title, setTitle] = useState("");
@@ -61,7 +65,42 @@ export default function CreateEventPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    router.push("/events");
+    if (!module) {
+      toast.error("Please select a module type.");
+      return;
+    }
+    if (!title.trim() || title.length < 3 || title.length > 150) {
+      toast.error("Event title must be between 3 and 150 characters.");
+      return;
+    }
+    if (!date) {
+      toast.error("Please specify a valid event date.");
+      return;
+    }
+    if (!startTime) {
+      toast.error("Please specify a start time.");
+      return;
+    }
+
+    const requestData = {
+      eventType: module === "AGM" ? "AGM_EGM" : module === "LAUNCH" ? "PRODUCT_LAUNCH" : module === "HACKATHON" ? "HACKATHON" : "GENERAL_EVENT",
+      title: title.trim(),
+      description: description.trim() || `About ${title.trim()}`,
+      format: format === "in-person" ? "IN_PERSON" : format.toUpperCase(),
+      date,
+      startTime,
+      maximumCapacity: capacity ? parseInt(capacity, 10) : 0,
+      location: format !== "virtual" ? venue : undefined,
+      agmConfig: module === "AGM" ? { resolutions: [], shareholderTargeting: "ALL_REGISTERED", enableProxyVoting: false } : undefined,
+      productLaunchConfig: module === "LAUNCH" ? {} : undefined,
+      generalEventConfig: module === "GENERAL" ? {} : undefined,
+    };
+
+    createMutation.mutate(requestData, {
+      onSuccess: () => {
+        router.push("/events");
+      },
+    });
   }
 
   return (

@@ -1,6 +1,8 @@
 "use client";
-import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { useState, useEffect } from "react";
+import { useEvents, useEventAttendees } from "@/api/super-admin";
+import { useApproveKyc, useDeclineKyc } from "@/api/participants";
+import { Loader } from "@/components/ui/Loader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -13,89 +15,10 @@ import {
   Wifi,
 } from "lucide-react";
 
-// ── Mock attendee pool to cycle through when scanning ────────────────────────
-
-const MOCK_ATTENDEES = [
-  {
-    name: "Ngozi Okafor",
-    email: "ngozi.okafor@email.com",
-    seatRef: "A-14",
-    kycStatus: "Full KYC",
-  },
-  {
-    name: "Emeka Eze",
-    email: "emeka.eze@gtco.com",
-    seatRef: "B-07",
-    kycStatus: "Full KYC",
-  },
-  {
-    name: "Chidera Obi",
-    email: "chidera.obi@fintech.ng",
-    seatRef: "C-22",
-    kycStatus: "Basic KYC",
-  },
-  {
-    name: "Tolu Adeyemi",
-    email: "tolu@unilag.edu.ng",
-    seatRef: "D-03",
-    kycStatus: "None",
-  },
-  {
-    name: "Biodun Adeola",
-    email: "biodun.adeola@insurance.ng",
-    seatRef: "A-31",
-    kycStatus: "Pending",
-  },
-  {
-    name: "Adaeze Nwosu",
-    email: "adaeze.nwosu@gmail.com",
-    seatRef: "B-19",
-    kycStatus: "Full KYC",
-  },
-  {
-    name: "Babatunde Lawal",
-    email: "babatunde.lawal@access.ng",
-    seatRef: "E-08",
-    kycStatus: "Full KYC",
-  },
-];
-
-// ── Pre-seeded recent check-ins ───────────────────────────────────────────────
-
-const SEED_CHECKINS = [
-  {
-    name: "Yetunde Abiodun",
-    time: "09:14 AM",
-    method: "QR Scan",
-    status: "Verified",
-  },
-  {
-    name: "Gbenga Falola",
-    time: "09:11 AM",
-    method: "QR Scan",
-    status: "Verified",
-  },
-  {
-    name: "Aisha Musa",
-    time: "09:08 AM",
-    method: "QR Scan",
-    status: "Verified",
-  },
-  {
-    name: "Chiamaka Eze",
-    time: "09:05 AM",
-    method: "QR Scan",
-    status: "Verified",
-  },
-  {
-    name: "Nnamdi Obi",
-    time: "09:01 AM",
-    method: "QR Scan",
-    status: "Verified",
-  },
-];
+// ── Types ────────────────────────────────────────────────────────────────────
 
 interface CheckIn {
+  id?: string;
   name: string;
   time: string;
   method: string;
@@ -103,6 +26,7 @@ interface CheckIn {
 }
 
 interface ScannedAttendee {
+  id: string;
   name: string;
   email: string;
   seatRef: string;
@@ -116,27 +40,101 @@ const KYC_COLORS: Record<string, { bg: string; text: string }> = {
   None: { bg: "#9ca3af18", text: "#6b7280" },
 };
 
-export default function QRCheckInPage() {
-  const { events } = useStore();
-  const liveEvents = events.filter(
-    (e) => e.status === "live" || e.status === "published",
-  );
+function getEventStatusColor(status: string) {
+  const s = status.toLowerCase();
+  if (s === "live") return "#16a34a";
+  if (s === "published") return "#1d4ed8";
+  return "#6b7280";
+}
 
-  const [selectedEventId, setSelectedEventId] = useState(
-    liveEvents[0]?.id ?? "",
-  );
+
+export default function QRCheckInPage() {
+  const { data: eventsData, isLoading: isEventsLoading } = useEvents("", 0, 100);
+  const liveEvents = eventsData?.data?.content?.filter(
+    (e: any) => e.status === "LIVE" || e.status === "PUBLISHED"
+  ) || [];
+
+  const [selectedEventId, setSelectedEventId] = useState("");
+  const { data: attendeesData } = useEventAttendees(selectedEventId, 0, 100);
+
+  const approveKycMutation = useApproveKyc();
+  const declineKycMutation = useDeclineKyc();
+  const isKycMutating = approveKycMutation.isPending || declineKycMutation.isPending;
+
   const [scanIndex, setScanIndex] = useState(0);
   const [lastScan, setLastScan] = useState<ScannedAttendee | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [checkins, setCheckins] = useState<CheckIn[]>(SEED_CHECKINS);
-  const [totalToday, setTotalToday] = useState(SEED_CHECKINS.length);
+  const [checkins, setCheckins] = useState<CheckIn[]>([]);
+  const [totalToday, setTotalToday] = useState(0);
+
+  useEffect(() => {
+    if (liveEvents.length > 0 && !selectedEventId) {
+      setSelectedEventId(liveEvents[0].id);
+    }
+  }, [liveEvents, selectedEventId]);
+
+  const handleApproveKyc = (participantId: string) => {
+    approveKycMutation.mutate({
+      id: participantId,
+      data: {
+        kycLevel: "FULL_KYC",
+        note: "Approved via QR Check-in scanner",
+      },
+    }, {
+      onSuccess: () => {
+        setLastScan((prev) => prev && prev.id === participantId ? { ...prev, kycStatus: "Full KYC" } : prev);
+        setCheckins((prev) =>
+          prev.map((c) =>
+            c.id === participantId ? { ...c, status: "Verified" } : c
+          )
+        );
+      }
+    });
+  };
+
+  const handleDeclineKyc = (participantId: string) => {
+    declineKycMutation.mutate({
+      id: participantId,
+      data: {
+        reason: "Declined via QR Check-in scanner",
+      },
+    }, {
+      onSuccess: () => {
+        setLastScan((prev) => prev && prev.id === participantId ? { ...prev, kycStatus: "None" } : prev);
+        setCheckins((prev) =>
+          prev.map((c) =>
+            c.id === participantId ? { ...c, status: "Pending KYC" } : c
+          )
+        );
+      }
+    });
+  };
 
   function simulateScan() {
     setScanning(true);
     setTimeout(() => {
-      const attendee = MOCK_ATTENDEES[scanIndex % MOCK_ATTENDEES.length];
+      const attendeePool = attendeesData?.data?.attendees || [];
+      if (attendeePool.length === 0) {
+        toast.error("No registered attendees for this event to simulate scan.");
+        setScanning(false);
+        return;
+      }
+      const attendee = attendeePool[scanIndex % attendeePool.length];
       setScanIndex((i) => i + 1);
-      setLastScan(attendee);
+
+      const isFull = attendee.kycStatus === "FULL_KYC" || attendee.kycStatus === "full" || attendee.kycStatus === "Full KYC";
+      const isBasic = attendee.kycStatus === "BASIC_KYC" || attendee.kycStatus === "basic" || attendee.kycStatus === "Basic KYC";
+      const kycStatusLabel = isFull ? "Full KYC" : isBasic ? "Basic KYC" : "None";
+
+      const parsedAttendee = {
+        id: attendee.id || attendee.participantId || `mock_${scanIndex}`,
+        name: attendee.fullName || attendee.name || "Anonymous",
+        email: attendee.email || "",
+        seatRef: attendee.seatRef || `Seat-${12 + (scanIndex % 80)}`,
+        kycStatus: kycStatusLabel,
+      };
+
+      setLastScan(parsedAttendee);
       setScanning(false);
 
       const now = new Date();
@@ -145,26 +143,33 @@ export default function QRCheckInPage() {
         minute: "2-digit",
       });
       const newCheckin: CheckIn = {
-        name: attendee.name,
+        id: parsedAttendee.id,
+        name: parsedAttendee.name,
         time,
         method: "QR Scan",
-        status: attendee.kycStatus === "None" ? "Pending KYC" : "Verified",
+        status: parsedAttendee.kycStatus === "None" ? "Pending KYC" : "Verified",
       };
       setCheckins((prev) => [newCheckin, ...prev]);
       setTotalToday((n) => n + 1);
-      toast.success(`${attendee.name} checked in successfully`);
+      toast.success(`${parsedAttendee.name} checked in successfully`);
     }, 900);
   }
 
-  const verified = checkins.filter((c) => c.status === "Verified").length;
-  const pending = checkins.filter((c) => c.status === "Pending KYC").length;
+  const verified = checkins.filter((c: CheckIn) => c.status === "Verified").length;
+  const pending = checkins.filter((c: CheckIn) => c.status === "Pending KYC").length;
   const verifiedPct =
     checkins.length > 0 ? Math.round((verified / checkins.length) * 100) : 0;
 
-  const selectedEvent = events.find((e) => e.id === selectedEventId);
+  const selectedEvent = liveEvents.find((e: any) => e.id === selectedEventId);
+
+  if (isEventsLoading) {
+    return <Loader variant="page" text="Loading Events..." />;
+  }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="relative">
+      {isKycMutating && <Loader variant="overlay" text="Updating KYC status..." />}
+      <div className="flex flex-col gap-6">
       {/* ── Header ── */}
       <div>
         <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
@@ -233,7 +238,7 @@ export default function QRCheckInPage() {
               onChange={(e) => setSelectedEventId(e.target.value)}
               className="w-full text-sm rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
             >
-              {liveEvents.map((evt) => (
+              {liveEvents.map((evt: any) => (
                 <option key={evt.id} value={evt.id}>
                   {evt.title}
                 </option>
@@ -244,11 +249,11 @@ export default function QRCheckInPage() {
                 <span
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold capitalize"
                   style={{
-                    backgroundColor: selectedEvent.color + "18",
-                    color: selectedEvent.color,
+                    backgroundColor: getEventStatusColor(selectedEvent.status) + "18",
+                    color: getEventStatusColor(selectedEvent.status),
                   }}
                 >
-                  {selectedEvent.status}
+                  {selectedEvent.status.toLowerCase()}
                 </span>
                 <span>{selectedEvent.format}</span>
               </div>
@@ -356,6 +361,27 @@ export default function QRCheckInPage() {
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Check-in successful
                 </div>
+                {lastScan.kycStatus === "None" && (
+                  <div className="mt-3 pt-3 border-t border-[hsl(var(--border))] flex gap-2">
+                    <Button
+                      size="sm"
+                      className="text-xs h-8 bg-green-600 hover:bg-green-700 text-white flex-1"
+                      onClick={() => handleApproveKyc(lastScan.id)}
+                      disabled={isKycMutating}
+                    >
+                      Approve KYC
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-8 text-red-600 border-red-200 hover:bg-red-50 flex-1"
+                      onClick={() => handleDeclineKyc(lastScan.id)}
+                      disabled={isKycMutating}
+                    >
+                      Decline KYC
+                    </Button>
+                  </div>
+                )}
               </div>
             </Card>
           )}
@@ -379,6 +405,7 @@ export default function QRCheckInPage() {
                   <th className="px-5 py-3 text-left">Time</th>
                   <th className="px-5 py-3 text-left">Method</th>
                   <th className="px-5 py-3 text-left">Status</th>
+                  <th className="px-5 py-3 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -420,6 +447,29 @@ export default function QRCheckInPage() {
                         {c.status}
                       </span>
                     </td>
+                    <td className="px-5 py-3">
+                      {c.status === "Pending KYC" && c.id && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleApproveKyc(c.id!)}
+                            disabled={isKycMutating}
+                            className="text-xs text-green-600 hover:text-green-700 font-semibold"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleDeclineKyc(c.id!)}
+                            disabled={isKycMutating}
+                            className="text-xs text-red-600 hover:text-red-700 font-semibold"
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      )}
+                      {c.status === "Verified" && (
+                        <span className="text-xs text-gray-400">Verified</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -427,6 +477,7 @@ export default function QRCheckInPage() {
           </Card>
         </div>
       </div>
+    </div>
     </div>
   );
 }

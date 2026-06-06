@@ -1,4 +1,5 @@
 "use client";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Lightbulb,
@@ -8,25 +9,135 @@ import {
   CheckCircle,
   FileText,
 } from "lucide-react";
-import { useStore } from "@/lib/store";
+import { useEvents } from "@/api/super-admin";
+import { Loader } from "@/components/ui/Loader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
-export default function HackathonsPage() {
-  const { events, applications } = useStore();
+const DEFAULT_APPLICATIONS = [
+  {
+    id: "app_001",
+    eventId: "evt_005",
+    teamName: "FinTech Gladiators",
+    ideaTitle: "DeFi Micro-Lending Platform for SMEs",
+    track: "Financial Inclusion",
+    status: "shortlisted",
+    memberCount: 4,
+    submittedAt: "2026-05-20",
+    score: 85,
+  },
+  {
+    id: "app_002",
+    eventId: "evt_005",
+    teamName: "GreenByte",
+    ideaTitle: "Eco-Friendly Carbon Ledger",
+    track: "Sustainability",
+    status: "under_review",
+    memberCount: 3,
+    submittedAt: "2026-05-21",
+    score: 72,
+  },
+  {
+    id: "app_003",
+    eventId: "evt_005",
+    teamName: "MedConnect",
+    ideaTitle: "Telehealth AI Diagnostics",
+    track: "Healthcare",
+    status: "submitted",
+    memberCount: 5,
+    submittedAt: "2026-05-22",
+  },
+  {
+    id: "app_004",
+    eventId: "evt_005",
+    teamName: "EduFlow",
+    ideaTitle: "Gamified Local Language Learning App",
+    track: "EdTech",
+    status: "selected",
+    memberCount: 3,
+    submittedAt: "2026-05-23",
+    score: 94,
+  },
+  {
+    id: "app_005",
+    eventId: "evt_005",
+    teamName: "PaySplit",
+    ideaTitle: "Peer-to-peer bill splitting engine",
+    track: "Financial Inclusion",
+    status: "not_progressed",
+    memberCount: 4,
+    submittedAt: "2026-05-24",
+  },
+];
 
-  const hackathonEvent = events.find((e) => e.module === "HACKATHON");
+function getSavedApplications() {
+  if (typeof window === "undefined") return DEFAULT_APPLICATIONS;
+  const saved = localStorage.getItem("merihack_applications");
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      return DEFAULT_APPLICATIONS;
+    }
+  }
+  localStorage.setItem(
+    "merihack_applications",
+    JSON.stringify(DEFAULT_APPLICATIONS),
+  );
+  return DEFAULT_APPLICATIONS;
+}
+
+export default function HackathonsPage() {
+  const { data: eventsData, isLoading } = useEvents("", 0, 100);
+  const [applications, setApplications] = useState<any[]>([]);
+
+  useEffect(() => {
+    setApplications(getSavedApplications());
+  }, []);
+
+  const hackathonEvents =
+    eventsData?.data?.content?.filter(
+      (e: any) =>
+        e.eventType === "HACKATHON" || e.eventType === "INNOVATION_CHALLENGE",
+    ) || [];
+
+  const liveHackathon = hackathonEvents[0];
+  const hackathonEvent = liveHackathon
+    ? {
+        id: liveHackathon.id,
+        title: liveHackathon.title,
+        organiser: liveHackathon.organizerName || "Meristem Innovation Hub",
+        date: liveHackathon.date,
+        format: (liveHackathon.format || "in-person").toLowerCase(),
+        venue:
+          (liveHackathon as any).location ||
+          (liveHackathon as any).venue ||
+          "Victoria Island, Lagos",
+      }
+    : {
+        id: "evt_005",
+        title: "MeriHack 2026 — FinTech Innovation Challenge",
+        organiser: "Meristem Innovation Hub",
+        date: "2026-07-20",
+        format: "in-person",
+        venue: "Victoria Island, Lagos",
+      };
+
   const total = applications.length;
   const shortlisted = applications.filter(
-    (a) => a.status === "shortlisted",
+    (a: any) => a.status === "shortlisted",
   ).length;
   const underReview = applications.filter(
-    (a) => a.status === "under_review",
+    (a: any) => a.status === "under_review",
   ).length;
-  const submitted = applications.filter((a) => a.status === "submitted").length;
-  const selected = applications.filter((a) => a.status === "selected").length;
+  const submitted = applications.filter(
+    (a: any) => a.status === "submitted",
+  ).length;
+  const selected = applications.filter(
+    (a: any) => a.status === "selected",
+  ).length;
 
-  const tracks = [...new Set(applications.map((a) => a.track))];
+  const tracks = Array.from(new Set(applications.map((a: any) => a.track)));
 
   return (
     <div>

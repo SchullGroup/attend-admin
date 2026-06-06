@@ -9,27 +9,24 @@ import {
   Clock,
   TrendingUp,
 } from "lucide-react";
-import { useStore } from "@/lib/store";
-import { ModuleBadge } from "@/components/custom/module-badge";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { Button } from "@/components/ui/button";
 import { formatDate, timeAgo } from "@/lib/utils";
-import { AttendEvent } from "@/lib/mock-data";
+import { Loader } from "@/components/ui/Loader";
+import { 
+  useDashboardStats, 
+  useEvents, 
+  useStakeholders, 
+  useRecentRegistrations 
+} from "@/api/super-admin";
+import { EventSummaryResponse } from "@/types/super-admin";
 
-function EventRow({ event }: { event: AttendEvent }) {
-  const isLive = event.status === "live";
-  const fill = event.capacity
-    ? Math.round((event.rsvpCount / event.capacity) * 100)
-    : null;
+function EventRow({ event }: { event: EventSummaryResponse }) {
+  const isLive = event.status === "LIVE";
+  
   return (
     <div className="flex items-center gap-4 px-5 py-3.5 border-b last:border-0 border-[hsl(var(--border)/0.6)] hover:bg-[hsl(var(--muted)/0.4)] transition-colors group">
-      {/* Color bar */}
-      <div
-        className="w-1 h-10 rounded-full shrink-0"
-        style={{ backgroundColor: event.color }}
-      />
-
-      {/* Title + module */}
+      {/* Title + stakeholder */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
           {isLive && (
@@ -38,57 +35,31 @@ function EventRow({ event }: { event: AttendEvent }) {
               LIVE
             </span>
           )}
-          <ModuleBadge module={event.module} />
         </div>
         <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">
           {event.title}
         </p>
         <p className="text-xs text-[hsl(var(--muted-foreground))]">
-          {event.organiser}
+          {event.organizerName || event.stakeholderName}
         </p>
       </div>
 
       {/* Date */}
       <div className="hidden lg:flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] shrink-0">
         <Clock className="h-3 w-3" />
-        {formatDate(event.date)}
-      </div>
-
-      {/* RSVP */}
-      <div className="w-24 shrink-0">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs font-medium tabular-nums">
-            {event.rsvpCount.toLocaleString()}
-          </span>
-          {fill !== null && (
-            <span className="text-xs text-[hsl(var(--muted-foreground))]">
-              {fill}%
-            </span>
-          )}
-        </div>
-        {fill !== null && (
-          <div className="h-1 rounded-full bg-[hsl(var(--border))]">
-            <div
-              className="h-1 rounded-full"
-              style={{
-                width: `${Math.min(fill, 100)}%`,
-                backgroundColor: event.color,
-              }}
-            />
-          </div>
-        )}
+        {formatDate(event.date || event.startDate || "")}
       </div>
 
       {/* Status + action */}
       <div className="flex items-center gap-2 shrink-0">
-        <StatusBadge status={event.status} />
-        <Link href={isLive ? "/events/live" : "/events"}>
+        <StatusBadge status={event.status.toLowerCase()} />
+        <Link href={`/events/${event.id}`}>
           <Button
             size="sm"
-            variant={isLive ? "default" : "outline"}
+            variant="outline"
             className="h-7 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
           >
-            {isLive ? "Control Room" : "View"}
+            View
           </Button>
         </Link>
       </div>
@@ -97,27 +68,19 @@ function EventRow({ event }: { event: AttendEvent }) {
 }
 
 export default function DashboardPage() {
-  const { events, participants, liveAttendees, stakeholders } = useStore();
+  const { data: statsData, isLoading: statsLoading } = useDashboardStats();
+  const { data: eventsData, isLoading: eventsLoading } = useEvents("", 0, 5);
+  const { data: stakeholdersData, isLoading: stkLoading } = useStakeholders(0, 4);
+  const { data: registrationsData, isLoading: regLoading } = useRecentRegistrations(0, 6);
 
-  const liveEvents = events.filter((e) => e.status === "live");
-  const pendingKYC = participants.filter(
-    (p) => p.kycStatus === "pending",
-  ).length;
-  const upcoming = events.filter(
-    (e) =>
-      e.status === "published" || e.status === "live" || e.status === "draft",
-  );
-  const recentParticipants = [...participants]
-    .sort(
-      (a, b) =>
-        new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime(),
-    )
-    .slice(0, 6);
+  if (statsLoading || eventsLoading || stkLoading || regLoading) {
+    return <Loader variant="page" text="Loading Dashboard..." />;
+  }
 
-  const activeStakeholders = stakeholders.filter((s) => s.status === "active");
-  const topStakeholders = [...activeStakeholders]
-    .sort((a, b) => b.eventsCount - a.eventsCount)
-    .slice(0, 4);
+  const stats = statsData?.data;
+  const upcomingEvents = eventsData?.data?.content || [];
+  const topStakeholders = stakeholdersData?.data?.content || [];
+  const recentRegistrations = registrationsData?.data?.content || [];
 
   const now = new Date();
   const timeStr = now.toLocaleTimeString("en-NG", {
@@ -137,28 +100,28 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
-            Welcome back, Stanley.
+            Admin Dashboard
           </h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
             {dateStr} · {timeStr}
           </p>
         </div>
-        {liveEvents.length > 0 && (
-          <Link href="/events/live">
+        {stats?.liveEvents ? (
+          <Link href="/events">
             <div className="flex items-center gap-2.5 bg-red-600 text-white rounded-xl px-4 py-2.5 cursor-pointer hover:bg-red-700 transition-colors">
               <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
               <div>
                 <p className="text-xs font-semibold leading-none">
-                  {liveEvents[0].title.split("—")[0].trim()}
+                  {stats.liveEvents} Live Events
                 </p>
                 <p className="text-xs text-red-200 mt-0.5">
-                  {liveAttendees.toLocaleString()} attendees online
+                  Across the platform
                 </p>
               </div>
               <Radio className="h-4 w-4 ml-1 opacity-70" />
             </div>
           </Link>
-        )}
+        ) : null}
       </div>
 
       {/* ── Stats strip (single card, 4 inline stats) ── */}
@@ -166,34 +129,31 @@ export default function DashboardPage() {
         {[
           {
             label: "Enrolled Stakeholders",
-            value: activeStakeholders.length,
+            value: stats?.activeStakeholders || 0,
             sub: "Active organisations",
             icon: Building2,
             color: "#374151",
           },
           {
-            label: "Total Events",
-            value: events.length,
+            label: "Total Users",
+            value: stats?.totalUsers || 0,
             sub: "Across all stakeholders",
             icon: CalendarDays,
             color: "#2563eb",
           },
           {
             label: "Live Now",
-            value: liveEvents.length,
-            sub:
-              liveEvents.length > 0
-                ? `${liveAttendees.toLocaleString()} online`
-                : "No active sessions",
+            value: stats?.liveEvents || 0,
+            sub: stats?.liveEvents ? `Events happening now` : "No active sessions",
             icon: Radio,
-            color: liveEvents.length > 0 ? "#dc2626" : "#9ca3af",
+            color: stats?.liveEvents ? "#dc2626" : "#9ca3af",
           },
           {
-            label: "Pending KYC",
-            value: pendingKYC,
-            sub: "Awaiting verification",
+            label: "Pending Enrollments",
+            value: stats?.pendingEnrollments || 0,
+            sub: "Awaiting approval",
             icon: ShieldAlert,
-            color: pendingKYC > 0 ? "#f97316" : "#9ca3af",
+            color: stats?.pendingEnrollments ? "#f97316" : "#9ca3af",
           },
         ].map(({ label, value, sub, icon: Icon, color }) => (
           <div key={label} className="flex items-center gap-4 px-6 py-5">
@@ -228,7 +188,7 @@ export default function DashboardPage() {
                 Platform Events
               </h2>
               <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                {upcoming.length} active or upcoming across all stakeholders
+                Recent active or upcoming across all stakeholders
               </p>
             </div>
             <Link href="/events">
@@ -241,10 +201,14 @@ export default function DashboardPage() {
               </Button>
             </Link>
           </div>
-          <div>
-            {upcoming.map((event) => (
+          <div className="divide-y divide-[hsl(var(--border)/0.5)]">
+            {upcomingEvents.length > 0 ? upcomingEvents.map((event) => (
               <EventRow key={event.id} event={event} />
-            ))}
+            )) : (
+              <div className="p-8 text-center text-muted-foreground text-sm">
+                No events found.
+              </div>
+            )}
           </div>
         </div>
 
@@ -254,7 +218,7 @@ export default function DashboardPage() {
           <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-[hsl(var(--border)/0.6)]">
               <h2 className="font-semibold text-[hsl(var(--foreground))] text-sm">
-                Stakeholders
+                Recent Stakeholders
               </h2>
               <Link href="/stakeholders">
                 <Button
@@ -267,7 +231,7 @@ export default function DashboardPage() {
               </Link>
             </div>
             <div className="divide-y divide-[hsl(var(--border)/0.5)]">
-              {topStakeholders.map((stk) => (
+              {topStakeholders.length > 0 ? topStakeholders.map((stk) => (
                 <div
                   key={stk.id}
                   className="flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.3)] transition-colors"
@@ -286,23 +250,26 @@ export default function DashboardPage() {
                       {stk.name}
                     </p>
                     <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">
-                      {stk.industry}
+                      {stk.industry || "Industry not specified"}
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className="text-xs font-semibold tabular-nums text-[hsl(var(--foreground))]">
-                      {stk.eventsCount}
-                    </span>
-                    <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                      events
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="h-2 w-2 rounded-full shrink-0"
+                        style={{ backgroundColor: stk.online ? "#16a34a" : "#6b7280" }}
+                      />
+                      <span className="text-xs font-medium capitalize text-[hsl(var(--muted-foreground))]">
+                        {stk.online ? "Online" : "Offline"}
+                      </span>
+                    </div>
                   </div>
-                  <span
-                    className="h-2 w-2 rounded-full shrink-0"
-                    style={{ backgroundColor: "#16a34a" }}
-                  />
                 </div>
-              ))}
+              )) : (
+                <div className="p-4 text-center text-muted-foreground text-sm">
+                  No stakeholders found.
+                </div>
+              )}
             </div>
           </div>
 
@@ -323,7 +290,7 @@ export default function DashboardPage() {
               </Link>
             </div>
             <div className="divide-y divide-[hsl(var(--border)/0.5)]">
-              {recentParticipants.map((p) => (
+              {recentRegistrations.length > 0 ? recentRegistrations.map((p) => (
                 <div
                   key={p.id}
                   className="flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.3)] transition-colors"
@@ -335,28 +302,29 @@ export default function DashboardPage() {
                       color: "hsl(var(--primary))",
                     }}
                   >
-                    {p.fullName
-                      .split(" ")
-                      .map((n: string) => n[0])
-                      .join("")
-                      .slice(0, 2)}
+                    {p.participantName
+                      ? p.participantName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)
+                      : p.participantEmail.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-[hsl(var(--foreground))] truncate">
-                      {p.fullName}
+                      {p.participantName || "Unknown"}
                     </p>
                     <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">
-                      {p.email}
+                      {p.participantEmail}
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
-                    <StatusBadge status={p.kycStatus} />
                     <span className="text-xs text-[hsl(var(--muted-foreground))]">
                       {timeAgo(p.registeredAt)}
                     </span>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <div className="p-4 text-center text-muted-foreground text-sm">
+                  No recent registrations.
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -372,19 +340,19 @@ export default function DashboardPage() {
           <Link href="/participants/kyc">
             <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5">
               KYC Queue
-              {pendingKYC > 0 && (
+            </Button>
+          </Link>
+          <Link href="/stakeholders/pending">
+            <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5">
+              Enroll Stakeholder
+              {(stats?.pendingEnrollments ?? 0) > 0 && (
                 <span
                   className="h-4 min-w-4 px-1 rounded-full text-xs font-bold flex items-center justify-center"
                   style={{ backgroundColor: "#f97316", color: "white" }}
                 >
-                  {pendingKYC}
+                  {stats?.pendingEnrollments}
                 </span>
               )}
-            </Button>
-          </Link>
-          <Link href="/stakeholders/pending">
-            <Button size="sm" variant="outline" className="h-8 text-xs">
-              Enroll Stakeholder
             </Button>
           </Link>
           <Link href="/documents">

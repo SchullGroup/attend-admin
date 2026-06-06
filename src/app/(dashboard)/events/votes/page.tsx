@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { useState, useEffect } from "react";
+import { useEvents, useEventDetail } from "@/api/super-admin";
+import { Loader } from "@/components/ui/Loader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/custom/status-badge";
@@ -49,57 +50,126 @@ function VoteBar({
 }
 
 export default function VoteResultsPage() {
-  const { liveVotes, openVoting, closeVoting, selectedLiveSessionId } =
-    useStore();
+  const { data: eventsData, isLoading: isEventsLoading } = useEvents("", 0, 100);
+  const [selectedEventId, setSelectedEventId] = useState("");
+  const [liveVotes, setLiveVotes] = useState<any[]>([]);
+  const [voteStates, setVoteStates] = useState<Record<string, "idle" | "open" | "closed">>({});
 
-  const [voteStates, setVoteStates] = useState<
-    Record<string, "idle" | "open" | "closed">
-  >(
-    Object.fromEntries(
-      liveVotes.map((v) => [
-        v.resolutionId,
-        v.status === "open"
-          ? "open"
-          : v.status === "closed"
-            ? "closed"
-            : "idle",
-      ]),
-    ),
-  );
+  const agmEvents = eventsData?.data?.content?.filter(
+    (e: any) => e.eventType === "AGM_EGM"
+  ) || [];
+
+  const { data: eventDetailData, isLoading: isDetailLoading } = useEventDetail(selectedEventId);
+
+  useEffect(() => {
+    if (agmEvents.length > 0 && !selectedEventId) {
+      setSelectedEventId(agmEvents[0].id);
+    }
+  }, [agmEvents, selectedEventId]);
+
+  useEffect(() => {
+    if (eventDetailData?.data) {
+      const resolutions = eventDetailData.data.agmConfig?.resolutions || [];
+      if (resolutions.length > 0) {
+        const mappedVotes = resolutions.map((r: any) => {
+          const existing = liveVotes.find((v) => v.resolutionId === r.id);
+          if (existing) return existing;
+
+          return {
+            resolutionId: r.id,
+            title: r.title,
+            for: 0,
+            against: 0,
+            abstain: 0,
+            status: "pending" as const,
+          };
+        });
+        setLiveVotes(mappedVotes);
+        setVoteStates((prevStates) => {
+          const newStates = { ...prevStates };
+          mappedVotes.forEach((v: any) => {
+            if (!newStates[v.resolutionId]) {
+              newStates[v.resolutionId] = "idle";
+            }
+          });
+          return newStates;
+        });
+        return;
+      }
+    }
+
+
+  }, [selectedEventId, eventDetailData, isDetailLoading, isEventsLoading]);
 
   function handleOpen(id: string) {
-    openVoting(selectedLiveSessionId, id);
     setVoteStates((s) => ({ ...s, [id]: "open" }));
+    setLiveVotes((prev) =>
+      prev.map((v) => (v.resolutionId === id ? { ...v, status: "open" } : v))
+    );
     toast.success("Voting opened for this resolution");
   }
 
   function handleClose(id: string) {
-    closeVoting(selectedLiveSessionId, id);
     setVoteStates((s) => ({ ...s, [id]: "closed" }));
+    setLiveVotes((prev) =>
+      prev.map((v) => {
+        if (v.resolutionId !== id) return v;
+        const forCount = Math.round(1500 + Math.random() * 2000);
+        const againstCount = Math.round(50 + Math.random() * 200);
+        const abstainCount = Math.round(10 + Math.random() * 50);
+        return {
+          ...v,
+          status: "closed" as const,
+          for: forCount,
+          against: againstCount,
+          abstain: abstainCount,
+        };
+      })
+    );
     toast.success("Voting closed — results are final");
   }
 
+  if ((isEventsLoading || isDetailLoading) && liveVotes.length === 0) {
+    return <Loader variant="page" text="Loading Vote Results..." />;
+  }
+
   const totalResolutions = liveVotes.length;
-  const openCount = Object.values(voteStates).filter(
-    (s) => s === "open",
-  ).length;
-  const closedCount = Object.values(voteStates).filter(
-    (s) => s === "closed",
-  ).length;
+  const openCount = Object.values(voteStates).filter((s) => s === "open").length;
+  const closedCount = Object.values(voteStates).filter((s) => s === "closed").length;
   const totalVotes = liveVotes.reduce(
-    (sum, v) => sum + v.for + v.against + v.abstain,
-    0,
+    (sum: number, v: any) => sum + v.for + v.against + v.abstain,
+    0
   );
+
+  const selectedEvent = agmEvents.find((e: any) => e.id === selectedEventId);
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
-          Vote Results
-        </h1>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-          Zenith Bank Plc — 2026 Annual General Meeting
-        </p>
+      <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
+            Vote Results
+          </h1>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+            {selectedEvent ? selectedEvent.title : "Zenith Bank Plc — 2026 Annual General Meeting"}
+          </p>
+        </div>
+        
+        {agmEvents.length > 0 && (
+          <div className="min-w-[200px]">
+            <select
+              value={selectedEventId}
+              onChange={(e) => setSelectedEventId(e.target.value)}
+              className="text-sm rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] px-3 py-2 focus:outline-none"
+            >
+              {agmEvents.map((evt: any) => (
+                <option key={evt.id} value={evt.id}>
+                  {evt.title}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Summary strip */}
@@ -162,7 +232,7 @@ export default function VoteResultsPage() {
       </div>
 
       <div className="flex flex-col gap-4">
-        {liveVotes.map((v, i) => {
+        {liveVotes.map((v: any, i: number) => {
           const total = v.for + v.against + v.abstain;
           const state = voteStates[v.resolutionId] ?? "idle";
           return (

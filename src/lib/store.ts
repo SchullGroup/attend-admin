@@ -8,11 +8,13 @@ import {
   MOCK_LIVE_VOTES,
   MOCK_LIVE_SESSIONS,
   MOCK_STAKEHOLDERS,
-  type AppDocument,
-  type LiveVote,
-  type LiveSession,
-  type Stakeholder,
 } from "./mock-data";
+import type {
+  AppDocument,
+  LiveVote,
+  LiveSession,
+  Stakeholder,
+} from "@/types/mock";
 
 interface AttendAdminStore {
   currentOrg: any | null;

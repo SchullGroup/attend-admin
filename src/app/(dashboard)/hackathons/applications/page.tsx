@@ -1,12 +1,12 @@
 "use client";
-import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { formatDate } from "@/lib/utils";
-import type { ApplicationStatus } from "@/lib/mock-data";
+import type { ApplicationStatus } from "@/types/mock";
 import { ChevronDown } from "lucide-react";
+import { toast } from "sonner";
 
 const STATUS_TABS = [
   { label: "All", value: "all" },
@@ -24,15 +24,107 @@ const STATUS_OPTIONS: ApplicationStatus[] = [
   "not_progressed",
 ];
 
+const DEFAULT_APPLICATIONS = [
+  {
+    id: "app_001",
+    eventId: "evt_005",
+    teamName: "FinTech Gladiators",
+    ideaTitle: "DeFi Micro-Lending Platform for SMEs",
+    track: "Financial Inclusion",
+    status: "shortlisted",
+    memberCount: 4,
+    submittedAt: "2026-05-20",
+    score: 85,
+  },
+  {
+    id: "app_002",
+    eventId: "evt_005",
+    teamName: "GreenByte",
+    ideaTitle: "Eco-Friendly Carbon Ledger",
+    track: "Sustainability",
+    status: "under_review",
+    memberCount: 3,
+    submittedAt: "2026-05-21",
+    score: 72,
+  },
+  {
+    id: "app_003",
+    eventId: "evt_005",
+    teamName: "MedConnect",
+    ideaTitle: "Telehealth AI Diagnostics",
+    track: "Healthcare",
+    status: "submitted",
+    memberCount: 5,
+    submittedAt: "2026-05-22",
+  },
+  {
+    id: "app_004",
+    eventId: "evt_005",
+    teamName: "EduFlow",
+    ideaTitle: "Gamified Local Language Learning App",
+    track: "EdTech",
+    status: "selected",
+    memberCount: 3,
+    submittedAt: "2026-05-23",
+    score: 94,
+  },
+  {
+    id: "app_005",
+    eventId: "evt_005",
+    teamName: "PaySplit",
+    ideaTitle: "Peer-to-peer bill splitting engine",
+    track: "Financial Inclusion",
+    status: "not_progressed",
+    memberCount: 4,
+    submittedAt: "2026-05-24",
+  },
+];
+
+function getSavedApplications() {
+  if (typeof window === "undefined") return DEFAULT_APPLICATIONS;
+  const saved = localStorage.getItem("merihack_applications");
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      return DEFAULT_APPLICATIONS;
+    }
+  }
+  localStorage.setItem(
+    "merihack_applications",
+    JSON.stringify(DEFAULT_APPLICATIONS),
+  );
+  return DEFAULT_APPLICATIONS;
+}
+
+function saveApplications(apps: any[]) {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("merihack_applications", JSON.stringify(apps));
+  }
+}
+
 export default function ApplicationsPage() {
-  const { applications, updateApplicationStatus } = useStore();
+  const [applications, setApplications] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState("all");
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+
+  useEffect(() => {
+    setApplications(getSavedApplications());
+  }, []);
+
+  function updateApplicationStatus(id: string, status: any) {
+    const updated = applications.map((app) =>
+      app.id === id ? { ...app, status } : app,
+    );
+    setApplications(updated);
+    saveApplications(updated);
+    toast.success(`Application status updated to ${status.replace("_", " ")}`);
+  }
 
   const filtered =
     activeTab === "all"
       ? applications
-      : applications.filter((a) => a.status === activeTab);
+      : applications.filter((a: any) => a.status === activeTab);
 
   return (
     <div>

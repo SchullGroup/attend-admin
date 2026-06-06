@@ -1,10 +1,89 @@
 "use client";
-import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Trophy, Star } from "lucide-react";
+import { toast } from "sonner";
+
+const DEFAULT_APPLICATIONS = [
+  {
+    id: "app_001",
+    eventId: "evt_005",
+    teamName: "FinTech Gladiators",
+    ideaTitle: "DeFi Micro-Lending Platform for SMEs",
+    track: "Financial Inclusion",
+    status: "shortlisted",
+    memberCount: 4,
+    submittedAt: "2026-05-20",
+    score: 85,
+  },
+  {
+    id: "app_002",
+    eventId: "evt_005",
+    teamName: "GreenByte",
+    ideaTitle: "Eco-Friendly Carbon Ledger",
+    track: "Sustainability",
+    status: "under_review",
+    memberCount: 3,
+    submittedAt: "2026-05-21",
+    score: 72,
+  },
+  {
+    id: "app_003",
+    eventId: "evt_005",
+    teamName: "MedConnect",
+    ideaTitle: "Telehealth AI Diagnostics",
+    track: "Healthcare",
+    status: "submitted",
+    memberCount: 5,
+    submittedAt: "2026-05-22",
+  },
+  {
+    id: "app_004",
+    eventId: "evt_005",
+    teamName: "EduFlow",
+    ideaTitle: "Gamified Local Language Learning App",
+    track: "EdTech",
+    status: "selected",
+    memberCount: 3,
+    submittedAt: "2026-05-23",
+    score: 94,
+  },
+  {
+    id: "app_005",
+    eventId: "evt_005",
+    teamName: "PaySplit",
+    ideaTitle: "Peer-to-peer bill splitting engine",
+    track: "Financial Inclusion",
+    status: "not_progressed",
+    memberCount: 4,
+    submittedAt: "2026-05-24",
+  },
+];
+
+function getSavedApplications() {
+  if (typeof window === "undefined") return DEFAULT_APPLICATIONS;
+  const saved = localStorage.getItem("merihack_applications");
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      return DEFAULT_APPLICATIONS;
+    }
+  }
+  localStorage.setItem(
+    "merihack_applications",
+    JSON.stringify(DEFAULT_APPLICATIONS),
+  );
+  return DEFAULT_APPLICATIONS;
+}
+
+function saveApplications(apps: any[]) {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("merihack_applications", JSON.stringify(apps));
+  }
+}
 
 const CRITERIA = [
   {
@@ -30,18 +109,38 @@ const CRITERIA = [
 ];
 
 export default function JudgingPage() {
-  const { applications } = useStore();
-  const shortlisted = applications.filter((a) => a.status === "shortlisted");
-
-  const [scores, setScores] = useState<Record<string, string>>(
-    Object.fromEntries(
-      shortlisted.map((a) => [a.id, a.score?.toString() ?? ""]),
-    ),
-  );
+  const [applications, setApplications] = useState<any[]>([]);
+  const [scores, setScores] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState<Record<string, boolean>>({});
 
+  useEffect(() => {
+    const apps = getSavedApplications();
+    setApplications(apps);
+    const shortlistedApps = apps.filter((a: any) => a.status === "shortlisted");
+    setScores(
+      Object.fromEntries(
+        shortlistedApps.map((a: any) => [a.id, a.score?.toString() ?? ""]),
+      ),
+    );
+  }, []);
+
+  const shortlisted = applications.filter((a) => a.status === "shortlisted");
+
   function handleSubmit(id: string) {
+    const scoreVal = parseInt(scores[id], 10);
+    if (isNaN(scoreVal) || scoreVal < 0 || scoreVal > 100) {
+      toast.error("Please enter a score between 0 and 100");
+      return;
+    }
+
+    const updated = applications.map((app) =>
+      app.id === id ? { ...app, score: scoreVal } : app,
+    );
+    setApplications(updated);
+    saveApplications(updated);
+
     setSubmitted((prev) => ({ ...prev, [id]: true }));
+    toast.success(`Score submitted successfully for team!`);
   }
 
   return (

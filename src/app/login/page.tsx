@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useStore } from "@/lib/store";
 import { useLogin } from "@/api/auth/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +33,6 @@ const FEATURES = [
 
 export default function LoginPage() {
   const router = useRouter();
-  const { seedStore } = useStore();
   const { mutate: loginMutation, isPending } = useLogin();
   const [email, setEmail] = useState("stanley.jacob@meristem.com");
   const [password, setPassword] = useState("password");
@@ -42,7 +40,6 @@ export default function LoginPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    seedStore(); // Retain mock data for events etc.
     loginMutation(
       { email, password },
       {
