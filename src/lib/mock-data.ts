@@ -5,6 +5,22 @@ export type KYCStatus = "none" | "basic" | "pending" | "full";
 export type ApplicationStatus = "submitted" | "under_review" | "shortlisted" | "selected" | "not_progressed";
 export type OrganiserStatus = "active" | "suspended" | "pending";
 
+export type RegistrarStatus = "active" | "suspended" | "pending";
+
+export interface Registrar {
+  id: string;
+  name: string;
+  industry: string;
+  rcNumber: string;
+  repName: string;
+  repEmail: string;
+  repPhone: string;
+  status: RegistrarStatus;
+  enrolledAt: string;
+  registersCount: number;
+  eventsCount: number;
+}
+
 export interface Organiser {
   id: string;
   name: string;
@@ -173,6 +189,13 @@ export const MOCK_ORGANISERS: Organiser[] = [
   { id: "stk_010", name: "AIICO Insurance Plc", industry: "Insurance", rcNumber: "RC 2479", contactEmail: "cosec@aiicoplc.com", plan: "starter", eventsCount: 0, status: "pending", enrolledAt: "2026-05-22" },
   { id: "stk_011", name: "Seplat Energy Plc", industry: "Oil & Gas", rcNumber: "RC 908631", contactEmail: "investors@seplatnigeria.com", plan: "enterprise", eventsCount: 1, status: "active", enrolledAt: "2026-03-10" },
   { id: "stk_012", name: "BUA Foods Plc", industry: "FMCG", rcNumber: "RC 1762", contactEmail: "investorrelations@buafoods.com", plan: "starter", eventsCount: 0, status: "pending", enrolledAt: "2026-05-24" },
+];
+
+export const MOCK_REGISTRARS: Registrar[] = [
+  { id: "rgr_001", name: "Meristem Securities Limited", industry: "Financial Services", rcNumber: "RC 400201", repName: "Obinna Nwachukwu", repEmail: "o.nwachukwu@meristem.com", repPhone: "08012345678", status: "active", enrolledAt: "2024-01-15", registersCount: 5, eventsCount: 12 },
+  { id: "rgr_002", name: "DataPort Registrars Ltd", industry: "Financial Services", rcNumber: "RC 287640", repName: "Adaeze Okonkwo", repEmail: "adaeze@dataport.ng", repPhone: "08023456789", status: "active", enrolledAt: "2025-03-10", registersCount: 3, eventsCount: 7 },
+  { id: "rgr_003", name: "United Securities Limited", industry: "Financial Services", rcNumber: "RC 164720", repName: "Emeka Eze", repEmail: "e.eze@unitedsecu.ng", repPhone: "08034567890", status: "active", enrolledAt: "2025-07-22", registersCount: 2, eventsCount: 4 },
+  { id: "rgr_004", name: "Greenwich Registrars", industry: "Financial Services", rcNumber: "RC 492810", repName: "Folake Adewale", repEmail: "f.adewale@greenwich.ng", repPhone: "08045678901", status: "pending", enrolledAt: "2026-05-30", registersCount: 0, eventsCount: 0 },
 ];
 
 export const MOCK_EVENTS: AttendEvent[] = [

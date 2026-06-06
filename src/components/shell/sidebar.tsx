@@ -36,10 +36,17 @@ const SECTIONS = [
     ],
   },
   {
-    label: "Organisers",
+    label: "Registrars",
     items: [
-      { title: "All Organisers", icon: Building2, href: "/organisers" },
-      { title: "Pending Enrollments", icon: ClipboardList, href: "/organisers/pending" },
+      { title: "All Registrars", icon: Building2, href: "/registrars" },
+      { title: "Enrol Registrar", icon: PlusCircle, href: "/registrars/enrol" },
+    ],
+  },
+  {
+    label: "Registers",
+    items: [
+      { title: "All Registers", icon: ClipboardList, href: "/registers" },
+      { title: "Enrol Register", icon: UserCog, href: "/registers/enrol" },
     ],
   },
   {
@@ -63,8 +70,10 @@ const SECTIONS = [
 
 const ALL_HREFS = [
   ...SECTIONS.flatMap((s) => s.items.map((i) => i.href)),
-  "/organisers",
-  "/organisers/pending",
+  "/registrars",
+  "/registrars/enrol",
+  "/registers",
+  "/registers/enrol",
   "/settings/team",
 ];
 
@@ -90,8 +99,9 @@ const roleLabel: Record<string, string> = {
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentUser, logout, organisers } = useStore();
-  const pendingCount = organisers.filter((s) => s.status === "pending").length;
+  const { currentUser, logout, organisers, registrars } = useStore();
+  const pendingRegisters = organisers.filter((s) => s.status === "pending").length;
+  const pendingRegistrars = registrars.filter((r) => r.status === "pending").length;
 
   return (
     <aside
@@ -169,12 +179,20 @@ export function Sidebar() {
                         style={{ backgroundColor: "#ef4444" }}
                       />
                     )}
-                    {item.href === "/organisers/pending" && pendingCount > 0 && (
+                    {item.href === "/registers/enrol" && pendingRegisters > 0 && (
                       <span
                         className="ml-auto h-4 min-w-4 px-1 rounded-full text-xs font-bold flex items-center justify-center"
                         style={{ backgroundColor: "#f59e0b", color: "white" }}
                       >
-                        {pendingCount}
+                        {pendingRegisters}
+                      </span>
+                    )}
+                    {item.href === "/registrars/enrol" && pendingRegistrars > 0 && (
+                      <span
+                        className="ml-auto h-4 min-w-4 px-1 rounded-full text-xs font-bold flex items-center justify-center"
+                        style={{ backgroundColor: "#f59e0b", color: "white" }}
+                      >
+                        {pendingRegistrars}
                       </span>
                     )}
                   </Link>

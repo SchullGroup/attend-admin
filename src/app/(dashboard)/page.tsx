@@ -157,8 +157,8 @@ export default function DashboardPage() {
           {/* Organisers card */}
           <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-[hsl(var(--border)/0.6)]">
-              <h2 className="font-semibold text-[hsl(var(--foreground))] text-sm">Organisers</h2>
-              <Link href="/organisers">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] text-sm">Registers</h2>
+              <Link href="/registers">
                 <Button variant="ghost" size="sm" className="h-6 text-xs gap-1 text-[hsl(var(--muted-foreground))] px-2">
                   All <ArrowRight className="h-2.5 w-2.5" />
                 </Button>
@@ -237,7 +237,7 @@ export default function DashboardPage() {
               )}
             </Button>
           </Link>
-          <Link href="/organisers/pending"><Button size="sm" variant="outline" className="h-8 text-xs">Enroll Organiser</Button></Link>
+          <Link href="/registers/enrol"><Button size="sm" variant="outline" className="h-8 text-xs">Enrol Register</Button></Link>
           <Link href="/documents"><Button size="sm" variant="outline" className="h-8 text-xs">Documents</Button></Link>
           <Link href="/analytics"><Button size="sm" variant="outline" className="h-8 text-xs">Analytics</Button></Link>
         </div>

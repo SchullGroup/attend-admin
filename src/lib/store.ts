@@ -1,6 +1,6 @@
 "use client";
 import { create } from "zustand";
-import { CURRENT_ADMIN, MOCK_EVENTS, MOCK_PARTICIPANTS, MOCK_APPLICATIONS, MOCK_DOCUMENTS, MOCK_LIVE_VOTES, MOCK_LIVE_SESSIONS, MOCK_ORGANISERS, MOCK_AUDIT_LOG, MOCK_TEAM, type AdminUser, type AttendEvent, type Participant, type HackathonApplication, type AppDocument, type LiveVote, type LiveSession, type Organiser, type AuditLogEntry, type AuditSeverity, type AuditCategory, type TeamMember } from "./mock-data";
+import { CURRENT_ADMIN, MOCK_EVENTS, MOCK_PARTICIPANTS, MOCK_APPLICATIONS, MOCK_DOCUMENTS, MOCK_LIVE_VOTES, MOCK_LIVE_SESSIONS, MOCK_ORGANISERS, MOCK_REGISTRARS, MOCK_AUDIT_LOG, MOCK_TEAM, type AdminUser, type AttendEvent, type Participant, type HackathonApplication, type AppDocument, type LiveVote, type LiveSession, type Organiser, type Registrar, type AuditLogEntry, type AuditSeverity, type AuditCategory, type TeamMember } from "./mock-data";
 
 
 interface AttendAdminStore {
@@ -13,6 +13,7 @@ interface AttendAdminStore {
   liveVotes: LiveVote[];
   liveAttendees: number;
   organisers: Organiser[];
+  registrars: Registrar[];
   // Multi-session live control room
   liveSessions: LiveSession[];
   selectedLiveSessionId: string;
@@ -32,6 +33,8 @@ interface AttendAdminStore {
   uploadOrgLogo: (url: string) => void;
   enrollOrganiser: (id: string) => void;
   suspendOrganiser: (id: string) => void;
+  enrollRegistrar: (id: string) => void;
+  suspendRegistrar: (id: string) => void;
   suspendParticipant: (id: string) => void;
   restoreParticipant: (id: string) => void;
   launchPoll: (sessionId: string, pollId: string) => void;
@@ -50,6 +53,7 @@ export const useStore = create<AttendAdminStore>((set) => ({
   documents: [],
   liveVotes: [],
   organisers: MOCK_ORGANISERS,
+  registrars: MOCK_REGISTRARS,
   liveAttendees: MOCK_LIVE_SESSIONS.reduce((s, sess) => s + sess.attendees, 0),
   liveSessions: MOCK_LIVE_SESSIONS,
   selectedLiveSessionId: MOCK_LIVE_SESSIONS[0]?.id ?? "",
@@ -70,6 +74,7 @@ export const useStore = create<AttendAdminStore>((set) => ({
     liveVotes: MOCK_LIVE_VOTES,
     liveSessions: MOCK_LIVE_SESSIONS,
     organisers: MOCK_ORGANISERS,
+    registrars: MOCK_REGISTRARS,
     auditLog: MOCK_AUDIT_LOG,
     team: MOCK_TEAM,
   }),
@@ -108,6 +113,8 @@ export const useStore = create<AttendAdminStore>((set) => ({
   uploadOrgLogo: (url) => set((s) => ({ currentUser: s.currentUser ? { ...s.currentUser, logoUrl: url } : null })),
   enrollOrganiser: (id) => set((s) => ({ organisers: s.organisers.map((stk) => stk.id === id ? { ...stk, status: "active" as const } : stk) })),
   suspendOrganiser: (id) => set((s) => ({ organisers: s.organisers.map((stk) => stk.id === id ? { ...stk, status: "suspended" as const } : stk) })),
+  enrollRegistrar: (id) => set((s) => ({ registrars: s.registrars.map((r) => r.id === id ? { ...r, status: "active" as const } : r) })),
+  suspendRegistrar: (id) => set((s) => ({ registrars: s.registrars.map((r) => r.id === id ? { ...r, status: "suspended" as const } : r) })),
   suspendParticipant: (id) => set((s) => ({ participants: s.participants.map((p) => p.id === id ? { ...p, status: "suspended" as const } : p) })),
   restoreParticipant: (id) => set((s) => ({ participants: s.participants.map((p) => p.id === id ? { ...p, status: "active" as const } : p) })),
   launchPoll: (sessionId, pollId) => set((s) => ({
