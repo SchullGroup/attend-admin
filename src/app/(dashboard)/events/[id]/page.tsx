@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 import { ModuleBadge } from "@/components/custom/module-badge";
+import { CustomSelect } from "@/components/custom/custom-select";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -701,10 +702,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               </div>
               <div>
                 <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] mb-1.5">Tier</label>
-                <select className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]">
-                  <option>Press / Media</option>
-                  <option>VIP Guests</option>
-                </select>
+                <CustomSelect
+                  value="press"
+                  onChange={() => {}}
+                  options={[{ label: "Press / Media", value: "press" }, { label: "VIP Guests", value: "vip" }]}
+                />
               </div>
             </div>
             <div className="flex gap-2">

@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Lightbulb, ArrowRight, Trophy, Clock, CheckCircle, FileText } from "lucide-react";
+import { Lightbulb, ArrowRight, Trophy, Clock, CheckCircle, FileText, Users, Zap } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -23,6 +23,17 @@ export default function HackathonsPage() {
         <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Innovation Challenges</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">Manage innovation challenges, review applications, and coordinate judging</p>
       </div>
+
+      {!hackathonEvent && (
+        <Card className="attend-card p-12 text-center mb-6">
+          <Zap className="h-12 w-12 mx-auto mb-4 text-purple-300" />
+          <p className="text-lg font-semibold text-[hsl(var(--foreground))] mb-1">No active challenges</p>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mb-5">Create your first innovation challenge to start accepting team applications.</p>
+          <Link href="/events/create">
+            <Button className="gap-2"><Lightbulb className="h-4 w-4" /> Create Challenge</Button>
+          </Link>
+        </Card>
+      )}
 
       {hackathonEvent && (
         <div className="rounded-2xl overflow-hidden mb-6" style={{ background: "linear-gradient(135deg, #9333ea 0%, #7c22c9 60%, #5b21b6 100%)" }}>
@@ -57,7 +68,7 @@ export default function HackathonsPage() {
                   { label: "Total Applications", value: total, icon: FileText },
                   { label: "Shortlisted", value: shortlisted, icon: CheckCircle },
                   { label: "Under Review", value: underReview, icon: Clock },
-                  { label: "Submitted", value: submitted, icon: FileText },
+                  { label: "Submitted", value: submitted, icon: Users },
                 ].map((stat) => (
                   <div key={stat.label} className="rounded-xl bg-white/10 p-3 min-w-[110px]">
                     <div className="text-2xl font-bold tabular-nums">{stat.value}</div>

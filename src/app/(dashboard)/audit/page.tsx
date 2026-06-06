@@ -1,7 +1,8 @@
 "use client";
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useStore } from "@/lib/store";
 import { Card } from "@/components/ui/card";
+import { CustomSelect } from "@/components/custom/custom-select";
 import type { AuditCategory, AuditSeverity } from "@/lib/mock-data";
 
 const CATEGORY_LABELS: Record<AuditCategory, string> = {
@@ -46,6 +47,7 @@ export default function AuditLogPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<"all" | AuditCategory>("all");
   const [severity, setSeverity] = useState<"all" | AuditSeverity>("all");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -98,24 +100,20 @@ export default function AuditLogPage() {
             placeholder="Search by actor, action, resource or details…"
             className="flex-1 h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
           />
-          <select
+          <CustomSelect
             value={category}
-            onChange={(e) => setCategory(e.target.value as "all" | AuditCategory)}
-            className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
-          >
-            {ALL_CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c === "all" ? "All categories" : CATEGORY_LABELS[c]}</option>
-            ))}
-          </select>
-          <select
+            onChange={(v) => setCategory(v as "all" | AuditCategory)}
+            placeholder="All categories"
+            className="w-44"
+            options={ALL_CATEGORIES.map((c) => ({ value: c, label: c === "all" ? "All categories" : CATEGORY_LABELS[c] }))}
+          />
+          <CustomSelect
             value={severity}
-            onChange={(e) => setSeverity(e.target.value as "all" | AuditSeverity)}
-            className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
-          >
-            {ALL_SEVERITIES.map((s) => (
-              <option key={s} value={s}>{s === "all" ? "All severities" : SEVERITY_CONFIG[s].label}</option>
-            ))}
-          </select>
+            onChange={(v) => setSeverity(v as "all" | AuditSeverity)}
+            placeholder="All severities"
+            className="w-40"
+            options={ALL_SEVERITIES.map((s) => ({ value: s, label: s === "all" ? "All severities" : SEVERITY_CONFIG[s].label }))}
+          />
         </div>
       </Card>
 
@@ -149,39 +147,59 @@ export default function AuditLogPage() {
                 filtered.map((entry) => {
                   const sev = SEVERITY_CONFIG[entry.severity];
                   const cat = CATEGORY_COLORS[entry.category];
+                  const isExpanded = expandedId === entry.id;
                   return (
-                    <tr key={entry.id} className="attend-table-row">
-                      <td className="px-5 py-3 text-xs text-[hsl(var(--muted-foreground))] whitespace-nowrap font-mono">
-                        {formatTimestamp(entry.timestamp)}
-                      </td>
-                      <td className="px-5 py-3">
-                        <p className="text-sm text-[hsl(var(--foreground))] font-medium truncate max-w-[180px]">{entry.actor}</p>
-                        <p className="text-xs text-[hsl(var(--muted-foreground))] truncate max-w-[180px]">{entry.actorEmail}</p>
-                        <p className="text-xs font-mono" style={{ color: "#94a3b8" }}>{entry.ip}</p>
-                      </td>
-                      <td className="px-5 py-3 text-sm font-medium text-[hsl(var(--foreground))] whitespace-nowrap">{entry.action}</td>
-                      <td className="px-5 py-3">
-                        <span
-                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
-                          style={{ backgroundColor: cat.bg, color: cat.text }}
-                        >
-                          {CATEGORY_LABELS[entry.category]}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[160px] truncate">{entry.resource}</td>
-                      <td className="px-5 py-3 text-xs text-[hsl(var(--muted-foreground))] max-w-[220px]">
-                        <span className="line-clamp-2">{entry.details}</span>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span
-                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
-                          style={{ backgroundColor: sev.bg, color: sev.text }}
-                        >
-                          <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: sev.dot }} />
-                          {sev.label}
-                        </span>
-                      </td>
-                    </tr>
+                    <React.Fragment key={entry.id}>
+                      <tr
+                        className="attend-table-row cursor-pointer select-none"
+                        onClick={() => setExpandedId(isExpanded ? null : entry.id)}
+                      >
+                        <td className="px-5 py-3 text-xs text-[hsl(var(--muted-foreground))] whitespace-nowrap font-mono">
+                          {formatTimestamp(entry.timestamp)}
+                        </td>
+                        <td className="px-5 py-3">
+                          <p className="text-sm text-[hsl(var(--foreground))] font-medium truncate max-w-[180px]">{entry.actor}</p>
+                          <p className="text-xs text-[hsl(var(--muted-foreground))] truncate max-w-[180px]">{entry.actorEmail}</p>
+                          <p className="text-xs font-mono" style={{ color: "#94a3b8" }}>{entry.ip}</p>
+                        </td>
+                        <td className="px-5 py-3 text-sm font-medium text-[hsl(var(--foreground))] whitespace-nowrap">{entry.action}</td>
+                        <td className="px-5 py-3">
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
+                            style={{ backgroundColor: cat.bg, color: cat.text }}
+                          >
+                            {CATEGORY_LABELS[entry.category]}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[160px] truncate">{entry.resource}</td>
+                        <td className="px-5 py-3 text-xs text-[hsl(var(--muted-foreground))] max-w-[220px]">
+                          <span className={isExpanded ? undefined : "line-clamp-2"}>{entry.details}</span>
+                        </td>
+                        <td className="px-5 py-3">
+                          <span
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold"
+                            style={{ backgroundColor: sev.bg, color: sev.text }}
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: sev.dot }} />
+                            {sev.label}
+                          </span>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="bg-[hsl(var(--muted)/0.4)]">
+                          <td colSpan={7} className="px-5 py-4 border-b border-[hsl(var(--border))]">
+                            <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-2">Full Details</p>
+                            <p className="text-sm text-[hsl(var(--foreground))] mb-3 leading-relaxed">{entry.details ?? "No additional details."}</p>
+                            <div className="grid grid-cols-4 gap-x-8 gap-y-1 text-xs text-[hsl(var(--muted-foreground))]">
+                              <div><span className="font-medium text-[hsl(var(--foreground))]">Actor:</span> {entry.actor}</div>
+                              <div><span className="font-medium text-[hsl(var(--foreground))]">Email:</span> {entry.actorEmail}</div>
+                              <div><span className="font-medium text-[hsl(var(--foreground))]">IP:</span> <span className="font-mono">{entry.ip}</span></div>
+                              <div><span className="font-medium text-[hsl(var(--foreground))]">Resource:</span> {entry.resource}</div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })
               )}

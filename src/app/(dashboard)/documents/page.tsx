@@ -128,6 +128,9 @@ export default function DocumentsPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [form, setForm] = useState({ title: "", type: "notice", eventId: "", pushToAttendees: true });
   const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const organisers = [...new Set(documents.map((d) => d.organiser).filter(Boolean))].sort() as string[];
 
@@ -209,9 +212,23 @@ export default function DocumentsPage() {
 
             <div>
               <Label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-1.5 block">File</Label>
-              <div className="border-2 border-dashed border-[hsl(var(--border))] rounded-xl p-6 text-center cursor-pointer hover:border-[hsl(var(--primary)/0.4)] transition-colors">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.xlsx"
+                className="hidden"
+                onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+              />
+              <div
+                className="border-2 border-dashed border-[hsl(var(--border))] rounded-xl p-6 text-center cursor-pointer hover:border-[hsl(var(--primary)/0.4)] transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
                 <Upload className="h-8 w-8 mx-auto mb-2 text-[hsl(var(--muted-foreground))]" />
-                <p className="text-sm text-[hsl(var(--muted-foreground))]">Click to select a file or drag and drop</p>
+                {selectedFile ? (
+                  <p className="text-sm font-medium text-[hsl(var(--foreground))]">{selectedFile.name}</p>
+                ) : (
+                  <p className="text-sm text-[hsl(var(--muted-foreground))]">Click to select a file or drag and drop</p>
+                )}
                 <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">PDF, DOCX, XLSX up to 50 MB</p>
               </div>
             </div>
@@ -320,17 +337,35 @@ export default function DocumentsPage() {
                         <Download className="h-3 w-3" />
                         Download
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
-                        onClick={() => {
-                          deleteDocument(doc.id);
-                          toast.success("Document deleted");
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      {confirmDeleteId === doc.id ? (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs text-red-600 bg-red-50 font-semibold hover:bg-red-100"
+                            onClick={() => { deleteDocument(doc.id); setConfirmDeleteId(null); toast.success("Document deleted"); }}
+                          >
+                            Delete
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setConfirmDeleteId(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => setConfirmDeleteId(doc.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -339,7 +374,18 @@ export default function DocumentsPage() {
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">No documents found for this type.</div>
+          <div className="py-14 text-center">
+            <FileText className="h-10 w-10 mx-auto mb-3 text-[hsl(var(--muted-foreground))] opacity-30" />
+            <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-1">No documents match these filters</p>
+            {(filter !== "all" || orgFilter) && (
+              <button
+                onClick={() => { setFilter("all"); setOrgFilter(""); }}
+                className="text-xs text-[hsl(var(--primary))] hover:underline mt-1"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
         )}
       </Card>
     </div>

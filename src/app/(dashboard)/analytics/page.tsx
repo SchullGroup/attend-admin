@@ -217,13 +217,10 @@ export default function AnalyticsPage() {
               </tr>
             </thead>
             <tbody>
-              {[
-                { event: events.find((e) => e.id === "evt_001"), attended: 1247, avgWatch: "83 min", pollResponses: 0 },
-                { event: events.find((e) => e.id === "evt_006"), attended: 289, avgWatch: "135 min", pollResponses: 251 },
-                { event: events.find((e) => e.id === "evt_018"), attended: 1042, avgWatch: "55 min", pollResponses: 0 },
-                { event: events.find((e) => e.id === "evt_004"), attended: 1843, avgWatch: "18 min", pollResponses: 0 },
-              ].map(({ event, attended, avgWatch, pollResponses }) => {
-                if (!event) return null;
+              {events.slice(0, 5).map((event) => {
+                const attended = Math.round(event.rsvpCount * 0.78);
+                const avgWatch = event.module === "AGM" ? "135 min" : event.module === "HACKATHON" ? "83 min" : event.format === "virtual" ? "55 min" : "40 min";
+                const pollResponses = event.module === "AGM" ? Math.round(attended * 0.92) : 0;
                 const rate = event.rsvpCount > 0 ? Math.round((attended / event.rsvpCount) * 100) : 0;
                 return (
                   <tr key={event.id} className="attend-table-row">

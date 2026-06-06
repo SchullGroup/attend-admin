@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { UserPlus, Trash2 } from "lucide-react";
+import { UserPlus, Trash2, Users2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { TeamRole, TeamMember } from "@/lib/mock-data";
 
@@ -198,8 +198,13 @@ export default function TeamPage() {
             })}
             {team.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
-                  No team members yet.
+                <td colSpan={5} className="px-4 py-14 text-center">
+                  <Users2 className="h-10 w-10 mx-auto mb-3 text-[hsl(var(--muted-foreground))] opacity-30" />
+                  <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-1">No team members yet</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3">Invite colleagues to manage the platform together.</p>
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setInviteOpen(true)}>
+                    <UserPlus className="h-3.5 w-3.5" /> Invite someone
+                  </Button>
                 </td>
               </tr>
             )}

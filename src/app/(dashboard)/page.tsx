@@ -67,7 +67,7 @@ function EventRow({ event }: { event: AttendEvent }) {
 }
 
 export default function DashboardPage() {
-  const { events, participants, liveAttendees, organisers } = useStore();
+  const { events, participants, liveAttendees, organisers, currentUser } = useStore();
 
   const liveEvents = events.filter((e) => e.status === "live");
   const pendingKYC = participants.filter((p) => p.kycStatus === "pending").length;
@@ -90,7 +90,7 @@ export default function DashboardPage() {
       {/* ── Page header ── */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Welcome back, Stanley.</h1>
+          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Welcome back, {currentUser?.name?.split(" ")[0] ?? "Admin"}.</h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{dateStr} · {timeStr}</p>
         </div>
         {liveEvents.length > 0 && (

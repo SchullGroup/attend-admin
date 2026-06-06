@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { CustomSelect } from "@/components/custom/custom-select";
 import { toast } from "sonner";
 
 const INDUSTRY_OPTIONS = [
@@ -31,6 +32,7 @@ export default function PendingEnrollmentsPage() {
     rcNumber: "",
     contactEmail: "",
   });
+  const [pendingConfirm, setPendingConfirm] = useState<{ id: string; name: string; action: "approve" | "reject" } | null>(null);
 
   function handleFormChange(field: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -48,10 +50,12 @@ export default function PendingEnrollmentsPage() {
   function handleApprove(id: string, name: string) {
     enrollOrganiser(id);
     toast.success(`${name} has been approved and activated.`);
+    setPendingConfirm(null);
   }
 
   function handleReject(name: string) {
     toast.error(`Enrollment for ${name} has been rejected.`);
+    setPendingConfirm(null);
   }
 
   return (
@@ -81,16 +85,12 @@ export default function PendingEnrollmentsPage() {
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Industry</label>
-            <select
+            <CustomSelect
               value={form.industry}
-              onChange={(e) => handleFormChange("industry", e.target.value)}
-              className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] transition-shadow"
-            >
-              <option value="">Select industry…</option>
-              {INDUSTRY_OPTIONS.map((i) => (
-                <option key={i} value={i}>{i}</option>
-              ))}
-            </select>
+              onChange={(v) => handleFormChange("industry", v)}
+              placeholder="Select industry…"
+              options={INDUSTRY_OPTIONS.map((i) => ({ label: i, value: i }))}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
@@ -151,23 +151,46 @@ export default function PendingEnrollmentsPage() {
                     {new Date(stk.enrolledAt).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
                   </td>
                   <td className="px-5 py-3">
-                    <div className="flex items-center gap-1.5">
-                      <Button
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => handleApprove(stk.id, stk.name)}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                        onClick={() => handleReject(stk.name)}
-                      >
-                        Reject
-                      </Button>
-                    </div>
+                    {pendingConfirm?.id === stk.id ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-[hsl(var(--muted-foreground))] mr-1">
+                          {pendingConfirm.action === "approve" ? "Approve this organiser?" : "Reject this organiser?"}
+                        </span>
+                        <Button
+                          size="sm"
+                          className={`h-7 text-xs ${pendingConfirm.action === "approve" ? "" : "bg-red-600 hover:bg-red-700"}`}
+                          onClick={() => pendingConfirm.action === "approve" ? handleApprove(stk.id, stk.name) : handleReject(stk.name)}
+                        >
+                          Confirm
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => setPendingConfirm(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setPendingConfirm({ id: stk.id, name: stk.name, action: "approve" })}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => setPendingConfirm({ id: stk.id, name: stk.name, action: "reject" })}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

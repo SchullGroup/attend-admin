@@ -119,7 +119,7 @@ function JudgingView({ challenge, onBack }: { challenge: any; onBack: () => void
                   <Button
                     size="sm"
                     className="mt-6 h-9"
-                    disabled={!scores[app.id]}
+                    disabled={scores[app.id] === undefined || scores[app.id] === ""}
                     onClick={() => setSubmitted((prev) => ({ ...prev, [app.id]: true }))}
                   >
                     Submit Score

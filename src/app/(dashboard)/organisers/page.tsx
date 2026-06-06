@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { Building2 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -152,8 +153,17 @@ export default function OrganisersPage() {
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
-            No organisers found for this filter.
+          <div className="py-14 text-center">
+            <Building2 className="h-10 w-10 mx-auto mb-3 text-[hsl(var(--muted-foreground))] opacity-30" />
+            <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-1">No organisers match this filter</p>
+            {activeTab !== "all" && (
+              <button
+                onClick={() => setActiveTab("all")}
+                className="text-xs text-[hsl(var(--primary))] hover:underline mt-1"
+              >
+                Clear filter
+              </button>
+            )}
           </div>
         )}
       </Card>

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Check, X, ShieldAlert } from "lucide-react";
+import { Check, X, ShieldAlert, CheckCircle2, XCircle } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -73,8 +73,22 @@ export default function KYCQueuePage() {
       {tab === "Pending" && pending.length === 0 && (
         <div className="text-center py-16 text-[hsl(var(--muted-foreground))]">
           <ShieldAlert className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p className="font-medium">No pending verifications</p>
+          <p className="font-medium text-[hsl(var(--foreground))]">No pending verifications</p>
           <p className="text-sm mt-1">All KYC submissions have been reviewed.</p>
+        </div>
+      )}
+      {tab === "Approved" && approvedList.length === 0 && (
+        <div className="text-center py-16 text-[hsl(var(--muted-foreground))]">
+          <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-green-400 opacity-40" />
+          <p className="font-medium text-[hsl(var(--foreground))]">No approved submissions yet</p>
+          <p className="text-sm mt-1">KYC submissions you approve will appear here.</p>
+        </div>
+      )}
+      {tab === "Rejected" && rejectedList.length === 0 && (
+        <div className="text-center py-16 text-[hsl(var(--muted-foreground))]">
+          <XCircle className="h-10 w-10 mx-auto mb-3 text-red-400 opacity-40" />
+          <p className="font-medium text-[hsl(var(--foreground))]">No rejected submissions yet</p>
+          <p className="text-sm mt-1">KYC submissions you reject will appear here.</p>
         </div>
       )}
 

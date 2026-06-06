@@ -85,7 +85,7 @@ export default function ParticipantsPage() {
             <button
               key={f.value}
               onClick={() => setKycFilter(f.value)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
                 kycFilter === f.value
                   ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
                   : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
