@@ -4,6 +4,7 @@ import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { OrgFilter } from "@/components/custom/org-filter";
 import { Trophy, Star, ChevronRight, Lightbulb, Users } from "lucide-react";
 
 const CRITERIA = [
@@ -161,10 +162,13 @@ function JudgingView({ challenge, onBack }: { challenge: any; onBack: () => void
 export default function JudgingPage() {
   const { events, applications } = useStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [orgFilter, setOrgFilter] = useState("");
 
   const hackathons  = events.filter((e) => e.module === "HACKATHON");
   const shortlisted = applications.filter((a) => a.status === "shortlisted").length;
   const selectedChallenge = hackathons.find((e) => e.id === selectedId);
+  const organisers = [...new Set(hackathons.map((e) => e.organiser))].sort();
+  const visibleHackathons = orgFilter ? hackathons.filter((e) => e.organiser === orgFilter) : hackathons;
 
   if (selectedChallenge) {
     return <JudgingView challenge={selectedChallenge} onBack={() => setSelectedId(null)} />;
@@ -196,9 +200,12 @@ export default function JudgingPage() {
       </div>
 
       <Card className="attend-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between gap-3">
           <h2 className="font-semibold text-[hsl(var(--foreground))]">Challenges</h2>
-          <span className="text-xs text-[hsl(var(--muted-foreground))]">{hackathons.length} active</span>
+          <div className="flex items-center gap-3">
+            <OrgFilter organisers={organisers} value={orgFilter} onChange={setOrgFilter} />
+            <span className="text-xs text-[hsl(var(--muted-foreground))]">{visibleHackathons.length} active</span>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[600px]">
@@ -213,7 +220,7 @@ export default function JudgingPage() {
               </tr>
             </thead>
             <tbody>
-              {hackathons.map((evt) => (
+              {visibleHackathons.map((evt) => (
                 <tr key={evt.id} className="attend-table-row">
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">

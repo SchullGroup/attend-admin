@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ModuleBadge } from "@/components/custom/module-badge";
 import { StatusBadge } from "@/components/custom/status-badge";
+import { OrgFilter } from "@/components/custom/org-filter";
 import { Card } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
 import type { EventModule } from "@/lib/mock-data";
@@ -29,9 +30,13 @@ export default function EventsPage() {
   const { events } = useStore();
   const [activeTab, setActiveTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [orgFilter, setOrgFilter] = useState("");
+
+  const organisers = [...new Set(events.map((e) => e.organiser))].sort();
 
   const filtered = (activeTab === "all" ? events : events.filter((e) => e.module === activeTab))
-    .filter((e) => !searchQuery.trim() || e.title.toLowerCase().includes(searchQuery.toLowerCase()));
+    .filter((e) => !searchQuery.trim() || e.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    .filter((e) => !orgFilter || e.organiser === orgFilter);
 
   return (
     <div>
@@ -43,14 +48,17 @@ export default function EventsPage() {
         <span className="text-sm text-[hsl(var(--muted-foreground))]">Events are created by enrolled stakeholders</span>
       </div>
 
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
-        <Input
-          placeholder="Search events by title…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9 max-w-sm"
-        />
+      <div className="flex items-center gap-3 mb-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+          <Input
+            placeholder="Search events by title…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <OrgFilter organisers={organisers} value={orgFilter} onChange={setOrgFilter} />
       </div>
 
       <div className="flex items-center gap-1 mb-4 bg-[hsl(var(--muted))] rounded-full p-1 w-full">

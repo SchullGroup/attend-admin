@@ -1,14 +1,16 @@
 "use client";
-import { useState } from "react";
-import { Upload, Download, Trash2, FileText, FileBarChart, Bell, BookOpen, Award, Package, Send } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Upload, Download, Trash2, FileText, FileBarChart, Bell, BookOpen, Award, Package, Send, Search, Check, ChevronDown } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OrgFilter } from "@/components/custom/org-filter";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 const TYPE_FILTERS = [
   { label: "All", value: "all" },
@@ -31,14 +33,107 @@ const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: 
 
 const DOC_TYPES = ["notice", "agenda", "minutes", "report", "press_kit", "certificate"];
 
+function EventCombobox({
+  events,
+  value,
+  onChange,
+}: {
+  events: { id: string; title: string; organiser: string }[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  const filtered = query.trim()
+    ? events.filter((e) => `${e.title} ${e.organiser}`.toLowerCase().includes(query.toLowerCase()))
+    : events;
+
+  const selected = events.find((e) => e.id === value);
+
+  useEffect(() => {
+    function handleOutside(ev: MouseEvent) {
+      if (ref.current && !ref.current.contains(ev.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    if (open) document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className="w-full flex items-center gap-2 h-10 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-left hover:border-[hsl(var(--ring)/0.5)] transition-colors"
+      >
+        <span className={cn("flex-1 truncate", !selected && "text-[hsl(var(--muted-foreground))]")}>
+          {selected ? selected.title : "Select an event…"}
+        </span>
+        <ChevronDown className={cn("h-4 w-4 text-[hsl(var(--muted-foreground))] shrink-0 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 top-[calc(100%+4px)] left-0 right-0 rounded-xl border border-[hsl(var(--border))] bg-white shadow-lg overflow-hidden">
+          <div className="p-2 border-b border-[hsl(var(--border))]">
+            <div className="flex items-center gap-2 px-2 py-0.5">
+              <Search className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))] shrink-0" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search events or organiser…"
+                className="flex-1 text-sm bg-transparent outline-none py-1 text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))]"
+              />
+            </div>
+          </div>
+          <div className="max-h-52 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="px-4 py-4 text-center text-sm text-[hsl(var(--muted-foreground))]">No events found.</p>
+            ) : (
+              filtered.map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => { onChange(e.id); setOpen(false); setQuery(""); }}
+                  className={cn(
+                    "w-full flex items-start gap-2 px-4 py-2.5 text-sm text-left hover:bg-[hsl(var(--muted))] transition-colors",
+                    value === e.id && "bg-[hsl(var(--primary)/0.05)] text-[hsl(var(--primary))]"
+                  )}
+                >
+                  <span className="w-3.5 shrink-0 mt-0.5 flex items-center justify-center">
+                    {value === e.id && <Check className="h-3.5 w-3.5" />}
+                  </span>
+                  <div>
+                    <p className={cn("font-medium", value === e.id ? "text-[hsl(var(--primary))]" : "text-[hsl(var(--foreground))]")}>{e.title}</p>
+                    <p className="text-xs text-[hsl(var(--muted-foreground))]">{e.organiser}</p>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DocumentsPage() {
   const { documents, deleteDocument, events } = useStore();
   const [filter, setFilter] = useState("all");
+  const [orgFilter, setOrgFilter] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [form, setForm] = useState({ title: "", type: "notice", eventId: "", pushToAttendees: true });
   const [uploading, setUploading] = useState(false);
 
-  const filtered = filter === "all" ? documents : documents.filter((d) => d.type === filter);
+  const organisers = [...new Set(documents.map((d) => d.organiser).filter(Boolean))].sort() as string[];
+
+  const filtered = documents
+    .filter((d) => filter === "all" || d.type === filter)
+    .filter((d) => !orgFilter || d.organiser === orgFilter);
 
   function handleUpload() {
     if (!form.title || !form.eventId) return;
@@ -70,7 +165,7 @@ export default function DocumentsPage() {
 
       {/* Upload dialog */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Upload Document</DialogTitle>
           </DialogHeader>
@@ -105,16 +200,11 @@ export default function DocumentsPage() {
 
             <div>
               <Label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-1.5 block">Event</Label>
-              <select
+              <EventCombobox
+                events={(events ?? []) as { id: string; title: string; organiser: string }[]}
                 value={form.eventId}
-                onChange={(e) => setForm((f) => ({ ...f, eventId: e.target.value }))}
-                className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
-              >
-                <option value="">Select an event…</option>
-                {(events ?? []).map((e: { id: string; title: string }) => (
-                  <option key={e.id} value={e.id}>{e.title}</option>
-                ))}
-              </select>
+                onChange={(id) => setForm((f) => ({ ...f, eventId: id }))}
+              />
             </div>
 
             <div>
@@ -158,20 +248,23 @@ export default function DocumentsPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 w-fit mb-4">
-        {TYPE_FILTERS.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => setFilter(f.value)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-              filter === f.value
-                ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
-                : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
+          {TYPE_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                filter === f.value
+                  ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
+                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <OrgFilter organisers={organisers} value={orgFilter} onChange={setOrgFilter} />
       </div>
 
       <Card className="attend-card overflow-hidden">

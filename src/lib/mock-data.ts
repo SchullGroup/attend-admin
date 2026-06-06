@@ -85,6 +85,7 @@ export interface AppDocument {
   type: "notice" | "agenda" | "minutes" | "report" | "certificate" | "press_kit";
   eventId: string;
   eventTitle: string;
+  organiser: string;
   fileSize: string;
   uploadedAt: string;
   downloadCount: number;
@@ -240,24 +241,93 @@ export const MOCK_APPLICATIONS: HackathonApplication[] = [
 ];
 
 export const MOCK_DOCUMENTS: AppDocument[] = [
-  { id: "doc_001", title: "Zenith Bank 2026 AGM Notice", type: "notice", eventId: "evt_001", eventTitle: "Zenith Bank Plc — 2026 AGM", fileSize: "1.2 MB", uploadedAt: "2026-05-01T09:00:00Z", downloadCount: 1423 },
-  { id: "doc_002", title: "Zenith Bank 2026 AGM Agenda", type: "agenda", eventId: "evt_001", eventTitle: "Zenith Bank Plc — 2026 AGM", fileSize: "0.4 MB", uploadedAt: "2026-05-01T09:00:00Z", downloadCount: 1201 },
-  { id: "doc_003", title: "Zenith Bank 2025 Annual Report", type: "report", eventId: "evt_001", eventTitle: "Zenith Bank Plc — 2026 AGM", fileSize: "8.7 MB", uploadedAt: "2026-04-28T09:00:00Z", downloadCount: 890 },
-  { id: "doc_004", title: "GTCo EGM Rights Issue Circular", type: "notice", eventId: "evt_002", eventTitle: "GTCo Holdings — 2026 EGM", fileSize: "2.1 MB", uploadedAt: "2026-05-15T09:00:00Z", downloadCount: 3201 },
-  { id: "doc_005", title: "GTCo EGM Proxy Form", type: "agenda", eventId: "evt_002", eventTitle: "GTCo Holdings — 2026 EGM", fileSize: "0.3 MB", uploadedAt: "2026-05-15T09:00:00Z", downloadCount: 2874 },
-  { id: "doc_006", title: "MeriSave Press Kit", type: "press_kit", eventId: "evt_004", eventTitle: "MeriSave Product Launch", fileSize: "15.4 MB", uploadedAt: "2026-06-10T09:00:00Z", downloadCount: 0 },
-  { id: "doc_007", title: "MeriHack 2026 Challenge Brief", type: "notice", eventId: "evt_005", eventTitle: "MeriHack 2026", fileSize: "3.2 MB", uploadedAt: "2026-06-01T09:00:00Z", downloadCount: 567 },
-  { id: "doc_008", title: "MeriHack 2026 Judging Criteria", type: "agenda", eventId: "evt_005", eventTitle: "MeriHack 2026", fileSize: "0.8 MB", uploadedAt: "2026-06-01T09:00:00Z", downloadCount: 412 },
-  { id: "doc_009", title: "Access Bank 2026 AGM Notice of Meeting", type: "notice", eventId: "evt_007", eventTitle: "Access Bank Plc — 2026 AGM", fileSize: "1.8 MB", uploadedAt: "2026-05-20T09:00:00Z", downloadCount: 2108 },
-  { id: "doc_010", title: "Access Bank 2026 AGM Agenda & Resolutions", type: "agenda", eventId: "evt_007", eventTitle: "Access Bank Plc — 2026 AGM", fileSize: "0.5 MB", uploadedAt: "2026-05-20T09:00:00Z", downloadCount: 1750 },
-  { id: "doc_011", title: "Access Bank 2025 Annual Report & Accounts", type: "report", eventId: "evt_007", eventTitle: "Access Bank Plc — 2026 AGM", fileSize: "12.3 MB", uploadedAt: "2026-05-18T09:00:00Z", downloadCount: 980 },
-  { id: "doc_012", title: "FintechNGR Roundtable Summary Report", type: "report", eventId: "evt_006", eventTitle: "FintechNGR Regulatory Roundtable 2026", fileSize: "2.4 MB", uploadedAt: "2026-05-23T09:00:00Z", downloadCount: 133 },
-  { id: "doc_013", title: "Capital Market Forum 2026 — Minutes", type: "minutes", eventId: "evt_010", eventTitle: "Capital Market Development Forum 2026", fileSize: "1.1 MB", uploadedAt: "2026-04-25T09:00:00Z", downloadCount: 348 },
-  { id: "doc_014", title: "ESG Investment Summit — Programme", type: "agenda", eventId: "evt_014", eventTitle: "ESG Investment Summit — Nigeria 2026", fileSize: "0.6 MB", uploadedAt: "2026-05-20T09:00:00Z", downloadCount: 204 },
-  { id: "doc_015", title: "Stanbic IBTC 2025 AGM Meeting Minutes", type: "minutes", eventId: "evt_008", eventTitle: "Stanbic IBTC Holdings — 2025 AGM", fileSize: "1.9 MB", uploadedAt: "2025-12-20T09:00:00Z", downloadCount: 1620 },
-  { id: "doc_016", title: "Stanbic IBTC 2026 AGM Notice", type: "notice", eventId: "evt_017", eventTitle: "Stanbic IBTC Holdings — 2026 AGM", fileSize: "1.4 MB", uploadedAt: "2026-05-15T09:00:00Z", downloadCount: 890 },
-  { id: "doc_017", title: "MeriSave Investor Factsheet", type: "press_kit", eventId: "evt_004", eventTitle: "MeriSave Product Launch", fileSize: "4.2 MB", uploadedAt: "2026-06-12T09:00:00Z", downloadCount: 0 },
-  { id: "doc_018", title: "MeriHack 2026 Participation Certificate Template", type: "certificate", eventId: "evt_005", eventTitle: "MeriHack 2026", fileSize: "0.2 MB", uploadedAt: "2026-06-15T09:00:00Z", downloadCount: 89 },
+  { id: "doc_001", title: "Zenith Bank 2026 AGM Notice", type: "notice", eventId: "evt_001", eventTitle: "Zenith Bank Plc — 2026 AGM", organiser: "Zenith Bank Plc", fileSize: "1.2 MB", uploadedAt: "2026-05-01T09:00:00Z", downloadCount: 1423 },
+  { id: "doc_002", title: "Zenith Bank 2026 AGM Agenda", type: "agenda", eventId: "evt_001", eventTitle: "Zenith Bank Plc — 2026 AGM", organiser: "Zenith Bank Plc", fileSize: "0.4 MB", uploadedAt: "2026-05-01T09:00:00Z", downloadCount: 1201 },
+  { id: "doc_003", title: "Zenith Bank 2025 Annual Report", type: "report", eventId: "evt_001", eventTitle: "Zenith Bank Plc — 2026 AGM", organiser: "Zenith Bank Plc", fileSize: "8.7 MB", uploadedAt: "2026-04-28T09:00:00Z", downloadCount: 890 },
+  { id: "doc_004", title: "GTCo EGM Rights Issue Circular", type: "notice", eventId: "evt_002", eventTitle: "GTCo Holdings — 2026 EGM", organiser: "GTCo Holdings", fileSize: "2.1 MB", uploadedAt: "2026-05-15T09:00:00Z", downloadCount: 3201 },
+  { id: "doc_005", title: "GTCo EGM Proxy Form", type: "agenda", eventId: "evt_002", eventTitle: "GTCo Holdings — 2026 EGM", organiser: "GTCo Holdings", fileSize: "0.3 MB", uploadedAt: "2026-05-15T09:00:00Z", downloadCount: 2874 },
+  { id: "doc_006", title: "MeriSave Press Kit", type: "press_kit", eventId: "evt_004", eventTitle: "MeriSave Product Launch", organiser: "Meristem Wealth Management", fileSize: "15.4 MB", uploadedAt: "2026-06-10T09:00:00Z", downloadCount: 0 },
+  { id: "doc_007", title: "MeriHack 2026 Challenge Brief", type: "notice", eventId: "evt_005", eventTitle: "MeriHack 2026", organiser: "Meristem Innovation Hub", fileSize: "3.2 MB", uploadedAt: "2026-06-01T09:00:00Z", downloadCount: 567 },
+  { id: "doc_008", title: "MeriHack 2026 Judging Criteria", type: "agenda", eventId: "evt_005", eventTitle: "MeriHack 2026", organiser: "Meristem Innovation Hub", fileSize: "0.8 MB", uploadedAt: "2026-06-01T09:00:00Z", downloadCount: 412 },
+  { id: "doc_009", title: "Access Bank 2026 AGM Notice of Meeting", type: "notice", eventId: "evt_007", eventTitle: "Access Bank Plc — 2026 AGM", organiser: "Access Bank Plc", fileSize: "1.8 MB", uploadedAt: "2026-05-20T09:00:00Z", downloadCount: 2108 },
+  { id: "doc_010", title: "Access Bank 2026 AGM Agenda & Resolutions", type: "agenda", eventId: "evt_007", eventTitle: "Access Bank Plc — 2026 AGM", organiser: "Access Bank Plc", fileSize: "0.5 MB", uploadedAt: "2026-05-20T09:00:00Z", downloadCount: 1750 },
+  { id: "doc_011", title: "Access Bank 2025 Annual Report & Accounts", type: "report", eventId: "evt_007", eventTitle: "Access Bank Plc — 2026 AGM", organiser: "Access Bank Plc", fileSize: "12.3 MB", uploadedAt: "2026-05-18T09:00:00Z", downloadCount: 980 },
+  { id: "doc_012", title: "FintechNGR Roundtable Summary Report", type: "report", eventId: "evt_006", eventTitle: "FintechNGR Regulatory Roundtable 2026", organiser: "FintechNGR Association", fileSize: "2.4 MB", uploadedAt: "2026-05-23T09:00:00Z", downloadCount: 133 },
+  { id: "doc_013", title: "Capital Market Forum 2026 — Minutes", type: "minutes", eventId: "evt_010", eventTitle: "Capital Market Development Forum 2026", organiser: "FintechNGR Association", fileSize: "1.1 MB", uploadedAt: "2026-04-25T09:00:00Z", downloadCount: 348 },
+  { id: "doc_014", title: "ESG Investment Summit — Programme", type: "agenda", eventId: "evt_014", eventTitle: "ESG Investment Summit — Nigeria 2026", organiser: "Seplat Energy Plc", fileSize: "0.6 MB", uploadedAt: "2026-05-20T09:00:00Z", downloadCount: 204 },
+  { id: "doc_015", title: "Stanbic IBTC 2025 AGM Meeting Minutes", type: "minutes", eventId: "evt_008", eventTitle: "Stanbic IBTC Holdings — 2025 AGM", organiser: "Stanbic IBTC Holdings", fileSize: "1.9 MB", uploadedAt: "2025-12-20T09:00:00Z", downloadCount: 1620 },
+  { id: "doc_016", title: "Stanbic IBTC 2026 AGM Notice", type: "notice", eventId: "evt_017", eventTitle: "Stanbic IBTC Holdings — 2026 AGM", organiser: "Stanbic IBTC Holdings", fileSize: "1.4 MB", uploadedAt: "2026-05-15T09:00:00Z", downloadCount: 890 },
+  { id: "doc_017", title: "MeriSave Investor Factsheet", type: "press_kit", eventId: "evt_004", eventTitle: "MeriSave Product Launch", organiser: "Meristem Wealth Management", fileSize: "4.2 MB", uploadedAt: "2026-06-12T09:00:00Z", downloadCount: 0 },
+  { id: "doc_018", title: "MeriHack 2026 Participation Certificate Template", type: "certificate", eventId: "evt_005", eventTitle: "MeriHack 2026", organiser: "Meristem Innovation Hub", fileSize: "0.2 MB", uploadedAt: "2026-06-15T09:00:00Z", downloadCount: 89 },
+
+  // GTCo Holdings — 2026 EGM (additional)
+  { id: "doc_019", title: "GTCo EGM 2026 — Proxy Form & Voting Instructions", type: "notice", eventId: "evt_002", eventTitle: "GTCo Holdings — 2026 EGM", organiser: "GTCo Holdings", fileSize: "0.6 MB", uploadedAt: "2026-05-16T09:00:00Z", downloadCount: 4102 },
+  { id: "doc_020", title: "GTCo Holdings 2025 Annual Report & Accounts", type: "report", eventId: "evt_002", eventTitle: "GTCo Holdings — 2026 EGM", organiser: "GTCo Holdings", fileSize: "14.8 MB", uploadedAt: "2026-05-10T09:00:00Z", downloadCount: 2380 },
+
+  // Dangote Cement — 2026 AGM (draft)
+  { id: "doc_021", title: "Dangote Cement 2026 AGM — Draft Notice of Meeting", type: "notice", eventId: "evt_003", eventTitle: "Dangote Cement Plc — 2026 AGM", organiser: "Dangote Cement Plc", fileSize: "1.5 MB", uploadedAt: "2026-06-01T09:00:00Z", downloadCount: 0 },
+  { id: "doc_022", title: "Dangote Cement 2026 AGM — Draft Agenda", type: "agenda", eventId: "evt_003", eventTitle: "Dangote Cement Plc — 2026 AGM", organiser: "Dangote Cement Plc", fileSize: "0.3 MB", uploadedAt: "2026-06-01T09:00:00Z", downloadCount: 0 },
+  { id: "doc_023", title: "Dangote Cement 2025 Annual Report", type: "report", eventId: "evt_003", eventTitle: "Dangote Cement Plc — 2026 AGM", organiser: "Dangote Cement Plc", fileSize: "11.2 MB", uploadedAt: "2026-05-28T09:00:00Z", downloadCount: 314 },
+
+  // MeriHack 2026 (additional)
+  { id: "doc_024", title: "MeriHack 2026 — Rules & Eligibility Guide", type: "notice", eventId: "evt_005", eventTitle: "MeriHack 2026", organiser: "Meristem Innovation Hub", fileSize: "1.1 MB", uploadedAt: "2026-06-02T09:00:00Z", downloadCount: 730 },
+  { id: "doc_025", title: "MeriHack 2026 — Prize Structure & Tracks", type: "report", eventId: "evt_005", eventTitle: "MeriHack 2026", organiser: "Meristem Innovation Hub", fileSize: "0.5 MB", uploadedAt: "2026-06-05T09:00:00Z", downloadCount: 621 },
+
+  // FintechNGR Regulatory Roundtable (additional)
+  { id: "doc_026", title: "FintechNGR Roundtable 2026 — Event Programme", type: "agenda", eventId: "evt_006", eventTitle: "FintechNGR Regulatory Roundtable 2026", organiser: "FintechNGR Association", fileSize: "0.7 MB", uploadedAt: "2026-05-20T09:00:00Z", downloadCount: 298 },
+  { id: "doc_027", title: "FintechNGR Roundtable 2026 — Speaker Profiles", type: "report", eventId: "evt_006", eventTitle: "FintechNGR Regulatory Roundtable 2026", organiser: "FintechNGR Association", fileSize: "2.1 MB", uploadedAt: "2026-05-22T09:00:00Z", downloadCount: 175 },
+
+  // Access Bank — 2026 AGM (additional)
+  { id: "doc_028", title: "Access Bank 2026 AGM — Proxy Voting Form", type: "notice", eventId: "evt_007", eventTitle: "Access Bank Plc — 2026 AGM", organiser: "Access Bank Plc", fileSize: "0.4 MB", uploadedAt: "2026-05-21T09:00:00Z", downloadCount: 3870 },
+
+  // Access Bank — DigiCredit SME Launch (draft)
+  { id: "doc_029", title: "DigiCredit SME Loan — Product Brief", type: "press_kit", eventId: "evt_009", eventTitle: "Access Bank — DigiCredit SME Loan Launch", organiser: "Access Bank Plc", fileSize: "5.8 MB", uploadedAt: "2026-06-20T09:00:00Z", downloadCount: 0 },
+  { id: "doc_030", title: "DigiCredit — Launch Press Release Draft", type: "notice", eventId: "evt_009", eventTitle: "Access Bank — DigiCredit SME Loan Launch", organiser: "Access Bank Plc", fileSize: "0.3 MB", uploadedAt: "2026-06-22T09:00:00Z", downloadCount: 0 },
+
+  // RegTech Challenge 2026 (draft)
+  { id: "doc_031", title: "RegTech Challenge 2026 — Challenge Brief (Draft)", type: "notice", eventId: "evt_011", eventTitle: "RegTech Challenge 2026 — Open Banking Edition", organiser: "Meristem Innovation Hub", fileSize: "2.4 MB", uploadedAt: "2026-06-10T09:00:00Z", downloadCount: 0 },
+  { id: "doc_032", title: "RegTech Challenge 2026 — Rules & Submission Guide", type: "agenda", eventId: "evt_011", eventTitle: "RegTech Challenge 2026 — Open Banking Edition", organiser: "Meristem Innovation Hub", fileSize: "0.9 MB", uploadedAt: "2026-06-10T09:00:00Z", downloadCount: 0 },
+
+  // Nigerian Breweries — 2025 AGM (ended)
+  { id: "doc_033", title: "Nigerian Breweries 2025 AGM — Notice of Meeting", type: "notice", eventId: "evt_012", eventTitle: "Nigerian Breweries Plc — 2025 AGM", organiser: "Nigerian Breweries Plc", fileSize: "1.3 MB", uploadedAt: "2025-10-20T09:00:00Z", downloadCount: 5210 },
+  { id: "doc_034", title: "Nigerian Breweries 2025 AGM — Agenda & Resolutions", type: "agenda", eventId: "evt_012", eventTitle: "Nigerian Breweries Plc — 2025 AGM", organiser: "Nigerian Breweries Plc", fileSize: "0.4 MB", uploadedAt: "2025-10-20T09:00:00Z", downloadCount: 4840 },
+  { id: "doc_035", title: "Nigerian Breweries 2025 AGM — Meeting Minutes", type: "minutes", eventId: "evt_012", eventTitle: "Nigerian Breweries Plc — 2025 AGM", organiser: "Nigerian Breweries Plc", fileSize: "2.2 MB", uploadedAt: "2025-12-05T09:00:00Z", downloadCount: 3120 },
+  { id: "doc_036", title: "Nigerian Breweries 2024 Annual Report & Accounts", type: "report", eventId: "evt_012", eventTitle: "Nigerian Breweries Plc — 2025 AGM", organiser: "Nigerian Breweries Plc", fileSize: "16.4 MB", uploadedAt: "2025-10-15T09:00:00Z", downloadCount: 2890 },
+
+  // Meristem Securities — NextGen Trading Platform Launch
+  { id: "doc_037", title: "NextGen Trading Platform — Press Kit", type: "press_kit", eventId: "evt_013", eventTitle: "Meristem Securities — NextGen Trading Platform Launch", organiser: "Meristem Wealth Management", fileSize: "9.1 MB", uploadedAt: "2026-07-25T09:00:00Z", downloadCount: 0 },
+  { id: "doc_038", title: "NextGen Platform — Investor Factsheet", type: "report", eventId: "evt_013", eventTitle: "Meristem Securities — NextGen Trading Platform Launch", organiser: "Meristem Wealth Management", fileSize: "2.8 MB", uploadedAt: "2026-07-28T09:00:00Z", downloadCount: 0 },
+  { id: "doc_039", title: "NextGen Trading — Launch Event Programme", type: "agenda", eventId: "evt_013", eventTitle: "Meristem Securities — NextGen Trading Platform Launch", organiser: "Meristem Wealth Management", fileSize: "0.5 MB", uploadedAt: "2026-07-30T09:00:00Z", downloadCount: 0 },
+
+  // ESG Investment Summit (additional)
+  { id: "doc_040", title: "ESG Investment Summit 2026 — Speaker Bios", type: "report", eventId: "evt_014", eventTitle: "ESG Investment Summit — Nigeria 2026", organiser: "Seplat Energy Plc", fileSize: "1.8 MB", uploadedAt: "2026-05-25T09:00:00Z", downloadCount: 187 },
+  { id: "doc_041", title: "ESG Investment Summit 2026 — Post-Event Report", type: "minutes", eventId: "evt_014", eventTitle: "ESG Investment Summit — Nigeria 2026", organiser: "Seplat Energy Plc", fileSize: "3.4 MB", uploadedAt: "2026-07-05T09:00:00Z", downloadCount: 412 },
+
+  // GTCo Holdings — 2025 AGM (ended)
+  { id: "doc_042", title: "GTCo Holdings 2025 AGM — Notice of Meeting", type: "notice", eventId: "evt_015", eventTitle: "GTCo Holdings — 2025 Annual General Meeting", organiser: "GTCo Holdings", fileSize: "1.4 MB", uploadedAt: "2025-08-20T09:00:00Z", downloadCount: 6740 },
+  { id: "doc_043", title: "GTCo Holdings 2025 AGM — Agenda & Proxy Form", type: "agenda", eventId: "evt_015", eventTitle: "GTCo Holdings — 2025 Annual General Meeting", organiser: "GTCo Holdings", fileSize: "0.5 MB", uploadedAt: "2025-08-20T09:00:00Z", downloadCount: 5890 },
+  { id: "doc_044", title: "GTCo Holdings 2025 AGM — Meeting Minutes", type: "minutes", eventId: "evt_015", eventTitle: "GTCo Holdings — 2025 Annual General Meeting", organiser: "GTCo Holdings", fileSize: "2.7 MB", uploadedAt: "2025-11-30T09:00:00Z", downloadCount: 4210 },
+  { id: "doc_045", title: "GTCo Holdings 2024 Annual Report", type: "report", eventId: "evt_015", eventTitle: "GTCo Holdings — 2025 Annual General Meeting", organiser: "GTCo Holdings", fileSize: "18.3 MB", uploadedAt: "2025-08-15T09:00:00Z", downloadCount: 3560 },
+
+  // Zenith Bank — 2025 AGM (ended)
+  { id: "doc_046", title: "Zenith Bank 2025 AGM — Notice of Meeting", type: "notice", eventId: "evt_016", eventTitle: "Zenith Bank Plc — 2025 Annual General Meeting", organiser: "Zenith Bank Plc", fileSize: "1.1 MB", uploadedAt: "2025-03-25T09:00:00Z", downloadCount: 8920 },
+  { id: "doc_047", title: "Zenith Bank 2025 AGM — Agenda & Resolutions", type: "agenda", eventId: "evt_016", eventTitle: "Zenith Bank Plc — 2025 Annual General Meeting", organiser: "Zenith Bank Plc", fileSize: "0.4 MB", uploadedAt: "2025-03-25T09:00:00Z", downloadCount: 7840 },
+  { id: "doc_048", title: "Zenith Bank 2025 AGM — Certified Meeting Minutes", type: "minutes", eventId: "evt_016", eventTitle: "Zenith Bank Plc — 2025 Annual General Meeting", organiser: "Zenith Bank Plc", fileSize: "2.1 MB", uploadedAt: "2025-07-10T09:00:00Z", downloadCount: 5102 },
+  { id: "doc_049", title: "Zenith Bank 2024 Annual Report & Accounts", type: "report", eventId: "evt_016", eventTitle: "Zenith Bank Plc — 2025 Annual General Meeting", organiser: "Zenith Bank Plc", fileSize: "19.6 MB", uploadedAt: "2025-03-20T09:00:00Z", downloadCount: 4380 },
+
+  // Stanbic IBTC — 2026 AGM (additional)
+  { id: "doc_050", title: "Stanbic IBTC 2026 AGM — Agenda & Resolutions", type: "agenda", eventId: "evt_017", eventTitle: "Stanbic IBTC Holdings — 2026 AGM", organiser: "Stanbic IBTC Holdings", fileSize: "0.5 MB", uploadedAt: "2026-05-16T09:00:00Z", downloadCount: 1240 },
+  { id: "doc_051", title: "Stanbic IBTC 2026 AGM — Proxy Voting Form", type: "notice", eventId: "evt_017", eventTitle: "Stanbic IBTC Holdings — 2026 AGM", organiser: "Stanbic IBTC Holdings", fileSize: "0.3 MB", uploadedAt: "2026-05-16T09:00:00Z", downloadCount: 2010 },
+  { id: "doc_052", title: "Stanbic IBTC 2025 Annual Report", type: "report", eventId: "evt_017", eventTitle: "Stanbic IBTC Holdings — 2026 AGM", organiser: "Stanbic IBTC Holdings", fileSize: "13.7 MB", uploadedAt: "2026-05-10T09:00:00Z", downloadCount: 980 },
+
+  // Seplat Energy — Investor Day 2026 (live)
+  { id: "doc_053", title: "Seplat Energy Investor Day 2026 — Programme", type: "agenda", eventId: "evt_018", eventTitle: "Seplat Energy — Investor Day 2026", organiser: "Seplat Energy Plc", fileSize: "1.2 MB", uploadedAt: "2026-05-20T09:00:00Z", downloadCount: 890 },
+  { id: "doc_054", title: "Seplat Energy — 2025 Annual Report & Accounts", type: "report", eventId: "evt_018", eventTitle: "Seplat Energy — Investor Day 2026", organiser: "Seplat Energy Plc", fileSize: "22.4 MB", uploadedAt: "2026-05-15T09:00:00Z", downloadCount: 1340 },
+  { id: "doc_055", title: "Seplat Energy — Investor Presentation Deck", type: "press_kit", eventId: "evt_018", eventTitle: "Seplat Energy — Investor Day 2026", organiser: "Seplat Energy Plc", fileSize: "8.7 MB", uploadedAt: "2026-05-22T09:00:00Z", downloadCount: 620 },
+
+  // Zenith Bank — SME Connect Launch (cancelled)
+  { id: "doc_056", title: "Zenith SME Connect — Product Launch Brief", type: "press_kit", eventId: "evt_019", eventTitle: "Zenith Bank — Zenith SME Connect Launch", organiser: "Zenith Bank Plc", fileSize: "6.3 MB", uploadedAt: "2026-04-12T09:00:00Z", downloadCount: 145 },
+  { id: "doc_057", title: "Zenith SME Connect — Launch Press Release", type: "notice", eventId: "evt_019", eventTitle: "Zenith Bank — Zenith SME Connect Launch", organiser: "Zenith Bank Plc", fileSize: "0.2 MB", uploadedAt: "2026-04-15T09:00:00Z", downloadCount: 98 },
 ];
 
 export const MOCK_LIVE_VOTES: LiveVote[] = [

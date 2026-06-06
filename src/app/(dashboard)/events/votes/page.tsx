@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Vote, Play, Square, Download, CheckCircle2, XCircle, MinusCircle, ArrowLeft, Search } from "lucide-react";
 import { MOCK_AGM_VOTE_RECORDS } from "@/lib/mock-data";
+import { OrgFilter } from "@/components/custom/org-filter";
 
 const STATUS_STYLE: Record<string, { label: string; color: string; bg: string }> = {
   live:      { label: "Live",      color: "#16a34a", bg: "#dcfce7" },
@@ -32,15 +33,16 @@ function VoteBar({ label, value, total, color }: { label: string; value: number;
 export default function VoteResultsPage() {
   const { openVoting, closeVoting, selectedLiveSessionId } = useStore();
   const [search, setSearch] = useState("");
+  const [orgFilter, setOrgFilter] = useState("");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [voteStates, setVoteStates] = useState<Record<string, "idle" | "open" | "closed">>({});
 
+  const organisers = [...new Set(MOCK_AGM_VOTE_RECORDS.map((r) => r.organiser))].sort();
+
   const filtered = MOCK_AGM_VOTE_RECORDS.filter((r) => {
-    if (!search.trim()) return true;
-    return (
-      r.eventTitle.toLowerCase().includes(search.toLowerCase()) ||
-      r.organiser.toLowerCase().includes(search.toLowerCase())
-    );
+    if (search.trim() && !r.eventTitle.toLowerCase().includes(search.toLowerCase()) && !r.organiser.toLowerCase().includes(search.toLowerCase())) return false;
+    if (orgFilter && r.organiser !== orgFilter) return false;
+    return true;
   });
 
   const selected = selectedEventId ? MOCK_AGM_VOTE_RECORDS.find((r) => r.eventId === selectedEventId) : null;
@@ -236,16 +238,19 @@ export default function VoteResultsPage() {
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
-        <input
-          type="text"
-          placeholder="Search by event or stakeholder..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
-        />
+      {/* Search + Organiser filter */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+          <input
+            type="text"
+            placeholder="Search by event or stakeholder..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
+          />
+        </div>
+        <OrgFilter organisers={organisers} value={orgFilter} onChange={setOrgFilter} />
       </div>
 
       <Card className="attend-card overflow-hidden">

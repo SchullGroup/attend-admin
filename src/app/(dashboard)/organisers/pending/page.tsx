@@ -4,9 +4,6 @@ import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import type { Organiser } from "@/lib/mock-data";
-
-const PLAN_OPTIONS: Organiser["plan"][] = ["enterprise", "growth", "starter"];
 
 const INDUSTRY_OPTIONS = [
   "Banking & Finance",
@@ -33,7 +30,6 @@ export default function PendingEnrollmentsPage() {
     industry: "",
     rcNumber: "",
     contactEmail: "",
-    plan: "starter" as Organiser["plan"],
   });
 
   function handleFormChange(field: keyof typeof form, value: string) {
@@ -46,7 +42,7 @@ export default function PendingEnrollmentsPage() {
       return;
     }
     toast.success(`Invitation sent to ${form.name}`);
-    setForm({ name: "", industry: "", rcNumber: "", contactEmail: "", plan: "starter" });
+    setForm({ name: "", industry: "", rcNumber: "", contactEmail: "" });
   }
 
   function handleApprove(id: string, name: string) {
@@ -119,18 +115,6 @@ export default function PendingEnrollmentsPage() {
               placeholder="e.g. ir@company.com"
               className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] transition-shadow"
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Plan</label>
-            <select
-              value={form.plan}
-              onChange={(e) => handleFormChange("plan", e.target.value)}
-              className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] transition-shadow capitalize"
-            >
-              {PLAN_OPTIONS.map((p) => (
-                <option key={p} value={p} className="capitalize">{p.charAt(0).toUpperCase() + p.slice(1)}</option>
-              ))}
-            </select>
           </div>
         </div>
         <div className="mt-4 flex justify-end">

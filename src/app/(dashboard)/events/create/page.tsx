@@ -1,19 +1,17 @@
 "use client";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   Vote, Rocket, Zap, CalendarDays, MapPin, Monitor, Users2,
   Plus, Trash2, GripVertical, Check, ChevronRight, ChevronLeft,
   ArrowLeft, Upload, ShieldCheck, Globe, Mail, Lock, Building2,
+  ChevronDown, Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -212,6 +210,96 @@ function StepPanel({
         className="flex items-center justify-center gap-1.5 text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] border border-[hsl(var(--border))] rounded-xl px-3 py-2.5 bg-white hover:bg-[hsl(var(--muted))] transition-all w-full">
         <ArrowLeft className="h-3.5 w-3.5" /> Change event type
       </button>
+    </div>
+  );
+}
+
+// ─── OrgCombobox (searchable organiser picker) ────────────────────────────────
+
+function OrgCombobox({
+  value,
+  onValueChange,
+  organisers,
+}: {
+  value: string;
+  onValueChange: (id: string) => void;
+  organisers: { id: string; name: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  const filtered = query.trim()
+    ? organisers.filter((o) => o.name.toLowerCase().includes(query.toLowerCase()))
+    : organisers;
+
+  const selected = organisers.find((o) => o.id === value);
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    if (open) document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className="w-full flex items-center gap-2 h-11 rounded-xl border border-[hsl(var(--border))] bg-white px-3 text-sm text-left hover:border-[hsl(var(--ring)/0.5)] transition-colors"
+      >
+        <Building2 className="h-4 w-4 text-[hsl(var(--muted-foreground))] shrink-0" />
+        <span className={cn("flex-1 truncate", !selected && "text-[hsl(var(--muted-foreground))]")}>
+          {selected ? selected.name : "Select an organiser…"}
+        </span>
+        <ChevronDown className={cn("h-4 w-4 text-[hsl(var(--muted-foreground))] shrink-0 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 top-[calc(100%+4px)] left-0 right-0 rounded-xl border border-[hsl(var(--border))] bg-white shadow-lg overflow-hidden">
+          <div className="p-2 border-b border-[hsl(var(--border))]">
+            <div className="flex items-center gap-2 px-2 py-0.5">
+              <Search className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))] shrink-0" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search organisers…"
+                className="flex-1 text-sm bg-transparent outline-none py-1 text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))]"
+              />
+            </div>
+          </div>
+          <div className="max-h-52 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-4 text-center text-sm text-[hsl(var(--muted-foreground))]">
+                {organisers.length === 0 ? "No active organisers — enroll one first." : "No results."}
+              </p>
+            ) : (
+              filtered.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => { onValueChange(o.id); setOpen(false); setQuery(""); }}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left hover:bg-[hsl(var(--muted))] transition-colors",
+                    value === o.id && "bg-[hsl(var(--primary)/0.05)] text-[hsl(var(--primary))] font-medium"
+                  )}
+                >
+                  <span className="w-3.5 shrink-0 flex items-center">
+                    {value === o.id && <Check className="h-3.5 w-3.5" />}
+                  </span>
+                  {o.name}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -989,43 +1077,70 @@ function CreateEventInner() {
     return (
       <div className="w-full">
         {/* Header */}
-        <div className="flex items-start justify-between gap-6 mb-8">
-          <div>
-            <h1 className="text-3xl font-black text-[hsl(var(--foreground))]">Create New Event</h1>
-            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1.5">
-              Select an event type — each has its own tailored setup flow.
-            </p>
-          </div>
+        <div className="mb-6">
+          <h1 className="text-3xl font-black text-[hsl(var(--foreground))]">Create New Event</h1>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1.5">
+            Choose the organiser and event type to begin setup.
+          </p>
+        </div>
 
-          {/* Organiser dropdown */}
-          <div className="flex flex-col gap-1.5 min-w-[240px]">
-            <p className="text-[10px] text-[hsl(var(--muted-foreground))] uppercase tracking-widest font-semibold">Organiser</p>
-            <Select value={organiserId} onValueChange={setOrganiserId}>
-              <SelectTrigger className="bg-white border-[hsl(var(--border))] shadow-sm rounded-xl h-10">
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))] shrink-0" />
-                  <SelectValue placeholder="Select organiser…" />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                {activeOrganisers.map((o) => (
-                  <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {!organiserId && (
-              <p className="text-xs text-amber-600">Select an organiser to associate this event</p>
-            )}
+        {/* Step 1 — Organiser selection */}
+        <div className="mb-8 rounded-2xl border border-[hsl(var(--border))] bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-8 w-8 rounded-full bg-[hsl(var(--primary))] flex items-center justify-center shrink-0">
+              <span className="text-xs font-bold text-white">1</span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Select Organiser</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Which organisation is hosting this event?</p>
+            </div>
+          </div>
+          <OrgCombobox
+            value={organiserId}
+            onValueChange={setOrganiserId}
+            organisers={activeOrganisers}
+          />
+          {organiserId && (
+            <p className="mt-2 text-xs text-emerald-600 font-medium flex items-center gap-1">
+              <Check className="h-3 w-3" /> {organiserName} selected
+            </p>
+          )}
+          {!organiserId && (
+            <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+              Required — every event must be linked to an organiser.
+            </p>
+          )}
+        </div>
+
+        {/* Step 2 — Event type */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className={cn(
+            "h-8 w-8 rounded-full flex items-center justify-center shrink-0 transition-colors",
+            organiserId ? "bg-[hsl(var(--primary))]" : "bg-[hsl(var(--muted-foreground)/0.3)]"
+          )}>
+            <span className="text-xs font-bold text-white">2</span>
+          </div>
+          <div>
+            <p className={cn("text-sm font-semibold transition-colors", organiserId ? "text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))]")}>
+              Select Event Type
+            </p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">Each type has its own tailored setup flow.</p>
           </div>
         </div>
 
         {/* Module cards */}
-        <div className="grid grid-cols-2 gap-5">
+        <div className={cn("grid grid-cols-2 gap-5 transition-opacity duration-200", !organiserId && "opacity-50 pointer-events-none select-none")}>
           {MODULES.map((m) => {
             const Icon = m.icon;
             const stepCount = STEPS[m.id as ModuleId].length;
             return (
-              <button key={m.id} type="button" onClick={() => selectModule(m.id as ModuleId)}
+              <button key={m.id} type="button" onClick={() => {
+                if (!organiserId) {
+                  toast.error("Please select an organiser first.");
+                  return;
+                }
+                selectModule(m.id as ModuleId);
+              }}
                 className="text-left rounded-2xl border border-[hsl(var(--border))] bg-white overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 group">
                 <div className="h-1.5" style={{ backgroundColor: m.color }} />
                 <div className="p-6">
@@ -1051,12 +1166,6 @@ function CreateEventInner() {
           })}
         </div>
 
-        <div className="mt-6">
-          <button type="button" onClick={() => router.back()}
-            className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
-            <ArrowLeft className="h-4 w-4" /> Back to events
-          </button>
-        </div>
       </div>
     );
   }
