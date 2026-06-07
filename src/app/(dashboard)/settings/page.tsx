@@ -237,7 +237,7 @@ export default function SettingsPage() {
             <div className="attend-section-title mb-3">Notification Channels</div>
             <div className="flex flex-col gap-3">
               {[
-                { label: "Email Notifications", desc: "Send event reminders and updates via email", value: emailNotifs, set: setEmailNotifs },
+                { label: "Email Notifications", desc: "Send event notices and updates via email", value: emailNotifs, set: setEmailNotifs },
                 { label: "SMS Notifications",   desc: "Send OTPs and alerts via SMS",               value: smsNotifs,   set: setSmsNotifs   },
                 { label: "Push Notifications",  desc: "In-app push notifications for mobile users", value: pushNotifs,  set: setPushNotifs  },
               ].map((n) => (
