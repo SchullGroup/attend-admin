@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
   Vote, Rocket, Zap, CalendarDays, MapPin, Monitor, Users2,
-  Plus, Trash2, GripVertical, Check, ChevronRight, ChevronLeft,
+  Plus, Trash2, Check, ChevronRight, ChevronLeft,
   ArrowLeft, Upload, ShieldCheck, Globe, Mail, Lock, Building2,
   ChevronDown, Search,
 } from "lucide-react";
@@ -49,7 +49,7 @@ const MODULES: {
     id: "GENERAL",
     label: "General Event",
     desc: "Investor day, conference, workshop or other",
-    detail: "Agenda, speakers, audience targeting, capacity management",
+    detail: "Speakers, audience targeting, capacity management",
     icon: CalendarDays, color: "#0f766e", bg: "#f0fdfa",
   },
 ];
@@ -57,7 +57,7 @@ const MODULES: {
 const STEPS: Record<ModuleId, { label: string; optional?: true }[]> = {
   AGM: [
     { label: "Meeting Basics" },
-    { label: "Notice & Agenda" },
+    { label: "Notice" },
     { label: "Resolutions" },
     { label: "Shareholders" },
     { label: "Review" },
@@ -78,7 +78,6 @@ const STEPS: Record<ModuleId, { label: string; optional?: true }[]> = {
   ],
   GENERAL: [
     { label: "Event Basics" },
-    { label: "Agenda", optional: true },
     { label: "Audience & Settings" },
     { label: "Review" },
   ],
@@ -87,7 +86,7 @@ const STEPS: Record<ModuleId, { label: string; optional?: true }[]> = {
 const STEP_META: Record<ModuleId, { title: string; subtitle: string }[]> = {
   AGM: [
     { title: "Meeting Basics",          subtitle: "Core details for your Annual or Extraordinary General Meeting" },
-    { title: "Notice & Agenda",         subtitle: "Upload the statutory notice and build the meeting programme" },
+    { title: "Notice",                  subtitle: "Upload the statutory notice for the meeting" },
     { title: "Resolutions",             subtitle: "List all ordinary and special resolutions to be voted on" },
     { title: "Shareholders & Voting",   subtitle: "Configure shareholder targeting, proxy voting and KYC" },
     { title: "Review & Publish",        subtitle: "Confirm all details before creating the meeting" },
@@ -108,7 +107,6 @@ const STEP_META: Record<ModuleId, { title: string; subtitle: string }[]> = {
   ],
   GENERAL: [
     { title: "Event Basics",            subtitle: "Core details for your event" },
-    { title: "Agenda",                  subtitle: "Add the programme of activities — you can do this later" },
     { title: "Audience & Settings",     subtitle: "Who can register and how many" },
     { title: "Review & Publish",        subtitle: "Confirm all details before creating the event" },
   ],
@@ -118,7 +116,6 @@ const STEP_META: Record<ModuleId, { title: string; subtitle: string }[]> = {
 
 function genId() { return Math.random().toString(36).slice(2, 10); }
 
-interface AgendaItem   { id: string; time: string; title: string; speaker?: string; }
 interface SpeakerItem  { id: string; name: string; role: string; bio: string; }
 interface Resolution   { id: string; title: string; description: string; isSpecial: boolean; }
 interface Prize        { id: string; place: string; reward: string; }
@@ -409,25 +406,6 @@ function AgmStep1({ s }: { s: AgmState }) {
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">PDF up to 50 MB</p>
           <input type="file" accept=".pdf" className="hidden" onChange={(e) => s.setNoticeFile(e.target.files?.[0]?.name ?? "")} />
         </label>
-      </div>
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <Label>Agenda Items</Label>
-          <button type="button" onClick={s.addAgenda} className="flex items-center gap-1 text-sm font-medium text-[hsl(var(--primary))] hover:opacity-70">
-            <Plus className="h-3.5 w-3.5" /> Add item
-          </button>
-        </div>
-        {s.agenda.map((item, idx) => (
-          <div key={item.id} className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-bold text-[hsl(var(--muted-foreground))] w-7 text-center shrink-0">{String(idx + 1).padStart(2, "0")}</span>
-            <Input type="time" value={item.time} onChange={(e) => s.updateAgenda(item.id, "time", e.target.value)} className="w-32 shrink-0" />
-            <Input placeholder="e.g. Opening of meeting" value={item.title} onChange={(e) => s.updateAgenda(item.id, "title", e.target.value)} className="flex-1" />
-            <button type="button" onClick={() => s.removeAgenda(item.id)} disabled={s.agenda.length === 1}
-              className="h-9 w-9 flex items-center justify-center rounded-lg border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:border-red-200 hover:bg-red-50 disabled:opacity-30 disabled:pointer-events-none transition-colors">
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -781,37 +759,6 @@ function GeneralStep0({ s, organiserName }: { s: GeneralState; organiserName: st
   );
 }
 
-function GeneralStep1({ s }: { s: GeneralState }) {
-  return (
-    <div className="flex flex-col gap-3">
-      {s.agenda.map((item, idx) => (
-        <div key={item.id} className="grid grid-cols-[auto_1fr] gap-3 rounded-xl border border-[hsl(var(--border))] p-4 bg-[hsl(var(--muted)/0.3)]">
-          <div className="flex flex-col items-center gap-2 pt-0.5">
-            <GripVertical className="h-4 w-4 text-[hsl(var(--muted-foreground)/0.5)]" />
-            <span className="text-xs font-bold tabular-nums text-[hsl(var(--muted-foreground))]">{String(idx + 1).padStart(2, "0")}</span>
-          </div>
-          <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-[120px_1fr_auto] gap-2 items-end">
-              <div><Label className="mb-1.5 block">Time</Label><Input type="time" value={item.time} onChange={(e) => s.updateAgenda(item.id, "time", e.target.value)} /></div>
-              <div><Label className="mb-1.5 block">Title</Label><Input placeholder="e.g. Opening Remarks" value={item.title} onChange={(e) => s.updateAgenda(item.id, "title", e.target.value)} /></div>
-              <button type="button" onClick={() => s.removeAgenda(item.id)} disabled={s.agenda.length === 1}
-                className="h-9 w-9 flex items-center justify-center rounded-lg border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:border-red-200 hover:bg-red-50 disabled:opacity-30 disabled:pointer-events-none transition-colors">
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-            <div><Label className="mb-1.5 block">Speaker <span className="font-normal text-[hsl(var(--muted-foreground))]">(optional)</span></Label>
-              <Input placeholder="e.g. Dr. Akinwunmi Adesina" value={item.speaker ?? ""} onChange={(e) => s.updateAgenda(item.id, "speaker", e.target.value)} />
-            </div>
-          </div>
-        </div>
-      ))}
-      <button type="button" onClick={s.addAgenda} className="flex items-center gap-2 text-sm font-medium text-[hsl(var(--primary))] hover:opacity-70 mt-1">
-        <Plus className="h-4 w-4" /> Add agenda item
-      </button>
-    </div>
-  );
-}
-
 function GeneralStep2({ s }: { s: GeneralState }) {
   return (
     <div className="flex flex-col gap-5">
@@ -940,17 +887,13 @@ function useAgmState() {
   const [noticeFile, setNoticeFile] = useState("");
   const [quorum, setQuorum] = useState("25");
   const [cutoff, setCutoff] = useState("");
-  const [agenda, setAgenda] = useState<AgendaItem[]>([{ id: genId(), time: "", title: "", speaker: "" }]);
   const [resolutions, setResolutions] = useState<Resolution[]>([{ id: genId(), title: "", description: "", isSpecial: false }]);
   const [proxyEnabled, setProxyEnabled] = useState(true);
   const [shareholderTargeting, setShareholderTargeting] = useState<"all" | "custom">("all");
-  const addAgenda = () => setAgenda((a) => [...a, { id: genId(), time: "", title: "", speaker: "" }]);
-  const removeAgenda = (id: string) => setAgenda((a) => a.filter((x) => x.id !== id));
-  const updateAgenda = (id: string, field: keyof AgendaItem, val: string) => setAgenda((a) => a.map((x) => x.id === id ? { ...x, [field]: val } : x));
   const addResolution = () => setResolutions((r) => [...r, { id: genId(), title: "", description: "", isSpecial: false }]);
   const removeResolution = (id: string) => setResolutions((r) => r.filter((x) => x.id !== id));
   const updateResolution = (id: string, field: keyof Resolution, val: string | boolean) => setResolutions((r) => r.map((x) => x.id === id ? { ...x, [field]: val } : x));
-  return { title, setTitle, date, setDate, time, setTime, format, setFormat, venue, setVenue, noticeDays, setNoticeDays, noticeFile, setNoticeFile, quorum, setQuorum, cutoff, setCutoff, agenda, addAgenda, removeAgenda, updateAgenda, resolutions, addResolution, removeResolution, updateResolution, proxyEnabled, setProxyEnabled, shareholderTargeting, setShareholderTargeting };
+  return { title, setTitle, date, setDate, time, setTime, format, setFormat, venue, setVenue, noticeDays, setNoticeDays, noticeFile, setNoticeFile, quorum, setQuorum, cutoff, setCutoff, resolutions, addResolution, removeResolution, updateResolution, proxyEnabled, setProxyEnabled, shareholderTargeting, setShareholderTargeting };
 }
 
 function useLaunchState() {
@@ -1010,12 +953,8 @@ function useGeneralState() {
   const [venue, setVenue] = useState("");
   const [streamUrl, setStreamUrl] = useState("");
   const [capacity, setCapacity] = useState("");
-  const [agenda, setAgenda] = useState<AgendaItem[]>([{ id: genId(), time: "", title: "", speaker: "" }]);
   const [audienceMode, setAudienceMode] = useState<"open" | "invite">("open");
-  const addAgenda = () => setAgenda((a) => [...a, { id: genId(), time: "", title: "", speaker: "" }]);
-  const removeAgenda = (id: string) => setAgenda((a) => a.filter((x) => x.id !== id));
-  const updateAgenda = (id: string, field: keyof AgendaItem, val: string) => setAgenda((a) => a.map((x) => x.id === id ? { ...x, [field]: val } : x));
-  return { title, setTitle, description, setDescription, date, setDate, time, setTime, format, setFormat, venue, setVenue, streamUrl, setStreamUrl, capacity, setCapacity, agenda, addAgenda, removeAgenda, updateAgenda, audienceMode, setAudienceMode };
+  return { title, setTitle, description, setDescription, date, setDate, time, setTime, format, setFormat, venue, setVenue, streamUrl, setStreamUrl, capacity, setCapacity, audienceMode, setAudienceMode };
 }
 
 // ─── Page Inner ───────────────────────────────────────────────────────────────
@@ -1197,8 +1136,7 @@ function CreateEventInner() {
     }
     if (selectedModule === "GENERAL") {
       if (step === 0) return <GeneralStep0 s={general} organiserName={organiserName} />;
-      if (step === 1) return <GeneralStep1 s={general} />;
-      if (step === 2) return <GeneralStep2 s={general} />;
+      if (step === 1) return <GeneralStep2 s={general} />;
       return <GeneralReview s={general} organiserName={organiserName} />;
     }
     return null;

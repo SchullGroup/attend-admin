@@ -1,6 +1,6 @@
 "use client";
 import { create } from "zustand";
-import { CURRENT_ADMIN, MOCK_EVENTS, MOCK_PARTICIPANTS, MOCK_APPLICATIONS, MOCK_DOCUMENTS, MOCK_LIVE_VOTES, MOCK_LIVE_SESSIONS, MOCK_ORGANISERS, MOCK_REGISTRARS, MOCK_AUDIT_LOG, MOCK_TEAM, type AdminUser, type AttendEvent, type Participant, type HackathonApplication, type AppDocument, type LiveVote, type LiveSession, type Organiser, type Registrar, type AuditLogEntry, type AuditSeverity, type AuditCategory, type TeamMember, type ProxyVoteEntry } from "./mock-data";
+import { CURRENT_ADMIN, MOCK_EVENTS, MOCK_PARTICIPANTS, MOCK_APPLICATIONS, MOCK_DOCUMENTS, MOCK_LIVE_VOTES, MOCK_LIVE_SESSIONS, MOCK_ORGANISERS, MOCK_REGISTRARS, MOCK_AUDIT_LOG, MOCK_TEAM, type AdminUser, type AttendEvent, type Participant, type HackathonApplication, type AppDocument, type LiveVote, type LiveSession, type LivePoll, type Organiser, type Registrar, type AuditLogEntry, type AuditSeverity, type AuditCategory, type TeamMember, type ProxyVoteEntry } from "./mock-data";
 
 
 interface AttendAdminStore {
@@ -40,6 +40,8 @@ interface AttendAdminStore {
   restoreParticipant: (id: string) => void;
   launchPoll: (sessionId: string, pollId: string) => void;
   closePoll: (sessionId: string, pollId: string) => void;
+  addPoll: (sessionId: string, poll: LivePoll) => void;
+  updatePoll: (sessionId: string, pollId: string, updates: Partial<LivePoll>) => void;
   releasePressKit: (sessionId: string) => void;
   declareWinner: (sessionId: string, teamName: string) => void;
   addTeamMember: (m: TeamMember) => void;
@@ -137,6 +139,18 @@ export const useStore = create<AttendAdminStore>((set) => ({
     liveSessions: s.liveSessions.map((sess) =>
       sess.id === sessionId
         ? { ...sess, polls: sess.polls.map((p) => p.id === pollId ? { ...p, status: "closed" as const } : p) }
+        : sess
+    ),
+  })),
+  addPoll: (sessionId, poll) => set((s) => ({
+    liveSessions: s.liveSessions.map((sess) =>
+      sess.id === sessionId ? { ...sess, polls: [...sess.polls, poll] } : sess
+    ),
+  })),
+  updatePoll: (sessionId, pollId, updates) => set((s) => ({
+    liveSessions: s.liveSessions.map((sess) =>
+      sess.id === sessionId
+        ? { ...sess, polls: sess.polls.map((p) => p.id === pollId ? { ...p, ...updates } : p) }
         : sess
     ),
   })),

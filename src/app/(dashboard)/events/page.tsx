@@ -45,7 +45,6 @@ export default function EventsPage() {
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Events</h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{events.length} total events across all modules</p>
         </div>
-        <span className="text-sm text-[hsl(var(--muted-foreground))]">Events are created by enrolled stakeholders</span>
       </div>
 
       <div className="flex items-center gap-3 mb-4">

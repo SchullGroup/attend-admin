@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import { toast } from "sonner";
 import {
   Check, X, Users, Vote, MessageSquare, UserCheck, Clock,
   Wifi, Radio, Building2, Tv2, Link2, BarChart2,
-  Trophy, Package, ChevronRight, ExternalLink,
+  Trophy, Package, ChevronRight, ExternalLink, Pencil, Plus, Trash2,
 } from "lucide-react";
 import type { LiveSession, LivePoll } from "@/lib/mock-data";
 
@@ -323,17 +324,110 @@ function ResolutionsPanel({
 
 // ── Poll Management Panel ─────────────────────────────────────────────────────
 
+function PollForm({
+  initial,
+  color,
+  onSave,
+  onCancel,
+}: {
+  initial?: { question: string; options: string[] };
+  color: string;
+  onSave: (question: string, options: string[]) => void;
+  onCancel: () => void;
+}) {
+  const [question, setQuestion] = useState(initial?.question ?? "");
+  const [options, setOptions] = useState<string[]>(initial?.options ?? ["", ""]);
+
+  function updateOption(i: number, val: string) {
+    setOptions((prev) => prev.map((o, idx) => idx === i ? val : o));
+  }
+  function addOption() {
+    if (options.length < 6) setOptions((prev) => [...prev, ""]);
+  }
+  function removeOption(i: number) {
+    if (options.length > 2) setOptions((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  const canSave = question.trim().length > 0 && options.filter((o) => o.trim()).length >= 2;
+
+  return (
+    <div className="px-5 py-4 bg-[hsl(var(--muted)/0.3)] border-t border-[hsl(var(--border))]">
+      <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-3">
+        {initial ? "Edit Poll" : "New Poll"}
+      </p>
+      <div className="flex flex-col gap-3">
+        <Input
+          placeholder="Poll question…"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          className="text-sm"
+        />
+        <div className="flex flex-col gap-2">
+          {options.map((opt, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="text-xs text-[hsl(var(--muted-foreground))] w-4 text-right shrink-0">{i + 1}.</span>
+              <Input
+                placeholder={`Option ${i + 1}`}
+                value={opt}
+                onChange={(e) => updateOption(i, e.target.value)}
+                className="text-sm flex-1"
+              />
+              <button
+                type="button"
+                onClick={() => removeOption(i)}
+                disabled={options.length <= 2}
+                className="h-7 w-7 flex items-center justify-center rounded-lg text-[hsl(var(--muted-foreground))] hover:text-red-500 disabled:opacity-30 transition-colors"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+          {options.length < 6 && (
+            <button
+              type="button"
+              onClick={addOption}
+              className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] ml-6 mt-1 transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add option
+            </button>
+          )}
+        </div>
+        <div className="flex gap-2 pt-1">
+          <Button
+            size="sm"
+            className="h-7 text-xs"
+            style={{ backgroundColor: color, color: "white" }}
+            disabled={!canSave}
+            onClick={() => onSave(question.trim(), options.filter((o) => o.trim()))}
+          >
+            {initial ? "Save Changes" : "Create Poll"}
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PollManagementPanel({
   session,
   onLaunch,
   onClose,
+  onAdd,
+  onUpdate,
 }: {
   session: LiveSession;
   onLaunch: (pollId: string) => void;
   onClose: (pollId: string) => void;
+  onAdd: (poll: LivePoll) => void;
+  onUpdate: (pollId: string, updates: Partial<LivePoll>) => void;
 }) {
+  const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   if (session.module === "AGM") return null;
-  if (session.polls.length === 0) return null;
 
   const statusBadge = (status: LivePoll["status"]) => {
     if (status === "active") return (
@@ -354,76 +448,141 @@ function PollManagementPanel({
       <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
         <BarChart2 className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
         <h2 className="font-semibold text-[hsl(var(--foreground))]">Poll Management</h2>
-        <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">
+        <span className="ml-2 text-xs text-[hsl(var(--muted-foreground))]">
           {session.polls.filter((p) => p.status === "active").length} active
         </span>
+        <Button
+          size="sm"
+          variant="outline"
+          className="ml-auto h-7 text-xs gap-1"
+          onClick={() => { setCreating(true); setEditingId(null); }}
+          disabled={creating}
+        >
+          <Plus className="h-3.5 w-3.5" /> Create Poll
+        </Button>
       </div>
+
+      {session.polls.length === 0 && !creating && (
+        <div className="px-5 py-8 flex flex-col items-center gap-2 text-center">
+          <BarChart2 className="h-8 w-8 text-[hsl(var(--muted-foreground))] opacity-40" />
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">No polls yet. Create one to engage attendees.</p>
+        </div>
+      )}
+
       <div className="divide-y divide-[hsl(var(--border))]">
         {session.polls.map((poll) => {
           const total = poll.options.reduce((s, o) => s + o.votes, 0);
+          const isEditing = editingId === poll.id;
           return (
-            <div key={poll.id} className="px-5 py-4">
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    {statusBadge(poll.status)}
-                  </div>
-                  <p className="text-sm font-semibold text-[hsl(var(--foreground))] leading-snug">{poll.question}</p>
-                </div>
-                <div className="shrink-0">
-                  {poll.status === "draft" && (
-                    <Button
-                      size="sm"
-                      className="h-7 text-xs"
-                      style={{ backgroundColor: session.color, color: "white" }}
-                      onClick={() => {
-                        onLaunch(poll.id);
-                        toast.success("Poll launched successfully");
-                      }}
-                    >
-                      Launch Poll
-                    </Button>
-                  )}
-                  {poll.status === "active" && (
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="h-7 text-xs"
-                      onClick={() => {
-                        onClose(poll.id);
-                        toast.success("Poll closed");
-                      }}
-                    >
-                      Close Poll
-                    </Button>
-                  )}
-                </div>
-              </div>
-              {(poll.status === "active" || poll.status === "closed") && (
-                <div className="bg-[hsl(var(--muted)/0.4)] rounded-xl p-3 flex flex-col gap-3">
-                  {poll.options.map((opt) => (
-                    <PollOptionBar
-                      key={opt.id}
-                      text={opt.text}
-                      votes={opt.votes}
-                      total={total}
-                      color={session.color}
-                    />
-                  ))}
-                  {total > 0 && (
-                    <div className="pt-1 mt-1 border-t border-[hsl(var(--border))] text-xs text-[hsl(var(--muted-foreground))]">
-                      Total responses: <span className="font-semibold text-[hsl(var(--foreground))]">{total.toLocaleString()}</span>
+            <div key={poll.id}>
+              <div className="px-5 py-4">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      {statusBadge(poll.status)}
                     </div>
-                  )}
+                    <p className="text-sm font-semibold text-[hsl(var(--foreground))] leading-snug">{poll.question}</p>
+                    {poll.status === "draft" && (
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] italic mt-0.5">
+                        {poll.options.length} options · not yet launched
+                      </p>
+                    )}
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1.5">
+                    {poll.status === "draft" && (
+                      <>
+                        <button
+                          type="button"
+                          className="h-7 w-7 flex items-center justify-center rounded-lg border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                          onClick={() => { setEditingId(isEditing ? null : poll.id); setCreating(false); }}
+                          title="Edit poll"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs"
+                          style={{ backgroundColor: session.color, color: "white" }}
+                          onClick={() => {
+                            onLaunch(poll.id);
+                            toast.success("Poll launched successfully");
+                          }}
+                        >
+                          Launch
+                        </Button>
+                      </>
+                    )}
+                    {poll.status === "active" && (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          onClose(poll.id);
+                          toast.success("Poll closed");
+                        }}
+                      >
+                        Close Poll
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              )}
-              {poll.status === "draft" && (
-                <p className="text-xs text-[hsl(var(--muted-foreground))] italic mt-1">Poll not yet launched to attendees.</p>
+                {(poll.status === "active" || poll.status === "closed") && (
+                  <div className="bg-[hsl(var(--muted)/0.4)] rounded-xl p-3 flex flex-col gap-3">
+                    {poll.options.map((opt) => (
+                      <PollOptionBar
+                        key={opt.id}
+                        text={opt.text}
+                        votes={opt.votes}
+                        total={total}
+                        color={session.color}
+                      />
+                    ))}
+                    {total > 0 && (
+                      <div className="pt-1 mt-1 border-t border-[hsl(var(--border))] text-xs text-[hsl(var(--muted-foreground))]">
+                        Total responses: <span className="font-semibold text-[hsl(var(--foreground))]">{total.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              {isEditing && (
+                <PollForm
+                  color={session.color}
+                  initial={{ question: poll.question, options: poll.options.map((o) => o.text) }}
+                  onSave={(q, opts) => {
+                    onUpdate(poll.id, {
+                      question: q,
+                      options: opts.map((text, i) => ({ id: poll.options[i]?.id ?? `o${Date.now()}_${i}`, text, votes: poll.options[i]?.votes ?? 0 })),
+                    });
+                    setEditingId(null);
+                    toast.success("Poll updated");
+                  }}
+                  onCancel={() => setEditingId(null)}
+                />
               )}
             </div>
           );
         })}
       </div>
+
+      {creating && (
+        <PollForm
+          color={session.color}
+          onSave={(question, options) => {
+            const id = `poll_${Date.now()}`;
+            onAdd({
+              id,
+              question,
+              options: options.map((text, i) => ({ id: `${id}_o${i}`, text, votes: 0 })),
+              status: "draft",
+            });
+            setCreating(false);
+            toast.success("Poll created as draft");
+          }}
+          onCancel={() => setCreating(false)}
+        />
+      )}
     </Card>
   );
 }
@@ -559,7 +718,7 @@ const MODULE_COLORS: Record<string, string> = {
 };
 
 export default function LiveControlPage() {
-  const { liveSessions, openVoting, closeVoting, submitProxyVotes, approveQA, rejectQA, launchPoll, closePoll, releasePressKit, declareWinner } = useStore();
+  const { liveSessions, openVoting, closeVoting, submitProxyVotes, approveQA, rejectQA, launchPoll, closePoll, addPoll, updatePoll, releasePressKit, declareWinner } = useStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [streamInputs, setStreamInputs] = useState<Record<string, string>>({});
   const [streamUrls, setStreamUrls] = useState<Record<string, string>>(DEFAULT_STREAM_URLS);
@@ -725,13 +884,20 @@ export default function LiveControlPage() {
 
       {/* Header with back button */}
       <div>
-        <button
-          onClick={() => setSelectedId(null)}
-          className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-4 transition-colors"
-        >
-          <ChevronRight className="h-4 w-4 rotate-180" />
-          Back to Live Sessions
-        </button>
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={() => setSelectedId(null)}
+            className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+          >
+            <ChevronRight className="h-4 w-4 rotate-180" />
+            Back to Live Sessions
+          </button>
+          <Link href={`/events/${session.eventId}`}>
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+              <Pencil className="h-3.5 w-3.5" /> Edit Event
+            </Button>
+          </Link>
+        </div>
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{session.organiser}</h1>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">
@@ -868,6 +1034,8 @@ export default function LiveControlPage() {
             session={session}
             onLaunch={(pollId) => launchPoll(session.id, pollId)}
             onClose={(pollId) => closePoll(session.id, pollId)}
+            onAdd={(poll) => addPoll(session.id, poll)}
+            onUpdate={(pollId, updates) => updatePoll(session.id, pollId, updates)}
           />
           <PressKitCard
             session={session}

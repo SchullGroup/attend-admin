@@ -94,7 +94,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     "Overview",
     "Attendees",
     "Documents",
-    isAGM ? "Resolutions" : "Agenda",
+    ...(isAGM ? ["Resolutions"] : []),
     "Broadcast",
     ...(isAGM ? ["Vote Results", "Post-AGM"] : []),
     ...(isLAUNCH ? ["Audience Tiers"] : []),
@@ -216,8 +216,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               </Card>
             )}
 
-            {/* Mini agenda preview */}
-            {agendaItems.length > 0 && (
+            {/* Mini agenda preview (AGM only) */}
+            {isAGM && agendaItems.length > 0 && (
               <Card className="attend-card p-5">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="font-semibold text-[hsl(var(--foreground))]">{isAGM ? "Resolutions" : "Agenda"}</h2>
@@ -380,8 +380,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {/* ── Agenda / Resolutions ── */}
-      {(tab === "Agenda" || tab === "Resolutions") && (
+      {/* ── Resolutions (AGM only) ── */}
+      {tab === "Resolutions" && (
         <Card className="attend-card p-5">
           <div className="flex items-center justify-between mb-5">
             <div>
