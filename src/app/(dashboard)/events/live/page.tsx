@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/custom/status-badge";
 import { toast } from "sonner";
 import {
   Check, X, Users, Vote, MessageSquare, UserCheck, Clock,
-  Wifi, Radio, Building2, Tv2, Link2, ListOrdered, BarChart2,
+  Wifi, Radio, Building2, Tv2, Link2, BarChart2,
   Trophy, Package, ChevronRight, ExternalLink,
 } from "lucide-react";
 import type { LiveSession, LivePoll } from "@/lib/mock-data";
@@ -423,50 +423,6 @@ function PollManagementPanel({
             </div>
           );
         })}
-      </div>
-    </Card>
-  );
-}
-
-// ── Live Agenda Tracker ───────────────────────────────────────────────────────
-
-function LiveAgendaTracker({ session }: { session: LiveSession }) {
-  if (session.agendaItems.length === 0) return null;
-
-  return (
-    <Card className="attend-card overflow-hidden">
-      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
-        <ListOrdered className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
-        <h2 className="font-semibold text-[hsl(var(--foreground))]">Live Agenda</h2>
-      </div>
-      <div className="divide-y divide-[hsl(var(--border))]">
-        {session.agendaItems.map((item) => (
-          <div
-            key={item.id}
-            className="px-4 py-3 flex items-center gap-3"
-            style={item.isCurrent ? { backgroundColor: `${session.color}10` } : {}}
-          >
-            <div className="shrink-0">
-              {item.isCurrent ? (
-                <span className="inline-flex items-center gap-1 text-xs font-bold" style={{ color: session.color }}>
-                  <span className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ backgroundColor: session.color }} />
-                  LIVE
-                </span>
-              ) : (
-                <ChevronRight className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p
-                className={`text-xs font-medium truncate ${item.isCurrent ? "font-semibold" : "text-[hsl(var(--muted-foreground))]"}`}
-                style={item.isCurrent ? { color: session.color } : {}}
-              >
-                {item.title}
-              </p>
-            </div>
-            <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums shrink-0">{item.durationMinutes}m</span>
-          </div>
-        ))}
       </div>
     </Card>
   );
@@ -923,7 +879,7 @@ export default function LiveControlPage() {
           />
         </div>
 
-        {/* Right: Q&A + Agenda + attendance */}
+        {/* Right: Q&A + attendance */}
         <div className="col-span-1 flex flex-col gap-5">
 
           {/* Q&A Queue */}
@@ -969,9 +925,6 @@ export default function LiveControlPage() {
               ))}
             </div>
           </Card>
-
-          {/* Live Agenda Tracker */}
-          <LiveAgendaTracker session={session} />
 
           {/* Attendance log */}
           <Card className="attend-card overflow-hidden">
