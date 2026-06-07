@@ -32,7 +32,16 @@ import {
   Square,
 } from "lucide-react";
 import type { EventModule } from "@/types/mock";
-import { useEventDetail, useEventDocuments, useEventAttendees, usePublishEvent, useGoLive, useEndEvent, useCancelEvent } from "@/api/super-admin";
+import {
+  useEventDetail,
+  useEventDocuments,
+  useEventAttendees,
+  usePublishEvent,
+  useGoLive,
+  useEndEvent,
+  useCancelEvent,
+  useDownloadEventDocument,
+} from "@/api/super-admin";
 import { Loader } from "@/components/ui/Loader";
 
 function VoteBar({
@@ -86,10 +95,41 @@ const FORMAT_ICON = {
 function getModuleFromEvent(event: any): EventModule {
   if (event.eventType === "AGM_EGM") return "AGM";
   if (event.eventType === "PRODUCT_LAUNCH") return "LAUNCH";
-  if (event.eventType === "INNOVATION_CHALLENGE" || event.eventType === "HACKATHON") {
+  if (
+    event.eventType === "INNOVATION_CHALLENGE" ||
+    event.eventType === "HACKATHON"
+  ) {
     return "HACKATHON";
   }
   return "GENERAL";
+}
+
+function triggerBase64Download(
+  base64Data: string,
+  filename: string,
+  mimeType: string,
+) {
+  try {
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: mimeType });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    toast.success(`Downloaded ${filename}`);
+  } catch (err) {
+    console.error("Failed to decode base64 file", err);
+    toast.error("Failed to download file. Document file data is invalid.");
+  }
 }
 
 export default function EventDetailPage({
@@ -100,6 +140,48 @@ export default function EventDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const [tab, setTab] = useState("Overview");
+
+  const downloadDocMutation = useDownloadEventDocument();
+
+  const handleDownload = (
+    docId: string,
+    title: string,
+    originalFilename?: string,
+    fileType?: string,
+    mimeType?: string,
+  ) => {
+    const filename =
+      originalFilename || `${title}.${(fileType || "pdf").toLowerCase()}`;
+    const resolvedMime = mimeType || "application/octet-stream";
+
+    toast.loading(`Downloading ${title}...`, { id: docId });
+    downloadDocMutation.mutate(
+      { eventId: id, documentId: docId },
+      {
+        onSuccess: (resData: any) => {
+          const base64Content = resData?.data?.fileData;
+          if (base64Content) {
+            triggerBase64Download(
+              base64Content,
+              filename,
+              resData?.data?.mimeType || resolvedMime,
+            );
+            toast.dismiss(docId);
+          } else {
+            toast.error("No file content found in the document.", {
+              id: docId,
+            });
+          }
+        },
+        onError: (err: any) => {
+          toast.error(
+            err?.response?.data?.message || "Failed to download document.",
+            { id: docId },
+          );
+        },
+      },
+    );
+  };
   const [broadcastMsg, setBroadcastMsg] = useState("");
   const [broadcastChannel, setBroadcastChannel] = useState<
     "push" | "sms" | "email" | "all"
@@ -112,7 +194,11 @@ export default function EventDetailPage({
     },
   ]);
 
-  const { data: eventDetailData, isLoading: isEventLoading, isError: isEventError } = useEventDetail(id);
+  const {
+    data: eventDetailData,
+    isLoading: isEventLoading,
+    isError: isEventError,
+  } = useEventDetail(id);
   const { data: attendeesData } = useEventAttendees(id, 0, 100);
   const { data: documentsData } = useEventDocuments(id);
 
@@ -152,34 +238,44 @@ export default function EventDetailPage({
   }
 
   const eventDetail = eventDetailData.data;
-  const formatStr = (eventDetail.format || "VIRTUAL").toLowerCase().replace("_", "-");
-  const FormatIcon = FORMAT_ICON[formatStr as keyof typeof FORMAT_ICON] || MapPin;
-  const rsvpCount = eventDetail.registrationCount ?? (eventDetail as any).rsvpCount ?? 0;
+  const formatStr = (eventDetail.format || "VIRTUAL")
+    .toLowerCase()
+    .replace("_", "-");
+  const FormatIcon =
+    FORMAT_ICON[formatStr as keyof typeof FORMAT_ICON] || MapPin;
+  const rsvpCount =
+    eventDetail.registrationCount ?? (eventDetail as any).rsvpCount ?? 0;
   const capacity = eventDetail.maximumCapacity ?? (eventDetail as any).capacity;
-  const fill = capacity
-    ? Math.round((rsvpCount / capacity) * 100)
-    : null;
+  const fill = capacity ? Math.round((rsvpCount / capacity) * 100) : null;
 
   const eventDocs = documentsData?.data?.documents || [];
   const attendeesList = attendeesData?.data?.attendees || [];
 
   const eventModule = getModuleFromEvent(eventDetail);
   const isAGM = eventModule === "AGM";
-  const liveVotes = eventDetail.agmConfig?.resolutions?.map((res: any, idx: number) => {
-    const charCodeSum = res.title.split("").reduce((sum: number, c: string) => sum + c.charCodeAt(0), 0);
-    const totalVotes = 1000 + (charCodeSum % 5000);
-    const forVotes = Math.round(totalVotes * (0.6 + (charCodeSum % 30) / 100));
-    const againstVotes = Math.round((totalVotes - forVotes) * 0.7);
-    const abstainVotes = totalVotes - forVotes - againstVotes;
-    return {
-      resolutionId: res.id,
-      title: res.title,
-      for: forVotes,
-      against: againstVotes,
-      abstain: abstainVotes,
-      status: idx === 0 && eventDetail.status === "LIVE" ? "open" as const : "closed" as const,
-    };
-  }) || [];
+  const liveVotes =
+    eventDetail.agmConfig?.resolutions?.map((res: any, idx: number) => {
+      const charCodeSum = res.title
+        .split("")
+        .reduce((sum: number, c: string) => sum + c.charCodeAt(0), 0);
+      const totalVotes = 1000 + (charCodeSum % 5000);
+      const forVotes = Math.round(
+        totalVotes * (0.6 + (charCodeSum % 30) / 100),
+      );
+      const againstVotes = Math.round((totalVotes - forVotes) * 0.7);
+      const abstainVotes = totalVotes - forVotes - againstVotes;
+      return {
+        resolutionId: res.id,
+        title: res.title,
+        for: forVotes,
+        against: againstVotes,
+        abstain: abstainVotes,
+        status:
+          idx === 0 && eventDetail.status === "LIVE"
+            ? ("open" as const)
+            : ("closed" as const),
+      };
+    }) || [];
   const visibleTabs = isAGM
     ? TABS
     : TABS.filter((t) => t !== "Vote Results" && t !== "Post-AGM");
@@ -192,14 +288,19 @@ export default function EventDetailPage({
     organiser: eventDetail.stakeholderName || "Platform Stakeholder",
     color: (eventDetail as any).color || "#2563eb",
     status: eventDetail.status.toLowerCase(),
-    venue: eventDetail.location ?? (eventDetail as any).venue ?? "Virtual (no physical venue)",
+    venue:
+      eventDetail.location ??
+      (eventDetail as any).venue ??
+      "Virtual (no physical venue)",
     module: eventModule,
     endTime: (eventDetail as any).endTime || "18:00",
   };
 
   return (
     <div className="relative">
-      {isMutating && <Loader variant="overlay" text="Updating event status..." />}
+      {isMutating && (
+        <Loader variant="overlay" text="Updating event status..." />
+      )}
       {/* Back + header */}
       <div className="mb-6">
         <button
@@ -463,15 +564,28 @@ export default function EventDetailPage({
               ) : (
                 <div className="flex flex-col gap-2">
                   {eventDocs.map((d: any) => (
-                    <div key={d.id} className="flex items-center gap-2 text-sm">
-                      <FileText className="h-3.5 w-3.5 text-[hsl(var(--primary))] shrink-0" />
-                      <span className="truncate text-[hsl(var(--foreground))]">
+                    <button
+                      key={d.id}
+                      onClick={() =>
+                        handleDownload(
+                          d.id,
+                          d.title,
+                          d.originalFilename,
+                          d.fileType,
+                          d.mimeType,
+                        )
+                      }
+                      disabled={downloadDocMutation.isPending}
+                      className="flex items-center gap-2 text-sm text-left hover:bg-[hsl(var(--muted)/0.4)] p-1.5 rounded-lg w-full transition-colors group cursor-pointer"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-[hsl(var(--primary))] shrink-0 group-hover:scale-110 transition-transform" />
+                      <span className="truncate text-[hsl(var(--foreground))] font-medium flex-1">
                         {d.title}
                       </span>
                       <span className="text-xs text-[hsl(var(--muted-foreground))] shrink-0">
-                        {d.fileSize}
+                        {d.sizeLabel || d.fileSize || "—"}
                       </span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -510,19 +624,28 @@ export default function EventDetailPage({
             <tbody>
               {attendeesList.map((p: any) => {
                 const displayName = p.fullName || p.email || "Unknown";
-                const initials = p.initials || displayName
-                  .split(" ")
-                  .map((n: string) => n[0])
-                  .join("")
-                  .slice(0, 2)
-                  .toUpperCase();
+                const initials =
+                  p.initials ||
+                  displayName
+                    .split(" ")
+                    .map((n: string) => n[0])
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase();
                 return (
                   <tr key={p.id} className="attend-table-row">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2.5">
-                        <div 
+                        <div
                           className="h-7 w-7 rounded-full bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-[hsl(var(--primary))] text-xs font-bold shrink-0"
-                          style={p.avatarColor ? { backgroundColor: p.avatarColor + "20", color: p.avatarColor } : undefined}
+                          style={
+                            p.avatarColor
+                              ? {
+                                  backgroundColor: p.avatarColor + "20",
+                                  color: p.avatarColor,
+                                }
+                              : undefined
+                          }
                         >
                           {initials}
                         </div>
@@ -540,13 +663,19 @@ export default function EventDetailPage({
                       {p.phone || "—"}
                     </td>
                     <td className="px-5 py-3">
-                      <StatusBadge status={(p.kycStatus || "none").toLowerCase()} />
+                      <StatusBadge
+                        status={(p.kycStatus || "none").toLowerCase()}
+                      />
                     </td>
                     <td className="px-5 py-3">
                       <StatusBadge status="active" />
                     </td>
                     <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-                      {formatDate(p.rsvpDate || (p as any).registeredAt || new Date().toISOString())}
+                      {formatDate(
+                        p.rsvpDate ||
+                          (p as any).registeredAt ||
+                          new Date().toISOString(),
+                      )}
                     </td>
                   </tr>
                 );
@@ -585,35 +714,60 @@ export default function EventDetailPage({
                   <th className="px-5 py-3 text-left">Size</th>
                   <th className="px-5 py-3 text-left">Downloads</th>
                   <th className="px-5 py-3 text-left">Uploaded</th>
+                  <th className="px-5 py-3 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {eventDocs.map((d: any) => (
-                  <tr key={d.id} className="attend-table-row">
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-[hsl(var(--primary))] shrink-0" />
-                        <span className="text-sm font-medium text-[hsl(var(--foreground))]">
-                          {d.title}
+                {eventDocs.map((d: any) => {
+                  const docType = d.documentType || d.type || "OTHER";
+                  const sizeLabel = d.sizeLabel || d.fileSize || "—";
+                  return (
+                    <tr key={d.id} className="attend-table-row">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-[hsl(var(--primary))] shrink-0" />
+                          <span className="text-sm font-medium text-[hsl(var(--foreground))]">
+                            {d.title}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className="text-xs bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded-full px-2.5 py-0.5 capitalize font-medium">
+                          {docType.replace("_", " ").toLowerCase()}
                         </span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className="text-xs bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded-full px-2.5 py-0.5 capitalize font-medium">
-                        {d.type.replace("_", " ")}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-sm font-mono text-[hsl(var(--muted-foreground))]">
-                      {d.fileSize}
-                    </td>
-                    <td className="px-5 py-3 text-sm font-medium tabular-nums">
-                      {d.downloadCount.toLocaleString()}
-                    </td>
-                    <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-                      {formatDate(d.uploadedAt)}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-5 py-3 text-sm font-mono text-[hsl(var(--muted-foreground))]">
+                        {sizeLabel}
+                      </td>
+                      <td className="px-5 py-3 text-sm font-medium tabular-nums">
+                        {(d.downloadCount ?? 0).toLocaleString()}
+                      </td>
+                      <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                        {formatDate(d.uploadedAt)}
+                      </td>
+                      <td className="px-5 py-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1 hover:bg-[hsl(var(--primary)/0.05)] hover:text-[hsl(var(--primary))] transition-colors"
+                          onClick={() =>
+                            handleDownload(
+                              d.id,
+                              d.title,
+                              d.originalFilename,
+                              d.fileType,
+                              d.mimeType,
+                            )
+                          }
+                          disabled={downloadDocMutation.isPending}
+                        >
+                          <Download className="h-3 w-3" />
+                          Download
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -762,7 +916,10 @@ export default function EventDetailPage({
               {
                 label: "Total Votes Cast",
                 value: liveVotes
-                  .reduce((s: number, v: any) => s + v.for + v.against + v.abstain, 0)
+                  .reduce(
+                    (s: number, v: any) => s + v.for + v.against + v.abstain,
+                    0,
+                  )
                   .toLocaleString(),
                 icon: CheckCircle2,
                 color: "#2563eb",

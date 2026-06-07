@@ -33,6 +33,7 @@ export const superAdminKeys = {
   users: (page: number, limit: number) => [...superAdminKeys.all, "users", page, limit] as const,
   documents: (search: string, eventId: string, type: string, page: number, limit: number) => [...superAdminKeys.all, "documents", search, eventId, type, page, limit] as const,
   recentRegistrations: (page: number, limit: number) => [...superAdminKeys.all, "recent-registrations", page, limit] as const,
+  eventDocuments: (id: string) => [...superAdminKeys.all, "event-documents", id] as const,
 };
 
 // --- Queries ---
@@ -264,12 +265,24 @@ export function useEventAttendees(id: string, page = 0, size = 20, kycStatus = "
 
 export function useEventDocuments(id: string) {
   return useQuery({
-    queryKey: clientEventKeys.documents(id),
+    queryKey: superAdminKeys.eventDocuments(id),
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<any>>(`/api/v1/client/events/${id}/documents`);
+      const res = await apiClient.get<ApiResponse<any>>(`/api/v1/admin/events/${id}/documents`);
       return res.data;
     },
     enabled: !!id,
+  });
+}
+
+export function useDownloadEventDocument() {
+  return useMutation({
+    mutationFn: async ({ eventId, documentId }: { eventId: string; documentId: string }) => {
+      const res = await apiClient.get<ApiResponse<any>>(`/api/v1/admin/events/${eventId}/documents/${documentId}`);
+      return res.data;
+    },
+    onError: (error: any) => {
+      popup.error("Download Failed", error?.response?.data?.message || "Could not download the document.");
+    }
   });
 }
 

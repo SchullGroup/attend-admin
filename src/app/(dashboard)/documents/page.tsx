@@ -14,7 +14,10 @@ import { Card } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { Loader } from "@/components/ui/Loader";
-import { useGlobalDocuments } from "@/api/super-admin";
+import {
+  useGlobalDocuments,
+  useDownloadEventDocument,
+} from "@/api/super-admin";
 
 const TYPE_FILTERS = [
   { label: "All", value: "" },
@@ -58,11 +61,85 @@ const TYPE_CONFIG: Record<
   },
 };
 
+function triggerBase64Download(
+  base64Data: string,
+  filename: string,
+  mimeType: string,
+) {
+  try {
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: mimeType });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    toast.success(`Downloaded ${filename}`);
+  } catch (err) {
+    console.error("Failed to decode base64 file", err);
+    toast.error("Failed to download file. Document file data is invalid.");
+  }
+}
+
 export default function DocumentsPage() {
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState(0);
 
   const { data, isLoading } = useGlobalDocuments("", "", filter, page, 20);
+  const downloadDocMutation = useDownloadEventDocument();
+
+  const handleDownload = (
+    eventId: string,
+    docId: string,
+    title: string,
+    originalFilename?: string,
+    fileType?: string,
+    mimeType?: string,
+  ) => {
+    if (!eventId) {
+      toast.error("Event ID is missing for this document.");
+      return;
+    }
+    const filename =
+      originalFilename || `${title}.${(fileType || "pdf").toLowerCase()}`;
+    const resolvedMime = mimeType || "application/octet-stream";
+
+    toast.loading(`Downloading ${title}...`, { id: docId });
+    downloadDocMutation.mutate(
+      { eventId, documentId: docId },
+      {
+        onSuccess: (resData: any) => {
+          const base64Content = resData?.data?.fileData;
+          if (base64Content) {
+            triggerBase64Download(
+              base64Content,
+              filename,
+              resData?.data?.mimeType || resolvedMime,
+            );
+            toast.dismiss(docId);
+          } else {
+            toast.error("No file content found in the document.", {
+              id: docId,
+            });
+          }
+        },
+        onError: (err: any) => {
+          toast.error(
+            err?.response?.data?.message || "Failed to download document.",
+            { id: docId },
+          );
+        },
+      },
+    );
+  };
 
   if (isLoading) {
     return <Loader variant="page" text="Loading Documents..." />;
@@ -119,8 +196,15 @@ export default function DocumentsPage() {
           </thead>
           <tbody>
             {documents.map((doc) => {
-              const typeConfig = TYPE_CONFIG[doc.type] ?? TYPE_CONFIG.NOTICE;
+              const docType = (
+                doc.documentType ||
+                doc.type ||
+                "NOTICE"
+              ).toUpperCase();
+              const typeConfig = TYPE_CONFIG[docType] ?? TYPE_CONFIG.NOTICE;
               const TypeIcon = typeConfig.icon;
+              const eventTitle = doc.eventName || doc.eventTitle || "—";
+              const sizeLabel = doc.sizeLabel || doc.fileSize || "—";
               return (
                 <tr key={doc.id} className="attend-table-row">
                   <td className="px-5 py-3">
@@ -151,10 +235,10 @@ export default function DocumentsPage() {
                     </span>
                   </td>
                   <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[180px] truncate">
-                    {doc.eventTitle}
+                    {eventTitle}
                   </td>
                   <td className="px-5 py-3 text-sm font-mono text-[hsl(var(--muted-foreground))]">
-                    {doc.fileSize}
+                    {sizeLabel}
                   </td>
                   <td className="px-5 py-3 text-sm font-medium tabular-nums">
                     {doc.downloadCount?.toLocaleString() || 0}
@@ -167,14 +251,18 @@ export default function DocumentsPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-xs gap-1"
-                        onClick={() => {
-                          if (doc.url) {
-                            window.open(doc.url, "_blank");
-                          } else {
-                            toast.error("Download URL not available");
-                          }
-                        }}
+                        className="h-7 text-xs gap-1 hover:bg-[hsl(var(--primary)/0.05)] hover:text-[hsl(var(--primary))] transition-colors"
+                        onClick={() =>
+                          handleDownload(
+                            doc.eventId,
+                            doc.id,
+                            doc.title,
+                            doc.originalFilename,
+                            doc.fileType,
+                            doc.mimeType,
+                          )
+                        }
+                        disabled={downloadDocMutation.isPending}
                       >
                         <Download className="h-3 w-3" />
                         Download
@@ -194,10 +282,10 @@ export default function DocumentsPage() {
 
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-[hsl(var(--border)/0.6)]">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              disabled={page === 0} 
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 0}
               onClick={() => setPage((p) => p - 1)}
             >
               Previous
@@ -205,10 +293,10 @@ export default function DocumentsPage() {
             <span className="text-sm text-[hsl(var(--muted-foreground))]">
               Page {page + 1} of {totalPages}
             </span>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              disabled={page >= totalPages - 1} 
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages - 1}
               onClick={() => setPage((p) => p + 1)}
             >
               Next
