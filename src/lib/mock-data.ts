@@ -107,6 +107,15 @@ export interface AppDocument {
   downloadCount: number;
 }
 
+export interface ProxyVoteEntry {
+  for: number;
+  against: number;
+  abstain: number;
+  forUnits: number;
+  againstUnits: number;
+  abstainUnits: number;
+}
+
 export interface LiveVote {
   resolutionId: string;
   title: string;
@@ -114,6 +123,9 @@ export interface LiveVote {
   against: number;
   abstain: number;
   status: "pending" | "open" | "closed";
+  countdownSeconds?: number;
+  proxyVotes?: ProxyVoteEntry;
+  result?: "passed" | "failed";
 }
 
 export interface LivePoll {
@@ -356,7 +368,7 @@ export const MOCK_DOCUMENTS: AppDocument[] = [
 export const MOCK_LIVE_VOTES: LiveVote[] = [
   { resolutionId: "res_001", title: "Adoption of Financial Statements", for: 4200000, against: 50000, abstain: 20000, status: "closed" },
   { resolutionId: "res_002", title: "Declaration of Final Dividend of ₦3.50/share", for: 4180000, against: 70000, abstain: 20000, status: "closed" },
-  { resolutionId: "res_003", title: "Re-election of Directors", for: 2100000, against: 340000, abstain: 95000, status: "open" },
+  { resolutionId: "res_003", title: "Re-election of Directors", for: 2100000, against: 340000, abstain: 95000, status: "open", countdownSeconds: 45 },
   { resolutionId: "res_004", title: "Appointment of PricewaterhouseCoopers as Auditors", for: 0, against: 0, abstain: 0, status: "pending" },
 ];
 
@@ -377,7 +389,7 @@ export const MOCK_LIVE_SESSIONS: LiveSession[] = [
     votes: [
       { resolutionId: "res_001", title: "Adoption of Financial Statements", for: 4200000, against: 50000, abstain: 20000, status: "closed" },
       { resolutionId: "res_002", title: "Declaration of Final Dividend of ₦3.50/share", for: 4180000, against: 70000, abstain: 20000, status: "closed" },
-      { resolutionId: "res_003", title: "Re-election of Directors", for: 2100000, against: 340000, abstain: 95000, status: "open" },
+      { resolutionId: "res_003", title: "Re-election of Directors", for: 2100000, against: 340000, abstain: 95000, status: "open", countdownSeconds: 45 },
       { resolutionId: "res_004", title: "Appointment of PricewaterhouseCoopers as Auditors", for: 0, against: 0, abstain: 0, status: "pending" },
     ],
     polls: [],

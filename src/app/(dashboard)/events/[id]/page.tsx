@@ -94,7 +94,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     "Overview",
     "Attendees",
     "Documents",
-    "Agenda",
+    isAGM ? "Resolutions" : "Agenda",
     "Broadcast",
     ...(isAGM ? ["Vote Results", "Post-AGM"] : []),
     ...(isLAUNCH ? ["Audience Tiers"] : []),
@@ -220,8 +220,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             {agendaItems.length > 0 && (
               <Card className="attend-card p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="font-semibold text-[hsl(var(--foreground))]">Agenda</h2>
-                  <button onClick={() => setTab("Agenda")} className="text-xs text-[hsl(var(--primary))] hover:underline">Edit →</button>
+                  <h2 className="font-semibold text-[hsl(var(--foreground))]">{isAGM ? "Resolutions" : "Agenda"}</h2>
+                  <button onClick={() => setTab(isAGM ? "Resolutions" : "Agenda")} className="text-xs text-[hsl(var(--primary))] hover:underline">Edit →</button>
                 </div>
                 <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
                   {agendaItems.slice(0, 4).map((item) => (
@@ -380,42 +380,54 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {/* ── Agenda ── */}
-      {tab === "Agenda" && (
+      {/* ── Agenda / Resolutions ── */}
+      {(tab === "Agenda" || tab === "Resolutions") && (
         <Card className="attend-card p-5">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="font-semibold text-[hsl(var(--foreground))]">Agenda Items</h2>
+            <div>
+              <h2 className="font-semibold text-[hsl(var(--foreground))]">{isAGM ? "Resolutions" : "Agenda Items"}</h2>
+              {isAGM && <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">Each resolution will be voted on individually during the meeting. Voting is initiated from the Live Control Room.</p>}
+            </div>
             <Button size="sm" variant="outline" onClick={addAgendaItem} className="gap-1.5">
-              <PlusCircle className="h-3.5 w-3.5" /> Add Item
+              <PlusCircle className="h-3.5 w-3.5" /> {isAGM ? "Add Resolution" : "Add Item"}
             </Button>
           </div>
           <div className="flex flex-col gap-3">
-            {agendaItems.map((item) => (
+            {agendaItems.map((item, idx) => (
               <div key={item.id} className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-2">
-                  <Label className="mb-1.5">Time</Label>
+                {!isAGM && (
+                  <div className="col-span-2">
+                    <Label className="mb-1.5">Time</Label>
+                    <Input
+                      placeholder="10:00 AM"
+                      value={item.time}
+                      onChange={(e) => updateAgendaItem(item.id, "time", e.target.value)}
+                    />
+                  </div>
+                )}
+                {isAGM && (
+                  <div className="col-span-2 flex items-center pb-1">
+                    <span className="text-xs font-bold text-[hsl(var(--muted-foreground))]">RES. {idx + 1}</span>
+                  </div>
+                )}
+                <div className={isAGM ? "col-span-9" : "col-span-5"}>
+                  <Label className="mb-1.5">{isAGM ? "Resolution title" : "Title"}</Label>
                   <Input
-                    placeholder="10:00 AM"
-                    value={item.time}
-                    onChange={(e) => updateAgendaItem(item.id, "time", e.target.value)}
-                  />
-                </div>
-                <div className="col-span-5">
-                  <Label className="mb-1.5">Title</Label>
-                  <Input
-                    placeholder="Agenda item title"
+                    placeholder={isAGM ? "e.g. Adoption of Financial Statements" : "Agenda item title"}
                     value={item.title}
                     onChange={(e) => updateAgendaItem(item.id, "title", e.target.value)}
                   />
                 </div>
-                <div className="col-span-4">
-                  <Label className="mb-1.5">Speaker (optional)</Label>
-                  <Input
-                    placeholder="Speaker name"
-                    value={item.speaker ?? ""}
-                    onChange={(e) => updateAgendaItem(item.id, "speaker", e.target.value)}
-                  />
-                </div>
+                {!isAGM && (
+                  <div className="col-span-4">
+                    <Label className="mb-1.5">Speaker (optional)</Label>
+                    <Input
+                      placeholder="Speaker name"
+                      value={item.speaker ?? ""}
+                      onChange={(e) => updateAgendaItem(item.id, "speaker", e.target.value)}
+                    />
+                  </div>
+                )}
                 <div className="col-span-1 flex justify-center pb-1">
                   <button
                     type="button"
@@ -428,12 +440,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               </div>
             ))}
             {agendaItems.length === 0 && (
-              <p className="text-sm text-[hsl(var(--muted-foreground))] py-6 text-center">No agenda items yet. Click &quot;Add Item&quot; to start.</p>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] py-6 text-center">
+                {isAGM ? "No resolutions yet. Add resolutions that shareholders will vote on." : "No agenda items yet. Click \"Add Item\" to start."}
+              </p>
             )}
           </div>
           {agendaItems.length > 0 && (
             <div className="flex justify-end mt-4 pt-4 border-t border-[hsl(var(--border))]">
-              <Button size="sm" onClick={() => toast.success("Agenda saved!")}>Save Agenda</Button>
+              <Button size="sm" onClick={() => toast.success(isAGM ? "Resolutions saved!" : "Agenda saved!")}>{isAGM ? "Save Resolutions" : "Save Agenda"}</Button>
             </div>
           )}
         </Card>

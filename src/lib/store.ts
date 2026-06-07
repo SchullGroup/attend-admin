@@ -1,6 +1,6 @@
 "use client";
 import { create } from "zustand";
-import { CURRENT_ADMIN, MOCK_EVENTS, MOCK_PARTICIPANTS, MOCK_APPLICATIONS, MOCK_DOCUMENTS, MOCK_LIVE_VOTES, MOCK_LIVE_SESSIONS, MOCK_ORGANISERS, MOCK_REGISTRARS, MOCK_AUDIT_LOG, MOCK_TEAM, type AdminUser, type AttendEvent, type Participant, type HackathonApplication, type AppDocument, type LiveVote, type LiveSession, type Organiser, type Registrar, type AuditLogEntry, type AuditSeverity, type AuditCategory, type TeamMember } from "./mock-data";
+import { CURRENT_ADMIN, MOCK_EVENTS, MOCK_PARTICIPANTS, MOCK_APPLICATIONS, MOCK_DOCUMENTS, MOCK_LIVE_VOTES, MOCK_LIVE_SESSIONS, MOCK_ORGANISERS, MOCK_REGISTRARS, MOCK_AUDIT_LOG, MOCK_TEAM, type AdminUser, type AttendEvent, type Participant, type HackathonApplication, type AppDocument, type LiveVote, type LiveSession, type Organiser, type Registrar, type AuditLogEntry, type AuditSeverity, type AuditCategory, type TeamMember, type ProxyVoteEntry } from "./mock-data";
 
 
 interface AttendAdminStore {
@@ -24,8 +24,9 @@ interface AttendAdminStore {
   login: (email: string) => void;
   logout: () => void;
   seedStore: () => void;
-  openVoting: (sessionId: string, resolutionId: string) => void;
+  openVoting: (sessionId: string, resolutionId: string, durationSeconds?: number) => void;
   closeVoting: (sessionId: string, resolutionId: string) => void;
+  submitProxyVotes: (sessionId: string, resolutionId: string, proxyVotes: ProxyVoteEntry) => void;
   approveQA: (sessionId: string, qaId: string) => void;
   rejectQA: (sessionId: string, qaId: string) => void;
   updateApplicationStatus: (id: string, status: HackathonApplication["status"]) => void;
@@ -78,19 +79,27 @@ export const useStore = create<AttendAdminStore>((set) => ({
     auditLog: MOCK_AUDIT_LOG,
     team: MOCK_TEAM,
   }),
-  openVoting: (sessionId, resolutionId) => set((s) => ({
-    liveVotes: s.liveVotes.map((v) => v.resolutionId === resolutionId ? { ...v, status: "open" as const } : v),
+  openVoting: (sessionId, resolutionId, durationSeconds) => set((s) => ({
+    liveVotes: s.liveVotes.map((v) => v.resolutionId === resolutionId ? { ...v, status: "open" as const, ...(durationSeconds ? { countdownSeconds: durationSeconds } : {}) } : v),
     liveSessions: s.liveSessions.map((sess) =>
       sess.id === sessionId
-        ? { ...sess, votes: sess.votes.map((v) => v.resolutionId === resolutionId ? { ...v, status: "open" as const } : v) }
+        ? { ...sess, votes: sess.votes.map((v) => v.resolutionId === resolutionId ? { ...v, status: "open" as const, ...(durationSeconds ? { countdownSeconds: durationSeconds } : {}) } : v) }
         : sess
     ),
   })),
   closeVoting: (sessionId, resolutionId) => set((s) => ({
-    liveVotes: s.liveVotes.map((v) => v.resolutionId === resolutionId ? { ...v, status: "closed" as const } : v),
+    liveVotes: s.liveVotes.map((v) => v.resolutionId === resolutionId ? { ...v, status: "closed" as const, result: (v.for + (v.proxyVotes?.for ?? 0)) > (v.against + (v.proxyVotes?.against ?? 0)) ? "passed" as const : "failed" as const } : v),
     liveSessions: s.liveSessions.map((sess) =>
       sess.id === sessionId
-        ? { ...sess, votes: sess.votes.map((v) => v.resolutionId === resolutionId ? { ...v, status: "closed" as const } : v) }
+        ? { ...sess, votes: sess.votes.map((v) => v.resolutionId === resolutionId ? { ...v, status: "closed" as const, result: (v.for + (v.proxyVotes?.for ?? 0)) > (v.against + (v.proxyVotes?.against ?? 0)) ? "passed" as const : "failed" as const } : v) }
+        : sess
+    ),
+  })),
+  submitProxyVotes: (sessionId, resolutionId, proxyVotes) => set((s) => ({
+    liveVotes: s.liveVotes.map((v) => v.resolutionId === resolutionId ? { ...v, proxyVotes } : v),
+    liveSessions: s.liveSessions.map((sess) =>
+      sess.id === sessionId
+        ? { ...sess, votes: sess.votes.map((v) => v.resolutionId === resolutionId ? { ...v, proxyVotes } : v) }
         : sess
     ),
   })),

@@ -84,29 +84,79 @@ function SessionTab({ session, active, onClick }: { session: LiveSession; active
 
 // ── Resolution panel ──────────────────────────────────────────────────────────
 
-function ResolutionsPanel({ session, onOpen, onClose }: { session: LiveSession; onOpen: (resId: string) => void; onClose: (resId: string) => void }) {
+type ProxyInputs = { for: string; against: string; abstain: string; forUnits: string; againstUnits: string; abstainUnits: string };
+
+function ResolutionsPanel({
+  session, onOpen, onClose, onProxyVotes,
+}: {
+  session: LiveSession;
+  onOpen: (resId: string, duration: number) => void;
+  onClose: (resId: string) => void;
+  onProxyVotes: (resId: string, proxy: import("@/lib/mock-data").ProxyVoteEntry) => void;
+}) {
   const [durations, setDurations] = useState<Record<string, string>>(() =>
-    Object.fromEntries(session.votes.map((v) => [v.resolutionId, "30"]))
+    Object.fromEntries(session.votes.map((v) => [v.resolutionId, String(v.countdownSeconds ?? 30)]))
   );
   const [countdowns, setCountdowns] = useState<Record<string, number>>({});
+  const [showProxy, setShowProxy] = useState<Record<string, boolean>>({});
+  const [proxyInputs, setProxyInputs] = useState<Record<string, ProxyInputs>>(() =>
+    Object.fromEntries(session.votes.map((v) => [v.resolutionId, { for: "", against: "", abstain: "", forUnits: "", againstUnits: "", abstainUnits: "" }]))
+  );
   const timers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
 
-  function startCountdown(resId: string) {
-    const secs = Math.max(1, parseInt(durations[resId] ?? "30", 10) || 30);
+  function runTimer(resId: string, secs: number) {
+    clearInterval(timers.current[resId]);
     setCountdowns((prev) => ({ ...prev, [resId]: secs }));
-    onOpen(resId);
     timers.current[resId] = setInterval(() => {
       setCountdowns((prev) => {
         const remaining = (prev[resId] ?? 0) - 1;
         if (remaining <= 0) {
           clearInterval(timers.current[resId]);
           onClose(resId);
+          toast.success(`Voting closed — ${session.votes.find((v) => v.resolutionId === resId)?.title ?? "Resolution"}`);
           return { ...prev, [resId]: 0 };
         }
         return { ...prev, [resId]: remaining };
       });
     }, 1000);
   }
+
+  function startCountdown(resId: string) {
+    const secs = Math.max(5, parseInt(durations[resId] ?? "30", 10) || 30);
+    runTimer(resId, secs);
+    onOpen(resId, secs);
+    toast.success(`Voting open — ${session.votes.find((v) => v.resolutionId === resId)?.title ?? "Resolution"} · ${secs}s`);
+  }
+
+  function forceClose(resId: string) {
+    clearInterval(timers.current[resId]);
+    setCountdowns((prev) => ({ ...prev, [resId]: 0 }));
+    onClose(resId);
+    toast.success(`Voting closed — ${session.votes.find((v) => v.resolutionId === resId)?.title ?? "Resolution"}`);
+  }
+
+  function saveProxyVotes(resId: string) {
+    const p = proxyInputs[resId];
+    if (!p) return;
+    onProxyVotes(resId, {
+      for: parseInt(p.for || "0", 10),
+      against: parseInt(p.against || "0", 10),
+      abstain: parseInt(p.abstain || "0", 10),
+      forUnits: parseInt(p.forUnits || "0", 10),
+      againstUnits: parseInt(p.againstUnits || "0", 10),
+      abstainUnits: parseInt(p.abstainUnits || "0", 10),
+    });
+    toast.success("Proxy votes saved and combined with digital totals.");
+  }
+
+  useEffect(() => {
+    session.votes.forEach((v) => {
+      if (v.status === "open" && v.countdownSeconds && countdowns[v.resolutionId] == null) {
+        runTimer(v.resolutionId, v.countdownSeconds);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const t = timers.current;
@@ -142,14 +192,29 @@ function ResolutionsPanel({ session, onOpen, onClose }: { session: LiveSession; 
       </div>
       <div className="divide-y divide-[hsl(var(--border))]">
         {session.votes.map((v, i) => {
-          const total = v.for + v.against + v.abstain;
+          const proxy = v.proxyVotes;
+          const digitalTotal = v.for + v.against + v.abstain;
+          const combinedFor = v.for + (proxy?.for ?? 0);
+          const combinedAgainst = v.against + (proxy?.against ?? 0);
+          const combinedAbstain = v.abstain + (proxy?.abstain ?? 0);
+          const combinedTotal = combinedFor + combinedAgainst + combinedAbstain;
+          const passed = v.result === "passed";
+          const remaining = countdowns[v.resolutionId];
+          const isUrgent = remaining != null && remaining <= 10 && remaining > 0;
+
           return (
             <div key={v.resolutionId} className="px-5 py-4">
+              {/* Header row */}
               <div className="flex items-start justify-between gap-4 mb-3">
-                <div>
-                  <div className="flex items-center gap-2.5 mb-1">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2.5 mb-1 flex-wrap">
                     <span className="text-xs font-bold text-[hsl(var(--muted-foreground))]">RES. {i + 1}</span>
                     <StatusBadge status={v.status} />
+                    {v.status === "closed" && (
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${passed ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                        {passed ? "PASSED" : "FAILED"}
+                      </span>
+                    )}
                   </div>
                   <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{v.title}</div>
                 </div>
@@ -167,38 +232,86 @@ function ResolutionsPanel({ session, onOpen, onClose }: { session: LiveSession; 
                         />
                         <span className="text-xs text-[hsl(var(--muted-foreground))]">sec</span>
                       </div>
-                      <Button size="sm" className="h-7 text-xs" onClick={() => startCountdown(v.resolutionId)}>
-                        Open Voting
+                      <Button size="sm" className="h-7 text-xs gap-1" onClick={() => startCountdown(v.resolutionId)}>
+                        <Vote className="h-3 w-3" /> Start Voting
                       </Button>
                     </div>
                   )}
                   {v.status === "open" && (
                     <div className="flex items-center gap-2">
-                      {countdowns[v.resolutionId] != null && countdowns[v.resolutionId] > 0 && (
-                        <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200">
-                          <Clock className="h-3.5 w-3.5 text-amber-600" />
-                          <span className="text-sm font-bold tabular-nums text-amber-700">{countdowns[v.resolutionId]}s</span>
+                      {remaining != null && remaining > 0 && (
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${isUrgent ? "bg-red-50 border-red-200 animate-pulse" : "bg-amber-50 border-amber-200"}`}>
+                          <Clock className={`h-3.5 w-3.5 ${isUrgent ? "text-red-600" : "text-amber-600"}`} />
+                          <span className={`text-base font-bold tabular-nums ${isUrgent ? "text-red-700" : "text-amber-700"}`}>{remaining}s</span>
                         </div>
                       )}
-                      <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => { clearInterval(timers.current[v.resolutionId]); onClose(v.resolutionId); }}>
-                        Close Voting
+                      <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => forceClose(v.resolutionId)}>
+                        Force Close
                       </Button>
                     </div>
                   )}
                 </div>
               </div>
-              {(v.status === "open" || v.status === "closed") && total > 0 && (
+
+              {/* Vote bars */}
+              {(v.status === "open" || v.status === "closed") && combinedTotal > 0 && (
                 <div className="flex flex-col gap-2 mt-3 bg-[hsl(var(--muted)/0.4)] rounded-xl p-3">
-                  <VoteBar label="For" value={v.for} total={total} color="#16a34a" />
-                  <VoteBar label="Against" value={v.against} total={total} color="#dc2626" />
-                  <VoteBar label="Abstain" value={v.abstain} total={total} color="#9ca3af" />
-                  <div className="pt-1 mt-1 border-t border-[hsl(var(--border))] text-xs text-[hsl(var(--muted-foreground))]">
-                    Total votes cast: <span className="font-semibold text-[hsl(var(--foreground))]">{total.toLocaleString()}</span>
+                  <VoteBar label="For" value={combinedFor} total={combinedTotal} color="#16a34a" />
+                  <VoteBar label="Against" value={combinedAgainst} total={combinedTotal} color="#dc2626" />
+                  <VoteBar label="Abstain" value={combinedAbstain} total={combinedTotal} color="#9ca3af" />
+                  <div className="pt-1 mt-1 border-t border-[hsl(var(--border))] flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
+                    <span>Digital votes: <span className="font-semibold text-[hsl(var(--foreground))]">{digitalTotal.toLocaleString()}</span></span>
+                    {proxy && <span>+ Proxy: <span className="font-semibold text-[hsl(var(--foreground))]">{(proxy.for + proxy.against + proxy.abstain).toLocaleString()}</span></span>}
+                    <span>Total: <span className="font-semibold text-[hsl(var(--foreground))]">{combinedTotal.toLocaleString()}</span></span>
                   </div>
                 </div>
               )}
+
               {v.status === "pending" && (
-                <div className="text-xs text-[hsl(var(--muted-foreground))] mt-2 italic">Voting not yet opened for this resolution.</div>
+                <div className="text-xs text-[hsl(var(--muted-foreground))] mt-2 italic">Set a duration above and press Start Voting when the chairman calls this resolution.</div>
+              )}
+
+              {/* Proxy vote entry — closed resolutions, hybrid events */}
+              {v.status === "closed" && session.format === "hybrid" && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    className="flex items-center gap-1.5 text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                    onClick={() => setShowProxy((prev) => ({ ...prev, [v.resolutionId]: !prev[v.resolutionId] }))}
+                  >
+                    <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showProxy[v.resolutionId] ? "rotate-90" : ""}`} />
+                    Enter proxy votes (physical ballots)
+                  </button>
+                  {showProxy[v.resolutionId] && (
+                    <div className="mt-2 p-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] space-y-2">
+                      <p className="text-xs text-[hsl(var(--muted-foreground))]">Enter counts from physically submitted proxy forms. These are combined with digital votes above.</p>
+                      {(["for", "against", "abstain"] as const).map((key) => (
+                        <div key={key} className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-[hsl(var(--foreground))] w-14 capitalize">{key}</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="Count"
+                            value={proxyInputs[v.resolutionId]?.[key] ?? ""}
+                            onChange={(e) => setProxyInputs((prev) => ({ ...prev, [v.resolutionId]: { ...prev[v.resolutionId], [key]: e.target.value } }))}
+                            className="h-7 w-24 text-xs px-2"
+                          />
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="Units"
+                            value={proxyInputs[v.resolutionId]?.[`${key}Units` as keyof ProxyInputs] ?? ""}
+                            onChange={(e) => setProxyInputs((prev) => ({ ...prev, [v.resolutionId]: { ...prev[v.resolutionId], [`${key}Units`]: e.target.value } }))}
+                            className="h-7 w-28 text-xs px-2"
+                          />
+                        </div>
+                      ))}
+                      <Button size="sm" className="h-7 text-xs mt-1" onClick={() => saveProxyVotes(v.resolutionId)}>
+                        Save Proxy Votes
+                      </Button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           );
@@ -490,7 +603,7 @@ const MODULE_COLORS: Record<string, string> = {
 };
 
 export default function LiveControlPage() {
-  const { liveSessions, openVoting, closeVoting, approveQA, rejectQA, launchPoll, closePoll, releasePressKit, declareWinner } = useStore();
+  const { liveSessions, openVoting, closeVoting, submitProxyVotes, approveQA, rejectQA, launchPoll, closePoll, releasePressKit, declareWinner } = useStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [streamInputs, setStreamInputs] = useState<Record<string, string>>({});
   const [streamUrls, setStreamUrls] = useState<Record<string, string>>(DEFAULT_STREAM_URLS);
@@ -791,8 +904,9 @@ export default function LiveControlPage() {
         <div className="col-span-2 flex flex-col gap-5">
           <ResolutionsPanel
             session={session}
-            onOpen={(resId) => openVoting(session.id, resId)}
+            onOpen={(resId, duration) => openVoting(session.id, resId, duration)}
             onClose={(resId) => closeVoting(session.id, resId)}
+            onProxyVotes={(resId, proxy) => submitProxyVotes(session.id, resId, proxy)}
           />
           <PollManagementPanel
             session={session}
