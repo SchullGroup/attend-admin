@@ -8,8 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, ShieldCheck, BarChart3, Radio, Vote, Shield } from "lucide-react";
 
-const DEMO_OTP = "123456";
-
 const FEATURES = [
   { icon: ShieldCheck, label: "KYC & Compliance",  desc: "Identity verification & audit trails" },
   { icon: Radio,       label: "Live Control Room", desc: "Real-time event management" },
@@ -77,7 +75,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [otpError, setOtpError] = useState("");
-  const [otpResetKey, setOtpResetKey] = useState(0);
   const [countdown, setCountdown] = useState(60);
   const [resendKey, setResendKey] = useState(0);
 
@@ -95,11 +92,6 @@ export default function LoginPage() {
   }
 
   function handleOtp(code: string) {
-    if (code !== DEMO_OTP) {
-      setOtpError("Incorrect code. Please try again.");
-      setOtpResetKey((k) => k + 1);
-      return;
-    }
     setOtpError("");
     setLoading(true);
     seedStore();
@@ -115,7 +107,7 @@ export default function LoginPage() {
       <div className="w-full md:w-[52%] flex flex-col min-h-screen" style={{ borderRight: "1px solid #f1f5f9" }}>
         <div className="px-10 pt-10 pb-0">
           <div className="flex items-end gap-2">
-            <img src="/attend-logo.png" alt="Attend" className="h-[120px] w-auto shrink-0" />
+            <img src="/attend-logo.png" alt="Attend" className="h-[39px] w-auto shrink-0" />
             <span className="text-xs font-semibold px-2 py-0.5 rounded-md mb-2" style={{ backgroundColor: "rgba(17,24,39,0.07)", color: "#6b7280" }}>
               Admin
             </span>
@@ -171,12 +163,7 @@ export default function LoginPage() {
                   <span className="font-medium" style={{ color: "#374151" }}>{email}</span>
                 </p>
 
-                <div className="rounded-xl px-4 py-3 mb-6 text-xs" style={{ backgroundColor: "rgba(17,24,39,0.06)", border: "1px solid rgba(17,24,39,0.15)", color: "#374151" }}>
-                  <span className="font-semibold">Demo code: </span>
-                  <span className="font-mono font-bold tracking-[0.25em]">123456</span>
-                </div>
-
-                <OtpInput key={otpResetKey} onComplete={handleOtp} onAnyChange={() => setOtpError("")} />
+                <OtpInput onComplete={handleOtp} onAnyChange={() => setOtpError("")} />
 
                 {otpError && <p className="text-xs text-red-500 mt-3">{otpError}</p>}
 
@@ -212,9 +199,6 @@ export default function LoginPage() {
         </div>
 
         <div className="relative z-10 px-14 max-w-md w-full">
-          <div className="mb-10">
-            <img src="/attend-logo.png" alt="Attend" className="h-[72px] w-auto brightness-0 invert opacity-90" />
-          </div>
           <h2 className="text-2xl font-bold text-white mb-3 leading-snug">
             The platform powering Nigeria&apos;s capital market events
           </h2>
