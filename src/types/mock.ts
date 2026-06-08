@@ -1,3 +1,5 @@
+import { Type } from "lucide-react";
+
 export type EventModule = "AGM" | "LAUNCH" | "HACKATHON" | "GENERAL";
 export type EventStatus =
   | "draft"
@@ -15,6 +17,20 @@ export type ApplicationStatus =
   | "not_progressed";
 export type StakeholderStatus = "active" | "suspended" | "pending";
 
+export type Organiser = {
+  name: string;
+  rcNumber: string;
+  email: string;
+  contactEmail: string;
+  phone: string;
+  logo: string;
+  id: string;
+  status: string;
+  industry: string;
+  plan: string;
+  enrolledAt: string;
+  eventsCount: number;
+};
 export interface Stakeholder {
   id: string;
   name: string;
@@ -94,6 +110,19 @@ export interface AppDocument {
   downloadCount: number;
 }
 
+export type AgendaItem = {
+  id: string;
+  title: string;
+  durationMinutes?: number;
+  isCurrent?: boolean;
+  time?: string;
+  speaker?: string;
+
+  // Type '(AgendaItem | { id: string; time: string; title: string; speaker: string; })[]' is not assignable to type 'AgendaItem[]'.
+  // Type 'AgendaItem | { id: string; time: string; title: string; speaker: string; }' is not assignable to type 'AgendaItem'.
+  //   Type '{ id: string; time: string; title: string; speaker: string; }' is missing the following properties from type 'AgendaItem': durationMinutes, isCurrentts(2345)
+};
+
 export interface LiveVote {
   resolutionId: string;
   title: string;
@@ -101,6 +130,10 @@ export interface LiveVote {
   against: number;
   abstain: number;
   status: "pending" | "open" | "closed";
+  durationSeconds?: number;
+  proxyVotes?: { for: number; against: number; abstain: number };
+  totalVotes?: number;
+  result?: string | null;
 }
 
 export interface LivePoll {
@@ -153,3 +186,41 @@ export interface LiveSession {
   recentJoins: LiveRecentJoin[];
   status?: string;
 }
+
+export type ProxyVoteEntry = {
+  for: number;
+  against: number;
+  abstain: number;
+  minutes?: number;
+  forUnits?: number;
+  againstUnits?: number;
+  abstainUnits?: number;
+};
+
+export type Registrar = {
+  id: string;
+  name: string;
+  repName: string;
+  repEmail: string;
+  repPhone: string;
+  rcNumber: string;
+  email: string;
+  contactEmail: string;
+  phone: string;
+  logo: string;
+  status: StakeholderStatus;
+  industry: string;
+  plan: string;
+  enrolledAt: string;
+  eventsCount: number;
+  registersCount: number;
+};
+
+export type TeamMember = {
+  id: string;
+  name: string;
+  email: string;
+  role: "Viewer" | "Admin" | "Editor" | "Judge" | "Event Manager";
+  avatar?: string;
+  joinedAt: string;
+};

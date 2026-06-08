@@ -19,6 +19,9 @@ import {
   Building2,
   ClipboardList,
   QrCode,
+  PlusCircle,
+  ScrollText,
+  Users2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe, useLogout } from "@/api/auth/hooks";
@@ -33,6 +36,7 @@ const SECTIONS = [
   {
     label: "Platform Events",
     items: [
+      { title: "Create Event", icon: PlusCircle, href: "/events/create" },
       { title: "All Events", icon: CalendarDays, href: "/events" },
       { title: "Live Control Room", icon: Radio, href: "/events/live" },
       { title: "QR Check-In", icon: QrCode, href: "/events/qr-checkin" },
@@ -52,14 +56,17 @@ const SECTIONS = [
     ],
   },
   {
-    label: "Stakeholders",
+    label: "Registrars",
     items: [
-      { title: "All Stakeholders", icon: Building2, href: "/stakeholders" },
-      {
-        title: "Pending Enrollments",
-        icon: ClipboardList,
-        href: "/stakeholders/pending",
-      },
+      { title: "All Registrars", icon: Building2, href: "/registrars" },
+      { title: "Enrol Registrar", icon: PlusCircle, href: "/registrars/enrol" },
+    ],
+  },
+  {
+    label: "Registers",
+    items: [
+      { title: "All Registers", icon: ClipboardList, href: "/registers" },
+      { title: "Enrol Register", icon: UserCog, href: "/registers/enrol" },
     ],
   },
   {
@@ -74,16 +81,21 @@ const SECTIONS = [
     items: [
       { title: "Documents", icon: FolderOpen, href: "/documents" },
       { title: "Analytics", icon: BarChart3, href: "/analytics" },
+      { title: "Audit Log", icon: ScrollText, href: "/audit" },
       { title: "Settings", icon: Settings, href: "/settings" },
       { title: "Roles & Access", icon: UserCog, href: "/settings/roles" },
+      { title: "Team Members", icon: Users2, href: "/settings/team" },
     ],
   },
 ];
 
 const ALL_HREFS = [
   ...SECTIONS.flatMap((s) => s.items.map((i) => i.href)),
-  "/stakeholders",
-  "/stakeholders/pending",
+  "/registrars",
+  "/registrars/enrol",
+  "/registers",
+  "/registers/enrol",
+  "/settings/team",
 ];
 
 function isActive(href: string, pathname: string): boolean {

@@ -1,11 +1,21 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useLogin } from "@/api/auth/hooks";
+import Link from "next/link";
+import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, ShieldCheck, BarChart3, Radio, Vote } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  BarChart3,
+  Radio,
+  Vote,
+  Shield,
+} from "lucide-react";
+import { useLogin } from "@/api/auth/hooks";
 import { toast } from "sonner";
 
 const FEATURES = [
@@ -31,12 +41,80 @@ const FEATURES = [
   },
 ];
 
+function OtpInput({
+  onComplete,
+  onAnyChange,
+}: {
+  onComplete: (code: string) => void;
+  onAnyChange?: () => void;
+}) {
+  const [digits, setDigits] = useState(["", "", "", "", "", ""]);
+  const refs = useRef<(HTMLInputElement | null)[]>([]);
+
+  function handleChange(i: number, val: string) {
+    const d = val.replace(/\D/g, "").slice(-1);
+    const next = digits.map((v, idx) => (idx === i ? d : v));
+    setDigits(next);
+    onAnyChange?.();
+    if (d && i < 5) refs.current[i + 1]?.focus();
+    if (next.every(Boolean)) onComplete(next.join(""));
+  }
+
+  function handleKeyDown(i: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace" && !digits[i] && i > 0)
+      refs.current[i - 1]?.focus();
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    e.preventDefault();
+    const pasted = e.clipboardData
+      .getData("text")
+      .replace(/\D/g, "")
+      .slice(0, 6);
+    if (!pasted) return;
+    const next = ["", "", "", "", "", ""].map((_, i) => pasted[i] ?? "");
+    setDigits(next);
+    refs.current[Math.min(pasted.length, 5)]?.focus();
+    if (pasted.length === 6) onComplete(pasted);
+  }
+
+  return (
+    <div className="flex gap-2" onPaste={handlePaste}>
+      {digits.map((d, i) => (
+        <input
+          key={i}
+          ref={(el) => {
+            refs.current[i] = el;
+          }}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={d}
+          onChange={(e) => handleChange(i, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(i, e)}
+          className="h-12 w-12 rounded-lg text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-gray-900 transition-all"
+          style={{
+            border: `1.5px solid ${d ? "#111827" : "#e5e7eb"}`,
+            color: "#111827",
+            backgroundColor: d ? "rgba(17,24,39,0.04)" : "#ffffff",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function LoginPage() {
   const router = useRouter();
-  const { mutate: loginMutation, isPending } = useLogin();
+  const [step, setStep] = useState<"credentials" | "otp">("credentials");
   const [email, setEmail] = useState("stanley.jacob@meristem.com");
   const [password, setPassword] = useState("password");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [otpError, setOtpError] = useState("");
+  const [countdown, setCountdown] = useState(60);
+  const [resendKey, setResendKey] = useState(0);
+  const { mutate: loginMutation, isPending } = useLogin();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -51,11 +129,62 @@ export default function LoginPage() {
           toast.error(
             err?.response?.data?.message ||
               err?.message ||
-              "Invalid email or password"
+              "Invalid email or password",
           );
         },
-      }
+      },
     );
+  }
+
+  useEffect(() => {
+    if (step !== "otp") return;
+    setCountdown(60);
+    const interval = setInterval(
+      () => setCountdown((c) => Math.max(0, c - 1)),
+      1000,
+    );
+    return () => clearInterval(interval);
+  }, [step, resendKey]);
+
+  function handleCredentials(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      setStep("otp");
+    }, 600);
+  }
+
+  function handleOtp(code: string) {
+    setOtpError("");
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      setStep("credentials");
+    }, 600);
+    // addAuditEntry({
+    //   actor: "Admin User",
+    //   actorEmail: email,
+    //   actorRole: "super_admin",
+    //   action: "Signed in",
+    //   category: "auth",
+    //   resource: "Admin Portal",
+    //   details: "Successful credential verification",
+    //   ip: "197.210.xx.xx",
+    //   severity: "info",
+    // });
+    // addAuditEntry({
+    //   actor: "Admin User",
+    //   actorEmail: email,
+    //   actorRole: "super_admin",
+    //   action: "2FA verified",
+    //   category: "auth",
+    //   resource: "Admin Portal",
+    //   details: "OTP authentication completed successfully",
+    //   ip: "197.210.xx.xx",
+    //   severity: "info",
+    // });
+    setTimeout(() => router.push("/"), 400);
   }
 
   return (

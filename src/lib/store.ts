@@ -12,12 +12,22 @@ import {
 import type {
   AppDocument,
   LiveVote,
+  LivePoll,
   LiveSession,
   Stakeholder,
+  Organiser,
+  Registrar,
+  TeamMember,
 } from "@/types/mock";
 
 interface AttendAdminStore {
+  auditLog: any[];
+  addPoll: (sessionId: string, poll: LivePoll) => void;
   currentOrg: any | null;
+  currentUser: any | null;
+  enrollOrganiser: (id: string) => void;
+  suspendOrganiser: (id: string) => void;
+  uploadOrgLogo: any;
   stakeholders: Stakeholder[];
   events: any[];
   attendees: any[];
@@ -29,14 +39,32 @@ interface AttendAdminStore {
   liveAttendees: number;
   // Multi-session live control room
   liveSessions: LiveSession[];
+  organisers: Organiser[];
   selectedLiveSessionId: string;
+  registrars: Registrar[];
+  enrollRegistrar: (id: string) => void;
+  suspendRegistrar: (id: string) => void;
   setSelectedLiveSession: (id: string) => void;
   seedStore: () => void;
-  openVoting: (sessionId: string, resolutionId: string) => void;
+  openVoting: (
+    sessionId: string,
+    resolutionId: string,
+    duration?: number,
+  ) => void;
   closeVoting: (sessionId: string, resolutionId: string) => void;
   approveQA: (sessionId: string, qaId: string) => void;
   rejectQA: (sessionId: string, qaId: string) => void;
   updateApplicationStatus: (id: string, status: string) => void;
+  updatePoll: (
+    sessionId: string,
+    pollId: string,
+    poll: Partial<LivePoll>,
+  ) => void;
+  submitProxyVotes: (
+    sessionId: string,
+    resolutionId: string,
+    votes: Record<string, number>,
+  ) => void;
   deleteDocument: (id: string) => void;
   enrollStakeholder: (id: string) => void;
   suspendStakeholder: (id: string) => void;
@@ -46,11 +74,88 @@ interface AttendAdminStore {
   closePoll: (sessionId: string, pollId: string) => void;
   releasePressKit: (sessionId: string) => void;
   declareWinner: (sessionId: string, teamName: string) => void;
+
+  team: TeamMember[];
+  addTeamMember: (member: TeamMember) => void;
+  removeTeamMember: (id: string) => void;
 }
 
 export const useStore = create<AttendAdminStore>((set) => ({
+  team: [],
+  addTeamMember: (member) =>
+    set((s) => ({ team: [...s.team, member] })),
+  removeTeamMember: (id) =>
+    set((s) => ({ team: s.team.filter((member) => member.id !== id) })),
+  auditLog: [],
   currentOrg: null,
+  currentUser: {
+    orgName: "Meristem Securities Limited",
+    rcNumber: "—",
+    orgEmail: "[EMAIL_ADDRESS]",
+    orgPhone: "+2349132435798",
+  },
+  uploadOrgLogo: () => {},
+  addPoll: (sessionId, poll) =>
+    set((s) => ({
+      liveSessions: s.liveSessions.map((sess) =>
+        sess.id === sessionId
+          ? { ...sess, polls: [...sess.polls, poll] }
+          : sess,
+      ),
+    })),
+  updatePoll: (sessionId, pollId, poll) =>
+    set((s) => ({
+      liveSessions: s.liveSessions.map((sess) =>
+        sess.id === sessionId
+          ? {
+              ...sess,
+              polls: sess.polls.map((p) =>
+                p.id === pollId ? { ...p, ...poll } : p,
+              ),
+            }
+          : sess,
+      ),
+    })),
+  submitProxyVotes: (sessionId, resolutionId, votes) =>
+    set((s) => ({
+      liveSessions: s.liveSessions.map((sess) =>
+        sess.id === sessionId
+          ? {
+              ...sess,
+              votes: sess.votes.map((v) =>
+                v.resolutionId === resolutionId ? { ...v, ...votes } : v,
+              ),
+            }
+          : sess,
+      ),
+    })),
+  enrollOrganiser: (id) =>
+    set((s) => ({
+      organisers: s.organisers.map((org) =>
+        org.id === id ? { ...org, status: "active" as const } : org,
+      ),
+    })),
+  suspendOrganiser: (id) =>
+    set((s) => ({
+      organisers: s.organisers.map((org) =>
+        org.id === id ? { ...org, status: "suspended" as const } : org,
+      ),
+    })),
+  enrollRegistrar: (id) =>
+    set((s) => ({
+      registrars: s.registrars.map((reg) =>
+        reg.id === id ? { ...reg, status: "active" as const } : reg,
+      ),
+    })),
+  suspendRegistrar: (id) =>
+    set((s) => ({
+      registrars: s.registrars.map((reg) =>
+        reg.id === id ? { ...reg, status: "suspended" as const } : reg,
+      ),
+    })),
+  registrars: [],
   stakeholders: [],
+  organisers: [],
   events: [],
   attendees: [],
   documents: [],
@@ -73,10 +178,12 @@ export const useStore = create<AttendAdminStore>((set) => ({
       liveVotes: MOCK_LIVE_VOTES,
       liveSessions: MOCK_LIVE_SESSIONS,
     }),
-  openVoting: (sessionId, resolutionId) =>
+  openVoting: (sessionId, resolutionId, duration) =>
     set((s) => ({
       liveVotes: s.liveVotes.map((v) =>
-        v.resolutionId === resolutionId ? { ...v, status: "open" as const } : v,
+        v.resolutionId === resolutionId
+          ? { ...v, status: "open" as const, duration: duration }
+          : v,
       ),
       liveSessions: s.liveSessions.map((sess) =>
         sess.id === sessionId
@@ -84,7 +191,7 @@ export const useStore = create<AttendAdminStore>((set) => ({
               ...sess,
               votes: sess.votes.map((v) =>
                 v.resolutionId === resolutionId
-                  ? { ...v, status: "open" as const }
+                  ? { ...v, status: "open" as const, duration: duration }
                   : v,
               ),
             }
