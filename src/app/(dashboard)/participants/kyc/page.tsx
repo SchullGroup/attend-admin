@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Check, X, ShieldAlert, CheckCircle2, XCircle } from "lucide-react";
+import { Check, X, ShieldAlert, CheckCircle2, XCircle, Shield } from "lucide-react";
 import { useKycQueue, useApproveKyc, useDeclineKyc } from "@/api/participants";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -8,7 +8,13 @@ import { StatusBadge } from "@/components/custom/status-badge";
 import { formatDate } from "@/lib/utils";
 import { Loader } from "@/components/ui/Loader";
 
-const TABS = ["Pending", "Approved", "Rejected"];
+// Fix 2: tabs map to the exact status strings the API accepts
+const TABS: { label: string; status: string }[] = [
+  { label: "Pending KYC", status: "PENDING" },
+  { label: "Full KYC",    status: "FULL"    },
+  { label: "Basic KYC",   status: "BASIC"   },
+  { label: "No KYC",      status: "NONE"    },
+];
 
 function maskValue(val?: string) {
   if (!val) return "—";
@@ -16,21 +22,20 @@ function maskValue(val?: string) {
 }
 
 export default function KYCQueuePage() {
-  const [tab, setTab] = useState("Pending");
+  // Fix 2: activeStatus drives both the API param AND the React Query cache key
+  const [activeStatus, setActiveStatus] = useState("PENDING");
 
-  const statusMap: Record<string, string> = {
-    Pending: "PENDING",
-    Approved: "APPROVED",
-    Rejected: "DECLINED",
-  };
-
-  const { data: queueData, isLoading } = useKycQueue(statusMap[tab], 0, 50);
+  // Fix 2: key is ["admin", "kycQueue", activeStatus, page, limit] — unique per tab
+  // useKycQueue passes status via { params: { status, page, size } } internally
+  const { data: queueData, isLoading } = useKycQueue(activeStatus, 0, 50);
   const approveMutation = useApproveKyc();
   const declineMutation = useDeclineKyc();
 
-  const items = queueData?.data?.content ?? [];
+  // Rule 1: array is under `queue`; fallback to `content` for safety
+  const items = queueData?.queue || queueData?.content || [];
+  const activeTab = TABS.find((t) => t.status === activeStatus) ?? TABS[0];
 
-  if (isLoading) return <Loader variant="page" text="Loading KYC Queue..." />;
+  if (isLoading) return <Loader variant="page" text="Loading KYC Queue…" />;
 
   return (
     <div>
@@ -38,55 +43,58 @@ export default function KYCQueuePage() {
         <div>
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">KYC Verification Queue</h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-            {tab === "Pending" ? (
-              <><span className="font-semibold text-[hsl(var(--foreground))]">{items.length}</span> pending verifications require review</>
-            ) : (
-              `${items.length} ${tab.toLowerCase()} submissions`
-            )}
+            <span className="font-semibold text-[hsl(var(--foreground))]">{items.length}</span>
+            {" "}{activeTab.label.toLowerCase()} submissions
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-xl bg-orange-50 flex items-center justify-center">
-            <ShieldAlert className="h-4.5 w-4.5 text-orange-500" />
-          </div>
+        <div className="h-9 w-9 rounded-xl bg-orange-50 flex items-center justify-center">
+          <ShieldAlert className="h-4.5 w-4.5 text-orange-500" />
         </div>
       </div>
 
+      {/* Fix 2: tab click changes activeStatus → new cache key → fresh API fetch */}
       <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 w-full mb-6">
         {TABS.map((t) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={t.status}
+            onClick={() => setActiveStatus(t.status)}
             className={`flex-1 px-4 py-1.5 rounded-full text-sm font-medium transition-all text-center ${
-              tab === t
+              activeStatus === t.status
                 ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
             }`}
           >
-            {t}
+            {t.label}
           </button>
         ))}
       </div>
 
-      {items.length === 0 && tab === "Pending" && (
+      {/* Empty states */}
+      {items.length === 0 && activeStatus === "PENDING" && (
         <div className="text-center py-16 text-[hsl(var(--muted-foreground))]">
           <ShieldAlert className="h-10 w-10 mx-auto mb-3 opacity-30" />
           <p className="font-medium text-[hsl(var(--foreground))]">No pending verifications</p>
           <p className="text-sm mt-1">All KYC submissions have been reviewed.</p>
         </div>
       )}
-      {items.length === 0 && tab === "Approved" && (
+      {items.length === 0 && activeStatus === "FULL" && (
         <div className="text-center py-16 text-[hsl(var(--muted-foreground))]">
           <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-green-400 opacity-40" />
-          <p className="font-medium text-[hsl(var(--foreground))]">No approved submissions yet</p>
-          <p className="text-sm mt-1">KYC submissions you approve will appear here.</p>
+          <p className="font-medium text-[hsl(var(--foreground))]">No fully verified users yet</p>
+          <p className="text-sm mt-1">Approved KYC submissions will appear here.</p>
         </div>
       )}
-      {items.length === 0 && tab === "Rejected" && (
+      {items.length === 0 && (activeStatus === "BASIC" || activeStatus === "NONE") && (
+        <div className="text-center py-16 text-[hsl(var(--muted-foreground))]">
+          <Shield className="h-10 w-10 mx-auto mb-3 opacity-30" />
+          <p className="font-medium text-[hsl(var(--foreground))]">No {activeTab.label.toLowerCase()} users</p>
+          <p className="text-sm mt-1">Users in this category will appear here.</p>
+        </div>
+      )}
+      {items.length === 0 && !["PENDING","FULL","BASIC","NONE"].includes(activeStatus) && (
         <div className="text-center py-16 text-[hsl(var(--muted-foreground))]">
           <XCircle className="h-10 w-10 mx-auto mb-3 text-red-400 opacity-40" />
-          <p className="font-medium text-[hsl(var(--foreground))]">No rejected submissions yet</p>
-          <p className="text-sm mt-1">KYC submissions you reject will appear here.</p>
+          <p className="font-medium text-[hsl(var(--foreground))]">No results</p>
         </div>
       )}
 
@@ -121,15 +129,14 @@ export default function KYCQueuePage() {
               </div>
             </div>
 
-            {tab === "Pending" && (
+            {activeStatus === "PENDING" && (
               <div className="flex gap-2">
                 <Button
                   className="flex-1 h-8 text-xs gap-1.5"
                   disabled={approveMutation.isPending}
                   onClick={() => approveMutation.mutate({ id: p.participantId, data: { notes: "Approved by admin" } })}
                 >
-                  <Check className="h-3.5 w-3.5" />
-                  Approve
+                  <Check className="h-3.5 w-3.5" /> Approve
                 </Button>
                 <Button
                   variant="outline"
@@ -137,21 +144,19 @@ export default function KYCQueuePage() {
                   disabled={declineMutation.isPending}
                   onClick={() => declineMutation.mutate({ id: p.participantId, data: { reason: "Declined by admin" } })}
                 >
-                  <X className="h-3.5 w-3.5" />
-                  Reject
+                  <X className="h-3.5 w-3.5" /> Reject
                 </Button>
               </div>
             )}
-            {tab === "Approved" && (
+            {activeStatus === "FULL" && (
               <div className="flex items-center gap-1.5 text-green-600 text-xs font-medium">
-                <Check className="h-3.5 w-3.5" />
-                KYC Verified
+                <CheckCircle2 className="h-3.5 w-3.5" /> Fully Verified
               </div>
             )}
-            {tab === "Rejected" && (
-              <div className="flex items-center gap-1.5 text-red-600 text-xs font-medium">
-                <X className="h-3.5 w-3.5" />
-                Declined
+            {(activeStatus === "BASIC" || activeStatus === "NONE") && (
+              <div className="flex items-center gap-1.5 text-[hsl(var(--muted-foreground))] text-xs font-medium">
+                <Shield className="h-3.5 w-3.5" />
+                {activeStatus === "BASIC" ? "Basic KYC only" : "No KYC on record"}
               </div>
             )}
           </Card>

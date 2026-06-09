@@ -106,27 +106,32 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   // ── Compatibility shim: map API fields → legacy names used in the JSX ─────
+  // Fix 1A: prefer overview.rsvps.{count,capacity} — the server's nested RSVP object
+  // falls back to top-level registrationCount / maximumCapacity for older payloads.
+  const _rsvpCount  = apiEvent.overview?.rsvps?.count    ?? apiEvent.registrationCount ?? 0;
+  const _capacity   = apiEvent.overview?.rsvps?.capacity ?? apiEvent.maximumCapacity   ?? null;
+
   const event = {
     ...apiEvent,
-    // field renames
-    organiser:   apiEvent.stakeholderName,
-    venue:       apiEvent.location ?? "",
-    rsvpCount:   apiEvent.registrationCount,
-    capacity:    apiEvent.maximumCapacity ?? null,
-    endTime:     "",                                          // not in API
-    format:      toFormatKey(apiEvent.format),               // lowercase for icon lookup
-    module:      toModule(apiEvent.eventType),               // legacy module key
-    color:       "#9333ea",                                   // fallback; no color in API
-    agenda:      (apiEvent.agenda ?? agendaItems) as LocalAgendaItem[],
+    organiser:  apiEvent.stakeholderName,
+    venue:      apiEvent.location ?? "",
+    rsvpCount:  _rsvpCount,
+    capacity:   _capacity,
+    endTime:    "",                                        // not in API
+    format:     toFormatKey(apiEvent.format),             // lowercase for icon lookup
+    module:     toModule(apiEvent.eventType),             // legacy module key
+    color:      "#9333ea",                                // fallback; no color in API
+    agenda:     (apiEvent.agenda ?? agendaItems) as LocalAgendaItem[],
   };
 
-  // Participants — guard against every possible API response shape
-  const _attendeesRaw = attendeesResponse?.data;
+  // Fix 1B: hook now returns res.data.data directly — no extra .data unwrap
+  // Guard all possible server shapes: bare array, { content }, { participants }, { data }
   const participants: any[] =
-    Array.isArray(_attendeesRaw)                  ? _attendeesRaw :
-    Array.isArray(_attendeesRaw?.content)         ? _attendeesRaw.content :
-    Array.isArray(_attendeesRaw?.participants)     ? _attendeesRaw.participants :
-    Array.isArray(_attendeesRaw?.data)            ? _attendeesRaw.data :
+    Array.isArray(attendeesResponse)                    ? attendeesResponse :
+    Array.isArray(attendeesResponse?.content)           ? attendeesResponse.content :
+    Array.isArray(attendeesResponse?.participants)      ? attendeesResponse.participants :
+    Array.isArray(attendeesResponse?.attendees)         ? attendeesResponse.attendees :
+    Array.isArray(attendeesResponse?.data)              ? attendeesResponse.data :
     [];
 
   // Documents — same defensive unwrap
@@ -139,7 +144,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const liveVotes: any[]   = [];                             // no live-votes API yet
 
   const FormatIcon = FORMAT_ICON[event.format as keyof typeof FORMAT_ICON];
-  const fill = event.capacity ? Math.round((event.rsvpCount / event.capacity) * 100) : null;
+  // Fix 1A: explicit safe calculation — clamps to 100 so the bar never overflows
+  const fill = event.capacity && event.capacity > 0
+    ? Math.min(Math.round((event.rsvpCount / event.capacity) * 100), 100)
+    : null;
   const isAGM     = event.module === "AGM";
   const isLAUNCH  = event.module === "LAUNCH";
   const isGENERAL = event.module === "GENERAL";

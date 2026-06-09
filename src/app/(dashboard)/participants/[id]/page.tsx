@@ -62,7 +62,8 @@ export default function ParticipantDetailPage({
     return <Loader variant="page" text="Loading User Details..." />;
   }
 
-  const participant = data?.data;
+  // Rule 3: hook now returns res.data.data directly — no extra .data unwrap needed
+  const participant = data;
 
   if (!participant) {
     return (

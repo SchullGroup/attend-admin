@@ -36,7 +36,7 @@ export const superAdminKeys = {
   pendingEnrollments: (page: number, limit: number) => [...superAdminKeys.all, "pending-enrollments", page, limit] as const,
   events: (status: string, page: number, limit: number) => [...superAdminKeys.all, "events", status, page, limit] as const,
   eventDetail: (id: string) => [...superAdminKeys.all, "event-detail", id] as const,
-  users: (page: number, limit: number) => [...superAdminKeys.all, "users", page, limit] as const,
+  users: (kycStatus: string, page: number, limit: number) => ["admin", "users", kycStatus, page, limit] as const,
   documents: (search: string, eventId: string, type: string, page: number, limit: number) => [...superAdminKeys.all, "documents", search, eventId, type, page, limit] as const,
   recentRegistrations: (page: number, limit: number) => [...superAdminKeys.all, "recent-registrations", page, limit] as const,
   eventDocuments: (id: string) => [...superAdminKeys.all, "event-documents", id] as const,
@@ -105,14 +105,27 @@ export function useEvents(status = "", page = 0, limit = 10) {
   });
 }
 
-export function useUsers(page = 0, limit = 20) {
+/**
+ * Paginated admin users list with optional KYC status filter.
+ * Query key: ["admin", "users", kycStatus, page, limit] — kycStatus is first
+ * so every tab change produces a structurally different key and React Query
+ * fires a fresh targeted request instead of serving a stale cached result.
+ */
+export function useUsers(kycStatus = "", page = 0, limit = 20) {
   return useQuery({
-    queryKey: superAdminKeys.users(page, limit),
+    queryKey: superAdminKeys.users(kycStatus, page, limit),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<PagedResponse<UserSummaryResponse>>>(
-        `/api/v1/admin/users?page=${page}&limit=${limit}`
+        "/api/v1/admin/users",
+        {
+          params: {
+            page,
+            limit,
+            ...(kycStatus ? { kycStatus } : {}), // omit key entirely when empty → unfiltered list
+          },
+        }
       );
-      return res.data;
+      return res.data.data; // unwrap envelope → PagedResponse<UserSummaryResponse>
     },
   });
 }
@@ -243,7 +256,7 @@ export function useSuspendUser() {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: superAdminKeys.users(0, 20) });
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       popup.success("Suspended", "The user has been suspended successfully.", 3000);
     },
     onError: (error: any) => {
@@ -260,7 +273,7 @@ export function useActivateUser() {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: superAdminKeys.users(0, 20) });
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       popup.success("Activated", "The user has been activated successfully.", 3000);
     },
     onError: (error: any) => {
@@ -294,13 +307,11 @@ export function useEventAttendees(id: string, page = 0, size = 20, kycStatus = "
   return useQuery({
     queryKey: clientEventKeys.attendees(id, page, size, kycStatus),
     queryFn: async () => {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        size: size.toString(),
-      });
-      if (kycStatus) params.append("kycStatus", kycStatus);
-      const res = await apiClient.get<ApiResponse<any>>(`/api/v1/client/events/${id}/attendees?${params.toString()}`);
-      return res.data;
+      const res = await apiClient.get<ApiResponse<any>>(
+        `/api/v1/client/events/${id}/attendees`,
+        { params: { page, size, ...(kycStatus ? { kycStatus } : {}) } }
+      );
+      return res.data.data; // unwrap envelope — payload may be array, paged object, or named list
     },
     enabled: !!id,
   });

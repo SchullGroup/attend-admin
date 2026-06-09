@@ -188,9 +188,13 @@ export type EventDetailResponse = {
   agenda?: AgendaItemResponse[];
   speakers?: SpeakerResponse[];
   overview?: {
-    rsvps: number;
+    /** Nested RSVP object returned by the server — use .count and .capacity for bar maths */
+    rsvps: {
+      count:    number;
+      capacity: number;
+    };
     verifiedAttendees: number;
-    documents: number;
+    documents:         number;
   };
   createdAt: string;
   updatedAt: string;
@@ -356,12 +360,14 @@ export interface ParticipantKycDetailResponse {
   };
 }
 
+/** Matches GET /api/v1/admin/participants/kyc/queue — array is under `queue`, NOT `content` */
 export interface KycQueueResponse {
-  content: ParticipantKycDetailResponse[];
-  totalElements: number;
-  totalPages: number;
-  size: number;
-  number: number;
+  queue:       ParticipantKycDetailResponse[]; // spec key
+  totalCount:  number;
+  page:        number;
+  size:        number;
+  // Legacy alias kept so any existing `?.content` access degrades gracefully
+  content?:    ParticipantKycDetailResponse[];
 }
 
 export interface GlobalDocumentListResponse {

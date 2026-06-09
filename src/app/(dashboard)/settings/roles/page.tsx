@@ -92,7 +92,7 @@ const INITIAL_TEAM: TeamMember[] = [
 export default function RolesPage() {
   const [team, setTeam] = useState<TeamMember[]>(INITIAL_TEAM);
   const [page, setPage] = useState(0);
-  const { data: usersData, isLoading, isError } = useUsers(page, 20);
+  const { data: usersData, isLoading, isError } = useUsers("", page, 20);
   
   const suspendMutation = useSuspendUser();
   const activateMutation = useActivateUser();
