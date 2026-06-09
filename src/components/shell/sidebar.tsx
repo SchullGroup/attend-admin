@@ -10,7 +10,6 @@ import {
   FileText as FileApp,
   Star,
   Users,
-  ShieldCheck,
   FolderOpen,
   BarChart3,
   Settings,
@@ -73,7 +72,6 @@ const SECTIONS = [
     label: "People",
     items: [
       { title: "All Users", icon: Users, href: "/participants" },
-      { title: "KYC Queue", icon: ShieldCheck, href: "/participants/kyc" },
     ],
   },
   {
@@ -151,7 +149,7 @@ export function Sidebar() {
         style={{ borderBottom: "1px solid #e2e8f0", minHeight: 72 }}
       >
         <div className="flex items-center gap-2">
-          <img src="/attend-logo.png" alt="Attend" style={{ height: 20, width: "auto" }} />
+          <img src="/attend-logo.png" alt="Attend" style={{ height: 26, width: "auto" }} />
           <span
             className="text-xs font-semibold px-1.5 py-0.5 rounded"
             style={{ backgroundColor: "rgba(17,24,39,0.07)", color: "#6b7280" }}

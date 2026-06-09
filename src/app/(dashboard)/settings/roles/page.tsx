@@ -45,7 +45,7 @@ const ROLES_INFO = [
     icon: Shield,
   },
   {
-    id: "event_manager",
+    id: "EVENT_MANAGER",
     name: "Event Manager",
     desc: "Create and manage events, upload documents, control live sessions",
     permissions: ["Events", "Documents", "Analytics (read)"],
@@ -208,7 +208,7 @@ export default function RolesPage() {
           </thead>
           <tbody>
             {team.map((u) => {
-              const role = ROLES_INFO.find((r) => r.id === u.role);
+              const role = ROLES_INFO.find((r) => r.id === u.role || r.id === u.role?.toUpperCase());
               const isSelf = u.id === "u1";
               return (
                 <tr key={u.id} className="attend-table-row">

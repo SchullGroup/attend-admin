@@ -1,5 +1,17 @@
 // Super Admin Response Types
 
+// ---------------------------------------------------------------------------
+// Generic paged envelope that matches the server's PagedResponse shape
+// ---------------------------------------------------------------------------
+export interface PagedApiResponse<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
+}
+
 export interface PlatformStatsResponse {
   totalStakeholders: number;
   totalUsers: number;
@@ -97,10 +109,62 @@ export interface SpeakerResponse {
   avatarUrl?: string;
 }
 
-export interface EventDetailResponse {
+// ---------------------------------------------------------------------------
+// Polymorphic event-type config blocks — GET /api/v1/admin/events/{id}
+// ---------------------------------------------------------------------------
+export interface AgmConfig {
+  quorumThreshold: number;
+  votingEnabled: boolean;
+  resolutions?: Array<{
+    id: string;
+    title: string;
+    description?: string;
+    order: number;
+    status: "PENDING" | "OPEN" | "CLOSED" | "PASSED" | "FAILED";
+    forVotes: number;
+    againstVotes: number;
+    abstainVotes: number;
+  }>;
+  proxyVotingEnabled?: boolean;
+  shareholderVerification?: boolean;
+}
+
+export interface ProductLaunchConfig {
+  productName: string;
+  productCategory?: string;
+  targetAudience?: string;
+  pressKitUrl?: string;
+  demoUrl?: string;
+  launchGoals?: string[];
+}
+
+export interface InnovationChallengeConfig {
+  tracks: string[];
+  maxTeamSize: number;
+  submissionDeadline?: string;
+  judgingCriteria?: Array<{
+    name: string;
+    weight: number;
+  }>;
+  prizePool?: string;
+}
+
+export interface GeneralEventConfig {
+  category?: string;
+  tags?: string[];
+  registrationDeadline?: string;
+  allowWalkIns?: boolean;
+}
+
+export type EventTypeConfig =
+  | { eventType: "AGM_EGM";             agmConfig: AgmConfig;                         productLaunchConfig?: never; innovationChallengeConfig?: never; generalEventConfig?: never }
+  | { eventType: "PRODUCT_LAUNCH";      productLaunchConfig: ProductLaunchConfig;      agmConfig?: never;           innovationChallengeConfig?: never; generalEventConfig?: never }
+  | { eventType: "INNOVATION_CHALLENGE" | "HACKATHON"; innovationChallengeConfig: InnovationChallengeConfig; agmConfig?: never; productLaunchConfig?: never; generalEventConfig?: never }
+  | { eventType: "GENERAL_EVENT";       generalEventConfig: GeneralEventConfig;        agmConfig?: never;           productLaunchConfig?: never; innovationChallengeConfig?: never };
+
+export type EventDetailResponse = {
   id: string;
   stakeholderName: string;
-  eventType: "AGM_EGM" | "PRODUCT_LAUNCH" | "INNOVATION_CHALLENGE" | "HACKATHON" | "GENERAL_EVENT";
   title: string;
   description: string;
   format: "VIRTUAL" | "IN_PERSON" | "HYBRID";
@@ -120,21 +184,24 @@ export interface EventDetailResponse {
   };
   createdAt: string;
   updatedAt: string;
-  agmConfig?: any;
-  productLaunchConfig?: any;
-  innovationChallengeConfig?: any;
-  generalEventConfig?: any;
-}
+} & EventTypeConfig;
 
 
+/** Matches GET /api/v1/admin/registrations response content items */
 export interface RegistrationSummaryResponse {
   id: string;
-  eventId: string;
-  eventTitle: string;
   participantName: string;
-  participantEmail: string;
+  email: string;
+  initials: string;
+  avatarColor: string;
+  kycStatus: string;
+  registeredAgo: string;
   registeredAt: string;
-  status: string;
+  // Legacy fields kept for backward compat with existing dashboard usage
+  eventId?: string;
+  eventTitle?: string;
+  participantEmail?: string;
+  status?: string;
 }
 
 export interface NotificationResponse {
@@ -154,10 +221,41 @@ export interface NotificationListResponse {
   number: number;
 }
 
+// ---------------------------------------------------------------------------
+// Global Search  — GET /api/v1/admin/search
+// ---------------------------------------------------------------------------
+export interface SearchEventResult {
+  id: string;
+  title: string;
+  status: string;
+  date: string;
+}
+
+export interface SearchParticipantResult {
+  id: string;
+  fullName: string;
+  email: string;
+  kycStatus: string;
+}
+
+export interface SearchStakeholderResult {
+  id: string;
+  name: string;
+  industry: string;
+}
+
 export interface SearchResponse {
-  events: EventSummaryResponse[];
-  stakeholders: StakeholderSummaryResponse[];
-  users: UserSummaryResponse[];
+  query: string;
+  totalResults: number;
+  events: SearchEventResult[];
+  participants: SearchParticipantResult[];
+  stakeholders: SearchStakeholderResult[];
+}
+
+export interface SearchParams {
+  q: string;
+  page?: number;
+  limit?: number;
 }
 
 export interface UserSummaryResponse {
@@ -292,11 +390,8 @@ export interface KycDeclineRequest {
   reason: string;
 }
 
-// Re-export common paged response wrapper just in case
-export interface PagedResponse<T> {
-  content: T[];
-  totalElements: number;
-  totalPages: number;
-  size: number;
-  number: number;
-}
+/**
+ * Legacy alias kept so existing hooks compile without changes.
+ * New code should use PagedApiResponse<T> which includes `last`.
+ */
+export type PagedResponse<T> = PagedApiResponse<T> & { number?: number };

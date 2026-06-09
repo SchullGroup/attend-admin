@@ -16,9 +16,14 @@ import {
   UserSummaryResponse,
   GlobalDocumentListResponse,
   PagedResponse,
+  PagedApiResponse,
   EventDetailResponse,
   KycApproveRequest,
-  KycDeclineRequest
+  KycDeclineRequest,
+  SearchResponse,
+  SearchParams,
+  NotificationResponse,
+  NotificationListResponse,
 } from "@/types/super-admin";
 import { ApiResponse } from "@/types/api";
 
@@ -34,6 +39,8 @@ export const superAdminKeys = {
   documents: (search: string, eventId: string, type: string, page: number, limit: number) => [...superAdminKeys.all, "documents", search, eventId, type, page, limit] as const,
   recentRegistrations: (page: number, limit: number) => [...superAdminKeys.all, "recent-registrations", page, limit] as const,
   eventDocuments: (id: string) => [...superAdminKeys.all, "event-documents", id] as const,
+  // Search — keyed by query string + pagination so each unique query caches independently
+  search: (q: string, page: number, limit: number) => [...superAdminKeys.all, "search", q, page, limit] as const,
 };
 
 // --- Queries ---
@@ -135,6 +142,37 @@ export function useRecentRegistrations(page = 0, limit = 10) {
       );
       return res.data;
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Global Search  — GET /api/v1/admin/search
+// ---------------------------------------------------------------------------
+/**
+ * Searches across events, stakeholders, and participants by keyword.
+ *
+ * - Disabled when `q` is empty so the query never fires on an empty input.
+ * - staleTime: 30 s — search results change quickly; no long-lived cache.
+ * - gcTime: 60 s — discard cached results after one minute of inactivity.
+ *
+ * Usage:
+ *   const { data, isLoading, isFetching } = useGlobalSearch("GTCo");
+ *   const results = data?.data;   // SearchResponse
+ */
+export function useGlobalSearch({ q, page = 0, limit = 10 }: SearchParams) {
+  return useQuery({
+    queryKey: superAdminKeys.search(q, page, limit),
+    queryFn: async () => {
+      const params = new URLSearchParams({ q, page: String(page), limit: String(limit) });
+      const res = await apiClient.get<ApiResponse<SearchResponse>>(
+        `/api/v1/admin/search?${params.toString()}`
+      );
+      return res.data;
+    },
+    enabled: q.trim().length > 0,
+    staleTime: 30_000,
+    gcTime: 60_000,
+    placeholderData: (prev) => prev, // keeps previous results visible while refetching
   });
 }
 

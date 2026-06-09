@@ -63,20 +63,18 @@ function EventRow({ event }: { event: EventSummaryResponse }) {
         {formatDate(event.date)}
       </div>
 
-      {/* RSVP */}
-      {rsvpCount != null && (
-        <div className="w-24 shrink-0">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium tabular-nums">{rsvpCount.toLocaleString()}</span>
-            {fill !== null && <span className="text-xs text-[hsl(var(--muted-foreground))]">{fill}%</span>}
-          </div>
+      {/* Users / RSVP */}
+      <div className="w-24 shrink-0">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs font-medium tabular-nums">{(rsvpCount ?? 0).toLocaleString()}</span>
+          {fill !== null && <span className="text-xs text-[hsl(var(--muted-foreground))]">{fill}%</span>}
+        </div>
+        <div className="h-1 rounded-full bg-[hsl(var(--border))]">
           {fill !== null && (
-            <div className="h-1 rounded-full bg-[hsl(var(--border))]">
-              <div className="h-1 rounded-full" style={{ width: `${Math.min(fill, 100)}%`, backgroundColor: color }} />
-            </div>
+            <div className="h-1 rounded-full" style={{ width: `${Math.min(fill, 100)}%`, backgroundColor: color }} />
           )}
         </div>
-      )}
+      </div>
 
       {/* Status + action */}
       <div className="flex items-center gap-2 shrink-0">
@@ -151,8 +149,8 @@ export default function DashboardPage() {
         {[
           { label: "Enrolled Organisers", value: stats?.activeStakeholders ?? stakeholders.length, sub: "Active organisations", icon: Building2, color: "#374151" },
           { label: "Total Events", value: allEvents.length, sub: "Across all organisers", icon: CalendarDays, color: "#111827" },
-          { label: "Live Now", value: liveEvents.length, sub: liveEvents.length > 0 ? "Active sessions" : "No active sessions", icon: Radio, color: liveEvents.length > 0 ? "#dc2626" : "#9ca3af" },
-          { label: "Pending KYC", value: pendingKYC, sub: "Awaiting verification", icon: ShieldAlert, color: pendingKYC > 0 ? "#f97316" : "#9ca3af" },
+          { label: "Live Now", value: liveEvents.length, sub: liveEvents.length > 0 ? "Active sessions" : "No active sessions", icon: Radio, color: "#dc2626" },
+          { label: "Pending KYC", value: pendingKYC, sub: "Awaiting verification", icon: ShieldAlert, color: "#f97316" },
         ].map(({ label, value, sub, icon: Icon, color }) => (
           <div key={label} className="flex items-center gap-4 px-6 py-5">
             <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: color + "15" }}>
@@ -256,8 +254,8 @@ export default function DashboardPage() {
                     <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{reg.participantEmail}</p>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
-                    <StatusBadge status={reg.status} />
-                    <span className="text-xs text-[hsl(var(--muted-foreground))]">{timeAgo(reg.registeredAt)}</span>
+                    <StatusBadge status={reg.kycStatus ?? reg.status ?? ""} />
+                    <span className="text-xs text-[hsl(var(--muted-foreground))]">{reg.registeredAgo ?? timeAgo(reg.registeredAt)}</span>
                   </div>
                 </div>
               ))}
