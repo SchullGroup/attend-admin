@@ -2,13 +2,14 @@
 import { use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useStore } from "@/lib/store";
+import { useEventDetail, useEventDocuments, useEventAttendees } from "@/api/super-admin";
 import { ModuleBadge } from "@/components/custom/module-badge";
 import { CustomSelect } from "@/components/custom/custom-select";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -16,7 +17,38 @@ import {
   Monitor, Users2, FileText, Vote, Megaphone, Send, Bell,
   Award, BookOpen, CheckCircle2, Download, PlusCircle, Trash2, Upload,
 } from "lucide-react";
-import type { EventModule, AgendaItem } from "@/types/mock";
+import type { EventModule } from "@/types/mock";
+import type { AgendaItemResponse } from "@/types/super-admin";
+
+// Local editable agenda item — superset of API shape used by the edit form
+interface LocalAgendaItem {
+  id: string;
+  order?: number;
+  title: string;
+  description?: string;
+  durationMinutes?: number;
+  speakerName?: string;
+  isCurrent?: boolean;
+  // Legacy edit-form fields kept for UI compat
+  time?: string;
+  speaker?: string;
+}
+
+// Map API eventType → legacy module key used throughout the UI
+function toModule(eventType?: string): string {
+  if (!eventType) return "GENERAL";
+  if (eventType === "AGM_EGM") return "AGM";
+  if (eventType === "PRODUCT_LAUNCH") return "LAUNCH";
+  if (eventType === "INNOVATION_CHALLENGE" || eventType === "HACKATHON") return "HACKATHON";
+  return "GENERAL";
+}
+
+// Map API uppercase format → legacy lowercase used for icon lookup
+function toFormatKey(fmt: string): "virtual" | "hybrid" | "in-person" {
+  if (fmt === "VIRTUAL") return "virtual";
+  if (fmt === "HYBRID") return "hybrid";
+  return "in-person";
+}
 
 function VoteBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
@@ -44,7 +76,12 @@ const uid = () => `ag_${++_uid}`;
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { events, participants, documents, liveVotes } = useStore();
+
+  // ── API data sources ──────────────────────────────────────────────────────
+  const { data: apiEvent, isLoading: eventLoading } = useEventDetail(id);
+  const { data: docsResponse }    = useEventDocuments(id);
+  const { data: attendeesResponse } = useEventAttendees(id, 0, 50);
+
   const [tab, setTab] = useState("Overview");
   const [broadcastMsg, setBroadcastMsg] = useState("");
   const [broadcastChannel, setBroadcastChannel] = useState<"push" | "sms" | "email" | "all">("push");
@@ -52,11 +89,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     { text: "The event will begin in 30 minutes. Please ensure you are connected.", channel: "Push + SMS", sentAt: "2h ago" },
   ]);
   const [localStatus, setLocalStatus] = useState<string | null>(null);
+  const [agendaItems, setAgendaItems] = useState<LocalAgendaItem[]>([]);
 
-  const event = events.find((e) => e.id === id);
-  const [agendaItems, setAgendaItems] = useState<AgendaItem[]>(event?.agenda ?? []);
+  if (eventLoading) return <Loader variant="page" text="Loading Event…" />;
 
-  if (!event) {
+  if (!apiEvent) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <p className="text-lg font-semibold text-[hsl(var(--foreground))]">Event not found</p>
@@ -68,13 +105,45 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     );
   }
 
+  // ── Compatibility shim: map API fields → legacy names used in the JSX ─────
+  const event = {
+    ...apiEvent,
+    // field renames
+    organiser:   apiEvent.stakeholderName,
+    venue:       apiEvent.location ?? "",
+    rsvpCount:   apiEvent.registrationCount,
+    capacity:    apiEvent.maximumCapacity ?? null,
+    endTime:     "",                                          // not in API
+    format:      toFormatKey(apiEvent.format),               // lowercase for icon lookup
+    module:      toModule(apiEvent.eventType),               // legacy module key
+    color:       "#9333ea",                                   // fallback; no color in API
+    agenda:      (apiEvent.agenda ?? agendaItems) as LocalAgendaItem[],
+  };
+
+  // Participants — guard against every possible API response shape
+  const _attendeesRaw = attendeesResponse?.data;
+  const participants: any[] =
+    Array.isArray(_attendeesRaw)                  ? _attendeesRaw :
+    Array.isArray(_attendeesRaw?.content)         ? _attendeesRaw.content :
+    Array.isArray(_attendeesRaw?.participants)     ? _attendeesRaw.participants :
+    Array.isArray(_attendeesRaw?.data)            ? _attendeesRaw.data :
+    [];
+
+  // Documents — same defensive unwrap
+  const _docsRaw = docsResponse?.data;
+  const eventDocs: any[] =
+    Array.isArray(_docsRaw)               ? _docsRaw :
+    Array.isArray(_docsRaw?.documents)    ? _docsRaw.documents :
+    Array.isArray(_docsRaw?.content)      ? _docsRaw.content :
+    [];
+  const liveVotes: any[]   = [];                             // no live-votes API yet
+
   const FormatIcon = FORMAT_ICON[event.format as keyof typeof FORMAT_ICON];
   const fill = event.capacity ? Math.round((event.rsvpCount / event.capacity) * 100) : null;
-  const eventDocs = documents.filter((d) => d.eventId === event.id);
-  const isAGM = event.module === "AGM";
-  const isLAUNCH = event.module === "LAUNCH";
+  const isAGM     = event.module === "AGM";
+  const isLAUNCH  = event.module === "LAUNCH";
   const isGENERAL = event.module === "GENERAL";
-  const currentStatus = localStatus ?? event.status;
+  const currentStatus = localStatus ?? event.status?.toLowerCase();
 
   function addAgendaItem() {
     setAgendaItems((a) => [...a, { id: uid(), time: "", title: "", speaker: "" }]);
@@ -82,7 +151,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   function removeAgendaItem(id: string) {
     setAgendaItems((a) => a.filter((x) => x.id !== id));
   }
-  function updateAgendaItem(id: string, field: keyof AgendaItem, val: string) {
+  function updateAgendaItem(id: string, field: keyof LocalAgendaItem, val: string) {
     setAgendaItems((a) => a.map((x) => (x.id === id ? { ...x, [field]: val } : x)));
   }
   function handleStatusChange(status: string) {

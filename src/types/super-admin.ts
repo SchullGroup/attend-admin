@@ -19,12 +19,22 @@ export interface PlatformStatsResponse {
   totalRsvps: number;
 }
 
+/** Matches GET /api/v1/admin/dashboard/stats — new nested shape */
 export interface DashboardStatsResponse {
-  activeStakeholders: number;
-  pendingEnrollments: number;
-  liveEvents: number;
-  totalUsers: number;
-  recentActivityCount: number;
+  enrolledStakeholders: { count: number; color: string };
+  totalEvents:          { count: number; color: string };
+  liveNow:              { count: number; onlineCount: number; label: string };
+  pendingKYC:           { count: number; color: string };
+  /**
+   * Present when at least one event is live.
+   * `null` when no events are currently live.
+   */
+  liveBanner: {
+    eventId:       string;
+    organizerName: string;
+    onlineCount:   number;
+    live:          boolean;
+  } | null;
 }
 
 export interface ClientAdminResponse {
@@ -360,6 +370,25 @@ export interface GlobalDocumentListResponse {
   totalPages: number;
   size: number;
   number: number;
+}
+
+// ---------------------------------------------------------------------------
+// Single event document  — GET /api/v1/admin/events/{id}/documents/{documentId}
+// ---------------------------------------------------------------------------
+export interface EventDocumentDetailResponse {
+  id:               string;
+  title:            string;
+  fileType:         string;
+  mimeType:         string;
+  originalFilename: string;
+  sizeBytes:        number;
+  /**
+   * Raw Base64-encoded file content.
+   * Can be very large — never store in component state directly.
+   * Use the `useEventDocument` hook which decodes lazily only when the
+   * caller explicitly requests a download.
+   */
+  fileData:         string;
 }
 
 // Super Admin Request Types

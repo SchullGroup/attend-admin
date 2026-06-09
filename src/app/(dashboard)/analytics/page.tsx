@@ -54,7 +54,7 @@ export default function AnalyticsPage() {
   const platformStats = platformStatsData?.data;
   const stakeholdersList = stakeholdersData?.data?.content || [];
   const participantStats = participantStatsData?.data || {};
-  const eventsList = allEventsData?.data?.content || [];
+  const eventsList = allEventsData?.content || [];
   const recentRegistrations = registrationsData?.data?.content || [];
 
   const totalRSVP = platformStats?.totalRsvps ?? 0;

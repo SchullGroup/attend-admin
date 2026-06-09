@@ -28,7 +28,7 @@ export default function HackathonsPage() {
 
   if (isLoading) return <Loader variant="page" text="Loading Challenges..." />;
 
-  const allEvents: EventSummaryResponse[] = eventsData?.data?.content ?? [];
+  const allEvents: EventSummaryResponse[] = eventsData?.content ?? [];
   const featuredEvent =
     allEvents.find((e) => e.status?.toLowerCase() === "live") ??
     allEvents.find((e) => e.status?.toLowerCase() === "published") ??

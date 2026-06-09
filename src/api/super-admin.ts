@@ -24,6 +24,7 @@ import {
   SearchParams,
   NotificationResponse,
   NotificationListResponse,
+  EventDocumentDetailResponse,
 } from "@/types/super-admin";
 import { ApiResponse } from "@/types/api";
 
@@ -39,6 +40,7 @@ export const superAdminKeys = {
   documents: (search: string, eventId: string, type: string, page: number, limit: number) => [...superAdminKeys.all, "documents", search, eventId, type, page, limit] as const,
   recentRegistrations: (page: number, limit: number) => [...superAdminKeys.all, "recent-registrations", page, limit] as const,
   eventDocuments: (id: string) => [...superAdminKeys.all, "event-documents", id] as const,
+  eventDocument:  (eventId: string, documentId: string) => [...superAdminKeys.all, "event-document", eventId, documentId] as const,
   // Search — keyed by query string + pagination so each unique query caches independently
   search: (q: string, page: number, limit: number) => [...superAdminKeys.all, "search", q, page, limit] as const,
 };
@@ -94,9 +96,11 @@ export function useEvents(status = "", page = 0, limit = 10) {
     queryKey: superAdminKeys.events(status, page, limit),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<PagedResponse<EventSummaryResponse>>>(
-        `/api/v1/admin/events?page=${page}&limit=${limit}${status ? `&status=${status}` : ""}`
+        `/api/v1/admin/events`,
+        { params: { page, limit, ...(status ? { status } : {}) } }
       );
-      return res.data;
+      // Unwrap the standard envelope so consumers receive the payload directly
+      return res.data.data; // PagedResponse<EventSummaryResponse>
     },
   });
 }
@@ -163,16 +167,16 @@ export function useGlobalSearch({ q, page = 0, limit = 10 }: SearchParams) {
   return useQuery({
     queryKey: superAdminKeys.search(q, page, limit),
     queryFn: async () => {
-      const params = new URLSearchParams({ q, page: String(page), limit: String(limit) });
-      const res = await apiClient.get<ApiResponse<SearchResponse>>(
-        `/api/v1/admin/search?${params.toString()}`
-      );
-      return res.data;
+      // Rule 3: strict ?q= binding via Axios params object (not URLSearchParams string)
+      const res = await apiClient.get<ApiResponse<SearchResponse>>("/api/v1/admin/search", {
+        params: { q, page, limit },
+      });
+      return res.data.data; // SearchResponse — unwrapped from envelope
     },
     enabled: q.trim().length > 0,
     staleTime: 30_000,
     gcTime: 60_000,
-    placeholderData: (prev) => prev, // keeps previous results visible while refetching
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -279,9 +283,10 @@ export function useEventDetail(id: string) {
     queryKey: superAdminKeys.eventDetail(id),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<EventDetailResponse>>(`/api/v1/admin/events/${id}`);
-      return res.data;
+      return res.data.data; // EventDetailResponse — unwrapped from envelope
     },
     enabled: !!id,
+    staleTime: 60_000, // event configs are stable; no need to refetch on every mount
   });
 }
 
@@ -312,15 +317,56 @@ export function useEventDocuments(id: string) {
   });
 }
 
+/**
+ * Fetches metadata + base64 payload for a single event document.
+ *
+ * - `enabled: false` by default — the caller opts in by passing `enabled: true`
+ *   so the large base64 string is never fetched until the user explicitly
+ *   requests it (e.g. clicks "Preview" or "Download").
+ * - `staleTime: Infinity` — document binary content never changes;
+ *   once cached there is no reason to re-fetch.
+ * - `gcTime: 5 * 60_000` — evict from memory after 5 min of inactivity
+ *   to avoid holding large base64 strings indefinitely.
+ *
+ * Usage:
+ *   const { data, refetch, isFetching } = useEventDocument(eventId, documentId, false);
+ *   // When user clicks download:
+ *   const { fileData, mimeType, originalFilename } = (await refetch()).data!.data!;
+ *   triggerBase64Download(fileData, mimeType, originalFilename);
+ */
+export function useEventDocument(eventId: string, documentId: string, enabled = false) {
+  return useQuery({
+    queryKey: superAdminKeys.eventDocument(eventId, documentId),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<EventDocumentDetailResponse>>(
+        `/api/v1/admin/events/${eventId}/documents/${documentId}`
+      );
+      return res.data;
+    },
+    enabled: enabled && !!eventId && !!documentId,
+    staleTime: Infinity,
+    gcTime: 5 * 60_000,
+  });
+}
+
+/**
+ * Mutation variant — use when you want to trigger a one-off download
+ * imperatively (e.g. from a table row action button) without pre-fetching.
+ *
+ * The `onSuccess` callback receives the full response; call
+ * `triggerBase64Download` inside your component to hand off to the browser.
+ */
 export function useDownloadEventDocument() {
   return useMutation({
     mutationFn: async ({ eventId, documentId }: { eventId: string; documentId: string }) => {
-      const res = await apiClient.get<ApiResponse<any>>(`/api/v1/admin/events/${eventId}/documents/${documentId}`);
+      const res = await apiClient.get<ApiResponse<EventDocumentDetailResponse>>(
+        `/api/v1/admin/events/${eventId}/documents/${documentId}`
+      );
       return res.data;
     },
     onError: (error: any) => {
       popup.error("Download Failed", error?.response?.data?.message || "Could not download the document.");
-    }
+    },
   });
 }
 
@@ -416,7 +462,8 @@ export function useCancelEvent() {
 // --- Notifications Queries & Mutations ---
 
 export const notificationKeys = {
-  all: ["notifications"] as const,
+  /** Root key — matches the architectural requirement: ["admin", "notifications"] */
+  all:  ["admin", "notifications"] as const,
   list: (page: number, limit: number, read?: boolean) => [...notificationKeys.all, "list", page, limit, read] as const,
 };
 
@@ -435,19 +482,33 @@ export function useNotifications(page = 0, limit = 10, read?: boolean) {
   });
 }
 
+/**
+ * Marks a single notification as read via PATCH /api/v1/admin/notifications/{id}/read.
+ *
+ * Cache invalidation strategy:
+ *   - Invalidates the entire ["admin", "notifications"] subtree so every
+ *     active useNotifications query (unread count badge, notification list)
+ *     refetches immediately — badge count updates without a page reload.
+ *   - Uses `exact: false` (the default) so both the unread-count query
+ *     (page 0, limit 1, read: false) and the full list query are invalidated
+ *     in one call.
+ */
 export function useMarkNotificationRead() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const res = await apiClient.patch<ApiResponse<any>>(`/api/v1/admin/notifications/${id}/read`);
+      const res = await apiClient.patch<ApiResponse<string>>(
+        `/api/v1/admin/notifications/${id}/read`
+      );
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
+      // Explicit invalidation of the full notifications subtree
+      queryClient.invalidateQueries({ queryKey: ["admin", "notifications"] });
     },
     onError: (error: any) => {
       popup.error("Mark Read Failed", error?.response?.data?.message || "An error occurred.");
-    }
+    },
   });
 }
 

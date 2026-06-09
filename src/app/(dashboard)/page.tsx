@@ -103,7 +103,7 @@ export default function DashboardPage() {
   }
 
   const stats = dashStats?.data;
-  const allEvents: EventSummaryResponse[] = eventsData?.data?.content ?? [];
+  const allEvents: EventSummaryResponse[] = eventsData?.content ?? [];
   const stakeholders: StakeholderSummaryResponse[] = stakeholdersData?.data?.content ?? [];
   const recentRegistrations: RegistrationSummaryResponse[] = recentRegsData?.data?.content ?? [];
 
@@ -114,7 +114,7 @@ export default function DashboardPage() {
   });
 
   const topStakeholders = [...stakeholders].slice(0, 4);
-  const pendingKYC = stats?.pendingEnrollments ?? 0;
+  const pendingKYC = stats?.pendingKYC?.count ?? 0;
 
   const now = new Date();
   const timeStr = now.toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" });
@@ -130,13 +130,19 @@ export default function DashboardPage() {
           </h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{dateStr} · {timeStr}</p>
         </div>
-        {liveEvents.length > 0 && (
+        {(stats?.liveBanner?.live || liveEvents.length > 0) && (
           <Link href="/events/live">
             <div className="flex items-center gap-2.5 bg-red-600 text-white rounded-xl px-4 py-2.5 cursor-pointer hover:bg-red-700 transition-colors">
               <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
               <div>
-                <p className="text-xs font-semibold leading-none">{liveEvents[0].title.split("—")[0].trim()}</p>
-                <p className="text-xs text-red-200 mt-0.5">Live now</p>
+                <p className="text-xs font-semibold leading-none">
+                  {stats?.liveBanner?.organizerName ?? liveEvents[0]?.title.split("—")[0].trim()}
+                </p>
+                <p className="text-xs text-red-200 mt-0.5">
+                  {stats?.liveBanner?.onlineCount != null
+                    ? `${stats.liveBanner.onlineCount.toLocaleString()} online`
+                    : "Live now"}
+                </p>
               </div>
               <Radio className="h-4 w-4 ml-1 opacity-70" />
             </div>
@@ -147,9 +153,9 @@ export default function DashboardPage() {
       {/* ── Stats strip (single card, 4 inline stats) ── */}
       <div className="grid grid-cols-4 divide-x divide-[hsl(var(--border))] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
         {[
-          { label: "Enrolled Organisers", value: stats?.activeStakeholders ?? stakeholders.length, sub: "Active organisations", icon: Building2, color: "#374151" },
+          { label: "Enrolled Organisers", value: stats?.enrolledStakeholders?.count ?? stakeholders.length, sub: "Active organisations", icon: Building2, color: "#374151" },
           { label: "Total Events", value: allEvents.length, sub: "Across all organisers", icon: CalendarDays, color: "#111827" },
-          { label: "Live Now", value: liveEvents.length, sub: liveEvents.length > 0 ? "Active sessions" : "No active sessions", icon: Radio, color: "#dc2626" },
+          { label: "Live Now", value: stats?.liveNow?.count ?? liveEvents.length, sub: stats?.liveNow?.label ?? (liveEvents.length > 0 ? "Active sessions" : "No active sessions"), icon: Radio, color: "#dc2626" },
           { label: "Pending KYC", value: pendingKYC, sub: "Awaiting verification", icon: ShieldAlert, color: "#f97316" },
         ].map(({ label, value, sub, icon: Icon, color }) => (
           <div key={label} className="flex items-center gap-4 px-6 py-5">

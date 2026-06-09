@@ -2,71 +2,82 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Radio, Eye, MapPin, Monitor, Users2, Search } from "lucide-react";
-import { useStore } from "@/lib/store";
+import { useEvents } from "@/api/super-admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ModuleBadge } from "@/components/custom/module-badge";
 import { StatusBadge } from "@/components/custom/status-badge";
-import { OrgFilter } from "@/components/custom/org-filter";
 import { Card } from "@/components/ui/card";
+import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
-import type { EventModule } from "@/types/mock";
+import type { EventSummaryResponse } from "@/types/super-admin";
 
-const TABS: { label: string; value: string }[] = [
-  { label: "All", value: "all" },
-  { label: "AGM", value: "AGM" },
-  { label: "Launch", value: "LAUNCH" },
-  { label: "Innovation Challenge", value: "HACKATHON" },
-  { label: "General", value: "GENERAL" },
+const STATUS_TABS = [
+  { label: "All",    value: "" },
+  { label: "Live",   value: "LIVE" },
+  { label: "Published", value: "PUBLISHED" },
+  { label: "Draft",  value: "DRAFT" },
+  { label: "Ended",  value: "ENDED" },
 ];
 
-const FORMAT_ICON = {
-  virtual: Monitor,
-  hybrid: Users2,
-  "in-person": MapPin,
+const FORMAT_ICON: Record<string, React.ElementType> = {
+  VIRTUAL:   Monitor,
+  HYBRID:    Users2,
+  IN_PERSON: MapPin,
 };
 
+function formatLabel(fmt: string) {
+  return fmt === "IN_PERSON" ? "In-Person" : fmt.charAt(0) + fmt.slice(1).toLowerCase();
+}
+
 export default function EventsPage() {
-  const { events } = useStore();
-  const [activeTab, setActiveTab] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [orgFilter, setOrgFilter] = useState("");
+  const [activeStatus, setActiveStatus] = useState("");
+  const [searchQuery, setSearchQuery]   = useState("");
+  const [page, setPage] = useState(0);
+  const LIMIT = 20;
 
-  const organisers = [...new Set(events.map((e) => e.organiser))].sort();
+  const { data, isLoading } = useEvents(activeStatus, page, LIMIT);
 
-  const filtered = (activeTab === "all" ? events : events.filter((e) => e.module === activeTab))
-    .filter((e) => !searchQuery.trim() || e.title.toLowerCase().includes(searchQuery.toLowerCase()))
-    .filter((e) => !orgFilter || e.organiser === orgFilter);
+  // Rule 2: unwrap .content with || [] fallback
+  const events: EventSummaryResponse[] = data?.content || [];
+  const totalPages = data?.totalPages ?? 1;
+
+  const filtered = searchQuery.trim()
+    ? events.filter((e) => e.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    : events;
+
+  if (isLoading) return <Loader variant="page" text="Loading Events…" />;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Events</h1>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{events.length} total events across all modules</p>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+            {data?.totalElements ?? events.length} total events across all organisers
+          </p>
         </div>
       </div>
 
+      {/* Search + status tabs */}
       <div className="flex items-center gap-3 mb-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
           <Input
             placeholder="Search events by title…"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
             className="pl-9"
           />
         </div>
-        <OrgFilter organisers={organisers} value={orgFilter} onChange={setOrgFilter} />
       </div>
 
       <div className="flex items-center gap-1 mb-4 bg-[hsl(var(--muted))] rounded-full p-1 w-full">
-        {TABS.map((tab) => (
+        {STATUS_TABS.map((tab) => (
           <button
             key={tab.value}
-            onClick={() => setActiveTab(tab.value)}
+            onClick={() => { setActiveStatus(tab.value); setPage(0); }}
             className={`flex-1 px-4 py-1.5 rounded-full text-sm font-medium transition-all text-center ${
-              activeTab === tab.value
+              activeStatus === tab.value
                 ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
             }`}
@@ -81,63 +92,73 @@ export default function EventsPage() {
           <thead>
             <tr className="attend-table-header">
               <th className="px-5 py-3 text-left">Event</th>
-              <th className="px-5 py-3 text-left">Stakeholder</th>
+              <th className="px-5 py-3 text-left">Organiser</th>
               <th className="px-5 py-3 text-left">Date</th>
               <th className="px-5 py-3 text-left">Format</th>
-              <th className="px-5 py-3 text-left">RSVP</th>
+              <th className="px-5 py-3 text-left">Registrations</th>
               <th className="px-5 py-3 text-left">Status</th>
               <th className="px-5 py-3 text-left">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((event) => {
-              const FormatIcon = FORMAT_ICON[event.format as keyof typeof FORMAT_ICON];
+              const isLive = event.status?.toUpperCase() === "LIVE" || event.live;
+              const FormatIcon = FORMAT_ICON[event.format] ?? Monitor;
               return (
                 <tr key={event.id} className="attend-table-row">
                   <td className="px-5 py-3">
-                    <div className="flex items-center gap-2.5">
-                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: event.color }} />
-                      <div>
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <ModuleBadge module={event.module as EventModule} />
-                        </div>
-                        <div className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[260px] truncate">{event.title}</div>
-                      </div>
+                    <div className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[260px] truncate">
+                      {isLive && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5 mr-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                          LIVE
+                        </span>
+                      )}
+                      {event.title}
                     </div>
+                    {event.tags?.length > 0 && (
+                      <div className="flex gap-1 mt-0.5 flex-wrap">
+                        {event.tags.slice(0, 2).map((tag) => (
+                          <span key={tag} className="text-xs text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))] rounded px-1.5 py-0.5">{tag}</span>
+                        ))}
+                      </div>
+                    )}
                   </td>
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{event.organiser}</td>
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                    {event.organizerName}
+                  </td>
                   <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] whitespace-nowrap">
                     {formatDate(event.date)}
-                    <div className="text-xs">{event.startTime}–{event.endTime}</div>
+                    {event.startTime && <div className="text-xs">{event.startTime}</div>}
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))]">
                       <FormatIcon className="h-3.5 w-3.5" />
-                      <span className="capitalize">{event.format}</span>
+                      <span>{formatLabel(event.format)}</span>
                     </div>
                   </td>
                   <td className="px-5 py-3 text-sm font-medium tabular-nums">
-                    {event.rsvpCount.toLocaleString()}
-                    {event.capacity && (
+                    {(event.registrationCount ?? 0).toLocaleString()}
+                    {event.registrationPercentage > 0 && (
                       <span className="text-[hsl(var(--muted-foreground))] font-normal text-xs block">
-                        of {event.capacity.toLocaleString()}
+                        {Math.round(event.registrationPercentage)}% filled
                       </span>
                     )}
                   </td>
-                  <td className="px-5 py-3"><StatusBadge status={event.status} /></td>
+                  <td className="px-5 py-3">
+                    <StatusBadge status={event.status?.toLowerCase()} />
+                  </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5">
                       <Link href={`/events/${event.id}`}>
                         <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
-                          <Eye className="h-3 w-3" />
-                          View
+                          <Eye className="h-3 w-3" /> View
                         </Button>
                       </Link>
-                      {event.status === "live" && (
+                      {isLive && (
                         <Link href="/events/live">
                           <Button size="sm" className="h-7 text-xs gap-1">
-                            <Radio className="h-3 w-3" />
-                            Live
+                            <Radio className="h-3 w-3" /> Live
                           </Button>
                         </Link>
                       )}
@@ -149,9 +170,28 @@ export default function EventsPage() {
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">No events found for this filter.</div>
+          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            No events found.
+          </div>
         )}
       </Card>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 px-1">
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            Page {page + 1} of {totalPages}
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+              Previous
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)}>
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
