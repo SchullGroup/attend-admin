@@ -22,11 +22,11 @@ const MODULE_CONFIG = {
   AGM: { color: "#374151", bg: "#f3f4f6" },
   LAUNCH: { color: "#ea6c00", bg: "#fff4eb" },
   HACKATHON: { color: "#7c22c9", bg: "#f8f0ff" },
-  GENERAL: { color: "#1d4ed8", bg: "#eff5ff" },
+  GENERAL: { color: "#374151", bg: "#eff5ff" },
 };
 
 const FORMAT_COLORS: Record<string, string> = {
-  virtual: "#2563eb",
+  virtual: "#111827",
   hybrid: "#9333ea",
   "in-person": "#374151",
 };
