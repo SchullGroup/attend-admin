@@ -5,44 +5,48 @@ import {
   Building2, Clock, TrendingUp,
 } from "lucide-react";
 import { useGetMe } from "@/api/auth/hooks";
-import { useDashboardStats, useEvents, useStakeholders, useRecentRegistrations } from "@/api/super-admin";
+import { useDashboardStats, useEvents, useRecentRegistrations } from "@/api/super-admin";
+import { useRegisters } from "@/api/registers";
 import { ModuleBadge } from "@/components/custom/module-badge";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { Button } from "@/components/ui/button";
 import { formatDate, timeAgo } from "@/lib/utils";
+import { getEventModule, getEventRegisterName, MODULE_COLORS } from "@/lib/event-module";
 import { Loader } from "@/components/ui/Loader";
-import type { EventSummaryResponse, StakeholderSummaryResponse, RegistrationSummaryResponse } from "@/types/super-admin";
+import type { EventSummaryResponse, RegistrationSummaryResponse } from "@/types/super-admin";
 
-const MODULE_COLORS: Record<string, string> = {
+// MODULE_COLORS is now imported from @/lib/event-module — keeping the local
+// Record shape here for legacy inline use within this file only.
+const _UNUSED_COLORS: Record<string, string> = {
   AGM: "#374151",
   HACKATHON: "#7c3aed",
   LAUNCH: "#ea6c00",
   GENERAL: "#111827",
 };
 
-function getModuleFromEvent(event: EventSummaryResponse): string {
-  if (!(event as any).tags) return "GENERAL";
-  const tagsStr = ((event as any).tags as string[]).join(" ").toUpperCase();
-  if (tagsStr.includes("AGM") || tagsStr.includes("EGM")) return "AGM";
-  if (tagsStr.includes("LAUNCH") || tagsStr.includes("PRODUCT")) return "LAUNCH";
-  if (tagsStr.includes("HACKATHON") || tagsStr.includes("CHALLENGE")) return "HACKATHON";
-  return "GENERAL";
-}
-
 function EventRow({ event }: { event: EventSummaryResponse }) {
-  const isLive = event.status === "live" || event.status === "LIVE";
-  const module = getModuleFromEvent(event);
-  const color = MODULE_COLORS[module] ?? "#111827";
-  const rsvpCount = (event as any).rsvpCount;
-  const capacity = (event as any).capacity;
-  const fill = capacity && rsvpCount != null ? Math.round((rsvpCount / capacity) * 100) : null;
+  const isLive   = event.status === "live" || event.status === "LIVE";
+  const mod      = getEventModule(event);
+  const dotColor = MODULE_COLORS[mod];
+
+  const rsvpCount = event.registrationCount ?? 0;
+  const fillPct   = event.registrationPercentage ?? null;
+  const capacity  = fillPct && fillPct > 0 && rsvpCount > 0
+    ? Math.round(rsvpCount / (fillPct / 100))
+    : null;
+  const fill = fillPct !== null ? Math.min(Math.round(fillPct), 100) : null;
+
+  // Register name = stakeholderName or registerName only.
+  // organizerName is intentionally excluded — it returns the registrar firm (e.g. Meristem).
+  const registerName = getEventRegisterName(event);
 
   return (
     <div className="flex items-center gap-4 px-5 py-3.5 border-b last:border-0 border-[hsl(var(--border)/0.6)] hover:bg-[hsl(var(--muted)/0.4)] transition-colors group">
-      {/* Color bar */}
-      <div className="w-1 h-10 rounded-full shrink-0" style={{ backgroundColor: color }} />
 
-      {/* Title + module */}
+      {/* Horizontal colour bar (event type indicator) */}
+      <div className="w-1 h-10 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
+
+      {/* Title + module badge */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
           {isLive && (
@@ -51,10 +55,11 @@ function EventRow({ event }: { event: EventSummaryResponse }) {
               LIVE
             </span>
           )}
-          <ModuleBadge module={module as any} />
+          <ModuleBadge module={mod} />
         </div>
         <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{event.title}</p>
-        <p className="text-xs text-[hsl(var(--muted-foreground))]">{(event as any).organiser ?? (event as any).organizerName ?? ""}</p>
+        {/* Register name (the organisation that owns the event) */}
+        <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{registerName}</p>
       </div>
 
       {/* Date */}
@@ -63,15 +68,17 @@ function EventRow({ event }: { event: EventSummaryResponse }) {
         {formatDate(event.date)}
       </div>
 
-      {/* Users / RSVP */}
-      <div className="w-24 shrink-0">
+      {/* RSVP bar */}
+      <div className="w-28 shrink-0">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-xs font-medium tabular-nums">{(rsvpCount ?? 0).toLocaleString()}</span>
-          {fill !== null && <span className="text-xs text-[hsl(var(--muted-foreground))]">{fill}%</span>}
+          <span className="text-xs font-medium tabular-nums">{rsvpCount.toLocaleString()}</span>
+          {fill !== null && (
+            <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">{fill}%</span>
+          )}
         </div>
         <div className="h-1 rounded-full bg-[hsl(var(--border))]">
           {fill !== null && (
-            <div className="h-1 rounded-full" style={{ width: `${Math.min(fill, 100)}%`, backgroundColor: color }} />
+            <div className="h-1 rounded-full transition-all" style={{ width: `${fill}%`, backgroundColor: dotColor }} />
           )}
         </div>
       </div>
@@ -79,7 +86,7 @@ function EventRow({ event }: { event: EventSummaryResponse }) {
       {/* Status + action */}
       <div className="flex items-center gap-2 shrink-0">
         <StatusBadge status={event.status} />
-        <Link href={isLive ? "/events/live" : "/events"}>
+        <Link href={isLive ? "/events/live" : `/events/${event.id}`}>
           <Button size="sm" variant={isLive ? "default" : "outline"} className="h-7 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
             {isLive ? "Control Room" : "View"}
           </Button>
@@ -93,18 +100,19 @@ export default function DashboardPage() {
   const { data: userResponse } = useGetMe();
   const currentUser = userResponse?.data;
 
-  const { data: dashStats, isLoading: statsLoading } = useDashboardStats();
-  const { data: eventsData, isLoading: eventsLoading } = useEvents("", 0, 20);
-  const { data: stakeholdersData, isLoading: stkLoading } = useStakeholders(0, 10);
-  const { data: recentRegsData, isLoading: regsLoading } = useRecentRegistrations(0, 6);
+  const { data: dashStats,    isLoading: statsLoading  } = useDashboardStats();
+  const { data: eventsData,   isLoading: eventsLoading } = useEvents("", 0, 20);
+  const { data: registersData, isLoading: regsLoading  } = useRegisters("ACTIVE", 0, 6);
+  const { data: recentRegsData, isLoading: recentsLoading } = useRecentRegistrations(0, 6);
 
-  if (statsLoading || eventsLoading || stkLoading || regsLoading) {
+  if (statsLoading || eventsLoading || regsLoading || recentsLoading) {
     return <Loader variant="page" text="Loading Dashboard..." />;
   }
 
   const stats = dashStats?.data;
   const allEvents: EventSummaryResponse[] = eventsData?.content ?? [];
-  const stakeholders: StakeholderSummaryResponse[] = stakeholdersData?.data?.content ?? [];
+  // Registers directory — fetched from GET /api/v1/client/registers?status=ACTIVE
+  const topRegisters = (registersData?.registers ?? []).slice(0, 5);
   const recentRegistrations: RegistrationSummaryResponse[] = recentRegsData?.data?.content ?? [];
 
   const liveEvents = allEvents.filter((e) => e.status === "live" || e.status === "LIVE");
@@ -113,7 +121,7 @@ export default function DashboardPage() {
     return s === "published" || s === "live" || s === "draft";
   });
 
-  const topStakeholders = [...stakeholders].slice(0, 4);
+  const topStakeholders = topRegisters; // alias kept so the JSX below compiles unchanged
   const pendingKYC = stats?.pendingKYC?.count ?? 0;
 
   const now = new Date();
@@ -153,7 +161,7 @@ export default function DashboardPage() {
       {/* ── Stats strip (single card, 4 inline stats) ── */}
       <div className="grid grid-cols-4 divide-x divide-[hsl(var(--border))] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
         {[
-          { label: "Enrolled Organisers", value: stats?.enrolledStakeholders?.count ?? stakeholders.length, sub: "Active organisations", icon: Building2, color: "#374151" },
+          { label: "Enrolled Registers", value: stats?.enrolledStakeholders?.count ?? (registersData?.totalCount ?? topRegisters.length), sub: "Active organisations", icon: Building2, color: "#374151" },
           { label: "Total Events", value: allEvents.length, sub: "Across all organisers", icon: CalendarDays, color: "#111827" },
           { label: "Live Now", value: stats?.liveNow?.count ?? liveEvents.length, sub: stats?.liveNow?.label ?? (liveEvents.length > 0 ? "Active sessions" : "No active sessions"), icon: Radio, color: "#dc2626" },
           { label: "Pending KYC", value: pendingKYC, sub: "Awaiting verification", icon: ShieldAlert, color: "#f97316" },
@@ -211,25 +219,32 @@ export default function DashboardPage() {
               </Link>
             </div>
             <div className="divide-y divide-[hsl(var(--border)/0.5)]">
-              {topStakeholders.map((stk) => (
-                <div key={stk.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.3)] transition-colors">
-                  <div
-                    className="h-7 w-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
-                    style={{ backgroundColor: "rgba(55,65,81,0.08)", color: "#374151" }}
-                  >
-                    <Building2 className="h-3.5 w-3.5" />
+              {topStakeholders.map((reg) => {
+                const displayName = reg.name || (reg as any).companyName || "—";
+                const statusKey   = (reg.status ?? "").toUpperCase();
+                const dotColor    = statusKey === "ACTIVE" ? "#16a34a" : statusKey === "SUSPENDED" ? "#dc2626" : "#f59e0b";
+                return (
+                  <div key={reg.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.3)] transition-colors">
+                    <div
+                      className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: "rgba(55,65,81,0.08)" }}
+                    >
+                      <Building2 className="h-3.5 w-3.5" style={{ color: "#374151" }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-[hsl(var(--foreground))] truncate">{displayName}</p>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">
+                        {reg.industry ?? <i>—</i>}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      <span className="text-xs font-semibold tabular-nums text-[hsl(var(--foreground))]">{reg.eventCount ?? 0}</span>
+                      <span className="text-xs text-[hsl(var(--muted-foreground))]">events</span>
+                    </div>
+                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-[hsl(var(--foreground))] truncate">{stk.name}</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{stk.industry}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className="text-xs font-semibold tabular-nums text-[hsl(var(--foreground))]">{stk.eventCount ?? 0}</span>
-                    <span className="text-xs text-[hsl(var(--muted-foreground))]">events</span>
-                  </div>
-                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: "#16a34a" }} />
-                </div>
-              ))}
+                );
+              })}
               {topStakeholders.length === 0 && (
                 <p className="text-xs text-[hsl(var(--muted-foreground))] text-center py-6">No registers yet.</p>
               )}

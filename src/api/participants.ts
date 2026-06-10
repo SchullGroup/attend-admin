@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
+import { parseAndToastApiError } from "@/lib/api-error";
 import {
   ParticipantListResponse,
   ParticipantDetailResponse,
@@ -177,9 +178,7 @@ export function useApproveKyc() {
       queryClient.invalidateQueries({ queryKey: participantKeys.kycDetail(id) });
       popup.success("KYC Approved", "Participant KYC has been successfully approved.", 3000);
     },
-    onError: (error: any) => {
-      popup.error("KYC Approval Failed", error?.response?.data?.message || "An error occurred.");
-    },
+    onError: (error: any) => parseAndToastApiError(error, "KYC approval failed."),
   });
 }
 
@@ -199,9 +198,7 @@ export function useDeclineKyc() {
       queryClient.invalidateQueries({ queryKey: participantKeys.kycDetail(id) });
       popup.success("KYC Declined", "Participant KYC has been successfully declined.", 3000);
     },
-    onError: (error: any) => {
-      popup.error("KYC Decline Failed", error?.response?.data?.message || "An error occurred.");
-    },
+    onError: (error: any) => parseAndToastApiError(error, "KYC decline failed."),
   });
 }
 
@@ -225,9 +222,7 @@ export function useSuspendParticipant() {
       queryClient.invalidateQueries({ queryKey: participantKeys.kycQueue("", 0, 20) }); // Rule 2: queue row
       popup.success("Suspended", "Participant account has been suspended.", 3000);
     },
-    onError: (error: any) => {
-      popup.error("Suspension Failed", error?.response?.data?.message || "An error occurred.");
-    },
+    onError: (error: any) => parseAndToastApiError(error, "Suspension failed."),
   });
 }
 
@@ -250,8 +245,6 @@ export function useReactivateParticipant() {
       queryClient.invalidateQueries({ queryKey: participantKeys.kycQueue("", 0, 20) }); // Rule 2
       popup.success("Reactivated", "Participant account has been reactivated.", 3000);
     },
-    onError: (error: any) => {
-      popup.error("Reactivation Failed", error?.response?.data?.message || "An error occurred.");
-    },
+    onError: (error: any) => parseAndToastApiError(error, "Reactivation failed."),
   });
 }

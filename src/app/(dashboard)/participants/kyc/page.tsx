@@ -99,8 +99,8 @@ export default function KYCQueuePage() {
       )}
 
       <div className="grid grid-cols-2 gap-4">
-        {items.map((p) => (
-          <Card key={p.participantId} className="attend-card p-5">
+        {items.map((p, idx) => (
+          <Card key={p.participantId ?? (p as any).id ?? idx} className="attend-card p-5">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-[hsl(var(--primary))] font-bold text-sm shrink-0">

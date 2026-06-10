@@ -9,7 +9,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useGetMe, useLogout } from "@/api/auth/hooks";
-import { useNotifications, useMarkNotificationRead, useGlobalSearch } from "@/api/super-admin";
+import { useAdminNotifications, useMarkNotificationRead } from "@/api/notifications";
+import { useGlobalSearch } from "@/api/super-admin";
 import { timeAgo } from "@/lib/utils";
 
 const ROUTE_LABELS: Record<string, string> = {
@@ -101,10 +102,10 @@ export function Header() {
   }
 
   // ── Notifications ──────────────────────────────────────────────────────────
-  const { data: unreadData }      = useNotifications(0, 1, false);
-  const unreadCount               = unreadData?.data?.totalElements ?? 0;
-  const { data: notificationsData } = useNotifications(0, 5);
-  const notifications             = notificationsData?.data?.content || [];
+  const { data: unreadData }        = useAdminNotifications(0, 1, false);
+  const unreadCount                 = unreadData?.data?.totalElements ?? 0;
+  const { data: notificationsData } = useAdminNotifications(0, 5);
+  const notifications               = notificationsData?.data?.content || [];
   const { mutate: markAsRead }    = useMarkNotificationRead();
 
   function handleLogout() { logout(); }

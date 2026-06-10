@@ -1,6 +1,135 @@
 // Super Admin Response Types
 
 // ---------------------------------------------------------------------------
+// Organisation Registers — /api/v1/admin/registers
+// ---------------------------------------------------------------------------
+export type RegisterStatus = "PENDING" | "ACTIVE" | "SUSPENDED" | "REJECTED";
+
+/**
+ * One row returned by GET /api/v1/admin/registers/{id}/documents
+ * (Document Vault tab on the Register detail page)
+ *
+ * Field contract (from admin API spec):
+ *   title         — document filename string
+ *   eventTitle    — meeting/event context scope the document belongs to
+ *   fileSizeBytes — raw byte count; formatted to KB/MB in the UI
+ *   downloadCount — cumulative download click counter
+ *   uploadedAt    — ISO timestamp the document was uploaded
+ */
+export interface RegisterDocumentItem {
+  id:            string;
+  title:         string;
+  eventTitle?:   string | null;
+  fileSizeBytes: number;
+  downloadCount: number;
+  uploadedAt:    string;
+  /** Optional extras that may be present in the payload */
+  fileType?:     string;
+  mimeType?:     string;
+  url?:          string;
+}
+
+/**
+ * One row returned by GET /api/v1/admin/stakeholders (Registers directory listing).
+ *
+ * Date field contract:
+ *   enrolledAt  — primary timestamp, set when the org was approved/activated
+ *   approvedAt  — legacy alias used by some backend versions
+ *   createdAt   — kept for backward compat; do NOT use as the display date
+ */
+export interface RegisterItem {
+  id:           string;
+  name:         string;
+  companyName?: string;    // some payloads return companyName rather than name
+  industry?:    string | null;
+  status:       RegisterStatus;
+  email?:       string;
+  phone?:       string;
+  rcNumber?:    string | null;
+  eventCount?:          number;
+  enrolledAt?:          string;    // ← preferred display date (spec primary key)
+  approvedAt?:          string;    // ← fallback display date
+  createdAt?:           string;    // ← present in legacy payloads; not used for display
+  representativeName?:  string;
+  representativePhone?: string;
+}
+
+/** Full profile returned by GET /api/v1/admin/registers/{id} */
+export interface RegisterDetailResponse {
+  id:           string;
+  name:         string;
+  industry?:    string;
+  status:       RegisterStatus;
+  email?:       string;
+  phone?:       string;
+  rcNumber?:    string;
+  domain?:      string;
+  adminEmail?:  string;
+  createdAt?:   string;
+  events?:      { id: string; title: string; status: string; date: string }[];
+  documents?:   { id: string; title: string; fileType: string }[];
+}
+
+/** One item inside data.pending[] from GET /api/v1/admin/registers/pending */
+export interface PendingRegisterItem {
+  id:           string;
+  name:         string;
+  industry?:    string;
+  email?:       string;
+  phone?:       string;
+  rcNumber?:    string;
+  requestedAt?: string;
+  requestedAgo?:string;
+}
+
+/** Envelope shape for GET /api/v1/admin/stakeholders (UI: Registers list) */
+export interface RegistersListResponse {
+  /**
+   * Spec response key from /api/v1/admin/stakeholders: `registrars`
+   * Both `registrars` and `registers` are populated — use whichever your
+   * consumer was already reading; they always point to the same array.
+   */
+  registrars:    RegisterItem[];
+  /** Backward-compat alias — equals `registrars` */
+  registers:     RegisterItem[];
+  totalCount:    number;
+  page:          number;
+  size:          number;
+  totalPages?:   number;
+}
+
+/** Envelope shape for GET /api/v1/admin/registers/pending */
+export interface PendingRegistersResponse {
+  pending:       PendingRegisterItem[];
+  totalCount:    number;
+  page:          number;
+  size:          number;
+}
+
+/**
+ * POST /api/v1/admin/stakeholders/enroll
+ * UI label: "Enrol New Register" — backend path: /stakeholders/enroll
+ * Spec-exact body contract: { companyName, industry, rcNumber, contactEmail, plan }
+ */
+export interface EnrollRegisterRequest {
+  companyName:  string;
+  industry?:    string;
+  rcNumber?:    string;
+  contactEmail: string;
+  plan?:        string;
+}
+
+/** POST /api/v1/admin/registers/{id}/reject body */
+export interface RejectRegisterRequest {
+  reason?: string;
+}
+
+/** POST /api/v1/admin/registers/{id}/suspend body */
+export interface SuspendRegisterRequest {
+  reason?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Generic paged envelope that matches the server's PagedResponse shape
 // ---------------------------------------------------------------------------
 export interface PagedApiResponse<T> {
@@ -91,12 +220,17 @@ export interface EventSummaryResponse {
   startTime: string;
   format: "VIRTUAL" | "IN_PERSON" | "HYBRID";
   live: boolean;
+  /** Name of the register (organisation) that owns this event — set from the dropdown at creation. */
   organizerName: string;
+  /** Alias returned by some endpoints — same meaning as organizerName. */
+  stakeholderName?: string;
+  /** Alias returned by some endpoints — same meaning as organizerName. */
+  registerName?: string;
   registrationCount: number;
   registrationPercentage: number;
   tags: string[];
-  // Fallbacks for backward compatibility
-  stakeholderName?: string;
+  /** AGM_EGM | PRODUCT_LAUNCH | INNOVATION_CHALLENGE | HACKATHON | GENERAL_EVENT */
+  eventType?: string;
   startDate?: string;
   endDate?: string;
 }
@@ -415,6 +549,22 @@ export interface SuspendParticipantRequest {
   reason: string;
 }
 
+/** POST /api/users — create a standalone individual user account */
+export interface CreateUserRequest {
+  firstName:   string;
+  lastName:    string;
+  email:       string;
+  phone?:      string;
+  password?:   string;
+  /** Defaults to "USER" on the server if omitted */
+  role?:       string;
+}
+
+/** POST /api/v1/admin/users/{userId}/suspend — suspend a single user account */
+export interface SuspendUserAccountRequest {
+  reason?: string;
+}
+
 export interface KycApproveRequest {
   kycLevel?: string;
   note?: string;
@@ -423,6 +573,158 @@ export interface KycApproveRequest {
 
 export interface KycDeclineRequest {
   reason: string;
+}
+
+// ---------------------------------------------------------------------------
+// Event Creation Request Types — one per backend route
+// ---------------------------------------------------------------------------
+
+/** Resolution item — body field is `specialResolution` (not `isSpecial`) */
+export interface AgmResolutionInput {
+  title:              string;
+  description?:       string;
+  specialResolution?: boolean;   // swagger key — was `isSpecial`
+}
+
+/** POST /api/v1/admin/events/agm — field names match swagger exactly */
+export interface CreateAgmEventRequest {
+  registerId:              string;        // was stakeholderId
+  title:                   string;
+  description?:            string;
+  date:                    string;        // YYYY-MM-DD
+  startTime:               string;        // HH:mm — swagger key `startTime`
+  format:                  "VIRTUAL" | "IN_PERSON" | "HYBRID";
+  venue?:                  string;
+  streamUrl?:              string;
+  maximumCapacity?:        number;
+  agenda?:                 Array<{ time: string; title: string; speaker?: string }>;
+  shareholderTargeting?:   "ALL_REGISTERED" | "CUSTOM";
+  enableProxyVoting?:      boolean;       // swagger key — was `proxyEnabled`
+  quorumPercentage?:       number;        // integer
+  eligibilityCutOffDate?:  string;        // swagger key — was `eligibilityCutoffDate`
+  agmNoticeBase64?:        string;        // swagger key — was `noticeFileBase64`
+  agmNoticeFilename?:      string;
+  shareholderListBase64?:  string;
+  shareholderListFilename?: string;
+  resolutions?:            AgmResolutionInput[];
+}
+
+/** POST /api/v1/admin/events/general — field names match swagger exactly */
+export interface CreateGeneralEventRequest {
+  registerId:          string;            // was stakeholderId
+  title:               string;
+  description?:        string;
+  date:                string;
+  startTime:           string;            // swagger key — was `time`
+  format:              "VIRTUAL" | "IN_PERSON" | "HYBRID";
+  venue?:              string;
+  streamUrl?:          string;
+  maximumCapacity?:    number;            // swagger key — was `maxCapacity`
+  audienceTargeting?:  "OPEN_REGISTRATION" | "INVITE_ONLY";  // was `audienceTargetingChannel: "OPEN"|"INVITE"`
+  agenda?:             Array<{ time: string; title: string; speaker?: string }>;
+}
+
+export interface InnovationPrizeInput    { position: string; reward: string; }  // `position` was `place`
+export interface InnovationCriteriaInput { criterion: string; weight: number; } // `criterion`/`weight` were `label`/`weightPercent`
+
+/**
+ * POST /api/v1/admin/events/innovation — field names match swagger exactly
+ * judgingCriteria weights must sum to 100 if provided.
+ */
+export interface CreateInnovationEventRequest {
+  registerId:           string;           // was stakeholderId
+  title:                string;
+  eventType?:           "INNOVATION_CHALLENGE" | "HACKATHON";
+  themeTrack?:          string;           // was `theme`
+  startDate:            string;
+  endDate:              string;
+  startTime?:           string;           // HH:mm
+  format:               "VIRTUAL" | "IN_PERSON" | "HYBRID";
+  venue?:               string;
+  streamUrl?:           string;
+  problemStatement?:    string;           // was `problemStatementBrief`
+  expectedDeliverable?: string;           // was `rulesSummary`
+  submissionDeadline?:  string;
+  allowedTechStack?:    string;           // was `techStack`
+  participationType?:   "SOLO" | "TEAM" | "BOTH";
+  minTeamSize?:         number;
+  maxTeamSize?:         number;
+  eligibilityCriteria?: string;           // was `eligibility`
+  maximumEntries?:      number;
+  prizeTiers?:          InnovationPrizeInput[];   // was `prizes`
+  judgingCriteria?:     InnovationCriteriaInput[];
+}
+
+/** Speaker shape — `roleTitle` is the swagger key (not `role`) */
+export interface ProductLaunchSpeakerInput { name: string; roleTitle: string; bio?: string; }
+
+/** POST /api/v1/admin/events/product-launch — field names match swagger exactly */
+export interface CreateProductLaunchEventRequest {
+  registerId:          string;            // was stakeholderId
+  title:               string;
+  date:                string;
+  startTime:           string;            // swagger key — was `time`
+  format:              "VIRTUAL" | "IN_PERSON" | "HYBRID";
+  venue?:              string;
+  streamUrl?:          string;
+  maximumCapacity?:    number;            // was `maxCapacity`
+  productName?:        string;
+  tagline?:            string;
+  productDescription?: string;
+  micrositeSlug?:      string;
+  audienceTargeting?:  "OPEN_REGISTRATION" | "INVITE_ONLY";  // was `audienceMode`
+  embargo?: {
+    enabled:    boolean;
+    releaseAt?: string;                   // ISO datetime
+  };                                      // was `embargoEnabled` + `embargoReleaseAt` flat fields
+  speakers?:           ProductLaunchSpeakerInput[];
+}
+
+// ---------------------------------------------------------------------------
+// Client Register Detail — GET /api/v1/client/registers/{registerId}
+// ---------------------------------------------------------------------------
+
+/**
+ * Embedded event row inside ClientRegisterDetailResponse.
+ * Matches the swagger response shape for GET /api/v1/client/registers/{registerId}.
+ */
+export interface ClientRegisterEventItem {
+  id:               string;
+  title:            string;
+  eventType:        string;
+  format:           string;
+  status:           string;
+  date:             string;
+  startTime?:       string;
+  venue?:           string;
+  streamUrl?:       string;
+  organizerName?:   string;
+  organizerLogo?:   string;
+  maximumCapacity?: number;
+  rsvpEnabled?:     boolean;
+  registered?:      boolean;
+}
+
+/**
+ * Full register profile returned by GET /api/v1/client/registers/{registerId}
+ *
+ * Response envelope: data (flat object, not nested)
+ * Nullable fields: rcNumber, industry — render as italic dash "—" in the UI
+ * Date: enrolledAt (swagger primary key, format: YYYY-MM-DD)
+ */
+export interface ClientRegisterDetailResponse {
+  id:                   string;
+  name:                 string;
+  email?:               string;
+  rcNumber?:            string | null;
+  industry?:            string | null;
+  representativeName?:  string;
+  representativePhone?: string;
+  status:               string;
+  enrolledAt?:          string;
+  approvedAt?:          string;   // legacy fallback date alias
+  eventCount?:          number;
+  events?:              ClientRegisterEventItem[];
 }
 
 /**

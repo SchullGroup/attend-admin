@@ -22,8 +22,12 @@ import {
   useReactivateParticipant 
 } from "@/api/participants";
 
+/**
+ * Mask the middle of a submitted KYC credential value.
+ * Only call this when the user HAS submitted KYC — returns "—" for empty/missing values.
+ */
 function maskValue(val?: string) {
-  if (!val) return "Not provided";
+  if (!val) return "—";
   return val.length > 6 ? val.slice(0, 3) + " **** " + val.slice(-3) : val;
 }
 
@@ -190,26 +194,41 @@ export default function ParticipantDetailPage({
                 {participant.kyc?.description || "Verification information unavailable."}
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-xl bg-[hsl(var(--muted)/0.5)] p-4">
-                <p className="attend-section-title mb-2">BVN</p>
-                <p className="text-sm font-mono font-semibold text-[hsl(var(--foreground))]">
-                  {maskValue(participant.kyc?.bvn)}
-                </p>
-              </div>
-              <div className="rounded-xl bg-[hsl(var(--muted)/0.5)] p-4">
-                <p className="attend-section-title mb-2">CHN</p>
-                <p className="text-sm font-mono font-semibold text-[hsl(var(--foreground))]">
-                  {maskValue(participant.kyc?.chn)}
-                </p>
-              </div>
-              <div className="rounded-xl bg-[hsl(var(--muted)/0.5)] p-4">
-                <p className="attend-section-title mb-2">NIN</p>
-                <p className="text-sm font-mono font-semibold text-[hsl(var(--foreground))]">
-                  {maskValue(participant.kyc?.nin)}
-                </p>
-              </div>
-            </div>
+            {/* Only show masked credential tiles when the user has actually submitted KYC.
+                NO_KYC users have no credentials — showing masked tiles would imply hidden data. */}
+            {(() => {
+              const hasKyc = participant.kycStatus?.toUpperCase() !== "NO_KYC"
+                && (participant.kyc?.bvn || participant.kyc?.nin || participant.kyc?.chn);
+              if (!hasKyc) {
+                return (
+                  <p className="text-sm text-[hsl(var(--muted-foreground))] italic">
+                    No KYC credentials submitted.
+                  </p>
+                );
+              }
+              return (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-xl bg-[hsl(var(--muted)/0.5)] p-4">
+                    <p className="attend-section-title mb-2">BVN</p>
+                    <p className="text-sm font-mono font-semibold text-[hsl(var(--foreground))]">
+                      {maskValue(participant.kyc?.bvn)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-[hsl(var(--muted)/0.5)] p-4">
+                    <p className="attend-section-title mb-2">CHN</p>
+                    <p className="text-sm font-mono font-semibold text-[hsl(var(--foreground))]">
+                      {maskValue(participant.kyc?.chn)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-[hsl(var(--muted)/0.5)] p-4">
+                    <p className="attend-section-title mb-2">NIN</p>
+                    <p className="text-sm font-mono font-semibold text-[hsl(var(--foreground))]">
+                      {maskValue(participant.kyc?.nin)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
           </Card>
 
           {/* Activity */}

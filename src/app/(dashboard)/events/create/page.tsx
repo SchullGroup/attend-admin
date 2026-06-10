@@ -1,7 +1,13 @@
 "use client";
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useStore } from "@/lib/store";
+import { useRegisters } from "@/api/registers";
+import {
+  useCreateAgmEvent,
+  useCreateGeneralEvent,
+  useCreateInnovationEvent,
+  useCreateProductLaunchEvent,
+} from "@/api/events";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -369,16 +375,31 @@ function FormatPicker({ value, onChange }: { value: Format; onChange: (f: Format
 
 // ─── AGM Steps ────────────────────────────────────────────────────────────────
 
-function AgmStep0({ s, organiserName }: { s: AgmState; organiserName: string }) {
+function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState; organiserName: string; showErrors?: boolean }) {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Label className="mb-2 block">Meeting Title</Label>
-        <Input placeholder="e.g. Zenith Bank Plc — 2026 Annual General Meeting" value={s.title} onChange={(e) => s.setTitle(e.target.value)} />
+        <Label className="mb-2 block">Meeting Title <span className="text-red-500">*</span></Label>
+        <Input
+          placeholder="e.g. Zenith Bank Plc — 2026 Annual General Meeting"
+          value={s.title}
+          onChange={(e) => s.setTitle(e.target.value)}
+          className={cn(showErrors && !s.title.trim() && "border-red-400 focus-visible:ring-red-200")}
+        />
+        {showErrors && !s.title.trim() && <p className="text-xs text-red-500 mt-1">Meeting title is required.</p>}
       </div>
       <OrgChip name={organiserName} />
       <div className="grid grid-cols-2 gap-4">
-        <div><Label className="mb-2 block">Date</Label><Input type="date" value={s.date} onChange={(e) => s.setDate(e.target.value)} /></div>
+        <div>
+          <Label className="mb-2 block">Date <span className="text-red-500">*</span></Label>
+          <Input
+            type="date"
+            value={s.date}
+            onChange={(e) => s.setDate(e.target.value)}
+            className={cn(showErrors && !s.date && "border-red-400 focus-visible:ring-red-200")}
+          />
+          {showErrors && !s.date && <p className="text-xs text-red-500 mt-1">Date is required.</p>}
+        </div>
         <div><Label className="mb-2 block">Start Time</Label><Input type="time" value={s.time} onChange={(e) => s.setTime(e.target.value)} /></div>
       </div>
       <FormatPicker value={s.format} onChange={s.setFormat} />
@@ -389,13 +410,22 @@ function AgmStep0({ s, organiserName }: { s: AgmState; organiserName: string }) 
   );
 }
 
-function AgmStep1({ s }: { s: AgmState }) {
+function AgmStep1({ s, showErrors = false }: { s: AgmState; showErrors?: boolean }) {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <Label className="mb-2 block">Notice Period</Label>
-        <Input type="number" placeholder="21" value={s.noticeDays} onChange={(e) => s.setNoticeDays(e.target.value)} className="max-w-[160px]" />
-        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Minimum 21 days per CAMA</p>
+        <Label className="mb-2 block">Notice Period <span className="text-red-500">*</span></Label>
+        <Input
+          type="number"
+          placeholder="21"
+          value={s.noticeDays}
+          onChange={(e) => s.setNoticeDays(e.target.value)}
+          className={cn("max-w-[160px]", showErrors && !s.noticeDays && "border-red-400 focus-visible:ring-red-200")}
+        />
+        {showErrors && !s.noticeDays
+          ? <p className="text-xs text-red-500 mt-1">Notice period is required (minimum 21 days).</p>
+          : <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Minimum 21 days per CAMA</p>
+        }
       </div>
       <div>
         <p className="text-sm font-semibold text-[hsl(var(--foreground))] mb-1">AGM Notice Document</p>
@@ -411,11 +441,12 @@ function AgmStep1({ s }: { s: AgmState }) {
   );
 }
 
-function AgmStep2({ s }: { s: AgmState }) {
+function AgmStep2({ s, showErrors = false }: { s: AgmState; showErrors?: boolean }) {
+  const hasValidResolution = s.resolutions.some((r) => r.title.trim());
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between mb-1">
-        <Label>Resolutions</Label>
+        <Label>Resolutions <span className="text-red-500">*</span></Label>
         <button type="button" onClick={s.addResolution} className="flex items-center gap-1 text-sm font-medium text-[hsl(var(--primary))] hover:opacity-70">
           <Plus className="h-3.5 w-3.5" /> Add resolution
         </button>
@@ -450,6 +481,9 @@ function AgmStep2({ s }: { s: AgmState }) {
           </div>
         </div>
       ))}
+      {showErrors && !hasValidResolution && (
+        <p className="text-xs text-red-500">At least one resolution with a title is required.</p>
+      )}
     </div>
   );
 }
@@ -501,13 +535,31 @@ function AgmStep3({ s }: { s: AgmState }) {
 
 // ─── Launch Steps ─────────────────────────────────────────────────────────────
 
-function LaunchStep0({ s, organiserName }: { s: LaunchState; organiserName: string }) {
+function LaunchStep0({ s, organiserName, showErrors = false }: { s: LaunchState; organiserName: string; showErrors?: boolean }) {
   return (
     <div className="flex flex-col gap-4">
-      <div><Label className="mb-2 block">Event Title</Label><Input placeholder="e.g. ZenithDirect 3.0 — Official Product Launch" value={s.title} onChange={(e) => s.setTitle(e.target.value)} /></div>
+      <div>
+        <Label className="mb-2 block">Event Title <span className="text-red-500">*</span></Label>
+        <Input
+          placeholder="e.g. ZenithDirect 3.0 — Official Product Launch"
+          value={s.title}
+          onChange={(e) => s.setTitle(e.target.value)}
+          className={cn(showErrors && !s.title.trim() && "border-red-400 focus-visible:ring-red-200")}
+        />
+        {showErrors && !s.title.trim() && <p className="text-xs text-red-500 mt-1">Event title is required.</p>}
+      </div>
       <OrgChip name={organiserName} />
       <div className="grid grid-cols-2 gap-4">
-        <div><Label className="mb-2 block">Date</Label><Input type="date" value={s.date} onChange={(e) => s.setDate(e.target.value)} /></div>
+        <div>
+          <Label className="mb-2 block">Date <span className="text-red-500">*</span></Label>
+          <Input
+            type="date"
+            value={s.date}
+            onChange={(e) => s.setDate(e.target.value)}
+            className={cn(showErrors && !s.date && "border-red-400 focus-visible:ring-red-200")}
+          />
+          {showErrors && !s.date && <p className="text-xs text-red-500 mt-1">Date is required.</p>}
+        </div>
         <div><Label className="mb-2 block">Start Time</Label><Input type="time" value={s.time} onChange={(e) => s.setTime(e.target.value)} /></div>
       </div>
       <FormatPicker value={s.format} onChange={s.setFormat} />
@@ -519,10 +571,19 @@ function LaunchStep0({ s, organiserName }: { s: LaunchState; organiserName: stri
   );
 }
 
-function LaunchStep1({ s }: { s: LaunchState }) {
+function LaunchStep1({ s, showErrors = false }: { s: LaunchState; showErrors?: boolean }) {
   return (
     <div className="flex flex-col gap-4">
-      <div><Label className="mb-2 block">Product Name</Label><Input placeholder="e.g. ZenithDirect 3.0" value={s.productName} onChange={(e) => s.setProductName(e.target.value)} /></div>
+      <div>
+        <Label className="mb-2 block">Product Name <span className="text-red-500">*</span></Label>
+        <Input
+          placeholder="e.g. ZenithDirect 3.0"
+          value={s.productName}
+          onChange={(e) => s.setProductName(e.target.value)}
+          className={cn(showErrors && !s.productName.trim() && "border-red-400 focus-visible:ring-red-200")}
+        />
+        {showErrors && !s.productName.trim() && <p className="text-xs text-red-500 mt-1">Product name is required.</p>}
+      </div>
       <div><Label className="mb-2 block">Tagline</Label><Input placeholder="e.g. Banking beyond boundaries." value={s.tagline} onChange={(e) => s.setTagline(e.target.value)} /></div>
       <div>
         <Label className="mb-2 block">Product Description</Label>
@@ -615,15 +676,48 @@ function LaunchStep3({ s }: { s: LaunchState }) {
 
 // ─── Hackathon Steps ──────────────────────────────────────────────────────────
 
-function HackStep0({ s, organiserName }: { s: HackState; organiserName: string }) {
+function HackStep0({ s, organiserName, showErrors = false }: { s: HackState; organiserName: string; showErrors?: boolean }) {
   return (
     <div className="flex flex-col gap-4">
-      <div><Label className="mb-2 block">Challenge Title</Label><Input placeholder="e.g. Meristem FinTech Innovation Challenge 2026" value={s.title} onChange={(e) => s.setTitle(e.target.value)} /></div>
+      <div>
+        <Label className="mb-2 block">Challenge Title <span className="text-red-500">*</span></Label>
+        <Input
+          placeholder="e.g. Meristem FinTech Innovation Challenge 2026"
+          value={s.title}
+          onChange={(e) => s.setTitle(e.target.value)}
+          className={cn(showErrors && !s.title.trim() && "border-red-400 focus-visible:ring-red-200")}
+        />
+        {showErrors && !s.title.trim() && <p className="text-xs text-red-500 mt-1">Challenge title is required.</p>}
+      </div>
       <OrgChip name={organiserName} />
       <div><Label className="mb-2 block">Theme / Track</Label><Input placeholder="e.g. Open Banking, AgriTech" value={s.theme} onChange={(e) => s.setTheme(e.target.value)} /></div>
       <div className="grid grid-cols-2 gap-4">
-        <div><Label className="mb-2 block">Start Date</Label><Input type="date" value={s.startDate} onChange={(e) => s.setStartDate(e.target.value)} /></div>
-        <div><Label className="mb-2 block">End Date</Label><Input type="date" value={s.endDate} onChange={(e) => s.setEndDate(e.target.value)} /></div>
+        <div>
+          <Label className="mb-2 block">Start Date <span className="text-red-500">*</span></Label>
+          <Input
+            type="date"
+            value={s.startDate}
+            onChange={(e) => s.setStartDate(e.target.value)}
+            className={cn(showErrors && !s.startDate && "border-red-400 focus-visible:ring-red-200")}
+          />
+          {showErrors && !s.startDate && <p className="text-xs text-red-500 mt-1">Start date is required.</p>}
+        </div>
+        <div>
+          <Label className="mb-2 block">End Date <span className="text-red-500">*</span></Label>
+          <Input
+            type="date"
+            value={s.endDate}
+            onChange={(e) => s.setEndDate(e.target.value)}
+            className={cn(showErrors && !s.endDate && "border-red-400 focus-visible:ring-red-200")}
+          />
+          {showErrors && !s.endDate && <p className="text-xs text-red-500 mt-1">End date is required.</p>}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label className="mb-2 block">Start Time</Label>
+          <Input type="time" value={s.time} onChange={(e) => s.setTime(e.target.value)} />
+        </div>
       </div>
       <FormatPicker value={s.format} onChange={s.setFormat} />
       {(s.format === "in_person" || s.format === "hybrid") && (
@@ -633,14 +727,24 @@ function HackStep0({ s, organiserName }: { s: HackState; organiserName: string }
   );
 }
 
-function HackStep1({ s }: { s: HackState }) {
+function HackStep1({ s, showErrors = false }: { s: HackState; showErrors?: boolean }) {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Label className="mb-2 block">Problem Statement</Label>
-        <textarea rows={4} placeholder="What problem are participants solving? Be specific and measurable."
-          value={s.problemStatement} onChange={(e) => s.setProblemStatement(e.target.value)}
-          className="flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none" />
+        <Label className="mb-2 block">Problem Statement <span className="text-red-500">*</span></Label>
+        <textarea
+          rows={4}
+          placeholder="What problem are participants solving? Be specific and measurable."
+          value={s.problemStatement}
+          onChange={(e) => s.setProblemStatement(e.target.value)}
+          className={cn(
+            "flex w-full rounded-lg border bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 resize-none",
+            showErrors && !s.problemStatement.trim()
+              ? "border-red-400 focus:ring-red-200"
+              : "border-[hsl(var(--input))] focus:ring-[hsl(var(--ring))]"
+          )}
+        />
+        {showErrors && !s.problemStatement.trim() && <p className="text-xs text-red-500 mt-1">Problem statement is required.</p>}
       </div>
       <div><Label className="mb-2 block">Expected Deliverable</Label><Input placeholder="e.g. Working prototype + 3-min pitch deck" value={s.deliverable} onChange={(e) => s.setDeliverable(e.target.value)} /></div>
       <div><Label className="mb-2 block">Submission Deadline</Label><Input type="date" value={s.submissionDeadline} onChange={(e) => s.setSubmissionDeadline(e.target.value)} /></div>
@@ -732,10 +836,19 @@ function HackStep3({ s }: { s: HackState }) {
 
 // ─── General Steps ────────────────────────────────────────────────────────────
 
-function GeneralStep0({ s, organiserName }: { s: GeneralState; organiserName: string }) {
+function GeneralStep0({ s, organiserName, showErrors = false }: { s: GeneralState; organiserName: string; showErrors?: boolean }) {
   return (
     <div className="flex flex-col gap-4">
-      <div><Label className="mb-2 block">Event Title</Label><Input placeholder="e.g. Meristem Capital Markets Summit 2026" value={s.title} onChange={(e) => s.setTitle(e.target.value)} /></div>
+      <div>
+        <Label className="mb-2 block">Event Title <span className="text-red-500">*</span></Label>
+        <Input
+          placeholder="e.g. Meristem Capital Markets Summit 2026"
+          value={s.title}
+          onChange={(e) => s.setTitle(e.target.value)}
+          className={cn(showErrors && !s.title.trim() && "border-red-400 focus-visible:ring-red-200")}
+        />
+        {showErrors && !s.title.trim() && <p className="text-xs text-red-500 mt-1">Event title is required.</p>}
+      </div>
       <OrgChip name={organiserName} />
       <div><Label className="mb-2 block">Capacity</Label><Input type="number" placeholder="e.g. 1000" value={s.capacity} onChange={(e) => s.setCapacity(e.target.value)} /></div>
       <div>
@@ -745,7 +858,16 @@ function GeneralStep0({ s, organiserName }: { s: GeneralState; organiserName: st
           className="flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none" />
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <div><Label className="mb-2 block">Date</Label><Input type="date" value={s.date} onChange={(e) => s.setDate(e.target.value)} /></div>
+        <div>
+          <Label className="mb-2 block">Date <span className="text-red-500">*</span></Label>
+          <Input
+            type="date"
+            value={s.date}
+            onChange={(e) => s.setDate(e.target.value)}
+            className={cn(showErrors && !s.date && "border-red-400 focus-visible:ring-red-200")}
+          />
+          {showErrors && !s.date && <p className="text-xs text-red-500 mt-1">Date is required.</p>}
+        </div>
         <div><Label className="mb-2 block">Start Time</Label><Input type="time" value={s.time} onChange={(e) => s.setTime(e.target.value)} /></div>
       </div>
       <FormatPicker value={s.format} onChange={s.setFormat} />
@@ -902,6 +1024,7 @@ function useLaunchState() {
   const [time, setTime] = useState("10:00");
   const [format, setFormat] = useState<Format>("virtual");
   const [venue, setVenue] = useState("");
+  const [streamUrl, setStreamUrl] = useState("");
   const [capacity, setCapacity] = useState("");
   const [productName, setProductName] = useState("");
   const [tagline, setTagline] = useState("");
@@ -914,7 +1037,7 @@ function useLaunchState() {
   const addSpeaker = () => setSpeakers((s) => [...s, { id: genId(), name: "", role: "", bio: "" }]);
   const removeSpeaker = (id: string) => setSpeakers((s) => s.filter((x) => x.id !== id));
   const updateSpeaker = (id: string, field: keyof SpeakerItem, val: string) => setSpeakers((s) => s.map((x) => x.id === id ? { ...x, [field]: val } : x));
-  return { title, setTitle, date, setDate, time, setTime, format, setFormat, venue, setVenue, capacity, setCapacity, productName, setProductName, tagline, setTagline, productDesc, setProductDesc, slug, setSlug, speakers, addSpeaker, removeSpeaker, updateSpeaker, embargoEnabled, setEmbargoEnabled, embargoAt, setEmbargoAt, audienceMode, setAudienceMode };
+  return { title, setTitle, date, setDate, time, setTime, format, setFormat, venue, setVenue, streamUrl, setStreamUrl, capacity, setCapacity, productName, setProductName, tagline, setTagline, productDesc, setProductDesc, slug, setSlug, speakers, addSpeaker, removeSpeaker, updateSpeaker, embargoEnabled, setEmbargoEnabled, embargoAt, setEmbargoAt, audienceMode, setAudienceMode };
 }
 
 function useHackState() {
@@ -922,6 +1045,7 @@ function useHackState() {
   const [theme, setTheme] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [time, setTime] = useState("09:00");         // ← added: event start time
   const [format, setFormat] = useState<Format>("virtual");
   const [venue, setVenue] = useState("");
   const [problemStatement, setProblemStatement] = useState("");
@@ -941,7 +1065,7 @@ function useHackState() {
   const addCriterion = () => setCriteria((c) => [...c, { id: genId(), label: "", weight: "" }]);
   const removeCriterion = (id: string) => setCriteria((c) => c.filter((x) => x.id !== id));
   const updateCriterion = (id: string, field: "label" | "weight", val: string) => setCriteria((c) => c.map((x) => x.id === id ? { ...x, [field]: val } : x));
-  return { title, setTitle, theme, setTheme, startDate, setStartDate, endDate, setEndDate, format, setFormat, venue, setVenue, problemStatement, setProblemStatement, deliverable, setDeliverable, submissionDeadline, setSubmissionDeadline, techStack, setTechStack, participationType, setParticipationType, minTeam, setMinTeam, maxTeam, setMaxTeam, eligibility, setEligibility, capacity, setCapacity, prizes, addPrize, removePrize, updatePrize, criteria, addCriterion, removeCriterion, updateCriterion };
+  return { title, setTitle, theme, setTheme, startDate, setStartDate, endDate, setEndDate, time, setTime, format, setFormat, venue, setVenue, problemStatement, setProblemStatement, deliverable, setDeliverable, submissionDeadline, setSubmissionDeadline, techStack, setTechStack, participationType, setParticipationType, minTeam, setMinTeam, maxTeam, setMaxTeam, eligibility, setEligibility, capacity, setCapacity, prizes, addPrize, removePrize, updatePrize, criteria, addCriterion, removeCriterion, updateCriterion };
 }
 
 function useGeneralState() {
@@ -962,12 +1086,22 @@ function useGeneralState() {
 function CreateEventInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { organisers } = useStore();
+
+  // Registers directory — GET /api/v1/client/registers?status=ACTIVE
+  // useRegisters signature: (status, page, size)
+  // Response envelope: data.registers[] — each row has id, name, email, rcNumber, …
+  const { data: registersData } = useRegisters("ACTIVE", 0, 100);
+  const activeOrganisers = (registersData?.registers ?? []).map((reg) => ({
+    id:   reg.id,
+    name: reg.name || (reg as any).companyName || reg.id,
+  }));
 
   const [selectedModule, setSelectedModule] = useState<ModuleId | null>(null);
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [organiserId, setOrganiserId] = useState("");
+  // Tracks whether the user has attempted to advance past an incomplete step
+  const [showStepErrors, setShowStepErrors] = useState(false);
 
   useEffect(() => {
     const type = searchParams.get("type") as ModuleId | null;
@@ -982,7 +1116,12 @@ function CreateEventInner() {
   const hack    = useHackState();
   const general = useGeneralState();
 
-  const activeOrganisers = organisers.filter((o) => o.status === "active");
+  // Typed event creation mutations — one per module type
+  const createAgm      = useCreateAgmEvent();
+  const createGeneral  = useCreateGeneralEvent();
+  const createHack     = useCreateInnovationEvent();
+  const createLaunch   = useCreateProductLaunchEvent();
+
   const selectedOrganiser = activeOrganisers.find((o) => o.id === organiserId) ?? null;
   const organiserName = selectedOrganiser?.name ?? "";
 
@@ -991,12 +1130,47 @@ function CreateEventInner() {
   const meta   = selectedModule ? STEP_META[selectedModule] : [];
   const isLast = step === steps.length - 1;
 
-  function next() { setStep((s) => Math.min(s + 1, steps.length - 1)); }
-  function back() { setStep((s) => Math.max(s - 1, 0)); }
-  function skip() { next(); }
+  /** Returns true when all required inputs on the current step are satisfied. */
+  function getStepValid(module: ModuleId, currentStep: number): boolean {
+    if (module === "AGM") {
+      if (currentStep === 0) return !!agm.title.trim() && !!agm.date;
+      if (currentStep === 1) return !!agm.noticeDays;
+      if (currentStep === 2) return agm.resolutions.some((r) => r.title.trim());
+      return true;
+    }
+    if (module === "LAUNCH") {
+      if (currentStep === 0) return !!launch.title.trim() && !!launch.date;
+      if (currentStep === 1) return !!launch.productName.trim();
+      return true;
+    }
+    if (module === "HACKATHON") {
+      if (currentStep === 0) return !!hack.title.trim() && !!hack.startDate && !!hack.endDate;
+      if (currentStep === 1) return !!hack.problemStatement.trim();
+      return true;
+    }
+    if (module === "GENERAL") {
+      if (currentStep === 0) return !!general.title.trim() && !!general.date;
+      return true;
+    }
+    return true;
+  }
 
-  function selectModule(id: ModuleId) { setSelectedModule(id); setStep(0); }
-  function resetModule() { setSelectedModule(null); setStep(0); }
+  const stepValid = selectedModule ? getStepValid(selectedModule, step) : true;
+
+  function next() {
+    if (!stepValid) {
+      setShowStepErrors(true);
+      toast.error("Please fill in all required fields on this screen before proceeding.");
+      return;
+    }
+    setShowStepErrors(false);
+    setStep((s) => Math.min(s + 1, steps.length - 1));
+  }
+  function back() { setShowStepErrors(false); setStep((s) => Math.max(s - 1, 0)); }
+  function skip() { setShowStepErrors(false); setStep((s) => Math.min(s + 1, steps.length - 1)); }
+
+  function selectModule(id: ModuleId) { setSelectedModule(id); setStep(0); setShowStepErrors(false); }
+  function resetModule() { setSelectedModule(null); setStep(0); setShowStepErrors(false); }
 
   function handleSubmit() {
     if (!organiserId) {
@@ -1004,11 +1178,117 @@ function CreateEventInner() {
       return;
     }
     if (!selectedModule) return;
-    setSubmitting(true);
-    setTimeout(() => {
-      toast.success("Event created successfully!");
-      router.push("/events");
-    }, 500);
+
+    const onDone = () => router.push("/events");
+
+    if (selectedModule === "AGM") {
+      setSubmitting(true);
+      createAgm.mutate(
+        {
+          registerId:             organiserId,                                     // was stakeholderId
+          title:                  agm.title,
+          date:                   agm.date,
+          startTime:              agm.time,                                        // swagger key `startTime`
+          format:                 agm.format.toUpperCase() as "VIRTUAL" | "IN_PERSON" | "HYBRID",
+          venue:                  agm.venue                   || undefined,
+          quorumPercentage:       parseInt(agm.quorum, 10)    || undefined,
+          eligibilityCutOffDate:  agm.cutoff                  || undefined,        // capital D — swagger key
+          enableProxyVoting:      agm.proxyEnabled,                                // swagger key
+          shareholderTargeting:   agm.shareholderTargeting === "all" ? "ALL_REGISTERED" : "CUSTOM",
+          resolutions:            agm.resolutions
+            .filter((r) => r.title.trim())
+            .map((r) => ({ title: r.title, description: r.description || undefined, specialResolution: r.isSpecial })),
+        },
+        { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+      );
+      return;
+    }
+
+    if (selectedModule === "GENERAL") {
+      setSubmitting(true);
+      createGeneral.mutate(
+        {
+          registerId:        organiserId,                                          // was stakeholderId
+          title:             general.title,
+          description:       general.description    || undefined,
+          date:              general.date,
+          startTime:         general.time,                                         // swagger key `startTime`
+          format:            general.format.toUpperCase() as "VIRTUAL" | "IN_PERSON" | "HYBRID",
+          venue:             general.venue           || undefined,
+          streamUrl:         general.streamUrl       || undefined,
+          maximumCapacity:   parseInt(general.capacity, 10) || undefined,          // swagger key `maximumCapacity`
+          audienceTargeting: general.audienceMode === "open"
+                               ? "OPEN_REGISTRATION"
+                               : "INVITE_ONLY",                                    // swagger enum values
+        },
+        { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+      );
+      return;
+    }
+
+    if (selectedModule === "HACKATHON") {
+      setSubmitting(true);
+      createHack.mutate(
+        {
+          registerId:           organiserId,                                       // was stakeholderId
+          title:                hack.title,
+          eventType:            "INNOVATION_CHALLENGE",
+          themeTrack:           hack.theme              || undefined,              // swagger key `themeTrack`
+          startDate:            hack.startDate,
+          endDate:              hack.endDate,
+          startTime:            hack.time               || "09:00",               // swagger key `startTime`
+          format:               hack.format.toUpperCase() as "VIRTUAL" | "IN_PERSON" | "HYBRID",
+          venue:                hack.venue              || undefined,
+          problemStatement:     hack.problemStatement   || undefined,              // swagger key
+          expectedDeliverable:  hack.deliverable        || undefined,              // swagger key
+          submissionDeadline:   hack.submissionDeadline || undefined,
+          allowedTechStack:     hack.techStack          || undefined,              // swagger key
+          participationType:    hack.participationType.toUpperCase() as "SOLO" | "TEAM" | "BOTH",
+          minTeamSize:          parseInt(hack.minTeam, 10)   || undefined,
+          maxTeamSize:          parseInt(hack.maxTeam, 10)   || undefined,
+          eligibilityCriteria:  hack.eligibility        || undefined,              // swagger key
+          maximumEntries:       parseInt(hack.capacity, 10)  || undefined,
+          prizeTiers:           hack.prizes.filter((p) => p.reward).map((p) => ({ position: p.place, reward: p.reward })),
+          judgingCriteria:      hack.criteria.map((c) => ({
+            criterion: c.label,                                                    // swagger key `criterion`
+            weight:    parseInt(c.weight.replace("%", ""), 10) || 0,             // swagger key `weight`
+          })),
+        },
+        { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+      );
+      return;
+    }
+
+    if (selectedModule === "LAUNCH") {
+      setSubmitting(true);
+      createLaunch.mutate(
+        {
+          registerId:         organiserId,                                         // was stakeholderId
+          title:              launch.title,
+          date:               launch.date,
+          startTime:          launch.time,                                         // swagger key `startTime`
+          format:             launch.format.toUpperCase() as "VIRTUAL" | "IN_PERSON" | "HYBRID",
+          venue:              launch.venue               || undefined,
+          streamUrl:          launch.streamUrl           || undefined,
+          maximumCapacity:    parseInt(launch.capacity, 10) || undefined,          // swagger key
+          productName:        launch.productName          || undefined,
+          tagline:            launch.tagline              || undefined,
+          productDescription: launch.productDesc          || undefined,
+          micrositeSlug:      launch.slug                 || undefined,
+          audienceTargeting:  launch.audienceMode === "open"
+                                ? "OPEN_REGISTRATION"
+                                : "INVITE_ONLY",                                   // swagger enum
+          embargo: {
+            enabled:   launch.embargoEnabled,
+            releaseAt: launch.embargoEnabled ? (launch.embargoAt || undefined) : undefined,
+          },                                                                        // swagger nested object
+          speakers: launch.speakers
+            .filter((sp) => sp.name.trim())
+            .map((sp) => ({ name: sp.name, roleTitle: sp.role, bio: sp.bio || undefined })), // swagger key `roleTitle`
+        },
+        { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+      );
+    }
   }
 
   // ── Module selection screen ───────────────────────────────────────────────
@@ -1114,28 +1394,28 @@ function CreateEventInner() {
 
   function renderStep() {
     if (selectedModule === "AGM") {
-      if (step === 0) return <AgmStep0 s={agm} organiserName={organiserName} />;
-      if (step === 1) return <AgmStep1 s={agm} />;
-      if (step === 2) return <AgmStep2 s={agm} />;
+      if (step === 0) return <AgmStep0 s={agm} organiserName={organiserName} showErrors={showStepErrors} />;
+      if (step === 1) return <AgmStep1 s={agm} showErrors={showStepErrors} />;
+      if (step === 2) return <AgmStep2 s={agm} showErrors={showStepErrors} />;
       if (step === 3) return <AgmStep3 s={agm} />;
       return <AgmReview s={agm} organiserName={organiserName} />;
     }
     if (selectedModule === "LAUNCH") {
-      if (step === 0) return <LaunchStep0 s={launch} organiserName={organiserName} />;
-      if (step === 1) return <LaunchStep1 s={launch} />;
+      if (step === 0) return <LaunchStep0 s={launch} organiserName={organiserName} showErrors={showStepErrors} />;
+      if (step === 1) return <LaunchStep1 s={launch} showErrors={showStepErrors} />;
       if (step === 2) return <LaunchStep2 s={launch} />;
       if (step === 3) return <LaunchStep3 s={launch} />;
       return <LaunchReview s={launch} organiserName={organiserName} />;
     }
     if (selectedModule === "HACKATHON") {
-      if (step === 0) return <HackStep0 s={hack} organiserName={organiserName} />;
-      if (step === 1) return <HackStep1 s={hack} />;
+      if (step === 0) return <HackStep0 s={hack} organiserName={organiserName} showErrors={showStepErrors} />;
+      if (step === 1) return <HackStep1 s={hack} showErrors={showStepErrors} />;
       if (step === 2) return <HackStep2 s={hack} />;
       if (step === 3) return <HackStep3 s={hack} />;
       return <HackReview s={hack} organiserName={organiserName} />;
     }
     if (selectedModule === "GENERAL") {
-      if (step === 0) return <GeneralStep0 s={general} organiserName={organiserName} />;
+      if (step === 0) return <GeneralStep0 s={general} organiserName={organiserName} showErrors={showStepErrors} />;
       if (step === 1) return <GeneralStep2 s={general} />;
       return <GeneralReview s={general} organiserName={organiserName} />;
     }
@@ -1181,21 +1461,31 @@ function CreateEventInner() {
                 </Button>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              {steps[step]?.optional && (
-                <button type="button" onClick={skip} className="text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] underline transition-colors">
-                  Skip this step
-                </button>
-              )}
-              {!isLast ? (
-                <Button type="button" onClick={next} className="gap-1.5 px-6">
-                  Continue <ChevronRight className="h-4 w-4" />
-                </Button>
-              ) : (
-                <Button type="button" onClick={handleSubmit} disabled={submitting} className="gap-1.5 px-6"
-                  style={{ backgroundColor: mod!.color }}>
-                  {submitting ? "Creating…" : <><Check className="h-4 w-4" /> Create {mod!.label}</>}
-                </Button>
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-3">
+                {steps[step]?.optional && (
+                  <button type="button" onClick={skip} className="text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] underline transition-colors">
+                    Skip this step
+                  </button>
+                )}
+                {!isLast ? (
+                  <Button
+                    type="button"
+                    onClick={next}
+                    className={cn("gap-1.5 px-6", !stepValid && "opacity-50 cursor-not-allowed")}
+                  >
+                    Continue <ChevronRight className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button type="button" onClick={handleSubmit} disabled={submitting} className="gap-1.5 px-6"
+                    style={{ backgroundColor: mod!.color }}>
+                    {submitting ? "Creating…" : <><Check className="h-4 w-4" /> Create {mod!.label}</>}
+                  </Button>
+                )}
+              </div>
+              {/* Inline hint shown only after the user has attempted to advance */}
+              {!isLast && !stepValid && showStepErrors && (
+                <p className="text-xs text-red-500">Complete the required fields above to continue.</p>
               )}
             </div>
           </div>
