@@ -1,11 +1,12 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Lock, Eye, EyeOff, Check, X, CheckCircle2, Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useResetPassword } from "@/api/auth/auth";
 
 const RULES = [
   { label: "At least 8 characters", test: (p: string) => p.length >= 8          },
@@ -13,14 +14,18 @@ const RULES = [
   { label: "Contains a number",      test: (p: string) => /\d/.test(p)           },
 ];
 
-export default function ResetPasswordPage() {
+function ResetPasswordInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token") ?? "";
+
   const [password,      setPassword]      = useState("");
   const [confirm,       setConfirm]       = useState("");
   const [showPassword,  setShowPassword]  = useState(false);
   const [showConfirm,   setShowConfirm]   = useState(false);
-  const [loading,       setLoading]       = useState(false);
   const [done,          setDone]          = useState(false);
+
+  const resetPassword = useResetPassword();
 
   const rulesPass = RULES.every((r) => r.test(password));
   const matches   = password === confirm && confirm.length > 0;
@@ -29,8 +34,10 @@ export default function ResetPasswordPage() {
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
-    setLoading(true);
-    setTimeout(() => { setLoading(false); setDone(true); }, 1200);
+    resetPassword.mutate(
+      { token, newPassword: password },
+      { onSuccess: () => setDone(true) }
+    );
   }
 
   return (
@@ -156,9 +163,9 @@ export default function ResetPasswordPage() {
                 <Button
                   type="submit"
                   className="w-full h-11"
-                  disabled={loading || !canSubmit}
+                  disabled={resetPassword.isPending || !canSubmit}
                 >
-                  {loading ? (
+                  {resetPassword.isPending ? (
                     <><Loader2 className="h-4 w-4 animate-spin" /> Updating…</>
                   ) : (
                     "Update password"
@@ -184,5 +191,13 @@ export default function ResetPasswordPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense>
+      <ResetPasswordInner />
+    </Suspense>
   );
 }

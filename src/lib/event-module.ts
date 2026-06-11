@@ -47,13 +47,17 @@ export function getEventModule(event: {
 }
 
 /**
- * Extract the organiser name from any event summary object.
- * organizerName is what the API returns for the register selected at event creation.
+ * Extract the organiser (register) name from any event object.
+ *
+ * Priority per API spec (GET /api/v1/client/events response):
+ *   1. registerName   — primary field in client event list response
+ *   2. stakeholderName — alias returned by some admin endpoints
+ *   3. organizerName  — alias returned by some admin endpoints
  */
 export function getEventRegisterName(event: {
-  stakeholderName?: string | null;
   registerName?:    string | null;
-  organizerName?:   string;
+  stakeholderName?: string | null;
+  organizerName?:   string | null;
 }): string {
-  return event.stakeholderName || event.registerName || event.organizerName || "";
+  return event.registerName || event.stakeholderName || event.organizerName || "";
 }

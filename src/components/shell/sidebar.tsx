@@ -1,4 +1,5 @@
 "use client";
+import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -27,6 +28,10 @@ import { useGetMe, useLogout } from "@/api/auth/hooks";
 import { usePendingEnrollments } from "@/api/super-admin";
 import Cookies from "js-cookie";
 
+/**
+ * `superAdminOnly: true`  — item/section is hidden unless the user has SUPER_ADMIN role.
+ * Sections with all items hidden are automatically omitted from the nav.
+ */
 const SECTIONS = [
   {
     label: "Platform",
@@ -35,34 +40,34 @@ const SECTIONS = [
   {
     label: "Platform Events",
     items: [
-      { title: "Create Event", icon: PlusCircle, href: "/events/create" },
-      { title: "All Events", icon: CalendarDays, href: "/events" },
+      { title: "Create Event",      icon: PlusCircle, href: "/events/create" },
+      { title: "All Events",        icon: CalendarDays, href: "/events" },
       { title: "Live Control Room", icon: Radio, href: "/events/live" },
-      { title: "QR Check-In", icon: QrCode, href: "/events/qr-checkin" },
-      { title: "Vote Results", icon: Vote, href: "/events/votes" },
+      { title: "QR Check-In",       icon: QrCode, href: "/events/qr-checkin" },
+      { title: "Vote Results",      icon: Vote, href: "/events/votes" },
     ],
   },
   {
     label: "Innovation Challenges",
     items: [
-      { title: "Challenges", icon: Lightbulb, href: "/hackathons" },
-      {
-        title: "Applications",
-        icon: FileApp,
-        href: "/hackathons/applications",
-      },
-      { title: "Judging", icon: Star, href: "/hackathons/judging" },
+      { title: "Challenges",   icon: Lightbulb, href: "/hackathons" },
+      { title: "Applications", icon: FileApp,   href: "/hackathons/applications" },
+      { title: "Judging",      icon: Star,      href: "/hackathons/judging" },
     ],
   },
   {
+    // RBAC: Registrars are the managing firms — SUPER_ADMIN visibility only
     label: "Registrars",
+    superAdminOnly: true,
     items: [
-      { title: "All Registrars", icon: Building2, href: "/registrars" },
+      { title: "All Registrars",  icon: Building2, href: "/registrars" },
       { title: "Enrol Registrar", icon: PlusCircle, href: "/registrars/enrol" },
     ],
   },
   {
+    // RBAC: Registers are client-scoped organisations — hidden from SUPER_ADMIN
     label: "Registers",
+    clientOnly: true,
     items: [
       { title: "All Registers", icon: ClipboardList, href: "/registers" },
       { title: "Enrol Register", icon: UserCog, href: "/registers/enrol" },
@@ -71,21 +76,27 @@ const SECTIONS = [
   {
     label: "People",
     items: [
-      { title: "All Users", icon: Users, href: "/participants" },
+      // RBAC: cross-tenant user roster — SUPER_ADMIN only
+      { title: "All Users", icon: Users, href: "/participants", superAdminOnly: true },
     ],
   },
   {
     label: "System",
     items: [
-      { title: "Documents", icon: FolderOpen, href: "/documents" },
-      { title: "Analytics", icon: BarChart3, href: "/analytics" },
-      { title: "Audit Log", icon: ScrollText, href: "/audit" },
-      { title: "Settings", icon: Settings, href: "/settings" },
-      { title: "Roles & Access", icon: UserCog, href: "/settings/roles" },
-      { title: "Team Members", icon: Users2, href: "/settings/team" },
+      { title: "Documents",     icon: FolderOpen, href: "/documents" },
+      { title: "Analytics",     icon: BarChart3,  href: "/analytics" },
+      { title: "Audit Log",     icon: ScrollText, href: "/audit" },
+      { title: "Settings",      icon: Settings,   href: "/settings" },
+      { title: "Roles & Access",icon: UserCog,    href: "/settings/roles" },
+      { title: "Team Members",  icon: Users2,     href: "/settings/team" },
     ],
   },
-];
+] as Array<{
+  label:           string;
+  superAdminOnly?: boolean;  // hide from everyone except SUPER_ADMIN
+  clientOnly?:     boolean;  // hide from SUPER_ADMIN; show only to client/non-super-admin users
+  items:           Array<{ title: string; icon: React.ElementType; href: string; superAdminOnly?: boolean }>;
+}>;
 
 const ALL_HREFS = [
   ...SECTIONS.flatMap((s) => s.items.map((i) => i.href)),
@@ -117,11 +128,20 @@ function getInitials(name: string) {
 }
 
 const roleLabel: Record<string, string> = {
-  super_admin: "Super Admin",
-  event_manager: "Event Manager",
-  kyc_officer: "KYC Officer",
-  judge: "Judge",
+  super_admin:  "Super Admin",
+  SUPER_ADMIN:  "Super Admin",
+  event_manager:"Event Manager",
+  EVENT_MANAGER:"Event Manager",
+  kyc_officer:  "KYC Officer",
+  KYC_OFFICER:  "KYC Officer",
+  judge:        "Judge",
+  JUDGE:        "Judge",
 };
+
+/** Normalise any role string to lowercase for consistent comparison. */
+function isSuperAdminRole(role?: string | null): boolean {
+  return (role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "super_admin";
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -132,6 +152,14 @@ export function Sidebar() {
   
   const { data: pendingEnrollmentsData } = usePendingEnrollments(0, 1);
   const pendingCount = pendingEnrollmentsData?.data?.totalCount ?? 0;
+
+  /**
+   * SUPER_ADMIN check — handles all casing variants the backend may return:
+   * "super_admin", "SUPER_ADMIN", "Super_Admin", "super-admin", etc.
+   * While user is loading (currentUser === undefined), default to false
+   * so privileged sections render correctly once the token is verified.
+   */
+  const isSuperAdmin = isSuperAdminRole(currentUser?.role);
 
   const hasToken = typeof window !== "undefined" && !!Cookies.get("accessToken");
   const displayName = currentUser?.fullName || "Admin User";
@@ -161,7 +189,19 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto no-scrollbar px-3 py-4 space-y-5">
-        {SECTIONS.map((section) => (
+        {SECTIONS.map((section) => {
+          // RBAC: hide section based on role flags
+          if (section.superAdminOnly && !isSuperAdmin) return null;  // e.g. Registrars
+          if (section.clientOnly     &&  isSuperAdmin) return null;  // e.g. Registers
+
+          // Filter individual items within the section
+          const visibleItems = section.items.filter(
+            (item) => !("superAdminOnly" in item && item.superAdminOnly && !isSuperAdmin)
+          );
+          // If all items in this section are hidden, omit the section header too
+          if (visibleItems.length === 0) return null;
+
+          return (
           <div key={section.label}>
             <p
               className="px-3 mb-1 text-xs font-semibold uppercase tracking-widest"
@@ -170,7 +210,7 @@ export function Sidebar() {
               {section.label}
             </p>
             <div className="space-y-0.5">
-              {section.items.map((item) => {
+              {visibleItems.map((item) => {
                 const active = isActive(item.href, pathname);
                 return (
                   <Link
@@ -214,8 +254,7 @@ export function Sidebar() {
                         style={{ backgroundColor: "#ef4444" }}
                       />
                     )}
-                    {item.href === "/stakeholders/pending" &&
-                      pendingCount > 0 && (
+                    {item.href === "/registers/enrol" && pendingCount > 0 && (
                         <span
                           className="ml-auto h-4 min-w-4 px-1 rounded-full text-xs font-bold flex items-center justify-center"
                           style={{ backgroundColor: "#f59e0b", color: "white" }}
@@ -228,7 +267,8 @@ export function Sidebar() {
               })}
             </div>
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       {hasToken && (

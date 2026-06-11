@@ -22,15 +22,19 @@ import { ApiResponse } from "@/types/api";
 // ---------------------------------------------------------------------------
 
 export interface EventListItem {
-  id:       string;
-  title:    string;
-  eventType: string;
-  date:     string;
-  format:   string;
-  rsvpCount: number;
-  capacity:  number;
-  fillRate:  number;
-  status:   "DRAFT" | "PUBLISHED" | "UPCOMING" | "LIVE" | "ENDED" | "CANCELLED";
+  id:          string;
+  title:       string;
+  eventType:   string;
+  date:        string;
+  format:      string;
+  rsvpCount:   number;
+  capacity:    number;
+  fillRate:    number;
+  status:      "DRAFT" | "PUBLISHED" | "UPCOMING" | "LIVE" | "ENDED" | "CANCELLED";
+  /** The name of the register (organisation) that owns this event — use for the "Organizer" UI field. */
+  registerName?: string;
+  registerId?:   string;
+  rsvpEnabled?:  boolean;
 }
 
 export interface EventListResponse {
@@ -173,8 +177,11 @@ export const clientEventKeys = {
 // Queries
 // ---------------------------------------------------------------------------
 
-/** Paginated event list for the authenticated stakeholder. */
-export function useClientEvents(type = "ALL", page = 0, size = 20) {
+/** Valid `type` filter values for GET /api/v1/client/events. */
+export type ClientEventTypeFilter = "ALL" | "AGM" | "LAUNCH" | "INNOVATION" | "HACKATHON" | "GENERAL";
+
+/** Paginated event list for the authenticated stakeholder. Default type=ALL returns every event. */
+export function useClientEvents(type: ClientEventTypeFilter = "ALL", page = 0, size = 20) {
   return useQuery({
     queryKey: clientEventKeys.list(type, page, size),
     queryFn: async () => {
@@ -532,5 +539,253 @@ export function useExportAttendees() {
       URL.revokeObjectURL(url);
     },
     onError: (error: any) => parseAndToastApiError(error, "Export failed."),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Create event — unified endpoint used by client (event manager) admins
+// ---------------------------------------------------------------------------
+
+export interface AgmConfigRequest {
+  resolutions?: Array<{
+    title:                string;
+    description?:         string;
+    isSpecialResolution?: boolean;
+  }>;
+  shareholderTargeting?:    "ALL_REGISTERED" | "CUSTOM_LIST";
+  enableProxyVoting?:       boolean;
+  agmNoticeBase64?:         string;
+  agmNoticeFilename?:       string;
+  shareholderListBase64?:   string;
+  shareholderListFilename?: string;
+}
+
+export interface EmbargoRequest {
+  enabled:   boolean;
+  releaseAt?: string; // ISO-8601
+}
+
+export interface ProductLaunchConfigRequest {
+  embargo?:           EmbargoRequest;
+  audienceTargeting?: AudienceTargeting;
+}
+
+export interface InnovationChallengeConfigRequest {
+  audienceTargeting?: AudienceTargeting;
+}
+
+export interface GeneralEventConfigRequest {
+  /** CRITICAL: only these three values are accepted. Any other string causes a 400. */
+  audienceTargeting?: AudienceTargeting;
+}
+
+/** Strict audience targeting enums — any other value causes a "Malformed Request Body" error. */
+export type AudienceTargeting = "OPEN_REGISTRATION" | "INVITE_ONLY" | "RESTRICT_BY_EMAIL_DOMAIN";
+
+export interface CreateEventRequest {
+  registerId:                  string;
+  eventType:                   "AGM_EGM" | "PRODUCT_LAUNCH" | "INNOVATION_CHALLENGE" | "HACKATHON" | "GENERAL_EVENT";
+  title:                       string;
+  description?:                string;
+  format:                      "VIRTUAL" | "IN_PERSON" | "HYBRID";
+  date:                        string;       // YYYY-MM-DD (must be a future date)
+  startTime:                   string;       // HH:mm (no seconds)
+  /** Required when format is VIRTUAL or HYBRID. */
+  streamUrl?:                  string;
+  /** Physical location label (used even for VIRTUAL as a room/link label). */
+  location?:                   string;
+  maximumCapacity:             number;
+  rsvpEnabled?:                boolean;
+  agenda?:                     Array<{ time: string; title: string; speaker?: string }>;
+  speakers?:                   SpeakerRequest[];
+  agmConfig?:                  AgmConfigRequest;
+  productLaunchConfig?:        ProductLaunchConfigRequest;
+  innovationChallengeConfig?:  InnovationChallengeConfigRequest;
+  generalEventConfig?:         GeneralEventConfigRequest;
+}
+
+/** Create a new event (client/event-manager). DRAFT status on creation. */
+export function useCreateEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: CreateEventRequest) => {
+      const res = await apiClient.post<ApiResponse<any>>(
+        "/api/v1/client/events",
+        payload
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: clientEventKeys.all });
+      popup.success("Event Created", "Your event has been created as a Draft.", 3000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to create event."),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Queries — legacy registrations, AGM downloads, retain-data
+// ---------------------------------------------------------------------------
+
+/** Legacy: GET /api/v1/client/events/{id}/registrations */
+export function useClientEventRegistrations(eventId: string, page = 0, limit = 10) {
+  return useQuery({
+    queryKey: ["clientEvents", "registrations", eventId, { page, limit }] as const,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<any>>(
+        `/api/v1/client/events/${eventId}/registrations`,
+        { params: { page, limit } }
+      );
+      return res.data.data;
+    },
+    enabled: !!eventId,
+    staleTime: 30_000,
+  });
+}
+
+/** Download AGM notice PDF (binary blob). Returns a Blob URL you can open/download. */
+export function useDownloadAgmNotice() {
+  return useMutation({
+    mutationFn: async (eventId: string) => {
+      const res = await apiClient.get(
+        `/api/v1/client/events/${eventId}/agm-notice`,
+        { responseType: "blob" }
+      );
+      return { blob: res.data as Blob, eventId };
+    },
+    onSuccess: ({ blob, eventId }) => {
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `agm-notice-${eventId}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "AGM notice download failed."),
+  });
+}
+
+/** Download shareholder list CSV (binary blob). */
+export function useDownloadShareholderList() {
+  return useMutation({
+    mutationFn: async (eventId: string) => {
+      const res = await apiClient.get(
+        `/api/v1/client/events/${eventId}/shareholder-list`,
+        { responseType: "blob" }
+      );
+      return { blob: res.data as Blob, eventId };
+    },
+    onSuccess: ({ blob, eventId }) => {
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `shareholders-${eventId}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Shareholder list download failed."),
+  });
+}
+
+/** POST /api/v1/client/events/{id}/retain-data */
+export function useRetainEventData() {
+  return useMutation({
+    mutationFn: async (eventId: string) => {
+      const res = await apiClient.post<ApiResponse<any>>(
+        `/api/v1/client/events/${eventId}/retain-data`
+      );
+      return res.data.data;
+    },
+    onSuccess: () => popup.success("Data Retained", "Event data has been retained.", 2500),
+    onError: (error: any) => parseAndToastApiError(error, "Retain data failed."),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Expected Attendees — /api/v1/client/events/{eventId}/expected-attendees
+// ---------------------------------------------------------------------------
+
+export interface ExpectedAttendee {
+  id:       string;
+  fullName: string;
+  email:    string;
+  phone?:   string;
+}
+
+export interface ExpectedAttendeeListResponse {
+  attendees:  ExpectedAttendee[];
+  totalCount: number;
+}
+
+export interface UploadAttendeesRequest {
+  attendees: Array<{
+    fullName: string;
+    email:    string;
+    phone?:   string;
+  }>;
+}
+
+/** List expected attendees for an event. */
+export function useExpectedAttendees(eventId: string) {
+  return useQuery({
+    queryKey: ["clientEvents", "expectedAttendees", eventId] as const,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<ExpectedAttendeeListResponse>>(
+        `/api/v1/client/events/${eventId}/expected-attendees`
+      );
+      return res.data.data;
+    },
+    enabled: !!eventId,
+    staleTime: 30_000,
+  });
+}
+
+/** Upload / replace expected attendee list. */
+export function useUploadExpectedAttendees() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, payload }: { eventId: string; payload: UploadAttendeesRequest }) => {
+      const res = await apiClient.post<ApiResponse<any>>(
+        `/api/v1/client/events/${eventId}/expected-attendees`,
+        payload
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "expectedAttendees", eventId] });
+      popup.success("Attendees Uploaded", "Expected attendee list updated.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Upload failed."),
+  });
+}
+
+/** Delete ALL expected attendees for an event. */
+export function useDeleteAllExpectedAttendees() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (eventId: string) => {
+      await apiClient.delete(`/api/v1/client/events/${eventId}/expected-attendees`);
+    },
+    onSuccess: (_, eventId) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "expectedAttendees", eventId] });
+      popup.success("List Cleared", "All expected attendees removed.", 2000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Delete failed."),
+  });
+}
+
+/** Delete a single expected attendee. */
+export function useDeleteExpectedAttendee() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, attendeeId }: { eventId: string; attendeeId: string }) => {
+      await apiClient.delete(
+        `/api/v1/client/events/${eventId}/expected-attendees/${attendeeId}`
+      );
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "expectedAttendees", eventId] });
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Delete failed."),
   });
 }

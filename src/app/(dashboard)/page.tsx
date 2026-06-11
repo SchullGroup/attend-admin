@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import { useGetMe } from "@/api/auth/hooks";
 import { useDashboardStats, useEvents, useRecentRegistrations } from "@/api/super-admin";
+import { useClientEvents } from "@/api/client-events";
+import { useClientDashboardStats } from "@/api/client-dashboard";
 import { useRegisters } from "@/api/registers";
 import { ModuleBadge } from "@/components/custom/module-badge";
 import { StatusBadge } from "@/components/custom/status-badge";
@@ -36,8 +38,7 @@ function EventRow({ event }: { event: EventSummaryResponse }) {
     : null;
   const fill = fillPct !== null ? Math.min(Math.round(fillPct), 100) : null;
 
-  // Register name = stakeholderName or registerName only.
-  // organizerName is intentionally excluded — it returns the registrar firm (e.g. Meristem).
+  // Organizer = event.registerName (primary per API spec), falling back to stakeholderName/organizerName.
   const registerName = getEventRegisterName(event);
 
   return (
@@ -46,20 +47,20 @@ function EventRow({ event }: { event: EventSummaryResponse }) {
       {/* Horizontal colour bar (event type indicator) */}
       <div className="w-1 h-10 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
 
-      {/* Title + module badge */}
+      {/* Type badge + title + organizer — same order as /events table */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
+          <ModuleBadge module={mod} />
           {isLive && (
             <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 rounded-full px-2 py-0.5">
               <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
               LIVE
             </span>
           )}
-          <ModuleBadge module={mod} />
         </div>
         <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{event.title}</p>
-        {/* Register name (the organisation that owns the event) */}
-        <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{registerName}</p>
+        {/* Organizer — the register/organisation that owns this event */}
+        <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{registerName || "—"}</p>
       </div>
 
       {/* Date */}
@@ -96,30 +97,61 @@ function EventRow({ event }: { event: EventSummaryResponse }) {
   );
 }
 
+// Roles that belong to the super-admin side; everything else is a client/stakeholder user.
+const ADMIN_ROLES = new Set(["super_admin", "event_manager", "kyc_officer", "judge"]);
+
 export default function DashboardPage() {
-  const { data: userResponse } = useGetMe();
+  const { data: userResponse, isLoading: userLoading } = useGetMe();
   const currentUser = userResponse?.data;
+  const isAdmin = userLoading || !currentUser || ADMIN_ROLES.has(currentUser.role?.toLowerCase() ?? "");
 
-  const { data: dashStats,    isLoading: statsLoading  } = useDashboardStats();
-  const { data: eventsData,   isLoading: eventsLoading } = useEvents("", 0, 20);
-  const { data: registersData, isLoading: regsLoading  } = useRegisters("ACTIVE", 0, 6);
-  const { data: recentRegsData, isLoading: recentsLoading } = useRecentRegistrations(0, 6);
+  // Both hook sets are always called (Rules of Hooks); we pick results by role below.
+  const { data: dashStats,       isLoading: statsLoading    } = useDashboardStats();
+  const { data: eventsData,      isLoading: eventsLoading   } = useEvents("", 0, 20);
+  const { data: registersData,   isLoading: regsLoading     } = useRegisters("ACTIVE", 0, 6);
+  const { data: recentRegsData,  isLoading: recentsLoading  } = useRecentRegistrations(0, 6);
+  const { data: clientEventsData, isLoading: clientEventsLoading } = useClientEvents("ALL", 0, 20);
+  const { data: clientStatsData,  isLoading: clientStatsLoading  } = useClientDashboardStats();
 
-  if (statsLoading || eventsLoading || regsLoading || recentsLoading) {
+  const isLoading = userLoading || (
+    isAdmin
+      ? (statsLoading || eventsLoading || regsLoading || recentsLoading)
+      : (clientEventsLoading || clientStatsLoading)
+  );
+
+  if (isLoading) {
     return <Loader variant="page" text="Loading Dashboard..." />;
   }
 
-  const stats = dashStats?.data;
-  const allEvents: EventSummaryResponse[] = eventsData?.content ?? [];
+  const stats = isAdmin ? dashStats?.data : null;
+
+  // Build a unified EventSummaryResponse[] regardless of which API was used.
+  // Per API spec: the "Organizer" UI field maps to event.registerName from the client list response.
+  const allEvents: EventSummaryResponse[] = isAdmin
+    ? (eventsData?.content ?? [])
+    : (clientEventsData?.events ?? []).map((e) => ({
+        id:                     e.id,
+        title:                  e.title,
+        status:                 e.status,
+        date:                   e.date,
+        startTime:              "",
+        format:                 e.format as "VIRTUAL" | "IN_PERSON" | "HYBRID",
+        live:                   e.status === "LIVE",
+        registerName:           e.registerName ?? "",          // primary organizer field
+        organizerName:          e.registerName ?? "",          // alias for admin-path consumers
+        registrationCount:      e.rsvpCount,
+        registrationPercentage: e.fillRate,
+        tags:                   [],
+        eventType:              e.eventType,
+      }));
+
   // Registers directory — fetched from GET /api/v1/client/registers?status=ACTIVE
   const topRegisters = (registersData?.registers ?? []).slice(0, 5);
   const recentRegistrations: RegistrationSummaryResponse[] = recentRegsData?.data?.content ?? [];
 
   const liveEvents = allEvents.filter((e) => e.status === "live" || e.status === "LIVE");
-  const upcoming = allEvents.filter((e) => {
-    const s = e.status?.toLowerCase();
-    return s === "published" || s === "live" || s === "draft";
-  });
+  // Admin sees every event on the platform; client sees all of their own events.
+  const upcoming = allEvents;
 
   const topStakeholders = topRegisters; // alias kept so the JSX below compiles unchanged
   const pendingKYC = stats?.pendingKYC?.count ?? 0;
@@ -134,7 +166,7 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
-            Welcome back, {currentUser?.fullName?.split(" ")[0] ?? "Admin"}.
+            Welcome back, {currentUser?.fullName ?? "Admin"}.
           </h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{dateStr} · {timeStr}</p>
         </div>
@@ -187,7 +219,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border)/0.6)]">
             <div>
               <h2 className="font-semibold text-[hsl(var(--foreground))]">Platform Events</h2>
-              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{upcoming.length} active or upcoming across all organisers</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{upcoming.length} event{upcoming.length !== 1 ? "s" : ""} across all organisers</p>
             </div>
             <Link href="/events">
               <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-[hsl(var(--muted-foreground))]">

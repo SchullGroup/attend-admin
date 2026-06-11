@@ -1,7 +1,15 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { Upload, Download, Trash2, FileText, FileBarChart, Bell, BookOpen, Award, Package, Send, Search, Check, ChevronDown } from "lucide-react";
-import { useStore } from "@/lib/store";
+import { useGetMe } from "@/api/auth/hooks";
+import { useGlobalDocuments as useAdminGlobalDocuments } from "@/api/super-admin";
+import {
+  useGlobalDocuments as useClientGlobalDocuments,
+  useDeleteGlobalDocument,
+  useDownloadGlobalDocument,
+  useUploadGlobalDocument,
+} from "@/api/client-documents";
+import { useClientEventsDropdown } from "@/api/client-events";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -121,44 +129,72 @@ function EventCombobox({
   );
 }
 
+const ADMIN_ROLES = new Set(["super_admin", "event_manager", "kyc_officer", "judge"]);
+
 export default function DocumentsPage() {
-  const { documents, deleteDocument, events } = useStore();
-  const [filter, setFilter] = useState("all");
-  const [orgFilter, setOrgFilter] = useState("");
+  const { data: userResponse } = useGetMe();
+  const isAdmin = !userResponse?.data || ADMIN_ROLES.has(userResponse.data.role?.toLowerCase() ?? "");
+
+  const [filter,    setFilter]    = useState("all");
+  const [search,    setSearch]    = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", type: "notice", eventId: "", pushToAttendees: true });
-  const [uploading, setUploading] = useState(false);
+  const [form,      setForm]      = useState({ title: "", type: "notice", eventId: "" });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const organisers = [...new Set(documents.map((d) => d.organiser).filter(Boolean))].sort() as string[];
+  // Both hooks called; role selects which result to use
+  const { data: adminDocsData, isLoading: adminLoading } =
+    useAdminGlobalDocuments(search, "", filter === "all" ? "" : filter, 0, 50);
+  const { data: clientDocsData, isLoading: clientLoading } =
+    useClientGlobalDocuments(search, "", filter === "all" ? "" : filter, 0, 50);
 
-  const filtered = documents
-    .filter((d) => filter === "all" || d.type === filter)
-    .filter((d) => !orgFilter || d.organiser === orgFilter);
+  const deleteMutation   = useDeleteGlobalDocument();
+  const downloadMutation = useDownloadGlobalDocument();
+  const uploadMutation   = useUploadGlobalDocument();
+  const { data: eventOptions = [] } = useClientEventsDropdown();
+
+  const isLoading = isAdmin ? adminLoading : clientLoading;
+
+  // Normalise both shapes to a flat list
+  const rawAdmin  = (adminDocsData?.data as any)?.content  ?? (adminDocsData?.data as any)?.documents ?? [];
+  const rawClient = clientDocsData?.content ?? [];
+  const docs: any[] = isAdmin ? rawAdmin : rawClient;
+
+  const filtered = docs.filter((d: any) =>
+    (filter === "all" || (d.documentType ?? d.type ?? "").toLowerCase() === filter) &&
+    (!search || (d.title ?? "").toLowerCase().includes(search.toLowerCase()))
+  );
 
   function handleUpload() {
-    if (!form.title || !form.eventId) return;
-    setUploading(true);
-    setTimeout(() => {
-      setUploading(false);
-      setUploadOpen(false);
-      setForm({ title: "", type: "notice", eventId: "", pushToAttendees: true });
-      toast.success("Document uploaded", {
-        description: form.pushToAttendees ? "Pushed to all registered attendees' vaults." : "Saved to vault without push.",
-      });
-    }, 1200);
+    if (!form.title || !form.eventId || !selectedFile) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const b64 = (reader.result as string).split(",")[1];
+      uploadMutation.mutate(
+        { title: form.title, documentType: form.type, eventId: form.eventId, fileData: b64, originalFilename: selectedFile.name },
+        {
+          onSuccess: () => {
+            setUploadOpen(false);
+            setForm({ title: "", type: "notice", eventId: "" });
+            setSelectedFile(null);
+          },
+        }
+      );
+    };
+    reader.readAsDataURL(selectedFile);
   }
 
-  const selectedEvent = events?.find?.((e: { id: string }) => e.id === form.eventId);
+  const selectedEvent = null; // rsvpCount not needed in new shape
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Document Vault</h1>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{documents.length} documents · {documents.reduce((s, d) => s + d.downloadCount, 0).toLocaleString()} total downloads</p>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+            {isLoading ? "Loading…" : `${docs.length} document${docs.length !== 1 ? "s" : ""}`}
+          </p>
         </div>
         <Button className="gap-2" onClick={() => setUploadOpen(true)}>
           <Upload className="h-4 w-4" />
@@ -204,7 +240,7 @@ export default function DocumentsPage() {
             <div>
               <Label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-1.5 block">Event</Label>
               <EventCombobox
-                events={(events ?? []) as { id: string; title: string; organiser: string }[]}
+                events={eventOptions.map((e: { id: string; label: string }) => ({ id: e.id, title: e.label, organiser: "" }))}
                 value={form.eventId}
                 onChange={(id) => setForm((f) => ({ ...f, eventId: id }))}
               />
@@ -233,32 +269,15 @@ export default function DocumentsPage() {
               </div>
             </div>
 
-            <div
-              className="flex items-center justify-between p-3 rounded-xl bg-[hsl(var(--muted)/0.5)] cursor-pointer"
-              onClick={() => setForm((f) => ({ ...f, pushToAttendees: !f.pushToAttendees }))}
-            >
-              <div>
-                <p className="text-sm font-medium text-[hsl(var(--foreground))]">Push to attendee vaults</p>
-                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                  {form.pushToAttendees
-                    ? `Will push to ${selectedEvent ? selectedEvent.rsvpCount?.toLocaleString() ?? "all" : "all"} registered attendees`
-                    : "Store only — attendees won't be notified"
-                  }
-                </p>
-              </div>
-              <div className={`w-10 h-6 rounded-full transition-colors flex items-center px-1 ${form.pushToAttendees ? "bg-[hsl(var(--primary))]" : "bg-[hsl(var(--border))]"}`}>
-                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${form.pushToAttendees ? "translate-x-4" : "translate-x-0"}`} />
-              </div>
-            </div>
 
             <div className="flex gap-2 justify-end pt-1">
               <Button variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>
               <Button
-                disabled={!form.title || !form.eventId || uploading}
+                disabled={!form.title || !form.eventId || !selectedFile || uploadMutation.isPending}
                 onClick={handleUpload}
                 className="gap-2"
               >
-                {uploading ? "Uploading…" : <><Send className="h-4 w-4" />{form.pushToAttendees ? "Upload & Push" : "Upload"}</>}
+                {uploadMutation.isPending ? "Uploading…" : <><Send className="h-4 w-4" /> Upload</>}
               </Button>
             </div>
           </div>
@@ -281,7 +300,11 @@ export default function DocumentsPage() {
             </button>
           ))}
         </div>
-        <OrgFilter organisers={organisers} value={orgFilter} onChange={setOrgFilter} />
+        <div className="relative max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+          <input type="text" placeholder="Search documents…" value={search} onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
+        </div>
       </div>
 
       <Card className="attend-card overflow-hidden">
@@ -298,71 +321,50 @@ export default function DocumentsPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((doc) => {
-              const typeConfig = TYPE_CONFIG[doc.type] ?? TYPE_CONFIG.notice;
-              const TypeIcon = typeConfig.icon;
+            {filtered.map((doc: any) => {
+              const typeKey   = (doc.documentType ?? doc.type ?? "notice").toLowerCase();
+              const typeConfig = TYPE_CONFIG[typeKey] ?? TYPE_CONFIG.notice;
+              const TypeIcon   = typeConfig.icon;
+              const sizeLabel  = doc.sizeLabel ?? doc.fileSize ?? "—";
+              const downloads  = doc.downloadCount ?? 0;
+              const eventTitle = doc.eventTitle ?? "—";
               return (
                 <tr key={doc.id} className="attend-table-row">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
-                      <div
-                        className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: typeConfig.bg }}
-                      >
+                      <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: typeConfig.bg }}>
                         <TypeIcon className="h-4 w-4" style={{ color: typeConfig.color }} />
                       </div>
                       <span className="text-sm font-medium text-[hsl(var(--foreground))]">{doc.title}</span>
                     </div>
                   </td>
                   <td className="px-5 py-3">
-                    <span
-                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                      style={{ backgroundColor: typeConfig.bg, color: typeConfig.color }}
-                    >
+                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: typeConfig.bg, color: typeConfig.color }}>
                       {typeConfig.label}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[180px] truncate">{doc.eventTitle}</td>
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{doc.fileSize}</td>
-                  <td className="px-5 py-3 text-sm font-medium tabular-nums">{doc.downloadCount.toLocaleString()}</td>
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[180px] truncate">{eventTitle}</td>
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{sizeLabel}</td>
+                  <td className="px-5 py-3 text-sm font-medium tabular-nums">{downloads.toLocaleString()}</td>
                   <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{formatDate(doc.uploadedAt)}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs gap-1"
-                        onClick={() => toast.success(`Downloading "${doc.title}"`, { description: doc.fileSize })}
-                      >
-                        <Download className="h-3 w-3" />
-                        Download
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                        disabled={downloadMutation.isPending}
+                        onClick={() => downloadMutation.mutate(doc.id)}>
+                        <Download className="h-3 w-3" /> Download
                       </Button>
                       {confirmDeleteId === doc.id ? (
                         <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 px-2 text-xs text-red-600 bg-red-50 font-semibold hover:bg-red-100"
-                            onClick={() => { deleteDocument(doc.id); setConfirmDeleteId(null); toast.success("Document deleted"); }}
-                          >
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-600 bg-red-50 font-semibold hover:bg-red-100"
+                            disabled={deleteMutation.isPending}
+                            onClick={() => { deleteMutation.mutate(doc.id); setConfirmDeleteId(null); }}>
                             Delete
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 px-2 text-xs"
-                            onClick={() => setConfirmDeleteId(null)}
-                          >
-                            Cancel
-                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
                         </div>
                       ) : (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
-                          onClick={() => setConfirmDeleteId(doc.id)}
-                        >
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => setConfirmDeleteId(doc.id)}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
@@ -377,9 +379,9 @@ export default function DocumentsPage() {
           <div className="py-14 text-center">
             <FileText className="h-10 w-10 mx-auto mb-3 text-[hsl(var(--muted-foreground))] opacity-30" />
             <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-1">No documents match these filters</p>
-            {(filter !== "all" || orgFilter) && (
+            {(filter !== "all" || search) && (
               <button
-                onClick={() => { setFilter("all"); setOrgFilter(""); }}
+                onClick={() => { setFilter("all"); setSearch(""); }}
                 className="text-xs text-[hsl(var(--primary))] hover:underline mt-1"
               >
                 Clear filters

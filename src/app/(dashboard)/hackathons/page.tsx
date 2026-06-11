@@ -1,68 +1,39 @@
 "use client";
 import Link from "next/link";
-import {
-  Lightbulb, ArrowRight, Trophy, Clock, CheckCircle2,
-  FileText, Users, Globe, MapPin,
-} from "lucide-react";
-import { useEvents } from "@/api/super-admin";
+import { Lightbulb, ArrowRight, Trophy, Clock, CheckCircle2, FileText, Users } from "lucide-react";
+import { useAdminChallengesOverview, useAdminChallenges } from "@/api/admin-challenges";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
-import { MOCK_APPLICATIONS } from "@/lib/mock-data";
-import type { EventSummaryResponse } from "@/types/super-admin";
-
-function formatLocation(e: EventSummaryResponse) {
-  if (e.format === "VIRTUAL") return "Virtual";
-  if (e.format === "HYBRID") return "Hybrid";
-  return "In-Person";
-}
-
-function FormatIcon({ format }: { format: string }) {
-  if (format === "VIRTUAL") return <Globe className="h-3 w-3" />;
-  return <MapPin className="h-3 w-3" />;
-}
+import { getEventRegisterName } from "@/lib/event-module";
 
 export default function HackathonsPage() {
-  const { data: eventsData, isLoading } = useEvents("", 0, 100);
+  const { data: overview, isLoading: overviewLoading } = useAdminChallengesOverview();
+  const { data: challengesData, isLoading: challengesLoading } = useAdminChallenges(0, 10);
 
-  if (isLoading) return <Loader variant="page" text="Loading Challenges..." />;
+  if (overviewLoading || challengesLoading) return <Loader variant="page" text="Loading Challenges…" />;
 
-  const allEvents: EventSummaryResponse[] = eventsData?.content ?? [];
-  const featuredEvent =
-    allEvents.find((e) => e.status?.toLowerCase() === "live") ??
-    allEvents.find((e) => e.status?.toLowerCase() === "published") ??
-    allEvents[0] ?? null;
+  const challenges = challengesData?.content ?? [];
+  const featured = challenges.find((c) => c.status?.toUpperCase() === "LIVE") ?? challenges[0] ?? null;
 
-  const totalRegistrations = allEvents.reduce((s, e) => s + (e.registrationCount ?? 0), 0);
-  const liveCount    = allEvents.filter((e) => e.status?.toLowerCase() === "live").length;
-  const publishedCount = allEvents.filter((e) => e.status?.toLowerCase() === "published").length;
-
-  // Applications from mock data (no API yet)
-  const applications = MOCK_APPLICATIONS;
-  const total       = applications.length;
-  const submitted   = applications.filter((a) => a.status === "submitted").length;
-  const underReview = applications.filter((a) => a.status === "under_review").length;
-  const shortlisted = applications.filter((a) => a.status === "shortlisted").length;
-  const selected    = applications.filter((a) => a.status === "selected").length;
-  const tracks      = [...new Set(applications.map((a) => a.track))];
+  const total       = overview?.totalApplications  ?? 0;
+  const submitted   = overview?.submittedCount     ?? 0;
+  const underReview = overview?.underReviewCount   ?? 0;
+  const shortlisted = overview?.shortlistedCount   ?? 0;
+  const selected    = overview?.selectedCount      ?? 0;
+  const tracks      = overview?.tracks             ?? [];
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Innovation Challenges</h1>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-            Manage innovation challenges, review applications, and coordinate judging
-          </p>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">Manage innovation challenges, review applications, and coordinate judging</p>
         </div>
       </div>
 
-      {/* ── Purple banner ── */}
-      <div
-        className="rounded-2xl overflow-hidden"
-        style={{ background: "linear-gradient(135deg, #9333ea 0%, #7c22c9 60%, #5b21b6 100%)" }}
-      >
+      <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(135deg, #9333ea 0%, #7c22c9 60%, #5b21b6 100%)" }}>
         <div className="p-6 text-white">
           <div className="flex items-start justify-between gap-6">
             <div className="flex-1 min-w-0">
@@ -72,19 +43,11 @@ export default function HackathonsPage() {
                 </div>
                 <span className="text-sm font-semibold text-purple-200">Innovation Challenge</span>
               </div>
-
-              {featuredEvent ? (
+              {featured ? (
                 <>
-                  <h2 className="text-2xl font-bold mb-1 truncate">{featuredEvent.title}</h2>
-                  <p className="text-purple-200 text-sm mb-4 flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span>{featuredEvent.organizerName}</span>
-                    <span>·</span>
-                    <span>{formatDate(featuredEvent.date)}</span>
-                    <span>·</span>
-                    <span className="flex items-center gap-1">
-                      <FormatIcon format={featuredEvent.format} />
-                      {formatLocation(featuredEvent)}
-                    </span>
+                  <h2 className="text-2xl font-bold mb-1 truncate">{featured.title}</h2>
+                  <p className="text-purple-200 text-sm mb-4">
+                    {getEventRegisterName(featured)} · {formatDate(featured.date)}
                   </p>
                 </>
               ) : (
@@ -93,7 +56,6 @@ export default function HackathonsPage() {
                   <p className="text-purple-200 text-sm mb-4">Create your first innovation challenge to get started.</p>
                 </>
               )}
-
               <div className="flex items-center gap-3">
                 <Link href="/hackathons/applications">
                   <Button className="h-9 text-sm bg-white text-purple-700 hover:bg-white/90 gap-2">
@@ -107,14 +69,12 @@ export default function HackathonsPage() {
                 </Link>
               </div>
             </div>
-
-            {/* Stat boxes */}
             <div className="grid grid-cols-2 gap-3 shrink-0">
               {[
-                { label: "Total Applications", value: total,              icon: FileText    },
-                { label: "Shortlisted",         value: shortlisted,       icon: CheckCircle2 },
-                { label: "Under Review",        value: underReview,       icon: Clock       },
-                { label: "Submitted",           value: submitted,         icon: Users       },
+                { label: "Total Applications", value: total,       icon: FileText },
+                { label: "Shortlisted",         value: shortlisted, icon: CheckCircle2 },
+                { label: "Under Review",        value: underReview, icon: Clock },
+                { label: "Submitted",           value: submitted,   icon: Users },
               ].map((s) => (
                 <div key={s.label} className="rounded-xl bg-white/10 p-3 min-w-[110px]">
                   <div className="text-2xl font-bold tabular-nums">{s.value}</div>
@@ -126,7 +86,6 @@ export default function HackathonsPage() {
         </div>
       </div>
 
-      {/* ── Bottom grid: Application Status Breakdown + Challenge Tracks ── */}
       <div className="grid grid-cols-3 gap-4">
         <Card className="attend-card p-5 col-span-2">
           <div className="attend-section-title mb-4">Application Status Breakdown</div>
@@ -151,19 +110,17 @@ export default function HackathonsPage() {
             })}
           </div>
         </Card>
-
         <Card className="attend-card p-5">
           <div className="attend-section-title mb-4">Challenge Tracks</div>
           <div className="flex flex-col gap-2">
-            {tracks.map((track) => {
-              const count = applications.filter((a) => a.track === track).length;
-              return (
-                <div key={track} className="flex items-center justify-between py-2 border-b border-[hsl(var(--border))] last:border-0">
-                  <span className="text-sm text-[hsl(var(--foreground))]">{track}</span>
-                  <span className="text-sm font-semibold tabular-nums">{count}</span>
-                </div>
-              );
-            })}
+            {tracks.length > 0 ? tracks.map((t) => (
+              <div key={t.track} className="flex items-center justify-between py-2 border-b border-[hsl(var(--border))] last:border-0">
+                <span className="text-sm text-[hsl(var(--foreground))]">{t.track}</span>
+                <span className="text-sm font-semibold tabular-nums">{t.count}</span>
+              </div>
+            )) : (
+              <p className="text-sm text-[hsl(var(--muted-foreground))] italic">No track data yet</p>
+            )}
           </div>
         </Card>
       </div>

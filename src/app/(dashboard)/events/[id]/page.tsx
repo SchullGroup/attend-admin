@@ -3,6 +3,8 @@ import { use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEventDetail, useEventDocuments, useEventAttendees } from "@/api/super-admin";
+import { useClientEventDetail, useClientEventDocuments, useClientEventAttendees } from "@/api/client-events";
+import { useGetMe } from "@/api/auth/hooks";
 import { useSuspendUserAccount } from "@/api/users";
 import { ModuleBadge } from "@/components/custom/module-badge";
 import { StatusBadge } from "@/components/custom/status-badge";
@@ -41,15 +43,30 @@ function toFormatKey(fmt: string): EventShim["format"] {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+const ADMIN_ROLES = new Set(["super_admin", "event_manager", "kyc_officer", "judge"]);
+
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
 
-  // ── Data ─────────────────────────────────────────────────────────────────
-  const { data: apiEvent,        isLoading: eventLoading } = useEventDetail(id);
-  const { data: docsResponse   }                           = useEventDocuments(id);
-  const { data: attendeesResponse }                        = useEventAttendees(id, 0, 50);
+  // ── Role detection ────────────────────────────────────────────────────────
+  const { data: userResponse } = useGetMe();
+  const currentUser = userResponse?.data;
+  const isAdmin = !currentUser || ADMIN_ROLES.has(currentUser.role?.toLowerCase() ?? "");
+
+  // ── Data (both hooks called; role selects which result to use) ───────────
+  const { data: adminEvent,  isLoading: adminLoading  } = useEventDetail(id);
+  const { data: clientEvent, isLoading: clientLoading } = useClientEventDetail(id);
+  const { data: adminDocs  }                             = useEventDocuments(id);
+  const { data: clientDocs }                             = useClientEventDocuments(id);
+  const { data: adminAttendees  }                        = useEventAttendees(id, 0, 50);
+  const { data: clientAttendees }                        = useClientEventAttendees(id, "", 0, 50);
   const suspendUser = useSuspendUserAccount();
+
+  const apiEvent        = isAdmin ? adminEvent        : (clientEvent ?? adminEvent);
+  const docsResponse    = isAdmin ? adminDocs         : (clientDocs  ?? adminDocs);
+  const attendeesResponse = isAdmin ? adminAttendees  : (clientAttendees ?? adminAttendees);
+  const eventLoading    = isAdmin ? adminLoading      : clientLoading;
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [tab,              setTab]             = useState("Overview");
@@ -75,13 +92,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   // ── Build compatibility shim ──────────────────────────────────────────────
-  const rsvpCount = apiEvent.overview?.rsvps?.count    ?? apiEvent.registrationCount ?? 0;
-  const capacity  = apiEvent.overview?.rsvps?.capacity ?? apiEvent.maximumCapacity   ?? null;
+  const rsvpCount = apiEvent.overview?.rsvps?.count    ?? apiEvent.rsvpCount          ?? apiEvent.registrationCount ?? 0;
+  const capacity  = apiEvent.overview?.rsvps?.capacity ?? apiEvent.maximumCapacity    ?? null;
 
   const event: EventShim = {
     ...apiEvent,
-    organiser: apiEvent.stakeholderName ?? "",
-    venue:     apiEvent.location ?? "",
+    // registerName is primary per API spec; fall back to the admin-side aliases.
+    organiser: (apiEvent as any).registerName ?? apiEvent.organizerName ?? apiEvent.stakeholderName ?? "",
+    venue:     apiEvent.location ?? apiEvent.venue ?? "",
     rsvpCount,
     capacity,
     endTime:   "",
@@ -93,14 +111,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
   // ── Defensive response unwraps ────────────────────────────────────────────
   const participants: any[] =
-    Array.isArray(attendeesResponse)               ? attendeesResponse :
-    Array.isArray(attendeesResponse?.content)      ? attendeesResponse.content :
-    Array.isArray(attendeesResponse?.participants) ? attendeesResponse.participants :
-    Array.isArray(attendeesResponse?.attendees)    ? attendeesResponse.attendees :
-    Array.isArray(attendeesResponse?.data)         ? attendeesResponse.data :
+    Array.isArray(attendeesResponse)                  ? attendeesResponse :
+    Array.isArray((attendeesResponse as any)?.attendees)  ? (attendeesResponse as any).attendees :
+    Array.isArray((attendeesResponse as any)?.content)    ? (attendeesResponse as any).content :
+    Array.isArray((attendeesResponse as any)?.participants) ? (attendeesResponse as any).participants :
+    Array.isArray((attendeesResponse as any)?.data)       ? (attendeesResponse as any).data :
     [];
 
-  const _docsRaw = docsResponse?.data;
+  const _docsRaw = (docsResponse as any)?.data ?? docsResponse;
   const eventDocs: any[] =
     Array.isArray(_docsRaw)                ? _docsRaw :
     Array.isArray(_docsRaw?.documents)     ? _docsRaw.documents :

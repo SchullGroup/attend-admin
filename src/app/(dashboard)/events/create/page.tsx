@@ -8,6 +8,8 @@ import {
   useCreateInnovationEvent,
   useCreateProductLaunchEvent,
 } from "@/api/events";
+import { useCreateEvent } from "@/api/client-events";
+import { useGetMe } from "@/api/auth/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -720,6 +722,19 @@ function HackStep0({ s, organiserName, showErrors = false }: { s: HackState; org
         </div>
       </div>
       <FormatPicker value={s.format} onChange={s.setFormat} />
+      {(s.format === "virtual" || s.format === "hybrid") && (
+        <div>
+          <Label className="mb-2 block">
+            <Monitor className="h-3.5 w-3.5 inline mr-1" />
+            Stream URL <span className="font-normal text-[hsl(var(--muted-foreground))] text-xs">(required for virtual/hybrid)</span>
+          </Label>
+          <Input
+            placeholder="https://youtube.com/live/... or https://meet.google.com/..."
+            value={s.streamUrl}
+            onChange={(e) => s.setStreamUrl(e.target.value)}
+          />
+        </div>
+      )}
       {(s.format === "in_person" || s.format === "hybrid") && (
         <div><Label className="mb-2 block"><MapPin className="h-3.5 w-3.5 inline mr-1" />Venue</Label><Input placeholder="e.g. Co-creation Hub, Yaba" value={s.venue} onChange={(e) => s.setVenue(e.target.value)} /></div>
       )}
@@ -1045,9 +1060,10 @@ function useHackState() {
   const [theme, setTheme] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [time, setTime] = useState("09:00");         // ← added: event start time
+  const [time, setTime] = useState("09:00");
   const [format, setFormat] = useState<Format>("virtual");
   const [venue, setVenue] = useState("");
+  const [streamUrl, setStreamUrl] = useState("");
   const [problemStatement, setProblemStatement] = useState("");
   const [deliverable, setDeliverable] = useState("");
   const [submissionDeadline, setSubmissionDeadline] = useState("");
@@ -1065,7 +1081,7 @@ function useHackState() {
   const addCriterion = () => setCriteria((c) => [...c, { id: genId(), label: "", weight: "" }]);
   const removeCriterion = (id: string) => setCriteria((c) => c.filter((x) => x.id !== id));
   const updateCriterion = (id: string, field: "label" | "weight", val: string) => setCriteria((c) => c.map((x) => x.id === id ? { ...x, [field]: val } : x));
-  return { title, setTitle, theme, setTheme, startDate, setStartDate, endDate, setEndDate, time, setTime, format, setFormat, venue, setVenue, problemStatement, setProblemStatement, deliverable, setDeliverable, submissionDeadline, setSubmissionDeadline, techStack, setTechStack, participationType, setParticipationType, minTeam, setMinTeam, maxTeam, setMaxTeam, eligibility, setEligibility, capacity, setCapacity, prizes, addPrize, removePrize, updatePrize, criteria, addCriterion, removeCriterion, updateCriterion };
+  return { title, setTitle, theme, setTheme, startDate, setStartDate, endDate, setEndDate, time, setTime, format, setFormat, venue, setVenue, streamUrl, setStreamUrl, problemStatement, setProblemStatement, deliverable, setDeliverable, submissionDeadline, setSubmissionDeadline, techStack, setTechStack, participationType, setParticipationType, minTeam, setMinTeam, maxTeam, setMaxTeam, eligibility, setEligibility, capacity, setCapacity, prizes, addPrize, removePrize, updatePrize, criteria, addCriterion, removeCriterion, updateCriterion };
 }
 
 function useGeneralState() {
@@ -1116,11 +1132,19 @@ function CreateEventInner() {
   const hack    = useHackState();
   const general = useGeneralState();
 
-  // Typed event creation mutations — one per module type
+  // Role detection — client users must use POST /api/v1/client/events (unified)
+  const { data: userResponse } = useGetMe();
+  const currentUser = userResponse?.data;
+  const ADMIN_ROLES = new Set(["super_admin", "event_manager", "kyc_officer", "judge"]);
+  const isAdmin = !currentUser || ADMIN_ROLES.has(currentUser.role?.toLowerCase() ?? "");
+
+  // Admin mutations — POST /api/v1/admin/events/{type}  (super admin only)
   const createAgm      = useCreateAgmEvent();
   const createGeneral  = useCreateGeneralEvent();
   const createHack     = useCreateInnovationEvent();
   const createLaunch   = useCreateProductLaunchEvent();
+  // Client mutation  — POST /api/v1/client/events       (event manager / client admin)
+  const createClientEvent = useCreateEvent();
 
   const selectedOrganiser = activeOrganisers.find((o) => o.id === organiserId) ?? null;
   const organiserName = selectedOrganiser?.name ?? "";
@@ -1180,20 +1204,118 @@ function CreateEventInner() {
     if (!selectedModule) return;
 
     const onDone = () => router.push("/events");
+    const fmt = (f: string) => f.toUpperCase() as "VIRTUAL" | "IN_PERSON" | "HYBRID";
+    const audience = (mode: string) =>
+      mode === "open" ? "OPEN_REGISTRATION" : "INVITE_ONLY" as const;
 
+    // ── CLIENT PATH: POST /api/v1/client/events (unified) ────────────────────
+    // Used when the logged-in user is NOT a super-admin (i.e. event manager / client admin).
+    if (!isAdmin) {
+      setSubmitting(true);
+      if (selectedModule === "AGM") {
+        createClientEvent.mutate(
+          {
+            registerId:      organiserId,
+            eventType:       "AGM_EGM",
+            title:           agm.title,
+            date:            agm.date,
+            startTime:       agm.time,
+            format:          fmt(agm.format),
+            maximumCapacity: 0,
+            agmConfig: {
+              resolutions: agm.resolutions
+                .filter((r) => r.title.trim())
+                .map((r) => ({ title: r.title, description: r.description || undefined, isSpecialResolution: r.isSpecial })),
+              shareholderTargeting: agm.shareholderTargeting === "all" ? "ALL_REGISTERED" : "CUSTOM_LIST",
+              enableProxyVoting: agm.proxyEnabled,
+            },
+          },
+          { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+        );
+        return;
+      }
+      if (selectedModule === "GENERAL") {
+        createClientEvent.mutate(
+          {
+            registerId:      organiserId,
+            eventType:       "GENERAL_EVENT",
+            title:           general.title,
+            description:     general.description || undefined,
+            date:            general.date,
+            startTime:       general.time,
+            format:          fmt(general.format),
+            streamUrl:       general.streamUrl   || undefined,
+            location:        general.venue       || undefined,
+            maximumCapacity: parseInt(general.capacity, 10) || 0,
+            generalEventConfig: { audienceTargeting: audience(general.audienceMode) },
+          },
+          { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+        );
+        return;
+      }
+      if (selectedModule === "HACKATHON") {
+        createClientEvent.mutate(
+          {
+            registerId:      organiserId,
+            eventType:       "INNOVATION_CHALLENGE",
+            title:           hack.title,
+            date:            hack.startDate,
+            startTime:       hack.time || "09:00",
+            format:          fmt(hack.format),
+            streamUrl:       hack.streamUrl || undefined,
+            location:        hack.venue     || undefined,
+            maximumCapacity: parseInt(hack.capacity, 10) || 0,
+            innovationChallengeConfig: { audienceTargeting: "OPEN_REGISTRATION" },
+          },
+          { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+        );
+        return;
+      }
+      if (selectedModule === "LAUNCH") {
+        createClientEvent.mutate(
+          {
+            registerId:      organiserId,
+            eventType:       "PRODUCT_LAUNCH",
+            title:           launch.title,
+            date:            launch.date,
+            startTime:       launch.time,
+            format:          fmt(launch.format),
+            streamUrl:       launch.streamUrl || undefined,
+            location:        launch.venue     || undefined,
+            maximumCapacity: parseInt(launch.capacity, 10) || 0,
+            speakers: launch.speakers
+              .filter((sp) => sp.name.trim())
+              .map((sp) => ({ name: sp.name, roleTitle: sp.role, bio: sp.bio || undefined })),
+            productLaunchConfig: {
+              audienceTargeting: audience(launch.audienceMode),
+              embargo: {
+                enabled:   launch.embargoEnabled,
+                releaseAt: launch.embargoEnabled ? (launch.embargoAt || undefined) : undefined,
+              },
+            },
+          },
+          { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+        );
+        return;
+      }
+      setSubmitting(false);
+      return;
+    }
+
+    // ── ADMIN PATH: POST /api/v1/admin/events/{type} (super-admin only) ───────
     if (selectedModule === "AGM") {
       setSubmitting(true);
       createAgm.mutate(
         {
-          registerId:             organiserId,                                     // was stakeholderId
+          registerId:             organiserId,
           title:                  agm.title,
           date:                   agm.date,
-          startTime:              agm.time,                                        // swagger key `startTime`
-          format:                 agm.format.toUpperCase() as "VIRTUAL" | "IN_PERSON" | "HYBRID",
+          startTime:              agm.time,
+          format:                 fmt(agm.format),
           venue:                  agm.venue                   || undefined,
           quorumPercentage:       parseInt(agm.quorum, 10)    || undefined,
-          eligibilityCutOffDate:  agm.cutoff                  || undefined,        // capital D — swagger key
-          enableProxyVoting:      agm.proxyEnabled,                                // swagger key
+          eligibilityCutOffDate:  agm.cutoff                  || undefined,
+          enableProxyVoting:      agm.proxyEnabled,
           shareholderTargeting:   agm.shareholderTargeting === "all" ? "ALL_REGISTERED" : "CUSTOM",
           resolutions:            agm.resolutions
             .filter((r) => r.title.trim())
@@ -1208,18 +1330,16 @@ function CreateEventInner() {
       setSubmitting(true);
       createGeneral.mutate(
         {
-          registerId:        organiserId,                                          // was stakeholderId
+          registerId:        organiserId,
           title:             general.title,
           description:       general.description    || undefined,
           date:              general.date,
-          startTime:         general.time,                                         // swagger key `startTime`
-          format:            general.format.toUpperCase() as "VIRTUAL" | "IN_PERSON" | "HYBRID",
+          startTime:         general.time,
+          format:            fmt(general.format),
           venue:             general.venue           || undefined,
           streamUrl:         general.streamUrl       || undefined,
-          maximumCapacity:   parseInt(general.capacity, 10) || undefined,          // swagger key `maximumCapacity`
-          audienceTargeting: general.audienceMode === "open"
-                               ? "OPEN_REGISTRATION"
-                               : "INVITE_ONLY",                                    // swagger enum values
+          maximumCapacity:   parseInt(general.capacity, 10) || undefined,
+          audienceTargeting: audience(general.audienceMode),
         },
         { onSuccess: onDone, onSettled: () => setSubmitting(false) }
       );
@@ -1230,28 +1350,28 @@ function CreateEventInner() {
       setSubmitting(true);
       createHack.mutate(
         {
-          registerId:           organiserId,                                       // was stakeholderId
+          registerId:           organiserId,
           title:                hack.title,
           eventType:            "INNOVATION_CHALLENGE",
-          themeTrack:           hack.theme              || undefined,              // swagger key `themeTrack`
+          themeTrack:           hack.theme              || undefined,
           startDate:            hack.startDate,
           endDate:              hack.endDate,
-          startTime:            hack.time               || "09:00",               // swagger key `startTime`
-          format:               hack.format.toUpperCase() as "VIRTUAL" | "IN_PERSON" | "HYBRID",
+          startTime:            hack.time               || "09:00",
+          format:               fmt(hack.format),
           venue:                hack.venue              || undefined,
-          problemStatement:     hack.problemStatement   || undefined,              // swagger key
-          expectedDeliverable:  hack.deliverable        || undefined,              // swagger key
+          problemStatement:     hack.problemStatement   || undefined,
+          expectedDeliverable:  hack.deliverable        || undefined,
           submissionDeadline:   hack.submissionDeadline || undefined,
-          allowedTechStack:     hack.techStack          || undefined,              // swagger key
+          allowedTechStack:     hack.techStack          || undefined,
           participationType:    hack.participationType.toUpperCase() as "SOLO" | "TEAM" | "BOTH",
           minTeamSize:          parseInt(hack.minTeam, 10)   || undefined,
           maxTeamSize:          parseInt(hack.maxTeam, 10)   || undefined,
-          eligibilityCriteria:  hack.eligibility        || undefined,              // swagger key
+          eligibilityCriteria:  hack.eligibility        || undefined,
           maximumEntries:       parseInt(hack.capacity, 10)  || undefined,
           prizeTiers:           hack.prizes.filter((p) => p.reward).map((p) => ({ position: p.place, reward: p.reward })),
           judgingCriteria:      hack.criteria.map((c) => ({
-            criterion: c.label,                                                    // swagger key `criterion`
-            weight:    parseInt(c.weight.replace("%", ""), 10) || 0,             // swagger key `weight`
+            criterion: c.label,
+            weight:    parseInt(c.weight.replace("%", ""), 10) || 0,
           })),
         },
         { onSuccess: onDone, onSettled: () => setSubmitting(false) }
@@ -1263,28 +1383,26 @@ function CreateEventInner() {
       setSubmitting(true);
       createLaunch.mutate(
         {
-          registerId:         organiserId,                                         // was stakeholderId
+          registerId:         organiserId,
           title:              launch.title,
           date:               launch.date,
-          startTime:          launch.time,                                         // swagger key `startTime`
-          format:             launch.format.toUpperCase() as "VIRTUAL" | "IN_PERSON" | "HYBRID",
+          startTime:          launch.time,
+          format:             fmt(launch.format),
           venue:              launch.venue               || undefined,
           streamUrl:          launch.streamUrl           || undefined,
-          maximumCapacity:    parseInt(launch.capacity, 10) || undefined,          // swagger key
+          maximumCapacity:    parseInt(launch.capacity, 10) || undefined,
           productName:        launch.productName          || undefined,
           tagline:            launch.tagline              || undefined,
           productDescription: launch.productDesc          || undefined,
           micrositeSlug:      launch.slug                 || undefined,
-          audienceTargeting:  launch.audienceMode === "open"
-                                ? "OPEN_REGISTRATION"
-                                : "INVITE_ONLY",                                   // swagger enum
+          audienceTargeting:  audience(launch.audienceMode),
           embargo: {
             enabled:   launch.embargoEnabled,
             releaseAt: launch.embargoEnabled ? (launch.embargoAt || undefined) : undefined,
-          },                                                                        // swagger nested object
+          },
           speakers: launch.speakers
             .filter((sp) => sp.name.trim())
-            .map((sp) => ({ name: sp.name, roleTitle: sp.role, bio: sp.bio || undefined })), // swagger key `roleTitle`
+            .map((sp) => ({ name: sp.name, roleTitle: sp.role, bio: sp.bio || undefined })),
         },
         { onSuccess: onDone, onSettled: () => setSubmitting(false) }
       );

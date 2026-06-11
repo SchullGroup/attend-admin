@@ -6,18 +6,21 @@ import { Mail, ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useForgotPassword } from "@/api/auth/auth";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const forgotPassword = useForgotPassword();
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
-    setLoading(true);
-    setTimeout(() => { setLoading(false); setSent(true); }, 1200);
+    forgotPassword.mutate(
+      { email: email.trim() },
+      { onSuccess: () => setSent(true) }
+    );
   }
 
   return (
@@ -104,8 +107,8 @@ export default function ForgotPasswordPage() {
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full h-11" disabled={loading || !email.trim()}>
-                  {loading ? (
+                <Button type="submit" className="w-full h-11" disabled={forgotPassword.isPending || !email.trim()}>
+                  {forgotPassword.isPending ? (
                     <><Loader2 className="h-4 w-4 animate-spin" /> Sending…</>
                   ) : (
                     "Send reset link"

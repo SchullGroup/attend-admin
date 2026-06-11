@@ -30,8 +30,9 @@ export function EventSettingsTab({
   currentStatus,
   onStatusChange,
 }: Props) {
-  const [titleVal, setTitleVal]   = useState(initialTitle);
-  const [descVal,  setDescVal]    = useState(initialDescription);
+  const [titleVal, setTitleVal]   = useState(initialTitle ?? "");
+  // Coerce null → "" because the API can return null for description
+  const [descVal,  setDescVal]    = useState(initialDescription ?? "");
 
   // Lifecycle mutations — all call real API
   const publishMutation  = usePublishEvent();

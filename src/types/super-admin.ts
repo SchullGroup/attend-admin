@@ -220,12 +220,18 @@ export interface EventSummaryResponse {
   startTime: string;
   format: "VIRTUAL" | "IN_PERSON" | "HYBRID";
   live: boolean;
-  /** Name of the register (organisation) that owns this event — set from the dropdown at creation. */
-  organizerName: string;
-  /** Alias returned by some endpoints — same meaning as organizerName. */
-  stakeholderName?: string;
-  /** Alias returned by some endpoints — same meaning as organizerName. */
+  /**
+   * PRIMARY organizer field returned by GET /api/v1/client/events.
+   * Always use this for the "Organizer" UI element when present.
+   */
   registerName?: string;
+  /**
+   * Alias returned by some admin endpoints — same meaning as registerName.
+   * Prefer registerName; fall back to this.
+   */
+  organizerName?: string;
+  /** Legacy alias — same meaning as registerName. */
+  stakeholderName?: string;
   registrationCount: number;
   registrationPercentage: number;
   tags: string[];
@@ -233,6 +239,8 @@ export interface EventSummaryResponse {
   eventType?: string;
   startDate?: string;
   endDate?: string;
+  registerId?: string;
+  rsvpEnabled?: boolean;
 }
 
 export interface AgendaItemResponse {
@@ -308,6 +316,9 @@ export type EventTypeConfig =
 
 export type EventDetailResponse = {
   id: string;
+  /** Name of the register/organisation that owns the event (preferred display value). */
+  organizerName?: string;
+  /** Registrar-firm name alias — use organizerName for display instead. */
   stakeholderName: string;
   title: string;
   description: string;

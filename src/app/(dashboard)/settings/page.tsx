@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { CheckCircle, XCircle, Settings, Shield, Link2, Loader2, RefreshCw, Lock, Building2 } from "lucide-react";
 import { toast } from "sonner";
-import { useStore } from "@/lib/store";
+import { useOrganisationProfile, useUploadOrgLogo } from "@/api/client-organisation";
 
 // ─── Toggle ────────────────────────────────────────────────────────────────
 
@@ -61,15 +61,14 @@ const STATUS_CONFIG = {
 // ─── Page ──────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const { currentUser, uploadOrgLogo } = useStore();
+  const { data: profileData } = useOrganisationProfile();
+  const uploadLogoMutation = useUploadOrgLogo();
+  const profile = profileData;
 
   function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => uploadOrgLogo(reader.result as string);
-    reader.readAsDataURL(file);
-    toast.success("Organisation logo updated.");
+    uploadLogoMutation.mutate(file);
   }
 
   // General
@@ -170,7 +169,7 @@ export default function SettingsPage() {
             <div>
               <Label className="mb-2 block text-[hsl(var(--muted-foreground))]">Organisation Name</Label>
               <Input
-                value={currentUser?.orgName ?? "Meristem Securities Limited"}
+                value={profile?.companyName ?? "—"}
                 disabled
                 className="bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] cursor-not-allowed"
               />
@@ -178,7 +177,7 @@ export default function SettingsPage() {
             <div>
               <Label className="mb-2 block text-[hsl(var(--muted-foreground))]">RC Number</Label>
               <Input
-                value={currentUser?.rcNumber ?? "—"}
+                value={profile?.rcNumber ?? "—"}
                 disabled
                 className="bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] cursor-not-allowed"
               />
@@ -186,7 +185,7 @@ export default function SettingsPage() {
             <div>
               <Label className="mb-2 block text-[hsl(var(--muted-foreground))]">Registered Email</Label>
               <Input
-                value={currentUser?.orgEmail ?? "—"}
+                value={profile?.contactEmail ?? "—"}
                 disabled
                 className="bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] cursor-not-allowed"
               />
@@ -197,8 +196,8 @@ export default function SettingsPage() {
             <div
               className="h-14 w-14 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted))] flex items-center justify-center shrink-0 overflow-hidden"
             >
-              {currentUser?.logoUrl
-                ? <img src={currentUser.logoUrl} alt="Org logo" className="h-full w-full object-contain" />
+              {profile?.logoUrl
+                ? <img src={profile.logoUrl} alt="Org logo" className="h-full w-full object-contain" />
                 : <Building2 className="h-6 w-6 text-[hsl(var(--muted-foreground))]" />
               }
             </div>
@@ -208,7 +207,7 @@ export default function SettingsPage() {
                 Shown in the top-right header. PNG or SVG, max 2 MB.
               </p>
               <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[hsl(var(--border))] bg-white hover:bg-[hsl(var(--muted))] transition-colors">
-                {currentUser?.logoUrl ? "Change logo" : "Upload logo"}
+                {profile?.logoUrl ? "Change logo" : "Upload logo"}
                 <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
               </label>
             </div>
