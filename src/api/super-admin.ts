@@ -91,18 +91,18 @@ export function usePendingEnrollments(page = 0, limit = 20) {
   });
 }
 
-export function useEvents(status = "", page = 0, limit = 10) {
+export function useEvents(status = "", page = 0, size = 10) {
   return useQuery({
-    queryKey: superAdminKeys.events(status, page, limit),
+    queryKey: superAdminKeys.events(status, page, size),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<any>>(
         `/api/v1/admin/events`,
-        { params: { page, limit, ...(status ? { status } : {}) } }
+        // Backend expects "size" (not "limit") for pagination — matches all other endpoints
+        { params: { page, size, ...(status ? { status } : {}) } }
       );
-      // API envelope: { status, data: { content:[...], totalElements, ... }, message }
-      // Some proxy configs strip the outer envelope, so handle both shapes.
-      const body    = res.data;                       // full JSON body
-      const payload = body?.data ?? body;             // inner payload (or body itself if no envelope)
+      // API envelope: { status: true, data: { content:[...], totalElements, ... }, message }
+      const body    = res.data;              // full JSON response body
+      const payload = body?.data ?? body;    // unwrap standard envelope; fall back to body if stripped
       const content: EventSummaryResponse[] =
         Array.isArray(payload?.content) ? payload.content :
         Array.isArray(payload)          ? payload          : [];
@@ -111,7 +111,7 @@ export function useEvents(status = "", page = 0, limit = 10) {
         totalElements: payload?.totalElements ?? payload?.totalCount ?? content.length,
         totalPages:    payload?.totalPages    ?? 1,
         page:          payload?.page          ?? payload?.number      ?? page,
-        size:          payload?.size          ?? limit,
+        size:          payload?.size          ?? size,
         number:        payload?.number        ?? payload?.page        ?? page,
         last:          payload?.last          ?? false,
       } as PagedResponse<EventSummaryResponse>;
@@ -403,7 +403,10 @@ export function useCreateEvent() {
       return res.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: superAdminKeys.events("", 0, 10) });
+      // Broad partial-key invalidation: clears ALL events queries regardless of
+      // active status filter, page number, or size — so the list always reflects
+      // the latest state after any mutation.
+      queryClient.invalidateQueries({ queryKey: [...superAdminKeys.all, "events"] });
       popup.success("Event Created", "The event has been successfully created as a draft.", 3000);
     },
     onError: (error: any) => {
@@ -421,7 +424,10 @@ export function usePublishEvent() {
     },
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: superAdminKeys.eventDetail(id) });
-      queryClient.invalidateQueries({ queryKey: superAdminKeys.events("", 0, 10) });
+      // Broad partial-key invalidation: clears ALL events queries regardless of
+      // active status filter, page number, or size — so the list always reflects
+      // the latest state after any mutation.
+      queryClient.invalidateQueries({ queryKey: [...superAdminKeys.all, "events"] });
       popup.success("Published", "The event has been published successfully.", 3000);
     },
     onError: (error: any) => {
@@ -439,7 +445,10 @@ export function useGoLive() {
     },
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: superAdminKeys.eventDetail(id) });
-      queryClient.invalidateQueries({ queryKey: superAdminKeys.events("", 0, 10) });
+      // Broad partial-key invalidation: clears ALL events queries regardless of
+      // active status filter, page number, or size — so the list always reflects
+      // the latest state after any mutation.
+      queryClient.invalidateQueries({ queryKey: [...superAdminKeys.all, "events"] });
       popup.success("Live Status", "Event is now Live.", 3000);
     },
     onError: (error: any) => {
@@ -457,7 +466,10 @@ export function useEndEvent() {
     },
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: superAdminKeys.eventDetail(id) });
-      queryClient.invalidateQueries({ queryKey: superAdminKeys.events("", 0, 10) });
+      // Broad partial-key invalidation: clears ALL events queries regardless of
+      // active status filter, page number, or size — so the list always reflects
+      // the latest state after any mutation.
+      queryClient.invalidateQueries({ queryKey: [...superAdminKeys.all, "events"] });
       popup.success("Ended", "Event has been completed.", 3000);
     },
     onError: (error: any) => {
@@ -475,7 +487,10 @@ export function useCancelEvent() {
     },
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: superAdminKeys.eventDetail(id) });
-      queryClient.invalidateQueries({ queryKey: superAdminKeys.events("", 0, 10) });
+      // Broad partial-key invalidation: clears ALL events queries regardless of
+      // active status filter, page number, or size — so the list always reflects
+      // the latest state after any mutation.
+      queryClient.invalidateQueries({ queryKey: [...superAdminKeys.all, "events"] });
       popup.success("Cancelled", "Event has been cancelled.", 3000);
     },
     onError: (error: any) => {
