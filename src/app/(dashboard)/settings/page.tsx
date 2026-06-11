@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { OrganisationSettings } from "@/components/dashboard/organisation-settings";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -152,8 +153,11 @@ export default function SettingsPage() {
 
       <div className="flex flex-col gap-5">
 
-        {/* ── Organisation Profile ─────────────────────────────────────── */}
-        <Card className="attend-card p-6">
+        {/* ── Organisation Profile — full split-panel settings module ─── */}
+        <OrganisationSettings />
+
+        {/* ── Legacy profile card (kept for backward-compat; hidden below) ── */}
+        <Card className="attend-card p-6 hidden">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-[hsl(var(--primary))]" />

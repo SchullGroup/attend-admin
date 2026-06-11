@@ -181,14 +181,21 @@ function EventTableRow({ event }: { event: EventSummaryResponse }) {
           <span>{formatLabel(event.format)}</span>
         </div>
       </td>
-      <td className="px-5 py-3 text-sm font-medium tabular-nums">
+      <td className="px-5 py-3 text-sm tabular-nums">
         {(() => {
           const count = event.registrationCount ?? 0;
           const pct   = event.registrationPercentage;
-          const cap   = pct && pct > 0 && count > 0 ? Math.round(count / (pct / 100)) : null;
-          return cap
-            ? <>{count.toLocaleString()} / {cap.toLocaleString()}</>
-            : <>{count.toLocaleString()}</>;
+          const cap   = (pct != null && pct > 0 && count > 0)
+            ? Math.round(count / (pct / 100))
+            : null;
+          return (
+            <span className="font-medium">
+              {count.toLocaleString()}
+              {cap != null ? (
+                <span className="text-[hsl(var(--muted-foreground))] font-normal"> of {cap.toLocaleString()}</span>
+              ) : null}
+            </span>
+          );
         })()}
       </td>
       <td className="px-5 py-3">
@@ -220,15 +227,15 @@ function EventTableRow({ event }: { event: EventSummaryResponse }) {
 
 const LIMIT = 20;
 
-function isSuperAdminRole(role?: string | null) {
-  return (role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "super_admin";
-}
-
 export default function EventsPage() {
   const { data: userResponse } = useGetMe();
   const currentUser = userResponse?.data;
-  const isAdmin      = !currentUser || ADMIN_ROLES.has(currentUser.role?.toLowerCase() ?? "");
-  const isSuperAdmin = isSuperAdminRole(currentUser?.role);
+
+  // ⚡ FIXED: Sanitize the role variant once to cleanly capture hyphens and spaces
+  const normalizedRole = (currentUser?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
+  
+  const isSuperAdmin = normalizedRole === "super_admin";
+  const isAdmin      = !currentUser || ADMIN_ROLES.has(normalizedRole);
 
   const [activeStatus,     setActiveStatus]     = useState("");
   const [activeType,       setActiveType]       = useState<ClientEventTypeFilter>("ALL");
@@ -285,7 +292,6 @@ export default function EventsPage() {
   const filtered = events.filter((e) => {
     if (searchQuery.trim() && !e.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (organizerFilter && (e as any).registerId !== organizerFilter) return false;
-    // registrarFilter: filter by registrar name match on organizerName
     if (registrarFilter) {
       const reg = registrarOptions.find((r) => r.id === registrarFilter);
       if (reg && !(e.organizerName ?? e.registerName ?? "").toLowerCase().includes(reg.name.toLowerCase())) return false;
@@ -307,7 +313,6 @@ export default function EventsPage() {
               : `${totalCount} total event${totalCount !== 1 ? "s" : ""} in your organisation`}
           </p>
         </div>
-        {/* Create Event shown to non-super-admin users only */}
         {!isSuperAdmin && (
           <Link href="/events/create">
             <Button size="sm" className="gap-1.5">Create Event</Button>
@@ -348,7 +353,6 @@ export default function EventsPage() {
           </>
         )}
 
-        {/* Clear filters — only relevant when dropdowns are visible (super admin) */}
         {(searchQuery || (isSuperAdmin && (registrarFilter || organizerFilter))) && (
           <button
             type="button"
