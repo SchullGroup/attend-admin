@@ -123,9 +123,9 @@ export default function RegistrarsPage() {
                 const isPending   = statusKey === "PENDING";
                 return (
                   <tr key={r.id} className="attend-table-row">
-                    <td className="px-5 py-3">
-                      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{getDisplayName(r)}</p>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))]">{r.industry ?? "—"}</p>
+                    <td className="px-5 py-3 max-w-[160px]">
+                      <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate" title={getDisplayName(r)}>{getDisplayName(r)}</p>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] truncate" title={r.industry ?? "—"}>{r.industry ?? "—"}</p>
                     </td>
                     <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{r.rcNumber ?? "—"}</td>
                     <td className="px-5 py-3">

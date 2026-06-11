@@ -35,8 +35,8 @@ export function EventRow({ event }: EventRowProps) {
             </span>
           )}
         </div>
-        <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{event.title}</p>
-        <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{regName || "—"}</p>
+        <p className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[220px] truncate" title={event.title}>{event.title}</p>
+        <p className="text-xs text-[hsl(var(--muted-foreground))] max-w-[160px] truncate" title={regName || "—"}>{regName || "—"}</p>
       </div>
 
       <div className="hidden lg:flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] shrink-0">

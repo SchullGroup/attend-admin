@@ -145,11 +145,17 @@ export default function RegistersPage() {
                   <tr key={reg.id} className="attend-table-row">
 
                     {/* Name + industry */}
-                    <td className="px-5 py-3">
-                      <p className="text-sm font-medium text-[hsl(var(--foreground))]">
+                    <td className="px-5 py-3 max-w-[160px]">
+                      <p
+                        className="text-sm font-medium text-[hsl(var(--foreground))] truncate"
+                        title={reg.name || reg.companyName || "—"}
+                      >
                         {reg.name || reg.companyName || "—"}
                       </p>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                      <p
+                        className="text-xs text-[hsl(var(--muted-foreground))] truncate"
+                        title={reg.industry != null && reg.industry !== "" ? reg.industry : "—"}
+                      >
                         {reg.industry != null && reg.industry !== "" ? reg.industry : <i>—</i>}
                       </p>
                     </td>

@@ -168,8 +168,8 @@ function EventTableRow({ event }: { event: EventSummaryResponse }) {
             </span>
           )}
         </div>
-        <p className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[260px] truncate">{event.title}</p>
-        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 max-w-[260px] truncate">{registerName || "—"}</p>
+        <p className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[240px] truncate" title={event.title}>{event.title}</p>
+        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 max-w-[160px] truncate" title={registerName || "—"}>{registerName || "—"}</p>
       </td>
       <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] whitespace-nowrap">
         {formatDate(event.date)}

@@ -109,7 +109,7 @@ export function ClientView({
         </div>
 
         {/* Right: Registers */}
-        <div className="col-span-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+        <div className="col-span-2 h-fit rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3.5 border-b border-[hsl(var(--border)/0.6)]">
             <h2 className="font-semibold text-[hsl(var(--foreground))] text-sm">Registers</h2>
             <Link href="/registers">
