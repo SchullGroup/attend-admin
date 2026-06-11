@@ -24,7 +24,9 @@ import { cn } from "@/lib/utils";
 // Constants
 // ---------------------------------------------------------------------------
 
-const ADMIN_ROLES = new Set(["super_admin", "event_manager", "kyc_officer", "judge"]);
+// Only super_admin uses the platform-level admin API.
+// All org-scoped roles (client_admin, event_manager, viewer, kyc_officer, etc.) use the client API.
+const ADMIN_ROLES = new Set(["super_admin"]);
 
 const ADMIN_STATUS_TABS = [
   { label: "All",       value: ""          },

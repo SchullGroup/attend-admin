@@ -11,7 +11,9 @@ import { ClientView } from "@/components/dashboard/client-view";
 import type { EventSummaryResponse } from "@/types/super-admin";
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
-const ADMIN_ROLES = new Set(["super_admin", "event_manager", "kyc_officer", "judge"]);
+// Only true platform-level roles (super_admin and its delegates) use the admin API.
+// client_admin, event_manager, viewer, kyc_officer, etc. all use the client API.
+const ADMIN_ROLES = new Set(["super_admin"]);
 
 // ─── Page controller ──────────────────────────────────────────────────────────
 export default function DashboardPage() {
