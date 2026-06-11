@@ -23,6 +23,7 @@ import { EventBroadcastTab }    from "./components/EventBroadcastTab";
 import { EventVoteResultsTab }  from "./components/EventVoteResultsTab";
 import { EventPostAgmTab }      from "./components/EventPostAgmTab";
 import { EventSettingsTab }     from "./components/EventSettingsTab";
+import { EventStakeholderTab }  from "./components/EventStakeholderTab";
 import type { LocalAgendaItem, EventShim } from "./components/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -140,9 +141,13 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
+  const isSuperAdmin = (currentUser?.role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "super_admin";
+
   const TABS = [
     "Overview",
     "Attendees",
+    // Registrar tab only for super admin (overview already shows it for others)
+    ...(isSuperAdmin ? ["Registrar"] : []),
     "Documents",
     ...(isAGM ? ["Resolutions"] : []),
     "Broadcast",
@@ -205,14 +210,20 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* ── Tab panels ── */}
-      {tab === "Overview"     && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} />}
-      {tab === "Attendees"    && <EventAttendeesTab   participants={participants} suspendUser={suspendUser} eventId={id} />}
-      {tab === "Documents"    && <EventDocumentsTab   eventId={id} />}
-      {tab === "Resolutions"  && isAGM && <EventResolutionsTab eventId={id} isAGM={isAGM} agendaItems={agendaItems} setAgendaItems={setAgendaItems} />}
-      {tab === "Broadcast"    && <EventBroadcastTab   rsvpCount={rsvpCount} broadcastMsg={broadcastMsg} setBroadcastMsg={setBroadcastMsg} broadcastChannel={broadcastChannel} setBroadcastChannel={setBroadcastChannel} broadcastHistory={broadcastHistory} setBroadcastHistory={setBroadcastHistory} />}
-      {tab === "Vote Results" && isAGM && <EventVoteResultsTab liveVotes={liveVotes} />}
-      {tab === "Post-AGM"     && isAGM && <EventPostAgmTab     event={event} liveVotes={liveVotes} participants={participants} />}
-      {tab === "Settings"     && <EventSettingsTab    eventId={id} title={event.title} organiser={event.organiser} description={apiEvent.description} currentStatus={currentStatus} onStatusChange={handleStatusChange} />}
+      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} />}
+      {tab === "Attendees"          && <EventAttendeesTab   participants={participants} suspendUser={suspendUser} eventId={id} />}
+      {tab === "Registrar" && isSuperAdmin && (
+        <EventStakeholderTab
+          stakeholderName={event.organiser}
+          stakeholderData={apiEvent as any}
+        />
+      )}
+      {tab === "Documents"          && <EventDocumentsTab   eventId={id} />}
+      {tab === "Resolutions"        && isAGM && <EventResolutionsTab eventId={id} isAGM={isAGM} agendaItems={agendaItems} setAgendaItems={setAgendaItems} />}
+      {tab === "Broadcast"          && <EventBroadcastTab   rsvpCount={rsvpCount} broadcastMsg={broadcastMsg} setBroadcastMsg={setBroadcastMsg} broadcastChannel={broadcastChannel} setBroadcastChannel={setBroadcastChannel} broadcastHistory={broadcastHistory} setBroadcastHistory={setBroadcastHistory} />}
+      {tab === "Vote Results"       && isAGM && <EventVoteResultsTab liveVotes={liveVotes} />}
+      {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} liveVotes={liveVotes} participants={participants} />}
+      {tab === "Settings"           && <EventSettingsTab    eventId={id} title={event.title} organiser={event.organiser} description={apiEvent.description} currentStatus={currentStatus} onStatusChange={handleStatusChange} />}
     </div>
   );
 }

@@ -85,12 +85,14 @@ export interface EnrollRegistrarRequest {
 // Cache contract: mutations invalidate BOTH ["registrars"] AND ["registrar", id]
 // ---------------------------------------------------------------------------
 export const registrarKeys = {
-  all:     ["registrars"] as const,
-  list:    (status: string, page: number, size: number) =>
-             ["registrars", "list", { status, page, size }] as const,
-  pending: (page: number, size: number) =>
-             ["registrars", "pending", page, size] as const,
-  detail:  (id: string) => ["registrar", id] as const,
+  all:       ["registrars"] as const,
+  list:      (status: string, page: number, size: number) =>
+               ["registrars", "list", { status, page, size }] as const,
+  pending:   (page: number, size: number) =>
+               ["registrars", "pending", page, size] as const,
+  detail:    (id: string) => ["registrar", id] as const,
+  registers: (id: string) => ["registrar", id, "registers"] as const,
+  events:    (id: string) => ["registrar", id, "events"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -149,6 +151,104 @@ export function useRegistrars(status = "", page = 0, size = 50) {
       return normalizeList(res.data.data, page, size);
     },
     staleTime: 30_000,
+  });
+}
+
+/**
+ * Full registrar profile including registers and events.
+ *
+ * API: GET /api/v1/admin/registrars/{id}
+ */
+export interface RegistrarDetailResponse {
+  id:                   string;
+  companyName?:         string;
+  name?:                string;
+  industry?:            string | null;
+  rcNumber?:            string | null;
+  representativeName?:  string;
+  repName?:             string;
+  contactEmail?:        string;
+  repEmail?:            string;
+  representativePhone?: string;
+  phone?:               string;
+  plan?:                string;
+  status:               string;
+  enrolledAt?:          string;
+  approvedAt?:          string;
+  createdAt?:           string;
+  logoUrl?:             string;
+  registers?:           Array<{
+    id:          string;
+    name:        string;
+    industry?:   string | null;
+    status:      string;
+    eventCount?: number;
+    enrolledAt?: string;
+  }>;
+  events?:              Array<{
+    id:        string;
+    title:     string;
+    eventType?: string;
+    date:       string;
+    status:     string;
+    format:     string;
+    registrationCount?: number;
+  }>;
+  registersCount?: number;
+  eventsCount?:    number;
+}
+
+export function useRegistrarDetail(id: string) {
+  return useQuery({
+    queryKey: registrarKeys.detail(id),
+    queryFn:  async () => {
+      const res = await apiClient.get<ApiResponse<RegistrarDetailResponse>>(
+        `/api/v1/admin/registrars/${id}`
+      );
+      return res.data.data;
+    },
+    enabled:   !!id,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Registers managed by a registrar.
+ *
+ * API: GET /api/v1/admin/registrars/{id}/registers
+ */
+export function useRegistrarRegisters(id: string) {
+  return useQuery({
+    queryKey: registrarKeys.registers(id),
+    queryFn:  async () => {
+      const res = await apiClient.get<ApiResponse<any>>(
+        `/api/v1/admin/registrars/${id}/registers`
+      );
+      const raw = res.data.data;
+      return (raw?.registers ?? raw?.content ?? raw?.data ?? (Array.isArray(raw) ? raw : [])) as RegistrarDetailResponse["registers"];
+    },
+    enabled:   !!id,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Events associated with a registrar.
+ *
+ * API: GET /api/v1/admin/registrars/{id}/events
+ */
+export function useRegistrarEvents(id: string) {
+  return useQuery({
+    queryKey: registrarKeys.events(id),
+    queryFn:  async () => {
+      const res = await apiClient.get<ApiResponse<any>>(
+        `/api/v1/admin/registrars/${id}/events`
+      );
+      const raw = res.data.data;
+      return (raw?.events ?? raw?.content ?? raw?.data ?? (Array.isArray(raw) ? raw : [])) as RegistrarDetailResponse["events"];
+    },
+    enabled:   !!id,
+    staleTime: 60_000,
   });
 }
 

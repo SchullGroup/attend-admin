@@ -505,14 +505,41 @@ export interface ParticipantKycDetailResponse {
   };
 }
 
+/**
+ * Individual row returned by GET /api/v1/admin/participants/kyc/queue
+ * Fields come from the list endpoint — different from the detail endpoint.
+ */
+export interface KycQueueItem {
+  id:            string;
+  participantId?: string;   // alias — same as id on some response shapes
+  displayId?:    string;
+  fullName:      string;
+  email?:        string;
+  phone?:        string;
+  kycStatus:     string;
+  accountStatus?: string;
+  submittedAgo?: string;
+  submittedAt?:  string;
+  bvnProvided?:  boolean;
+  chnProvided?:  boolean;
+  avatarColor?:  string;
+  // Detail shape — present when fetched via the detail endpoint
+  credentials?: {
+    bvn?: CredentialField;
+    nin?: CredentialField;
+    chn?: CredentialField;
+  };
+}
+
 /** Matches GET /api/v1/admin/participants/kyc/queue — array is under `queue`, NOT `content` */
 export interface KycQueueResponse {
-  queue:       ParticipantKycDetailResponse[]; // spec key
+  queue:       KycQueueItem[];   // primary spec key
   totalCount:  number;
   page:        number;
   size:        number;
-  // Legacy alias kept so any existing `?.content` access degrades gracefully
-  content?:    ParticipantKycDetailResponse[];
+  totalPages?: number;
+  // Alias fallback
+  content?:    KycQueueItem[];
 }
 
 export interface GlobalDocumentListResponse {

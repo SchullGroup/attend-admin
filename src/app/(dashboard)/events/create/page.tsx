@@ -405,6 +405,12 @@ function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState; organ
         <div><Label className="mb-2 block">Start Time</Label><Input type="time" value={s.time} onChange={(e) => s.setTime(e.target.value)} /></div>
       </div>
       <FormatPicker value={s.format} onChange={s.setFormat} />
+      {(s.format === "virtual" || s.format === "hybrid") && (
+        <div>
+          <Label className="mb-2 block"><Monitor className="h-3.5 w-3.5 inline mr-1" />Stream URL <span className="font-normal text-[hsl(var(--muted-foreground))] text-xs">(required for virtual/hybrid)</span></Label>
+          <Input placeholder="https://zoom.us/j/... or https://meet.google.com/..." value={s.streamUrl} onChange={(e) => s.setStreamUrl(e.target.value)} />
+        </div>
+      )}
       {(s.format === "in_person" || s.format === "hybrid") && (
         <div><Label className="mb-2 block"><MapPin className="h-3.5 w-3.5 inline mr-1" />Venue</Label><Input placeholder="e.g. Civic Centre, Victoria Island, Lagos" value={s.venue} onChange={(e) => s.setVenue(e.target.value)} /></div>
       )}
@@ -565,6 +571,12 @@ function LaunchStep0({ s, organiserName, showErrors = false }: { s: LaunchState;
         <div><Label className="mb-2 block">Start Time</Label><Input type="time" value={s.time} onChange={(e) => s.setTime(e.target.value)} /></div>
       </div>
       <FormatPicker value={s.format} onChange={s.setFormat} />
+      {(s.format === "virtual" || s.format === "hybrid") && (
+        <div>
+          <Label className="mb-2 block"><Monitor className="h-3.5 w-3.5 inline mr-1" />Stream URL <span className="font-normal text-[hsl(var(--muted-foreground))] text-xs">(required for virtual/hybrid)</span></Label>
+          <Input placeholder="https://youtube.com/live/... or https://zoom.us/j/..." value={s.streamUrl} onChange={(e) => s.setStreamUrl(e.target.value)} />
+        </div>
+      )}
       {(s.format === "in_person" || s.format === "hybrid") && (
         <div><Label className="mb-2 block"><MapPin className="h-3.5 w-3.5 inline mr-1" />Venue</Label><Input placeholder="e.g. Eko Hotels, Victoria Island" value={s.venue} onChange={(e) => s.setVenue(e.target.value)} /></div>
       )}
@@ -1020,6 +1032,7 @@ function useAgmState() {
   const [time, setTime] = useState("10:00");
   const [format, setFormat] = useState<Format>("virtual");
   const [venue, setVenue] = useState("");
+  const [streamUrl, setStreamUrl] = useState("");
   const [noticeDays, setNoticeDays] = useState("21");
   const [noticeFile, setNoticeFile] = useState("");
   const [quorum, setQuorum] = useState("25");
@@ -1030,7 +1043,7 @@ function useAgmState() {
   const addResolution = () => setResolutions((r) => [...r, { id: genId(), title: "", description: "", isSpecial: false }]);
   const removeResolution = (id: string) => setResolutions((r) => r.filter((x) => x.id !== id));
   const updateResolution = (id: string, field: keyof Resolution, val: string | boolean) => setResolutions((r) => r.map((x) => x.id === id ? { ...x, [field]: val } : x));
-  return { title, setTitle, date, setDate, time, setTime, format, setFormat, venue, setVenue, noticeDays, setNoticeDays, noticeFile, setNoticeFile, quorum, setQuorum, cutoff, setCutoff, resolutions, addResolution, removeResolution, updateResolution, proxyEnabled, setProxyEnabled, shareholderTargeting, setShareholderTargeting };
+  return { title, setTitle, date, setDate, time, setTime, format, setFormat, venue, setVenue, streamUrl, setStreamUrl, noticeDays, setNoticeDays, noticeFile, setNoticeFile, quorum, setQuorum, cutoff, setCutoff, resolutions, addResolution, removeResolution, updateResolution, proxyEnabled, setProxyEnabled, shareholderTargeting, setShareholderTargeting };
 }
 
 function useLaunchState() {
@@ -1221,6 +1234,7 @@ function CreateEventInner() {
             date:            agm.date,
             startTime:       agm.time,
             format:          fmt(agm.format),
+            streamUrl:       agm.streamUrl || undefined,
             maximumCapacity: 0,
             agmConfig: {
               resolutions: agm.resolutions
@@ -1312,6 +1326,7 @@ function CreateEventInner() {
           date:                   agm.date,
           startTime:              agm.time,
           format:                 fmt(agm.format),
+          streamUrl:              agm.streamUrl               || undefined,
           venue:                  agm.venue                   || undefined,
           quorumPercentage:       parseInt(agm.quorum, 10)    || undefined,
           eligibilityCutOffDate:  agm.cutoff                  || undefined,
@@ -1359,6 +1374,7 @@ function CreateEventInner() {
           startTime:            hack.time               || "09:00",
           format:               fmt(hack.format),
           venue:                hack.venue              || undefined,
+          streamUrl:            hack.streamUrl          || undefined,
           problemStatement:     hack.problemStatement   || undefined,
           expectedDeliverable:  hack.deliverable        || undefined,
           submissionDeadline:   hack.submissionDeadline || undefined,

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Building2, Users, CalendarDays } from "lucide-react";
+import { Building2, Users, CalendarDays, Eye } from "lucide-react";
 import {
   useRegistrars,
   useSuspendRegistrar,
@@ -111,6 +111,7 @@ export default function RegistrarsPage() {
                 <th className="px-5 py-3 text-left">Status</th>
                 <th className="px-5 py-3 text-left">Enrolled</th>
                 <th className="px-5 py-3 text-left">Actions</th>
+                    <th className="px-5 py-3 text-left"></th>
               </tr>
             </thead>
             <tbody>
@@ -184,6 +185,13 @@ export default function RegistrarsPage() {
                           </Button>
                         )}
                       </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <Link href={`/registrars/${r.id}`}>
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1 opacity-60 hover:opacity-100">
+                          <Eye className="h-3 w-3" /> View
+                        </Button>
+                      </Link>
                     </td>
                   </tr>
                 );

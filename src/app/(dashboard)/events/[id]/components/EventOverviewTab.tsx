@@ -7,15 +7,17 @@ import type { EventShim, LocalAgendaItem } from "./types";
 const FORMAT_ICON = { virtual: Monitor, hybrid: Users2, "in-person": MapPin };
 
 interface Props {
-  event:        EventShim;
-  fill:         number | null;
-  eventDocs:    any[];
-  agendaItems:  LocalAgendaItem[];
-  isAGM:        boolean;
-  onNavigate:   (tab: string) => void;
+  event:           EventShim;
+  fill:            number | null;
+  eventDocs:       any[];
+  agendaItems:     LocalAgendaItem[];
+  isAGM:           boolean;
+  onNavigate:      (tab: string) => void;
+  /** Registrar / managing firm name — shown in a separate card below the Organiser card */
+  stakeholderName?: string;
 }
 
-export function EventOverviewTab({ event, fill, eventDocs, agendaItems, isAGM, onNavigate }: Props) {
+export function EventOverviewTab({ event, fill, eventDocs, agendaItems, isAGM, onNavigate, stakeholderName }: Props) {
   const FormatIcon = FORMAT_ICON[event.format] ?? Monitor;
 
   return (
@@ -123,6 +125,22 @@ export function EventOverviewTab({ event, fill, eventDocs, agendaItems, isAGM, o
             </div>
           </div>
         </Card>
+
+        {/* Registrar card — shown when the managing firm name is available */}
+        {stakeholderName && (
+          <Card className="attend-card p-5">
+            <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3">Registrar</h2>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-[hsl(var(--muted))] flex items-center justify-center font-bold text-sm shrink-0 text-[hsl(var(--muted-foreground))]">
+                {stakeholderName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{stakeholderName}</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">Managing registrar</p>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Documents mini-list */}
         <Card className="attend-card p-5">

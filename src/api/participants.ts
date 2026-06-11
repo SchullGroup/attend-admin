@@ -8,6 +8,7 @@ import {
   ParticipantListResponse,
   ParticipantDetailResponse,
   KycQueueResponse,
+  KycQueueItem,
   ParticipantKycDetailResponse,
   SuspendParticipantRequest,
   KycApproveRequest,
@@ -47,7 +48,17 @@ export function useParticipantStats() {
     queryKey: participantKeys.stats(),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<any>>("/api/v1/admin/participants/stats");
-      return res.data.data; // Rule 3: unwrap envelope
+      // Unwrap standard envelope; also handle flat responses (no envelope)
+      const raw = res.data?.data ?? res.data;
+      // Normalise various backend naming conventions into a single flat shape
+      return {
+        totalParticipants: raw?.totalParticipants ?? raw?.total ?? raw?.totalCount ?? 0,
+        verified:          raw?.verified          ?? raw?.fullKyc ?? raw?.verifiedCount ?? raw?.totalVerified ?? 0,
+        pendingKyc:        raw?.pendingKyc        ?? raw?.pending ?? raw?.pendingCount  ?? raw?.totalPending  ?? 0,
+        suspended:         raw?.suspended         ?? raw?.suspendedCount ?? raw?.totalSuspended ?? 0,
+        // Pass through all original keys so consumers reading raw fields still work
+        ...raw,
+      };
     },
   });
 }
@@ -117,26 +128,46 @@ export function useParticipantDetail(id: string) {
   });
 }
 
+// Re-export KycQueueItem so pages can import it from here
+export type { KycQueueItem };
+
 /**
  * KYC review queue — GET /api/v1/admin/participants/kyc/queue
  * Rule 1: server wraps array under `queue`, not `content`.
- * Rule 3: returns payload; consumers use `data?.queue || []`.
+ * Rule 3: returns payload; consumers normalise via `.queue ?? .content ?? []`.
  */
 export function useKycQueue(status = "", page = 0, limit = 20) {
   return useQuery({
     queryKey: participantKeys.kycQueue(status, page, limit),
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<KycQueueResponse>>(
+      const res = await apiClient.get<ApiResponse<any>>(
         "/api/v1/admin/participants/kyc/queue",
         {
           params: {
             page,
-            size: limit,
+            size:  limit,   // most participant endpoints use `size`
+            limit,          // also send `limit` for endpoints that prefer it
             ...(status ? { status } : {}),
           },
         }
       );
-      return res.data.data; // KycQueueResponse — use .queue for the items array
+      // Handle both envelope and flat responses
+      const raw = res.data?.data ?? res.data;
+      // Normalise: API may wrap under `queue`, `participants`, `data`, or `content`
+      const items: KycQueueItem[] =
+        raw?.queue        ??
+        raw?.participants ??
+        raw?.data         ??
+        raw?.content      ??
+        (Array.isArray(raw) ? raw : []);
+      return {
+        queue:       items,
+        content:     items,  // alias for backward compat
+        totalCount:  raw?.totalCount  ?? raw?.totalElements ?? items.length,
+        totalPages:  raw?.totalPages  ?? 1,
+        page:        raw?.page        ?? page,
+        size:        raw?.size        ?? limit,
+      } satisfies KycQueueResponse;
     },
   });
 }

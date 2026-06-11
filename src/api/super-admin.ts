@@ -95,12 +95,26 @@ export function useEvents(status = "", page = 0, limit = 10) {
   return useQuery({
     queryKey: superAdminKeys.events(status, page, limit),
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<PagedResponse<EventSummaryResponse>>>(
+      const res = await apiClient.get<ApiResponse<any>>(
         `/api/v1/admin/events`,
         { params: { page, limit, ...(status ? { status } : {}) } }
       );
-      // Unwrap the standard envelope so consumers receive the payload directly
-      return res.data.data; // PagedResponse<EventSummaryResponse>
+      // API envelope: { status, data: { content:[...], totalElements, ... }, message }
+      // Some proxy configs strip the outer envelope, so handle both shapes.
+      const body    = res.data;                       // full JSON body
+      const payload = body?.data ?? body;             // inner payload (or body itself if no envelope)
+      const content: EventSummaryResponse[] =
+        Array.isArray(payload?.content) ? payload.content :
+        Array.isArray(payload)          ? payload          : [];
+      return {
+        content,
+        totalElements: payload?.totalElements ?? payload?.totalCount ?? content.length,
+        totalPages:    payload?.totalPages    ?? 1,
+        page:          payload?.page          ?? payload?.number      ?? page,
+        size:          payload?.size          ?? limit,
+        number:        payload?.number        ?? payload?.page        ?? page,
+        last:          payload?.last          ?? false,
+      } as PagedResponse<EventSummaryResponse>;
     },
   });
 }

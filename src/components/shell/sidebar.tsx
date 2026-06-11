@@ -40,11 +40,12 @@ const SECTIONS = [
   {
     label: "Platform Events",
     items: [
-      { title: "Create Event",      icon: PlusCircle, href: "/events/create" },
+      // Create Event is hidden for super admin — they don't own events directly
+      { title: "Create Event",      icon: PlusCircle,   href: "/events/create", clientOnly: true },
       { title: "All Events",        icon: CalendarDays, href: "/events" },
-      { title: "Live Control Room", icon: Radio, href: "/events/live" },
-      { title: "QR Check-In",       icon: QrCode, href: "/events/qr-checkin" },
-      { title: "Vote Results",      icon: Vote, href: "/events/votes" },
+      { title: "Live Control Room", icon: Radio,        href: "/events/live" },
+      { title: "QR Check-In",       icon: QrCode,       href: "/events/qr-checkin" },
+      { title: "Vote Results",      icon: Vote,         href: "/events/votes" },
     ],
   },
   {
@@ -83,19 +84,19 @@ const SECTIONS = [
   {
     label: "System",
     items: [
-      { title: "Documents",     icon: FolderOpen, href: "/documents" },
-      { title: "Analytics",     icon: BarChart3,  href: "/analytics" },
-      { title: "Audit Log",     icon: ScrollText, href: "/audit" },
-      { title: "Settings",      icon: Settings,   href: "/settings" },
-      { title: "Roles & Access",icon: UserCog,    href: "/settings/roles" },
-      { title: "Team Members",  icon: Users2,     href: "/settings/team" },
+      { title: "Documents",    icon: FolderOpen, href: "/documents" },
+      { title: "Analytics",    icon: BarChart3,  href: "/analytics" },
+      { title: "Audit Log",    icon: ScrollText, href: "/audit" },
+      { title: "Settings",     icon: Settings,   href: "/settings" },
+      // Team Members shown only to client/non-super-admin users
+      { title: "Team Members", icon: Users2,     href: "/settings/team", clientOnly: true },
     ],
   },
 ] as Array<{
   label:           string;
-  superAdminOnly?: boolean;  // hide from everyone except SUPER_ADMIN
-  clientOnly?:     boolean;  // hide from SUPER_ADMIN; show only to client/non-super-admin users
-  items:           Array<{ title: string; icon: React.ElementType; href: string; superAdminOnly?: boolean }>;
+  superAdminOnly?: boolean;
+  clientOnly?:     boolean;
+  items:           Array<{ title: string; icon: React.ElementType; href: string; superAdminOnly?: boolean; clientOnly?: boolean }>;
 }>;
 
 const ALL_HREFS = [
@@ -194,10 +195,12 @@ export function Sidebar() {
           if (section.superAdminOnly && !isSuperAdmin) return null;  // e.g. Registrars
           if (section.clientOnly     &&  isSuperAdmin) return null;  // e.g. Registers
 
-          // Filter individual items within the section
-          const visibleItems = section.items.filter(
-            (item) => !("superAdminOnly" in item && item.superAdminOnly && !isSuperAdmin)
-          );
+          // Filter individual items by role flags
+          const visibleItems = section.items.filter((item) => {
+            if (item.superAdminOnly && !isSuperAdmin) return false; // requires super admin
+            if (item.clientOnly     &&  isSuperAdmin) return false; // hidden for super admin
+            return true;
+          });
           // If all items in this section are hidden, omit the section header too
           if (visibleItems.length === 0) return null;
 
