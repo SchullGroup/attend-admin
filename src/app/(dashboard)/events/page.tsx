@@ -184,16 +184,17 @@ function EventTableRow({ event }: { event: EventSummaryResponse }) {
       <td className="px-5 py-3 text-sm tabular-nums">
         {(() => {
           const count = event.registrationCount ?? 0;
-          const pct   = event.registrationPercentage;
-          const cap   = (pct != null && pct > 0 && count > 0)
-            ? Math.round(count / (pct / 100))
+          // Prefer the direct maximumCapacity field (accurate).
+          // Fall back to nothing — reverse-engineering from a rounded percentage is lossy and misleading.
+          const cap = (event.maximumCapacity != null && event.maximumCapacity > 0)
+            ? event.maximumCapacity
             : null;
           return (
             <span className="font-medium">
               {count.toLocaleString()}
-              {cap != null ? (
-                <span className="text-[hsl(var(--muted-foreground))] font-normal"> of {cap.toLocaleString()}</span>
-              ) : null}
+              {cap != null
+                ? <span className="text-[hsl(var(--muted-foreground))] font-normal"> of {cap.toLocaleString()}</span>
+                : null}
             </span>
           );
         })()}

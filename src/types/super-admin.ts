@@ -232,13 +232,15 @@ export interface EventSummaryResponse {
   organizerName?: string;
   /** Legacy alias — same meaning as registerName. */
   stakeholderName?: string;
-  registrationCount: number;
+  registrationCount:      number;
   registrationPercentage: number;
-  tags: string[];
+  /** Maximum attendee capacity — use this directly for "X of Y" display. 0 = unlimited. */
+  maximumCapacity?:       number;
+  tags:       string[];
   /** AGM_EGM | PRODUCT_LAUNCH | INNOVATION_CHALLENGE | HACKATHON | GENERAL_EVENT */
   eventType?: string;
   startDate?: string;
-  endDate?: string;
+  endDate?:   string;
   registerId?: string;
   rsvpEnabled?: boolean;
 }
