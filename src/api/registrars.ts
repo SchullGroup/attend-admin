@@ -42,7 +42,7 @@ export interface RegistrarItem {
   repPhone?:            string;
   plan?:                string;
   registersCount?:      number;
-  eventsCount?:         number;
+  eventCount?:         number;
   status:               string;
   enrolledAt?:          string;
   approvedAt?:          string;

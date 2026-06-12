@@ -22,7 +22,7 @@ export interface SuperAdminViewProps {
   allEvents:      EventSummaryResponse[];
   eventsData:     PagedResponse<EventSummaryResponse> | undefined;
   eventsLoading:  boolean;
-  registrars:     Array<{ id: string; companyName?: string; name?: string; industry?: string | null; status?: string; eventsCount?: number }>;
+  registrars:     Array<{ id: string; companyName?: string; name?: string; industry?: string | null; status?: string; eventCount?: number }>;
   registrarsData: RegistrarsListResponse | undefined;
   regLoading:     boolean;
   liveEvents:     EventSummaryResponse[];
@@ -44,6 +44,7 @@ export function SuperAdminView({
   liveEvents,
   publishedData,
 }: SuperAdminViewProps) {
+
 
   const enrolledCount  = stats?.enrolledStakeholders?.count ?? 0;
   const publishedCount = publishedData?.totalElements        ?? 0;
@@ -180,7 +181,7 @@ export function SuperAdminView({
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       <span className="h-2 w-2 rounded-full" style={{ backgroundColor: dot }} />
-                      <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">{reg.eventsCount ?? 0} events</span>
+                      <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">{reg.eventCount ?? 0} events</span>
                     </div>
                   </Link>
                 );

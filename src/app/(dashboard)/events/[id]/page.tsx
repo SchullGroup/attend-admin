@@ -214,7 +214,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {tab === "Attendees"          && <EventAttendeesTab   participants={participants} suspendUser={suspendUser} eventId={id} />}
       {tab === "Registrar" && isSuperAdmin && (
         <EventStakeholderTab
-          stakeholderName={event.organiser}
+          stakeholderName={apiEvent.stakeholderName || undefined}
           stakeholderData={apiEvent as any}
         />
       )}
