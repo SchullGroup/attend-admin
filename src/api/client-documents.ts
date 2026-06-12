@@ -186,6 +186,66 @@ export function useUploadGlobalDocument() {
   });
 }
 
+/**
+ * Upload a file URL directly to Cloudinary then register it in the document vault.
+ * Flow: fetch file blob → POST /api/v1/upload (FormData) → POST /api/v1/client/documents.
+ */
+export interface UploadCloudinaryDocumentRequest {
+  /** Absolute or relative URL of the file to fetch and re-upload. */
+  sourceUrl:    string;
+  title:        string;
+  documentType: string;
+  eventId:      string;
+  /** Suggested filename, e.g. "AGM-Notice.pdf" */
+  originalFilename?: string;
+}
+
+export function useUploadCloudinaryDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      sourceUrl,
+      title,
+      documentType,
+      eventId,
+      originalFilename = "document.pdf",
+    }: UploadCloudinaryDocumentRequest) => {
+      // 1. Fetch the raw file blob from the source URL
+      const fileResponse = await apiClient.get<Blob>(sourceUrl, {
+        responseType: "blob",
+      });
+      const blob = fileResponse.data;
+
+      // 2. Upload to Cloudinary via the platform upload proxy
+      const formData = new FormData();
+      formData.append("file", blob, originalFilename);
+      const uploadRes = await apiClient.post<ApiResponse<Record<string, string>>>(
+        "/api/v1/upload",
+        formData,
+        {
+          params:  { folder: "documents" },
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
+      const uploadData = uploadRes.data.data ?? {};
+      const fileUrl           = uploadData["fileUrl"]           ?? uploadData["url"]        ?? "";
+      const cloudinaryPublicId = uploadData["cloudinaryPublicId"] ?? uploadData["public_id"] ?? "";
+
+      // 3. Register the document in the vault
+      const docRes = await apiClient.post<ApiResponse<GlobalDocumentItem>>(
+        "/api/v1/client/documents",
+        { title, documentType, eventId, fileUrl, cloudinaryPublicId, originalFilename }
+      );
+      return docRes.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: clientDocumentKeys.all });
+      popup.success("AGM Notice Uploaded", "AGM notice has been added to documents.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "AGM notice upload failed."),
+  });
+}
+
 /** Delete a document from the vault. */
 export function useDeleteGlobalDocument() {
   const queryClient = useQueryClient();

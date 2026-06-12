@@ -707,10 +707,14 @@ export function useRetainEventData() {
 // ---------------------------------------------------------------------------
 
 export interface ExpectedAttendee {
-  id:       string;
-  fullName: string;
-  email:    string;
-  phone?:   string;
+  id:              string;
+  firstName?:      string;
+  lastName?:       string;
+  /** Derived display name — firstName + lastName, or fullName from legacy payloads */
+  fullName?:       string;
+  email:           string;
+  phone?:          string;
+  shareholderRef?: string;
 }
 
 export interface ExpectedAttendeeListResponse {
@@ -718,11 +722,14 @@ export interface ExpectedAttendeeListResponse {
   totalCount: number;
 }
 
+/** POST body for adding one or more expected attendees */
 export interface UploadAttendeesRequest {
   attendees: Array<{
-    fullName: string;
-    email:    string;
-    phone?:   string;
+    firstName:       string;
+    lastName:        string;
+    email:           string;
+    phone?:          string;
+    shareholderRef?: string;
   }>;
 }
 

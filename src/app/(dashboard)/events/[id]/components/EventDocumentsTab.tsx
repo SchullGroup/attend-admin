@@ -1,5 +1,5 @@
 "use client";
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { Upload, FileText, Download, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,9 +10,14 @@ import {
   useDeleteEventDocument,
   useDownloadEventDocument,
 } from "@/api/client-events";
+import { useUploadCloudinaryDocument } from "@/api/client-documents";
 import { toast } from "sonner";
 
-interface Props { eventId: string }
+interface Props {
+  eventId:       string;
+  /** AGM notice URL from agmConfig — if present, auto-uploads on first load */
+  agmNoticeUrl?: string;
+}
 
 function formatBytes(bytes: number): string {
   if (!bytes) return "—";
@@ -21,13 +26,32 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1_048_576).toFixed(1)} MB`;
 }
 
-export function EventDocumentsTab({ eventId }: Props) {
+export function EventDocumentsTab({ eventId, agmNoticeUrl }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: docs = [], isLoading }    = useClientEventDocuments(eventId);
-  const uploadMutation   = useUploadEventDocument();
-  const deleteMutation   = useDeleteEventDocument();
-  const downloadMutation = useDownloadEventDocument();
+  const uploadMutation          = useUploadEventDocument();
+  const deleteMutation          = useDeleteEventDocument();
+  const downloadMutation        = useDownloadEventDocument();
+  const cloudinaryUploadMutation = useUploadCloudinaryDocument();
+
+  // Auto-upload AGM notice once when the tab mounts and no AGM_NOTICE doc exists yet
+  useEffect(() => {
+    if (!agmNoticeUrl || isLoading || cloudinaryUploadMutation.isPending) return;
+    const alreadyUploaded = docs.some(
+      (d: any) => d.documentType === "AGM_NOTICE" || d.title?.toLowerCase().includes("agm notice")
+    );
+    if (alreadyUploaded) return;
+
+    cloudinaryUploadMutation.mutate({
+      sourceUrl:        agmNoticeUrl,
+      title:            "AGM Notice",
+      documentType:     "AGM_NOTICE",
+      eventId,
+      originalFilename: "AGM-Notice.pdf",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agmNoticeUrl, isLoading]);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

@@ -1,9 +1,9 @@
 "use client";
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEventDetail, useEventDocuments, useEventAttendees } from "@/api/super-admin";
-import { useClientEventDetail, useClientEventDocuments, useClientEventAttendees } from "@/api/client-events";
+import { useClientEventDetail, useClientEventDocuments, useClientEventAttendees, useExpectedAttendees } from "@/api/client-events";
 import { useGetMe } from "@/api/auth/hooks";
 import { useSuspendUserAccount } from "@/api/users";
 import { ModuleBadge } from "@/components/custom/module-badge";
@@ -23,7 +23,8 @@ import { EventBroadcastTab }    from "./components/EventBroadcastTab";
 import { EventVoteResultsTab }  from "./components/EventVoteResultsTab";
 import { EventPostAgmTab }      from "./components/EventPostAgmTab";
 import { EventSettingsTab }     from "./components/EventSettingsTab";
-import { EventStakeholderTab }  from "./components/EventStakeholderTab";
+import { EventStakeholderTab }          from "./components/EventStakeholderTab";
+import { EventExpectedAttendeesTab }   from "./components/EventExpectedAttendeesTab";
 import type { LocalAgendaItem, EventShim } from "./components/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -62,6 +63,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const { data: clientDocs }                             = useClientEventDocuments(id);
   const { data: adminAttendees  }                        = useEventAttendees(id, 0, 50);
   const { data: clientAttendees }                        = useClientEventAttendees(id, "", 0, 50);
+  const { data: expectedAttendeesData }                  = useExpectedAttendees(id);
   const suspendUser = useSuspendUserAccount();
 
   const apiEvent        = isAdmin ? adminEvent        : (clientEvent ?? adminEvent);
@@ -151,13 +153,15 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   // ── Tabs ──────────────────────────────────────────────────────────────────
   const isSuperAdmin = (currentUser?.role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "super_admin";
 
+  const expectedAttendeesCount = expectedAttendeesData?.totalCount ?? 0;
+
   const TABS = [
     "Overview",
     "Attendees",
     // Registrar tab only for super admin (overview already shows it for others)
     ...(isSuperAdmin ? ["Registrar"] : []),
     "Documents",
-    ...(isAGM ? ["Resolutions"] : []),
+    ...(isAGM ? ["Resolutions", "Expected Attendees"] : []),
     "Broadcast",
     ...(isAGM ? ["Vote Results", "Post-AGM"] : []),
     ...((isLAUNCH || isGENERAL) ? ["Waitlist"] : []),
@@ -218,7 +222,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* ── Tab panels ── */}
-      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} />}
+      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} expectedAttendeesCount={expectedAttendeesCount} />}
       {tab === "Attendees"          && <EventAttendeesTab   participants={participants} suspendUser={suspendUser} eventId={id} />}
       {tab === "Registrar" && isSuperAdmin && (
         <EventStakeholderTab
@@ -226,8 +230,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           stakeholderData={apiEvent as any}
         />
       )}
-      {tab === "Documents"          && <EventDocumentsTab   eventId={id} />}
-      {tab === "Resolutions"        && isAGM && <EventResolutionsTab eventId={id} isAGM={isAGM} agendaItems={agendaItems} setAgendaItems={setAgendaItems} />}
+      {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} />}
+      {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} />}
+      {tab === "Expected Attendees"  && isAGM && <EventExpectedAttendeesTab  eventId={id} />}
       {tab === "Broadcast"          && <EventBroadcastTab   rsvpCount={rsvpCount} broadcastMsg={broadcastMsg} setBroadcastMsg={setBroadcastMsg} broadcastChannel={broadcastChannel} setBroadcastChannel={setBroadcastChannel} broadcastHistory={broadcastHistory} setBroadcastHistory={setBroadcastHistory} />}
       {tab === "Vote Results"       && isAGM && <EventVoteResultsTab liveVotes={liveVotes} />}
       {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} liveVotes={liveVotes} participants={participants} />}

@@ -19,30 +19,38 @@ function sanitiseStreamUrl(raw: string): string {
 }
 
 interface Props {
-  event:           EventShim;
-  fill:            number | null;
-  eventDocs:       any[];
-  agendaItems:     LocalAgendaItem[];
-  isAGM:           boolean;
-  onNavigate:      (tab: string) => void;
+  event:                   EventShim;
+  fill:                    number | null;
+  eventDocs:               any[];
+  agendaItems:             LocalAgendaItem[];
+  isAGM:                   boolean;
+  onNavigate:              (tab: string) => void;
   /** Registrar / managing firm name — shown in a separate card below the Organiser card */
-  stakeholderName?: string;
+  stakeholderName?:        string;
+  /** Expected attendees count from GET /expected-attendees — shown instead of RSVPs for AGMs */
+  expectedAttendeesCount?: number;
 }
 
-export function EventOverviewTab({ event, fill, eventDocs, agendaItems, isAGM, onNavigate, stakeholderName }: Props) {
+export function EventOverviewTab({ event, fill, eventDocs, agendaItems, isAGM, onNavigate, stakeholderName, expectedAttendeesCount = 0 }: Props) {
   const FormatIcon = FORMAT_ICON[event.format] ?? Monitor;
+
+  // For AGMs, the primary attendee metric is expected attendees (not RSVPs)
+  const attendeeLabel = isAGM ? "Expected Attendees" : "RSVPs";
+  const attendeeValue = isAGM
+    ? expectedAttendeesCount.toLocaleString()
+    : event.rsvpCount.toLocaleString();
 
   return (
     <div className="grid grid-cols-3 gap-5">
       {/* ── Left column ── */}
       <div className="col-span-2 flex flex-col gap-5">
 
-        {/* RSVP / Capacity / Fill rate strip */}
+        {/* Attendees / Capacity / Fill rate strip */}
         <div className="grid grid-cols-3 divide-x divide-[hsl(var(--border))] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
           {[
-            { label: "RSVPs",     value: event.rsvpCount.toLocaleString(), icon: Users,  color: "#111827" },
-            { label: "Capacity",  value: event.capacity ? event.capacity.toLocaleString() : "Unlimited", icon: Users2, color: "#1a6b3c" },
-            { label: "Fill Rate", value: fill !== null ? `${fill}%` : "—", icon: Radio,  color: fill !== null && fill >= 80 ? "#dc2626" : "#f97316" },
+            { label: attendeeLabel, value: attendeeValue,                                                                icon: Users,  color: "#111827" },
+            { label: "Capacity",    value: event.capacity ? event.capacity.toLocaleString() : "Unlimited",              icon: Users2, color: "#1a6b3c" },
+            { label: "Fill Rate",   value: fill !== null ? `${fill}%` : "—", icon: Radio, color: fill !== null && fill >= 80 ? "#dc2626" : "#f97316" },
           ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="flex items-center gap-3 px-5 py-4">
               <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: color + "15" }}>
@@ -90,7 +98,7 @@ export function EventOverviewTab({ event, fill, eventDocs, agendaItems, isAGM, o
               <div className="h-3 rounded-full transition-all" style={{ width: `${Math.min(fill, 100)}%`, backgroundColor: event.color }} />
             </div>
             <div className="flex justify-between mt-2 text-xs text-[hsl(var(--muted-foreground))]">
-              <span>{event.rsvpCount.toLocaleString()} registered</span>
+              <span>{attendeeValue} {isAGM ? "expected" : "registered"}</span>
               <span>{event.capacity?.toLocaleString()} capacity</span>
             </div>
           </Card>

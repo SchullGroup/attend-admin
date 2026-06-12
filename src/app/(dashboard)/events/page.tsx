@@ -151,6 +151,7 @@ function FilterDropdown({
 function EventTableRow({ event }: { event: EventSummaryResponse }) {
   const isLive      = event.status?.toUpperCase() === "LIVE" || event.live;
   const mod         = getEventModule(event);
+  const isAGM       = mod === "AGM";
   const dotColor    = MODULE_COLORS[mod];
   const FormatIcon  = FORMAT_ICON[event.format] ?? Monitor;
   const registerName = getEventRegisterName(event);
@@ -186,18 +187,17 @@ function EventTableRow({ event }: { event: EventSummaryResponse }) {
       <td className="px-5 py-3 text-sm tabular-nums">
         {(() => {
           const count = event.registrationCount ?? 0;
-          // Prefer the direct maximumCapacity field (accurate).
-          // Fall back to nothing — reverse-engineering from a rounded percentage is lossy and misleading.
-          const cap = (event.maximumCapacity != null && event.maximumCapacity > 0)
-            ? event.maximumCapacity
-            : null;
+          const cap   = (event.maximumCapacity != null && event.maximumCapacity > 0) ? event.maximumCapacity : null;
           return (
-            <span className="font-medium">
-              {count.toLocaleString()}
-              {cap != null
-                ? <span className="text-[hsl(var(--muted-foreground))] font-normal"> of {cap.toLocaleString()}</span>
-                : null}
-            </span>
+            <div>
+              <span className="font-medium">{count.toLocaleString()}</span>
+              {!isAGM && cap != null && (
+                <span className="text-[hsl(var(--muted-foreground))] font-normal"> of {cap.toLocaleString()}</span>
+              )}
+              <div className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5">
+                {isAGM ? "expected" : "RSVPs"}
+              </div>
+            </div>
           );
         })()}
       </td>
@@ -410,7 +410,7 @@ export default function EventsPage() {
               <th className="px-5 py-3 text-left">Event</th>
               <th className="px-5 py-3 text-left">Date</th>
               <th className="px-5 py-3 text-left">Format</th>
-              <th className="px-5 py-3 text-left">RSVP</th>
+              <th className="px-5 py-3 text-left">RSVP / Expected</th>
               <th className="px-5 py-3 text-left">Status</th>
               <th className="px-5 py-3 text-left">Actions</th>
             </tr>

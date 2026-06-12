@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { PlusCircle, Trash2, Loader2 } from "lucide-react";
+import { PlusCircle, Trash2, Loader2, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,9 +17,19 @@ import type { LocalAgendaItem } from "./types";
 let _uid = 0;
 const uid = () => `ag_${++_uid}`;
 
+export interface AgmResolution {
+  id:                  string;
+  title:               string;
+  description?:        string;
+  isSpecialResolution?: boolean;
+  order?:              number;
+}
+
 interface Props {
   eventId:       string;
   isAGM:         boolean;
+  /** Pre-configured resolutions from agmConfig — passed directly from the API response */
+  agmResolutions?: AgmResolution[];
   /** Local state items — used only for unsaved new rows before persisting */
   agendaItems:   LocalAgendaItem[];
   setAgendaItems: React.Dispatch<React.SetStateAction<LocalAgendaItem[]>>;
@@ -33,16 +43,18 @@ function Label({ children, className = "" }: { children: React.ReactNode; classN
   );
 }
 
-export function EventResolutionsTab({ eventId, isAGM, agendaItems, setAgendaItems }: Props) {
-  // Live data from server
+export function EventResolutionsTab({ eventId, isAGM, agmResolutions = [], agendaItems, setAgendaItems }: Props) {
+  // Live data from server (agenda endpoint)
   const { data: serverItems = [], isLoading } = useClientEventAgenda(eventId);
 
-  // Merge server items with any local-only (unsaved) additions
-  // Server items have a real UUID; local ones have the `ag_` prefix
-  const allItems = [
-    ...serverItems,
-    ...agendaItems.filter((local) => local.id.startsWith("ag_")),
-  ];
+  // Sort agmConfig resolutions by `order` so they appear in the right sequence
+  const sortedResolutions = [...agmResolutions].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  // Only truly new user-added rows need the editable form
+  const newUserRows = agendaItems.filter((x) => x.id.startsWith("ag_"));
+
+  // Combine server-persisted agenda items with user-added unsaved rows
+  const allItems = [...serverItems, ...newUserRows];
 
   const addMutation    = useAddAgendaItem();
   const updateMutation = useUpdateAgendaItem();
@@ -106,6 +118,49 @@ export function EventResolutionsTab({ eventId, isAGM, agendaItems, setAgendaItem
       </div>
 
       <div className="flex flex-col gap-3">
+
+        {/* ── agmConfig resolutions — directly from API, always up-to-date ── */}
+        {sortedResolutions.map((res, idx) => (
+          <div
+            key={res.id}
+            className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0">
+                {/* Numbered circle */}
+                <span className="h-6 w-6 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))] text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                  {res.order ?? idx + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[hsl(var(--foreground))] leading-snug">
+                    {res.title}
+                  </p>
+                  {res.description && (
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1 leading-relaxed">
+                      {res.description}
+                    </p>
+                  )}
+                </div>
+              </div>
+              {/* Resolution type badge */}
+              {res.isSpecialResolution ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 shrink-0 whitespace-nowrap">
+                  <ShieldCheck className="h-3 w-3" /> Special
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 rounded-full px-2 py-0.5 shrink-0 whitespace-nowrap">
+                  <CheckCircle2 className="h-3 w-3" /> Ordinary
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {/* Divider between pre-configured resolutions and editable agenda rows */}
+        {sortedResolutions.length > 0 && allItems.length > 0 && (
+          <div className="border-t border-[hsl(var(--border))] my-1" />
+        )}
+
         {/* ── Persisted server items ── */}
         {serverItems.map((item, idx) => (
           <div key={item.id} className="grid grid-cols-12 gap-2 items-end">
@@ -163,8 +218,8 @@ export function EventResolutionsTab({ eventId, isAGM, agendaItems, setAgendaItem
           </div>
         ))}
 
-        {/* ── Unsaved local rows ── */}
-        {agendaItems.filter((x) => x.id.startsWith("ag_")).map((item, idx) => (
+        {/* ── Unsaved local rows (user-added, not yet persisted) ── */}
+        {newUserRows.map((item, idx) => (
           <div key={item.id} className="grid grid-cols-12 gap-2 items-end border border-[hsl(var(--primary)/0.2)] rounded-lg p-2 bg-[hsl(var(--primary)/0.02)]">
             {isAGM ? (
               <div className="col-span-2 flex items-center pb-1">
@@ -211,7 +266,7 @@ export function EventResolutionsTab({ eventId, isAGM, agendaItems, setAgendaItem
           </div>
         ))}
 
-        {allItems.length === 0 && (
+        {sortedResolutions.length === 0 && allItems.length === 0 && (
           <p className="text-sm text-[hsl(var(--muted-foreground))] py-6 text-center">
             {isAGM
               ? "No resolutions yet. Add resolutions that shareholders will vote on."

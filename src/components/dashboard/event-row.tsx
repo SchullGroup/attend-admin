@@ -16,6 +16,7 @@ interface EventRowProps {
 export function EventRow({ event }: EventRowProps) {
   const isLive    = event.status === "live" || event.status === "LIVE";
   const mod       = getEventModule(event);
+  const isAGM     = mod === "AGM";
   const dotColor  = MODULE_COLORS[mod];
   const rsvpCount = event.registrationCount ?? 0;
   const fillPct   = event.registrationPercentage ?? null;
@@ -44,13 +45,16 @@ export function EventRow({ event }: EventRowProps) {
         {formatDate(event.date)}
       </div>
 
-      <div className="w-24 shrink-0">
+      <div className="w-28 shrink-0">
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs font-medium tabular-nums">{rsvpCount.toLocaleString()}</span>
-          {fill !== null && (
+          {fill !== null && !isAGM && (
             <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">{fill}%</span>
           )}
         </div>
+        <p className="text-[10px] text-[hsl(var(--muted-foreground))] leading-none mb-1">
+          {isAGM ? "expected" : "RSVPs"}
+        </p>
         <div className="h-1 rounded-full bg-[hsl(var(--border))]">
           {fill !== null && (
             <div className="h-1 rounded-full" style={{ width: `${fill}%`, backgroundColor: dotColor }} />

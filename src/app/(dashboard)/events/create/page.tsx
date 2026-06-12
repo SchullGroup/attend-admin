@@ -8,7 +8,7 @@ import {
   useCreateInnovationEvent,
   useCreateProductLaunchEvent,
 } from "@/api/events";
-import { useCreateEvent } from "@/api/client-events";
+import { useCreateEvent, type CreateEventRequest } from "@/api/client-events";
 import { useGetMe } from "@/api/auth/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -380,17 +380,33 @@ function FormatPicker({ value, onChange }: { value: Format; onChange: (f: Format
 function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState; organiserName: string; showErrors?: boolean }) {
   return (
     <div className="flex flex-col gap-4">
+      {/* Title */}
       <div>
         <Label className="mb-2 block">Meeting Title <span className="text-red-500">*</span></Label>
         <Input
-          placeholder="e.g. Zenith Bank Plc — 2026 Annual General Meeting"
+          placeholder="e.g. Routelink MFB 10th Annual General Meeting"
           value={s.title}
           onChange={(e) => s.setTitle(e.target.value)}
           className={cn(showErrors && !s.title.trim() && "border-red-400 focus-visible:ring-red-200")}
         />
         {showErrors && !s.title.trim() && <p className="text-xs text-red-500 mt-1">Meeting title is required.</p>}
       </div>
+
+      {/* Description */}
+      <div>
+        <Label className="mb-2 block">Description</Label>
+        <textarea
+          rows={3}
+          placeholder="Brief overview of the meeting purpose and agenda scope…"
+          value={s.description}
+          onChange={(e) => s.setDescription(e.target.value)}
+          className="flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none"
+        />
+      </div>
+
       <OrgChip name={organiserName} />
+
+      {/* Date / Start / End */}
       <div className="grid grid-cols-3 gap-4">
         <div>
           <Label className="mb-2 block">Date <span className="text-red-500">*</span></Label>
@@ -405,47 +421,101 @@ function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState; organ
         <div><Label className="mb-2 block">Start Time</Label><Input type="time" value={s.time} onChange={(e) => s.setTime(e.target.value)} /></div>
         <div><Label className="mb-2 block">End Time</Label><Input type="time" value={s.endTime} onChange={(e) => s.setEndTime(e.target.value)} /></div>
       </div>
+
+      {/* Format */}
       <FormatPicker value={s.format} onChange={s.setFormat} />
+
       {(s.format === "virtual" || s.format === "hybrid") && (
         <div>
-          <Label className="mb-2 block"><Monitor className="h-3.5 w-3.5 inline mr-1" />Stream URL <span className="font-normal text-[hsl(var(--muted-foreground))] text-xs">(required for virtual/hybrid)</span></Label>
-          <Input placeholder="https://zoom.us/j/... or https://meet.google.com/..." value={s.streamUrl} onChange={(e) => s.setStreamUrl(e.target.value)} />
+          <Label className="mb-2 block"><Monitor className="h-3.5 w-3.5 inline mr-1" />Stream URL</Label>
+          <Input placeholder="https://agm.company.ng/live or https://zoom.us/j/..." value={s.streamUrl} onChange={(e) => s.setStreamUrl(e.target.value)} />
         </div>
       )}
       {(s.format === "in_person" || s.format === "hybrid") && (
-        <div><Label className="mb-2 block"><MapPin className="h-3.5 w-3.5 inline mr-1" />Venue</Label><Input placeholder="e.g. Civic Centre, Victoria Island, Lagos" value={s.venue} onChange={(e) => s.setVenue(e.target.value)} /></div>
+        <div><Label className="mb-2 block"><MapPin className="h-3.5 w-3.5 inline mr-1" />Venue / Location</Label><Input placeholder="e.g. Grand Ballroom, Oriental Hotel, Victoria Island, Lagos" value={s.venue} onChange={(e) => s.setVenue(e.target.value)} /></div>
       )}
+
+      {/* Capacity + RSVP */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label className="mb-2 block">Maximum Capacity</Label>
+          <Input type="number" placeholder="e.g. 500" value={s.capacity} onChange={(e) => s.setCapacity(e.target.value)} />
+        </div>
+        <div className="flex items-center justify-between rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-[hsl(var(--foreground))]">RSVP Enabled</p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">Allow shareholders to confirm attendance</p>
+          </div>
+          <Toggle checked={s.rsvpEnabled} onChange={s.setRsvpEnabled} color="#374151" />
+        </div>
+      </div>
     </div>
   );
 }
 
-function AgmStep1({ s, showErrors = false }: { s: AgmState; showErrors?: boolean }) {
+function AgmStep1({ s }: { s: AgmState }) {
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    s.setNoticeFile(file.name);
+    s.setNoticeFileSize(file.size);
+    // Convert PDF → raw base64 (no data-URI prefix — backend expects plain base64)
+    const reader = new FileReader();
+    reader.onload = () => {
+      const buffer = reader.result as ArrayBuffer;
+      const bytes  = new Uint8Array(buffer);
+      let binary = "";
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      s.setNoticeFileBase64(btoa(binary));
+    };
+    reader.readAsArrayBuffer(file);
+    // Reset so the same file can be re-selected if needed
+    e.target.value = "";
+  }
+
+  function formatBytes(b: number) {
+    if (b === 0) return "0 B";
+    if (b < 1_024) return `${b} B`;
+    if (b < 1_048_576) return `${(b / 1_024).toFixed(1)} KB`;
+    return `${(b / 1_048_576).toFixed(1)} MB`;
+  }
+
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <Label className="mb-2 block">Notice Period <span className="text-red-500">*</span></Label>
-        <Input
-          type="number"
-          placeholder="21"
-          value={s.noticeDays}
-          onChange={(e) => s.setNoticeDays(e.target.value)}
-          className={cn("max-w-[160px]", showErrors && !s.noticeDays && "border-red-400 focus-visible:ring-red-200")}
-        />
-        {showErrors && !s.noticeDays
-          ? <p className="text-xs text-red-500 mt-1">Notice period is required (minimum 21 days).</p>
-          : <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Minimum 21 days per CAMA</p>
-        }
+      <div className="p-4 rounded-xl bg-[hsl(var(--muted)/0.4)] border border-[hsl(var(--border))] text-sm text-[hsl(var(--muted-foreground))] leading-relaxed">
+        Upload the statutory AGM Notice. The PDF will be encoded and attached to the meeting record — shareholders can download it from the event page.
       </div>
-      <div>
-        <p className="text-sm font-semibold text-[hsl(var(--foreground))] mb-1">AGM Notice Document</p>
-        <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3">Upload the statutory notice — it will be distributed to all registered shareholders.</p>
-        <label className="border-2 border-dashed border-[hsl(var(--border))] rounded-xl p-6 text-center flex flex-col items-center cursor-pointer hover:border-[hsl(var(--ring)/0.4)] transition-colors">
-          <Upload className="h-7 w-7 mb-2 text-[hsl(var(--muted-foreground))]" />
-          <p className="text-sm font-medium text-[hsl(var(--foreground))]">{s.noticeFile ? `${s.noticeFile} ✓` : "Click to upload notice"}</p>
-          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">PDF up to 50 MB</p>
-          <input type="file" accept=".pdf" className="hidden" onChange={(e) => s.setNoticeFile(e.target.files?.[0]?.name ?? "")} />
-        </label>
-      </div>
+
+      {/* File drop zone */}
+      <label className={cn(
+        "border-2 border-dashed rounded-xl p-8 text-center flex flex-col items-center cursor-pointer transition-colors",
+        s.noticeFileBase64
+          ? "border-[hsl(var(--primary)/0.5)] bg-[hsl(var(--primary)/0.04)]"
+          : "border-[hsl(var(--border))] hover:border-[hsl(var(--ring)/0.4)]"
+      )}>
+        <Upload className={cn("h-8 w-8 mb-3", s.noticeFileBase64 ? "text-[hsl(var(--primary))]" : "text-[hsl(var(--muted-foreground))]")} />
+        {s.noticeFileBase64 ? (
+          <>
+            <p className="text-sm font-semibold text-[hsl(var(--primary))]">{s.noticeFile}</p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">{formatBytes(s.noticeFileSize)} · Click to replace</p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-medium text-[hsl(var(--foreground))]">Click to upload AGM Notice</p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">PDF · up to 50 MB</p>
+          </>
+        )}
+        <input type="file" accept=".pdf" className="hidden" onChange={handleFileChange} />
+      </label>
+
+      {/* Optional: if no file, show that it's skippable */}
+      {!s.noticeFileBase64 && (
+        <p className="text-xs text-[hsl(var(--muted-foreground))] text-center">
+          The notice document is optional — you can skip this step and upload it later from the event settings.
+        </p>
+      )}
     </div>
   );
 }
@@ -943,18 +1013,21 @@ function AgmReview({ s, organiserName }: { s: AgmState; organiserName: string })
       <div><p className="attend-section-title mb-2">Meeting Details</p>
         <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] px-4 divide-y divide-[hsl(var(--border))]">
           <ReviewRow label="Title" value={s.title} />
+          {s.description && <ReviewRow label="Description" value={s.description} />}
           <ReviewRow label="Company" value={organiserName} />
           <ReviewRow label="Date" value={s.date} />
           <ReviewRow label="Start Time" value={s.time || "—"} />
           {s.endTime && <ReviewRow label="End Time" value={s.endTime} />}
           <ReviewRow label="Format" value={s.format} />
           {s.venue && <ReviewRow label="Venue" value={s.venue} />}
+          {s.streamUrl && <ReviewRow label="Stream URL" value={s.streamUrl} />}
+          {s.capacity && <ReviewRow label="Capacity" value={s.capacity} />}
+          <ReviewRow label="RSVP Enabled" value={s.rsvpEnabled ? "Yes" : "No"} />
         </div>
       </div>
       <div><p className="attend-section-title mb-2">Governance</p>
         <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] px-4 divide-y divide-[hsl(var(--border))]">
-          <ReviewRow label="Notice Period" value={s.noticeDays ? `${s.noticeDays} days` : ""} />
-          <ReviewRow label="Quorum" value={s.quorum ? `${s.quorum}%` : ""} />
+          <ReviewRow label="AGM Notice" value={s.noticeFile || "Not uploaded"} />
           <ReviewRow label="Resolutions" value={`${s.resolutions.filter(r => r.title).length} resolution(s)`} />
           <ReviewRow label="Proxy Voting" value={s.proxyEnabled ? "Enabled" : "Disabled"} />
           <ReviewRow label="Shareholder List" value={s.shareholderTargeting === "all" ? "All registered" : "Custom upload"} />
@@ -1042,24 +1115,50 @@ type HackState    = ReturnType<typeof useHackState>;
 type GeneralState = ReturnType<typeof useGeneralState>;
 
 function useAgmState() {
-  const [title, setTitle] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("10:00");
-  const [endTime, setEndTime] = useState("");
-  const [format, setFormat] = useState<Format>("virtual");
-  const [venue, setVenue] = useState("");
-  const [streamUrl, setStreamUrl] = useState("");
-  const [noticeDays, setNoticeDays] = useState("21");
-  const [noticeFile, setNoticeFile] = useState("");
-  const [quorum, setQuorum] = useState("25");
-  const [cutoff, setCutoff] = useState("");
-  const [resolutions, setResolutions] = useState<Resolution[]>([{ id: genId(), title: "", description: "", isSpecial: false }]);
-  const [proxyEnabled, setProxyEnabled] = useState(true);
+  const [title,               setTitle]               = useState("");
+  const [description,         setDescription]         = useState("");
+  const [date,                setDate]                = useState("");
+  const [time,                setTime]                = useState("10:00");
+  const [endTime,             setEndTime]             = useState("");
+  const [format,              setFormat]              = useState<Format>("hybrid");
+  const [venue,               setVenue]               = useState("");
+  const [streamUrl,           setStreamUrl]           = useState("");
+  const [capacity,            setCapacity]            = useState("");
+  const [rsvpEnabled,         setRsvpEnabled]         = useState(true);
+  // AGM Notice document — stored as base64 + filename for the API payload
+  const [noticeFile,          setNoticeFile]          = useState("");       // filename
+  const [noticeFileBase64,    setNoticeFileBase64]    = useState("");       // base64 content
+  const [noticeFileSize,      setNoticeFileSize]      = useState(0);        // bytes (display only)
+  // Governance
+  const [quorum,              setQuorum]              = useState("25");     // admin path only
+  const [cutoff,              setCutoff]              = useState("");        // admin path only
+  const [resolutions,         setResolutions]         = useState<Resolution[]>([{ id: genId(), title: "", description: "", isSpecial: false }]);
+  const [proxyEnabled,        setProxyEnabled]        = useState(true);
   const [shareholderTargeting, setShareholderTargeting] = useState<"all" | "custom">("all");
-  const addResolution = () => setResolutions((r) => [...r, { id: genId(), title: "", description: "", isSpecial: false }]);
+  const addResolution    = () => setResolutions((r) => [...r, { id: genId(), title: "", description: "", isSpecial: false }]);
   const removeResolution = (id: string) => setResolutions((r) => r.filter((x) => x.id !== id));
-  const updateResolution = (id: string, field: keyof Resolution, val: string | boolean) => setResolutions((r) => r.map((x) => x.id === id ? { ...x, [field]: val } : x));
-  return { title, setTitle, date, setDate, time, setTime, endTime, setEndTime, format, setFormat, venue, setVenue, streamUrl, setStreamUrl, noticeDays, setNoticeDays, noticeFile, setNoticeFile, quorum, setQuorum, cutoff, setCutoff, resolutions, addResolution, removeResolution, updateResolution, proxyEnabled, setProxyEnabled, shareholderTargeting, setShareholderTargeting };
+  const updateResolution = (id: string, field: keyof Resolution, val: string | boolean) =>
+    setResolutions((r) => r.map((x) => x.id === id ? { ...x, [field]: val } : x));
+  return {
+    title, setTitle,
+    description, setDescription,
+    date, setDate,
+    time, setTime,
+    endTime, setEndTime,
+    format, setFormat,
+    venue, setVenue,
+    streamUrl, setStreamUrl,
+    capacity, setCapacity,
+    rsvpEnabled, setRsvpEnabled,
+    noticeFile, setNoticeFile,
+    noticeFileBase64, setNoticeFileBase64,
+    noticeFileSize, setNoticeFileSize,
+    quorum, setQuorum,
+    cutoff, setCutoff,
+    resolutions, addResolution, removeResolution, updateResolution,
+    proxyEnabled, setProxyEnabled,
+    shareholderTargeting, setShareholderTargeting,
+  };
 }
 
 function useLaunchState() {
@@ -1190,7 +1289,7 @@ function CreateEventInner() {
   function getStepValid(module: ModuleId, currentStep: number): boolean {
     if (module === "AGM") {
       if (currentStep === 0) return !!agm.title.trim() && !!agm.date;
-      if (currentStep === 1) return !!agm.noticeDays;
+      if (currentStep === 1) return true; // notice document is optional
       if (currentStep === 2) return agm.resolutions.some((r) => r.title.trim());
       return true;
     }
@@ -1241,101 +1340,131 @@ function CreateEventInner() {
       mode === "open" ? "OPEN_REGISTRATION" : "INVITE_ONLY" as const;
 
     // ── CLIENT PATH: POST /api/v1/client/events (unified) ────────────────────
-    // Used when the logged-in user is NOT a super-admin (i.e. event manager / client admin).
+    //
+    // A single payload object is assembled dynamically based on the selected
+    // event type. Each config block (agmConfig, productLaunchConfig, etc.) is
+    // set to its module-specific value when active and to `undefined` otherwise,
+    // so the serialised JSON body never contains keys for inactive modules.
     if (!isAdmin) {
       setSubmitting(true);
-      if (selectedModule === "AGM") {
-        createClientEvent.mutate(
-          {
-            registerId:      organiserId,
-            eventType:       "AGM_EGM",
-            title:           agm.title,
-            date:            agm.date,
-            startTime:       agm.time,
-            endTime:         agm.endTime   || undefined,
-            format:          fmt(agm.format),
-            streamUrl:       agm.streamUrl || undefined,
-            maximumCapacity: 0,
-            agmConfig: {
-              resolutions: agm.resolutions
-                .filter((r) => r.title.trim())
-                .map((r) => ({ title: r.title, description: r.description || undefined, isSpecialResolution: r.isSpecial })),
-              shareholderTargeting: agm.shareholderTargeting === "all" ? "ALL_REGISTERED" : "CUSTOM_LIST",
-              enableProxyVoting: agm.proxyEnabled,
-            },
-          },
-          { onSuccess: onDone, onSettled: () => setSubmitting(false) }
-        );
-        return;
-      }
-      if (selectedModule === "GENERAL") {
-        createClientEvent.mutate(
-          {
-            registerId:      organiserId,
-            eventType:       "GENERAL_EVENT",
-            title:           general.title,
-            description:     general.description || undefined,
-            date:            general.date,
-            startTime:       general.time,
-            endTime:         general.endTime    || undefined,
-            format:          fmt(general.format),
-            streamUrl:       general.streamUrl   || undefined,
-            location:        general.venue       || undefined,
-            maximumCapacity: parseInt(general.capacity, 10) || 0,
-            generalEventConfig: { audienceTargeting: audience(general.audienceMode) },
-          },
-          { onSuccess: onDone, onSettled: () => setSubmitting(false) }
-        );
-        return;
-      }
-      if (selectedModule === "HACKATHON") {
-        createClientEvent.mutate(
-          {
-            registerId:      organiserId,
-            eventType:       "INNOVATION_CHALLENGE",
-            title:           hack.title,
-            date:            hack.startDate,
-            startTime:       hack.time    || "09:00",
-            endTime:         hack.endTime || undefined,
-            format:          fmt(hack.format),
-            streamUrl:       hack.streamUrl || undefined,
-            location:        hack.venue     || undefined,
-            maximumCapacity: parseInt(hack.capacity, 10) || 0,
-            innovationChallengeConfig: { audienceTargeting: "OPEN_REGISTRATION" },
-          },
-          { onSuccess: onDone, onSettled: () => setSubmitting(false) }
-        );
-        return;
-      }
-      if (selectedModule === "LAUNCH") {
-        createClientEvent.mutate(
-          {
-            registerId:      organiserId,
-            eventType:       "PRODUCT_LAUNCH",
-            title:           launch.title,
-            date:            launch.date,
-            startTime:       launch.time,
-            endTime:         launch.endTime || undefined,
-            format:          fmt(launch.format),
-            streamUrl:       launch.streamUrl || undefined,
-            location:        launch.venue     || undefined,
-            maximumCapacity: parseInt(launch.capacity, 10) || 0,
-            speakers: launch.speakers
-              .filter((sp) => sp.name.trim())
-              .map((sp) => ({ name: sp.name, roleTitle: sp.role, bio: sp.bio || undefined })),
-            productLaunchConfig: {
-              audienceTargeting: audience(launch.audienceMode),
-              embargo: {
-                enabled:   launch.embargoEnabled,
-                releaseAt: launch.embargoEnabled ? (launch.embargoAt || undefined) : undefined,
-              },
-            },
-          },
-          { onSuccess: onDone, onSettled: () => setSubmitting(false) }
-        );
-        return;
-      }
-      setSubmitting(false);
+
+      // ── Base fields shared by every event type ──────────────────────────────
+      const eventTypeMap: Record<ModuleId, CreateEventRequest["eventType"]> = {
+        AGM:      "AGM_EGM",
+        LAUNCH:   "PRODUCT_LAUNCH",
+        HACKATHON:"INNOVATION_CHALLENGE",
+        GENERAL:  "GENERAL_EVENT",
+      };
+
+      const base = {
+        registerId: organiserId,
+        eventType:  eventTypeMap[selectedModule],
+      } as const;
+
+      // ── Config blocks — only the active module's block is populated ─────────
+      const agmConfig = selectedModule === "AGM" ? {
+        resolutions: agm.resolutions
+          .filter((r) => r.title.trim())
+          .map((r) => ({ title: r.title, description: r.description || undefined, isSpecialResolution: r.isSpecial })),
+        shareholderTargeting: agm.shareholderTargeting === "all" ? "ALL_REGISTERED" as const : "CUSTOM_LIST" as const,
+        enableProxyVoting:    agm.proxyEnabled,
+        // AGM Notice PDF — raw base64, no data-URI prefix
+        agmNoticeBase64:    agm.noticeFileBase64  || undefined,
+        agmNoticeFilename:  agm.noticeFile        || undefined,
+      } : undefined;
+
+      const productLaunchConfig = selectedModule === "LAUNCH" ? {
+        audienceTargeting: audience(launch.audienceMode) as import("@/api/client-events").AudienceTargeting,
+        embargo: {
+          enabled:   launch.embargoEnabled,
+          releaseAt: launch.embargoEnabled ? (launch.embargoAt || undefined) : undefined,
+        },
+      } : undefined;
+
+      const innovationChallengeConfig = selectedModule === "HACKATHON" ? {
+        audienceTargeting: "OPEN_REGISTRATION" as import("@/api/client-events").AudienceTargeting,
+      } : undefined;
+
+      const generalEventConfig = selectedModule === "GENERAL" ? {
+        audienceTargeting: audience(general.audienceMode) as import("@/api/client-events").AudienceTargeting,
+      } : undefined;
+
+      // ── Module-specific scalar fields ───────────────────────────────────────
+      const title           = selectedModule === "AGM"      ? agm.title
+                            : selectedModule === "LAUNCH"    ? launch.title
+                            : selectedModule === "HACKATHON" ? hack.title
+                            : general.title;
+
+      const date            = selectedModule === "AGM"      ? agm.date
+                            : selectedModule === "LAUNCH"    ? launch.date
+                            : selectedModule === "HACKATHON" ? hack.startDate
+                            : general.date;
+
+      const startTime       = selectedModule === "AGM"      ? agm.time
+                            : selectedModule === "LAUNCH"    ? launch.time
+                            : selectedModule === "HACKATHON" ? (hack.time || "09:00")
+                            : general.time;
+
+      const endTime         = selectedModule === "AGM"      ? (agm.endTime    || undefined)
+                            : selectedModule === "LAUNCH"    ? (launch.endTime || undefined)
+                            : selectedModule === "HACKATHON" ? (hack.endTime   || undefined)
+                            : (general.endTime || undefined);
+
+      const eventFormat     = selectedModule === "AGM"      ? agm.format
+                            : selectedModule === "LAUNCH"    ? launch.format
+                            : selectedModule === "HACKATHON" ? hack.format
+                            : general.format;
+
+      const streamUrl       = selectedModule === "AGM"      ? (agm.streamUrl     || undefined)
+                            : selectedModule === "LAUNCH"    ? (launch.streamUrl  || undefined)
+                            : selectedModule === "HACKATHON" ? (hack.streamUrl    || undefined)
+                            : (general.streamUrl  || undefined);
+
+      const location        = selectedModule === "AGM"      ? (agm.venue         || undefined)
+                            : selectedModule === "LAUNCH"    ? (launch.venue      || undefined)
+                            : selectedModule === "HACKATHON" ? (hack.venue        || undefined)
+                            : (general.venue      || undefined);
+
+      const maximumCapacity = selectedModule === "AGM"      ? (parseInt(agm.capacity,     10) || 0)
+                            : selectedModule === "LAUNCH"    ? (parseInt(launch.capacity,  10) || 0)
+                            : selectedModule === "HACKATHON" ? (parseInt(hack.capacity,    10) || 0)
+                            : selectedModule === "GENERAL"   ? (parseInt(general.capacity, 10) || 0)
+                            : 0;
+
+      const description     = selectedModule === "AGM"      ? (agm.description     || undefined)
+                            : selectedModule === "GENERAL"   ? (general.description || undefined)
+                            : undefined;
+
+      const rsvpEnabled     = selectedModule === "AGM" ? agm.rsvpEnabled : undefined;
+
+      const speakers        = selectedModule === "LAUNCH"
+        ? launch.speakers.filter((sp) => sp.name.trim()).map((sp) => ({ name: sp.name, roleTitle: sp.role, bio: sp.bio || undefined }))
+        : undefined;
+
+      // ── Final unified payload ───────────────────────────────────────────────
+      createClientEvent.mutate(
+        {
+          ...base,
+          title,
+          description,
+          date,
+          startTime,
+          endTime,
+          format:       fmt(eventFormat),
+          streamUrl,
+          location,
+          maximumCapacity,
+          rsvpEnabled,
+          speakers,
+          // Exactly one of these will be populated; the others are `undefined`
+          // and will be omitted from the JSON body by JSON.stringify
+          agmConfig,
+          productLaunchConfig,
+          innovationChallengeConfig,
+          generalEventConfig,
+        },
+        { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+      );
       return;
     }
 
@@ -1552,7 +1681,7 @@ function CreateEventInner() {
   function renderStep() {
     if (selectedModule === "AGM") {
       if (step === 0) return <AgmStep0 s={agm} organiserName={organiserName} showErrors={showStepErrors} />;
-      if (step === 1) return <AgmStep1 s={agm} showErrors={showStepErrors} />;
+      if (step === 1) return <AgmStep1 s={agm} />;
       if (step === 2) return <AgmStep2 s={agm} showErrors={showStepErrors} />;
       if (step === 3) return <AgmStep3 s={agm} />;
       return <AgmReview s={agm} organiserName={organiserName} />;
