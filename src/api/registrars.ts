@@ -100,10 +100,13 @@ export const registrarKeys = {
 // ---------------------------------------------------------------------------
 
 function normalizeList(raw: any, page: number, size: number): RegistrarsListResponse {
+  // The endpoint uses "stakeholders" as the primary key in its response envelope.
+  // Fall back through common alternatives for forward-compatibility.
   const registrars: RegistrarItem[] =
-    raw?.registrars ??
-    raw?.content    ??
-    raw?.data       ??
+    raw?.registrars   ??
+    raw?.stakeholders ??
+    raw?.content      ??
+    raw?.data         ??
     [];
   return {
     registrars,
@@ -112,6 +115,17 @@ function normalizeList(raw: any, page: number, size: number): RegistrarsListResp
     size:       raw?.size       ?? size,
     totalPages: raw?.totalPages,
   };
+}
+
+/**
+ * Resolve the best available enrolled/approved date for a registrar.
+ * Priority: enrolledAt → approvedAt → createdAt
+ * Returns undefined when none are present so DateCell can render its own fallback.
+ */
+export function getRegistrarEnrolledAt(
+  r: Pick<RegistrarItem, "enrolledAt" | "approvedAt" | "createdAt">
+): string | undefined {
+  return r.enrolledAt ?? r.approvedAt ?? r.createdAt;
 }
 
 export function getRegistrarDisplayName(r: RegistrarItem | PendingRegistrarItem) {
@@ -168,11 +182,15 @@ export interface RegistrarDetailResponse {
   representativeName?:  string;
   repName?:             string;
   contactEmail?:        string;
+  email?:               string;       // alias returned by some response shapes
   repEmail?:            string;
   representativePhone?: string;
   phone?:               string;
+  website?:             string | null;
+  address?:             string | null;
   plan?:                string;
   status:               string;
+  /** Primary enrolled-at timestamp — use enrolledAt → approvedAt → createdAt in that order. */
   enrolledAt?:          string;
   approvedAt?:          string;
   createdAt?:           string;

@@ -7,6 +7,7 @@ import {
   useSuspendRegistrar,
   useActivateRegistrar,
   useApproveRegistrar,
+  getRegistrarEnrolledAt,
   type RegistrarItem,
 } from "@/api/registrars";
 import { Button } from "@/components/ui/button";
@@ -141,7 +142,7 @@ export default function RegistrarsPage() {
                       </div>
                     </td>
                     <td className="px-5 py-3">
-                      <DateCell value={r.enrolledAt || r.createdAt} />
+                      <DateCell value={getRegistrarEnrolledAt(r)} />
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1.5">

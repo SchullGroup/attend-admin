@@ -13,6 +13,7 @@ import {
   useActivateRegistrar,
   useSuspendRegistrar,
   getRegistrarDisplayName,
+  getRegistrarEnrolledAt,
 } from "@/api/registrars";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -143,13 +144,11 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
           <Card className="attend-card p-5">
             <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">Organisation</h2>
             <div className="flex flex-col gap-3">
-              {[
-                { icon: Hash,     label: "RC Number",  value: registrar.rcNumber ?? "—" },
-                { icon: Globe,    label: "Industry",   value: registrar.industry  ?? "—" },
-                { icon: Building2,label: "Plan",       value: registrar.plan      ?? "—" },
-                { icon: CalendarDays, label: "Enrolled", value: registrar.enrolledAt || registrar.createdAt
-                    ? formatDate((registrar.enrolledAt || registrar.createdAt)!) : "—" },
-              ].map(({ icon: Icon, label, value }) => (
+              {([
+                { icon: Hash,      label: "RC Number", value: registrar.rcNumber ?? "—"  },
+                { icon: Globe,     label: "Industry",  value: registrar.industry  ?? "—" },
+                { icon: Building2, label: "Plan",      value: registrar.plan      ?? "—" },
+              ] as { icon: React.ElementType; label: string; value: string }[]).map(({ icon: Icon, label, value }) => (
                 <div key={label} className="flex items-start gap-3">
                   <div className="h-8 w-8 rounded-lg bg-[hsl(var(--muted))] flex items-center justify-center shrink-0 mt-0.5">
                     <Icon className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
@@ -160,6 +159,22 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                   </div>
                 </div>
               ))}
+
+              {/* Enrolled date — DateCell handles formatting + null fallback */}
+              <div className="flex items-start gap-3">
+                <div className="h-8 w-8 rounded-lg bg-[hsl(var(--muted))] flex items-center justify-center shrink-0 mt-0.5">
+                  <CalendarDays className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Enrolled</p>
+                  <p className="text-sm text-[hsl(var(--foreground))] mt-0.5">
+                    {getRegistrarEnrolledAt(registrar)
+                      ? <DateCell value={getRegistrarEnrolledAt(registrar)} />
+                      : <span className="text-[hsl(var(--muted-foreground))]">—</span>
+                    }
+                  </p>
+                </div>
+              </div>
             </div>
           </Card>
 
