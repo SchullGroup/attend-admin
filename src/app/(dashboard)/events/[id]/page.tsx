@@ -77,6 +77,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [broadcastChannel, setBroadcastChannel] = useState<"push"|"sms"|"email"|"all">("push");
   const [broadcastHistory, setBroadcastHistory] = useState<Array<{ text: string; channel: string; sentAt: string }>>([]);
 
+  // 🎯 RAW API PAYLOAD DATA LOGGING
+  console.log("=== [DEBUG] EVENT DETAIL SYSTEM DISPATCH ===");
+  console.log("Target Routing Parameter ID:", id);
+  console.log("User Authority Evaluation:", { currentUser, isAdmin });
+  console.log("Raw Hook Resolution - apiEvent:", apiEvent);
+  console.log("Raw Hook Resolution - docsResponse:", docsResponse);
+  console.log("Raw Hook Resolution - attendeesResponse:", attendeesResponse);
+  
   // ── Loading / error ───────────────────────────────────────────────────────
   if (eventLoading) return <Loader variant="page" text="Loading Event…" />;
 

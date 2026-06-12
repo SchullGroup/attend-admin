@@ -1,10 +1,22 @@
 "use client";
-import { FileText, Calendar, Clock, MapPin, Users, Users2, Radio, Monitor } from "lucide-react";
+import { FileText, Calendar, Clock, MapPin, Users, Users2, Radio, Monitor, ExternalLink } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
 import type { EventShim, LocalAgendaItem } from "./types";
 
 const FORMAT_ICON = { virtual: Monitor, hybrid: Users2, "in-person": MapPin };
+
+// ─── Stream URL sanitiser ──────────────────────────────────────────────────────
+//
+// Catches common structural typos in user-submitted stream URLs before rendering
+// them as anchor targets, e.g. "https;//" → "https://", "http;//" → "http://".
+function sanitiseStreamUrl(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^https?;\/\//i, (m) => m.replace(";", ":"))  // https;// → https://
+    .replace(/^https?;\/([^/])/i, (_, c) => `https://${c}`) // https;/foo → https://foo
+    .replace(/^https?:[^/]/i, (m) => m.slice(0, m.length - 1) + "://"); // https:foo → https://
+}
 
 interface Props {
   event:           EventShim;
@@ -141,6 +153,46 @@ export function EventOverviewTab({ event, fill, eventDocs, agendaItems, isAGM, o
             </div>
           </Card>
         )}
+
+        {/* ── Live Stream ─────────────────────────────────────────────────────
+            Conditionally shown when streamUrl is present and event is VIRTUAL
+            or HYBRID. URL is sanitised before rendering to catch typos like
+            "https;//" that would otherwise produce broken anchor hrefs. */}
+        {event.streamUrl && (event.format === "virtual" || event.format === "hybrid") && (() => {
+          const url = sanitiseStreamUrl(event.streamUrl!);
+          return (
+            <div className="bg-[hsl(var(--primary)/0.04)] border border-[hsl(var(--primary)/0.1)] rounded-xl p-3">
+              <div className="flex items-start gap-2.5">
+                {/* Icon */}
+                <div className="h-8 w-8 rounded-lg bg-[hsl(var(--primary)/0.1)] flex items-center justify-center shrink-0 mt-0.5">
+                  <Monitor className="h-4 w-4 text-[hsl(var(--primary))]" />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  {/* Header row */}
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-xs font-bold text-[hsl(var(--muted-foreground))] tracking-wider uppercase">
+                      Live Stream
+                    </span>
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse inline-block shrink-0" />
+                  </div>
+
+                  {/* URL anchor */}
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center gap-1 text-[hsl(var(--primary))] hover:underline font-semibold text-sm truncate max-w-full"
+                    title={url}
+                  >
+                    <span className="truncate">{url}</span>
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Documents mini-list */}
         <Card className="attend-card p-5">

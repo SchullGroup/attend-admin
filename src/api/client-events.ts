@@ -590,6 +590,7 @@ export interface CreateEventRequest {
   format:                      "VIRTUAL" | "IN_PERSON" | "HYBRID";
   date:                        string;       // YYYY-MM-DD (must be a future date)
   startTime:                   string;       // HH:mm (no seconds)
+  endTime?:                    string;       // HH:mm (no seconds) — optional end time
   /** Required when format is VIRTUAL or HYBRID. */
   streamUrl?:                  string;
   /** Physical location label (used even for VIRTUAL as a room/link label). */

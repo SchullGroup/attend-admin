@@ -391,7 +391,7 @@ function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState; organ
         {showErrors && !s.title.trim() && <p className="text-xs text-red-500 mt-1">Meeting title is required.</p>}
       </div>
       <OrgChip name={organiserName} />
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div>
           <Label className="mb-2 block">Date <span className="text-red-500">*</span></Label>
           <Input
@@ -403,6 +403,7 @@ function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState; organ
           {showErrors && !s.date && <p className="text-xs text-red-500 mt-1">Date is required.</p>}
         </div>
         <div><Label className="mb-2 block">Start Time</Label><Input type="time" value={s.time} onChange={(e) => s.setTime(e.target.value)} /></div>
+        <div><Label className="mb-2 block">End Time</Label><Input type="time" value={s.endTime} onChange={(e) => s.setEndTime(e.target.value)} /></div>
       </div>
       <FormatPicker value={s.format} onChange={s.setFormat} />
       {(s.format === "virtual" || s.format === "hybrid") && (
@@ -557,7 +558,7 @@ function LaunchStep0({ s, organiserName, showErrors = false }: { s: LaunchState;
         {showErrors && !s.title.trim() && <p className="text-xs text-red-500 mt-1">Event title is required.</p>}
       </div>
       <OrgChip name={organiserName} />
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div>
           <Label className="mb-2 block">Date <span className="text-red-500">*</span></Label>
           <Input
@@ -569,6 +570,7 @@ function LaunchStep0({ s, organiserName, showErrors = false }: { s: LaunchState;
           {showErrors && !s.date && <p className="text-xs text-red-500 mt-1">Date is required.</p>}
         </div>
         <div><Label className="mb-2 block">Start Time</Label><Input type="time" value={s.time} onChange={(e) => s.setTime(e.target.value)} /></div>
+        <div><Label className="mb-2 block">End Time</Label><Input type="time" value={s.endTime} onChange={(e) => s.setEndTime(e.target.value)} /></div>
       </div>
       <FormatPicker value={s.format} onChange={s.setFormat} />
       {(s.format === "virtual" || s.format === "hybrid") && (
@@ -732,6 +734,10 @@ function HackStep0({ s, organiserName, showErrors = false }: { s: HackState; org
           <Label className="mb-2 block">Start Time</Label>
           <Input type="time" value={s.time} onChange={(e) => s.setTime(e.target.value)} />
         </div>
+        <div>
+          <Label className="mb-2 block">End Time</Label>
+          <Input type="time" value={s.endTime} onChange={(e) => s.setEndTime(e.target.value)} />
+        </div>
       </div>
       <FormatPicker value={s.format} onChange={s.setFormat} />
       {(s.format === "virtual" || s.format === "hybrid") && (
@@ -884,7 +890,7 @@ function GeneralStep0({ s, organiserName, showErrors = false }: { s: GeneralStat
           value={s.description} onChange={(e) => s.setDescription(e.target.value)}
           className="flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none" />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div>
           <Label className="mb-2 block">Date <span className="text-red-500">*</span></Label>
           <Input
@@ -896,6 +902,7 @@ function GeneralStep0({ s, organiserName, showErrors = false }: { s: GeneralStat
           {showErrors && !s.date && <p className="text-xs text-red-500 mt-1">Date is required.</p>}
         </div>
         <div><Label className="mb-2 block">Start Time</Label><Input type="time" value={s.time} onChange={(e) => s.setTime(e.target.value)} /></div>
+        <div><Label className="mb-2 block">End Time</Label><Input type="time" value={s.endTime} onChange={(e) => s.setEndTime(e.target.value)} /></div>
       </div>
       <FormatPicker value={s.format} onChange={s.setFormat} />
       {(s.format === "in_person" || s.format === "hybrid") && (
@@ -938,6 +945,8 @@ function AgmReview({ s, organiserName }: { s: AgmState; organiserName: string })
           <ReviewRow label="Title" value={s.title} />
           <ReviewRow label="Company" value={organiserName} />
           <ReviewRow label="Date" value={s.date} />
+          <ReviewRow label="Start Time" value={s.time || "—"} />
+          {s.endTime && <ReviewRow label="End Time" value={s.endTime} />}
           <ReviewRow label="Format" value={s.format} />
           {s.venue && <ReviewRow label="Venue" value={s.venue} />}
         </div>
@@ -963,6 +972,8 @@ function LaunchReview({ s, organiserName }: { s: LaunchState; organiserName: str
           <ReviewRow label="Title" value={s.title} />
           <ReviewRow label="Company" value={organiserName} />
           <ReviewRow label="Date" value={s.date} />
+          <ReviewRow label="Start Time" value={s.time || "—"} />
+          {s.endTime && <ReviewRow label="End Time" value={s.endTime} />}
           <ReviewRow label="Format" value={s.format} />
           <ReviewRow label="Capacity" value={s.capacity || "Unlimited"} />
         </div>
@@ -987,6 +998,8 @@ function HackReview({ s, organiserName }: { s: HackState; organiserName: string 
           <ReviewRow label="Title" value={s.title} />
           <ReviewRow label="Organiser" value={organiserName} />
           <ReviewRow label="Dates" value={s.startDate && s.endDate ? `${s.startDate} → ${s.endDate}` : ""} />
+          <ReviewRow label="Start Time" value={s.time || "—"} />
+          {s.endTime && <ReviewRow label="End Time" value={s.endTime} />}
           <ReviewRow label="Submission" value={s.submissionDeadline} />
           <ReviewRow label="Format" value={s.format} />
         </div>
@@ -1010,6 +1023,8 @@ function GeneralReview({ s, organiserName }: { s: GeneralState; organiserName: s
           <ReviewRow label="Title" value={s.title} />
           <ReviewRow label="Organiser" value={organiserName} />
           <ReviewRow label="Date" value={s.date} />
+          <ReviewRow label="Start Time" value={s.time || "—"} />
+          {s.endTime && <ReviewRow label="End Time" value={s.endTime} />}
           <ReviewRow label="Format" value={s.format} />
           <ReviewRow label="Capacity" value={s.capacity || "Unlimited"} />
           <ReviewRow label="Audience" value={s.audienceMode} />
@@ -1030,6 +1045,7 @@ function useAgmState() {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("10:00");
+  const [endTime, setEndTime] = useState("");
   const [format, setFormat] = useState<Format>("virtual");
   const [venue, setVenue] = useState("");
   const [streamUrl, setStreamUrl] = useState("");
@@ -1043,13 +1059,14 @@ function useAgmState() {
   const addResolution = () => setResolutions((r) => [...r, { id: genId(), title: "", description: "", isSpecial: false }]);
   const removeResolution = (id: string) => setResolutions((r) => r.filter((x) => x.id !== id));
   const updateResolution = (id: string, field: keyof Resolution, val: string | boolean) => setResolutions((r) => r.map((x) => x.id === id ? { ...x, [field]: val } : x));
-  return { title, setTitle, date, setDate, time, setTime, format, setFormat, venue, setVenue, streamUrl, setStreamUrl, noticeDays, setNoticeDays, noticeFile, setNoticeFile, quorum, setQuorum, cutoff, setCutoff, resolutions, addResolution, removeResolution, updateResolution, proxyEnabled, setProxyEnabled, shareholderTargeting, setShareholderTargeting };
+  return { title, setTitle, date, setDate, time, setTime, endTime, setEndTime, format, setFormat, venue, setVenue, streamUrl, setStreamUrl, noticeDays, setNoticeDays, noticeFile, setNoticeFile, quorum, setQuorum, cutoff, setCutoff, resolutions, addResolution, removeResolution, updateResolution, proxyEnabled, setProxyEnabled, shareholderTargeting, setShareholderTargeting };
 }
 
 function useLaunchState() {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("10:00");
+  const [endTime, setEndTime] = useState("");
   const [format, setFormat] = useState<Format>("virtual");
   const [venue, setVenue] = useState("");
   const [streamUrl, setStreamUrl] = useState("");
@@ -1065,7 +1082,7 @@ function useLaunchState() {
   const addSpeaker = () => setSpeakers((s) => [...s, { id: genId(), name: "", role: "", bio: "" }]);
   const removeSpeaker = (id: string) => setSpeakers((s) => s.filter((x) => x.id !== id));
   const updateSpeaker = (id: string, field: keyof SpeakerItem, val: string) => setSpeakers((s) => s.map((x) => x.id === id ? { ...x, [field]: val } : x));
-  return { title, setTitle, date, setDate, time, setTime, format, setFormat, venue, setVenue, streamUrl, setStreamUrl, capacity, setCapacity, productName, setProductName, tagline, setTagline, productDesc, setProductDesc, slug, setSlug, speakers, addSpeaker, removeSpeaker, updateSpeaker, embargoEnabled, setEmbargoEnabled, embargoAt, setEmbargoAt, audienceMode, setAudienceMode };
+  return { title, setTitle, date, setDate, time, setTime, endTime, setEndTime, format, setFormat, venue, setVenue, streamUrl, setStreamUrl, capacity, setCapacity, productName, setProductName, tagline, setTagline, productDesc, setProductDesc, slug, setSlug, speakers, addSpeaker, removeSpeaker, updateSpeaker, embargoEnabled, setEmbargoEnabled, embargoAt, setEmbargoAt, audienceMode, setAudienceMode };
 }
 
 function useHackState() {
@@ -1074,6 +1091,7 @@ function useHackState() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [time, setTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("");
   const [format, setFormat] = useState<Format>("virtual");
   const [venue, setVenue] = useState("");
   const [streamUrl, setStreamUrl] = useState("");
@@ -1094,7 +1112,7 @@ function useHackState() {
   const addCriterion = () => setCriteria((c) => [...c, { id: genId(), label: "", weight: "" }]);
   const removeCriterion = (id: string) => setCriteria((c) => c.filter((x) => x.id !== id));
   const updateCriterion = (id: string, field: "label" | "weight", val: string) => setCriteria((c) => c.map((x) => x.id === id ? { ...x, [field]: val } : x));
-  return { title, setTitle, theme, setTheme, startDate, setStartDate, endDate, setEndDate, time, setTime, format, setFormat, venue, setVenue, streamUrl, setStreamUrl, problemStatement, setProblemStatement, deliverable, setDeliverable, submissionDeadline, setSubmissionDeadline, techStack, setTechStack, participationType, setParticipationType, minTeam, setMinTeam, maxTeam, setMaxTeam, eligibility, setEligibility, capacity, setCapacity, prizes, addPrize, removePrize, updatePrize, criteria, addCriterion, removeCriterion, updateCriterion };
+  return { title, setTitle, theme, setTheme, startDate, setStartDate, endDate, setEndDate, time, setTime, endTime, setEndTime, format, setFormat, venue, setVenue, streamUrl, setStreamUrl, problemStatement, setProblemStatement, deliverable, setDeliverable, submissionDeadline, setSubmissionDeadline, techStack, setTechStack, participationType, setParticipationType, minTeam, setMinTeam, maxTeam, setMaxTeam, eligibility, setEligibility, capacity, setCapacity, prizes, addPrize, removePrize, updatePrize, criteria, addCriterion, removeCriterion, updateCriterion };
 }
 
 function useGeneralState() {
@@ -1102,12 +1120,13 @@ function useGeneralState() {
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("10:00");
+  const [endTime, setEndTime] = useState("");
   const [format, setFormat] = useState<Format>("virtual");
   const [venue, setVenue] = useState("");
   const [streamUrl, setStreamUrl] = useState("");
   const [capacity, setCapacity] = useState("");
   const [audienceMode, setAudienceMode] = useState<"open" | "invite">("open");
-  return { title, setTitle, description, setDescription, date, setDate, time, setTime, format, setFormat, venue, setVenue, streamUrl, setStreamUrl, capacity, setCapacity, audienceMode, setAudienceMode };
+  return { title, setTitle, description, setDescription, date, setDate, time, setTime, endTime, setEndTime, format, setFormat, venue, setVenue, streamUrl, setStreamUrl, capacity, setCapacity, audienceMode, setAudienceMode };
 }
 
 // ─── Page Inner ───────────────────────────────────────────────────────────────
@@ -1233,6 +1252,7 @@ function CreateEventInner() {
             title:           agm.title,
             date:            agm.date,
             startTime:       agm.time,
+            endTime:         agm.endTime   || undefined,
             format:          fmt(agm.format),
             streamUrl:       agm.streamUrl || undefined,
             maximumCapacity: 0,
@@ -1257,6 +1277,7 @@ function CreateEventInner() {
             description:     general.description || undefined,
             date:            general.date,
             startTime:       general.time,
+            endTime:         general.endTime    || undefined,
             format:          fmt(general.format),
             streamUrl:       general.streamUrl   || undefined,
             location:        general.venue       || undefined,
@@ -1274,7 +1295,8 @@ function CreateEventInner() {
             eventType:       "INNOVATION_CHALLENGE",
             title:           hack.title,
             date:            hack.startDate,
-            startTime:       hack.time || "09:00",
+            startTime:       hack.time    || "09:00",
+            endTime:         hack.endTime || undefined,
             format:          fmt(hack.format),
             streamUrl:       hack.streamUrl || undefined,
             location:        hack.venue     || undefined,
@@ -1293,6 +1315,7 @@ function CreateEventInner() {
             title:           launch.title,
             date:            launch.date,
             startTime:       launch.time,
+            endTime:         launch.endTime || undefined,
             format:          fmt(launch.format),
             streamUrl:       launch.streamUrl || undefined,
             location:        launch.venue     || undefined,
