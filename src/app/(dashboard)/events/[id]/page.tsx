@@ -52,24 +52,28 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const router = useRouter();
 
   // ── Role detection ────────────────────────────────────────────────────────
-  const { data: userResponse } = useGetMe();
-  const currentUser = userResponse?.data;
-  const isAdmin = !currentUser || ADMIN_ROLES.has(currentUser.role?.toLowerCase() ?? "");
+  const { data: userResponse, isLoading: userLoading } = useGetMe();
+  const currentUser  = userResponse?.data;
+  // Wait for user to load before deciding; default false while loading so we
+  // never fire admin endpoints for client users.
+  const userReady    = !userLoading;
+  const isAdmin      = userReady && !!currentUser && ADMIN_ROLES.has(currentUser.role?.toLowerCase() ?? "");
+  const isClient     = userReady && !isAdmin;
 
-  // ── Data (both hooks called; role selects which result to use) ───────────
-  const { data: adminEvent,  isLoading: adminLoading  } = useEventDetail(id);
-  const { data: clientEvent, isLoading: clientLoading } = useClientEventDetail(id);
-  const { data: adminDocs  }                             = useEventDocuments(id);
-  const { data: clientDocs }                             = useClientEventDocuments(id);
-  const { data: adminAttendees  }                        = useEventAttendees(id, 0, 50);
+  // ── Data — each hook only fires for the matching role ────────────────────
+  const { data: adminEvent,  isLoading: adminLoading  } = useEventDetail(id, { enabled: isAdmin });
+  const { data: clientEvent, isLoading: clientLoading } = useClientEventDetail(id, { enabled: isClient });
+  const { data: adminDocs  }                             = useEventDocuments(id, { enabled: isAdmin });
+  const { data: clientDocs }                             = useClientEventDocuments(id, "", { enabled: isClient });
+  const { data: adminAttendees  }                        = useEventAttendees(id, 0, 50, "", { enabled: isAdmin });
   const { data: clientAttendees }                        = useClientEventAttendees(id, "", 0, 50);
   const { data: expectedAttendeesData }                  = useExpectedAttendees(id);
   const suspendUser = useSuspendUserAccount();
 
-  const apiEvent        = isAdmin ? adminEvent        : (clientEvent ?? adminEvent);
-  const docsResponse    = isAdmin ? adminDocs         : (clientDocs  ?? adminDocs);
-  const attendeesResponse = isAdmin ? adminAttendees  : (clientAttendees ?? adminAttendees);
-  const eventLoading    = isAdmin ? adminLoading      : clientLoading;
+  const apiEvent          = isAdmin ? adminEvent    : clientEvent;
+  const docsResponse      = isAdmin ? adminDocs     : clientDocs;
+  const attendeesResponse = isAdmin ? adminAttendees : clientAttendees;
+  const eventLoading      = !userReady || (isAdmin ? adminLoading : clientLoading);
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [tab,              setTab]             = useState("Overview");
@@ -79,14 +83,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [broadcastChannel, setBroadcastChannel] = useState<"push"|"sms"|"email"|"all">("push");
   const [broadcastHistory, setBroadcastHistory] = useState<Array<{ text: string; channel: string; sentAt: string }>>([]);
 
-  // 🎯 RAW API PAYLOAD DATA LOGGING
-  console.log("=== [DEBUG] EVENT DETAIL SYSTEM DISPATCH ===");
-  console.log("Target Routing Parameter ID:", id);
-  console.log("User Authority Evaluation:", { currentUser, isAdmin });
-  console.log("Raw Hook Resolution - apiEvent:", apiEvent);
-  console.log("Raw Hook Resolution - docsResponse:", docsResponse);
-  console.log("Raw Hook Resolution - attendeesResponse:", attendeesResponse);
-  
   // ── Loading / error ───────────────────────────────────────────────────────
   if (eventLoading) return <Loader variant="page" text="Loading Event…" />;
 
@@ -235,7 +231,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {tab === "Broadcast"          && <EventBroadcastTab   rsvpCount={rsvpCount} broadcastMsg={broadcastMsg} setBroadcastMsg={setBroadcastMsg} broadcastChannel={broadcastChannel} setBroadcastChannel={setBroadcastChannel} broadcastHistory={broadcastHistory} setBroadcastHistory={setBroadcastHistory} />}
       {tab === "Vote Results"       && isAGM && <EventVoteResultsTab liveVotes={liveVotes} />}
       {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} liveVotes={liveVotes} participants={participants} />}
-      {tab === "Settings"           && <EventSettingsTab    eventId={id} title={event.title} organiser={event.organiser} description={apiEvent.description} currentStatus={currentStatus} onStatusChange={handleStatusChange} />}
+      {tab === "Settings"           && <EventSettingsTab    eventId={id} title={event.title} organiser={event.organiser} description={apiEvent.description} currentStatus={currentStatus} featured={(apiEvent as any).featured ?? false} onStatusChange={handleStatusChange} />}
     </div>
   );
 }

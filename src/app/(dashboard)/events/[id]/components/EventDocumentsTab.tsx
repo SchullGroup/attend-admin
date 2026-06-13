@@ -63,13 +63,15 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl }: Props) {
     if (!file) return;
     e.target.value = "";
 
-    const allowed = [
-      "application/pdf",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      "image/jpeg", "image/png",
-    ];
-    if (!allowed.includes(file.type)) {
+    const MIME_TO_DOCTYPE: Record<string, string> = {
+      "application/pdf": "PDF",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation": "PPTX",
+      "image/jpeg": "IMAGE",
+      "image/png":  "IMAGE",
+    };
+
+    if (!MIME_TO_DOCTYPE[file.type]) {
       toast.error("Only PDF, DOCX, PPTX, JPG and PNG files are supported.");
       return;
     }
@@ -94,25 +96,35 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl }: Props) {
           timeout:          120_000,
         }
       );
-      const uploadData = uploadRes.data?.data ?? uploadRes.data ?? {};
-      const fileUrl    = uploadData.fileUrl ?? uploadData.url ?? uploadData.secure_url ?? "";
+      const uploadData         = uploadRes.data?.data ?? uploadRes.data ?? {};
+      const fileUrl            =
+        uploadData.fileUrl        ??
+        uploadData.secure_url     ??
+        uploadData.url            ??
+        uploadData.downloadUrl    ??
+        "";
+      const cloudinaryPublicId  =
+        uploadData.cloudinaryPublicId ??
+        uploadData.public_id          ??
+        undefined;
 
       if (!fileUrl) {
-        toast.error("Upload failed — no file URL returned.");
+        toast.error("Upload failed — no file URL returned by server.");
         return;
       }
 
       // Step 2 — register the document with the event
-      uploadMutation.mutate({
+      // Build payload without undefined keys so the API doesn't reject extra nulls
+      const docPayload: Record<string, string> = {
+        title:            file.name.replace(/\.[^.]+$/, ""),
+        documentType:     MIME_TO_DOCTYPE[file.type],
         eventId,
-        payload: {
-          title:            file.name.replace(/\.[^.]+$/, ""),
-          documentType:     "GENERAL",
-          eventId,
-          fileUrl,
-          originalFilename: file.name,
-        },
-      });
+        fileUrl,
+        originalFilename: file.name,
+      };
+      if (cloudinaryPublicId) docPayload.cloudinaryPublicId = cloudinaryPublicId;
+
+      uploadMutation.mutate({ eventId, payload: docPayload as any });
     } catch (err: any) {
       const msg = err?.response?.data?.message ?? err?.message ?? "Upload failed";
       toast.error(msg);

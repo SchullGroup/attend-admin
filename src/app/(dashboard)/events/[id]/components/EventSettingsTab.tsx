@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Radio } from "lucide-react";
+import { Radio, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import {
   useEndEvent,
   useCancelEvent,
   useUpdateEventInfo,
+  useToggleEventFeatured,
 } from "@/api/client-events";
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
   organiser:      string;
   description?:   string;
   currentStatus:  string;
+  featured?:      boolean;
   onStatusChange: (status: string) => void;
 }
 
@@ -28,18 +30,21 @@ export function EventSettingsTab({
   organiser,
   description: initialDescription = "",
   currentStatus,
+  featured: initialFeatured = false,
   onStatusChange,
 }: Props) {
   const [titleVal, setTitleVal]   = useState(initialTitle ?? "");
   // Coerce null → "" because the API can return null for description
   const [descVal,  setDescVal]    = useState(initialDescription ?? "");
+  const [featured, setFeatured]   = useState(initialFeatured);
 
   // Lifecycle mutations — all call real API
-  const publishMutation  = usePublishEvent();
-  const goLiveMutation   = useGoLiveEvent();
-  const endMutation      = useEndEvent();
-  const cancelMutation   = useCancelEvent();
-  const updateInfoMutation = useUpdateEventInfo();
+  const publishMutation       = usePublishEvent();
+  const goLiveMutation        = useGoLiveEvent();
+  const endMutation           = useEndEvent();
+  const cancelMutation        = useCancelEvent();
+  const updateInfoMutation    = useUpdateEventInfo();
+  const toggleFeaturedMutation = useToggleEventFeatured();
 
   const anyLifecyclePending =
     publishMutation.isPending ||
@@ -102,6 +107,35 @@ export function EventSettingsTab({
             }
           >
             {updateInfoMutation.isPending ? "Saving…" : "Save Changes"}
+          </Button>
+        </div>
+      </Card>
+
+      {/* Featured toggle */}
+      <Card className="attend-card p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-[hsl(var(--foreground))] flex items-center gap-2">
+              <Star className="h-4 w-4" />
+              Featured Event
+            </h2>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+              Featured events are highlighted to participants in the public view.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant={featured ? "default" : "outline"}
+            disabled={toggleFeaturedMutation.isPending}
+            className="gap-1.5 min-w-[110px]"
+            onClick={() =>
+              toggleFeaturedMutation.mutate(eventId, {
+                onSuccess: () => setFeatured((f) => !f),
+              })
+            }
+          >
+            <Star className={`h-3.5 w-3.5 ${featured ? "fill-current" : ""}`} />
+            {toggleFeaturedMutation.isPending ? "…" : featured ? "Unfeature" : "Set Featured"}
           </Button>
         </div>
       </Card>

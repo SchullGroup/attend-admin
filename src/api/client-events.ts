@@ -127,14 +127,14 @@ export interface EventDocumentListResponse {
 }
 
 export interface UploadDocumentRequest {
-  title:             string;
-  documentType:      string;
-  eventId:           string;
-  /** Cloudinary URL — preferred over base64 */
-  fileUrl?:          string;
-  /** Legacy base64 fallback */
-  fileData?:         string;
-  originalFilename:  string;
+  title:              string;
+  documentType:       string;
+  eventId:            string;
+  /** Cloudinary URL */
+  fileUrl?:           string;
+  /** Cloudinary public_id returned by the upload proxy */
+  cloudinaryPublicId?: string;
+  originalFilename:   string;
 }
 
 // Attendees
@@ -201,7 +201,7 @@ export function useClientEvents(type: ClientEventTypeFilter = "ALL", page = 0, s
 }
 
 /** Full event detail including agenda, speakers, config, and overview stats. */
-export function useClientEventDetail(id: string) {
+export function useClientEventDetail(id: string, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: clientEventKeys.detail(id),
     queryFn: async () => {
@@ -210,7 +210,7 @@ export function useClientEventDetail(id: string) {
       );
       return res.data.data;
     },
-    enabled: !!id,
+    enabled: !!id && (opts?.enabled ?? true),
     staleTime: 60_000,
   });
 }
@@ -245,7 +245,7 @@ export function useClientEventAgenda(eventId: string) {
 }
 
 /** Documents attached to this event. */
-export function useClientEventDocuments(eventId: string, search = "") {
+export function useClientEventDocuments(eventId: string, search = "", opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: clientEventKeys.documents(eventId),
     queryFn: async () => {
@@ -255,7 +255,7 @@ export function useClientEventDocuments(eventId: string, search = "") {
       );
       return res.data.data?.documents ?? [];
     },
-    enabled: !!eventId,
+    enabled: !!eventId && (opts?.enabled ?? true),
     staleTime: 30_000,
   });
 }
@@ -733,6 +733,27 @@ export function useRetainEventData() {
     },
     onSuccess: () => popup.success("Data Retained", "Event data has been retained.", 2500),
     onError: (error: any) => parseAndToastApiError(error, "Retain data failed."),
+  });
+}
+
+/**
+ * POST /api/v1/client/events/{id}/feature
+ * Toggles the featured flag. Returns the new featured state.
+ */
+export function useToggleEventFeatured() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (eventId: string) => {
+      const res = await apiClient.post<ApiResponse<Record<string, any>>>(
+        `/api/v1/client/events/${eventId}/feature`
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, eventId) => {
+      queryClient.invalidateQueries({ queryKey: clientEventKeys.detail(eventId) });
+      popup.success("Featured toggled", "Event featured status updated.", 2000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Toggle featured failed."),
   });
 }
 

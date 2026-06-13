@@ -320,19 +320,19 @@ export const clientEventKeys = {
   documents: (id: string) => [...clientEventKeys.all, "documents", id] as const,
 };
 
-export function useEventDetail(id: string) {
+export function useEventDetail(id: string, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: superAdminKeys.eventDetail(id),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<EventDetailResponse>>(`/api/v1/admin/events/${id}`);
-      return res.data.data; // EventDetailResponse — unwrapped from envelope
+      return res.data.data;
     },
-    enabled: !!id,
-    staleTime: 60_000, // event configs are stable; no need to refetch on every mount
+    enabled: !!id && (opts?.enabled ?? true),
+    staleTime: 60_000,
   });
 }
 
-export function useEventAttendees(id: string, page = 0, size = 20, kycStatus = "") {
+export function useEventAttendees(id: string, page = 0, size = 20, kycStatus = "", opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: clientEventKeys.attendees(id, page, size, kycStatus),
     queryFn: async () => {
@@ -340,20 +340,20 @@ export function useEventAttendees(id: string, page = 0, size = 20, kycStatus = "
         `/api/v1/client/events/${id}/attendees`,
         { params: { page, size, ...(kycStatus ? { kycStatus } : {}) } }
       );
-      return res.data.data; // unwrap envelope — payload may be array, paged object, or named list
+      return res.data.data;
     },
-    enabled: !!id,
+    enabled: !!id && (opts?.enabled ?? true),
   });
 }
 
-export function useEventDocuments(id: string) {
+export function useEventDocuments(id: string, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: superAdminKeys.eventDocuments(id),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<any>>(`/api/v1/admin/events/${id}/documents`);
       return res.data;
     },
-    enabled: !!id,
+    enabled: !!id && (opts?.enabled ?? true),
   });
 }
 

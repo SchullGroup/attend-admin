@@ -1,39 +1,62 @@
 "use client";
-import Link from "next/link";
-import { Lightbulb, ArrowRight, Trophy, Clock, CheckCircle2, FileText, Users } from "lucide-react";
-import { useAdminChallengesOverview, useAdminChallenges } from "@/api/admin-challenges";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Lightbulb, ArrowRight, Trophy, Users, FileText, ChevronRight, Search,
+} from "lucide-react";
+import { useClientChallenges } from "@/api/client-challenges";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
-import { getEventRegisterName } from "@/lib/event-module";
+
+const STATUS_FILTERS = [
+  { label: "All",       value: "" },
+  { label: "Draft",     value: "DRAFT" },
+  { label: "Published", value: "PUBLISHED" },
+  { label: "Live",      value: "LIVE" },
+  { label: "Ended",     value: "ENDED" },
+];
+
+function statusStyle(status: string): { bg: string; color: string } {
+  const s = status?.toUpperCase();
+  if (s === "LIVE")      return { bg: "#16a34a18", color: "#16a34a" };
+  if (s === "PUBLISHED") return { bg: "#0891b218", color: "#0891b2" };
+  if (s === "ENDED")     return { bg: "#6b728018", color: "#6b7280" };
+  return { bg: "#7c22c918", color: "#7c22c9" };
+}
 
 export default function HackathonsPage() {
-  const { data: overview, isLoading: overviewLoading } = useAdminChallengesOverview();
-  const { data: challengesData, isLoading: challengesLoading } = useAdminChallenges(0, 10);
+  const router = useRouter();
+  const [search,    setSearch]    = useState("");
+  const [statusTab, setStatusTab] = useState("");
 
-  if (overviewLoading || challengesLoading) return <Loader variant="page" text="Loading Challenges…" />;
+  const { data, isLoading } = useClientChallenges(search, statusTab, 0, 50);
 
-  const challenges = challengesData?.content ?? [];
-  const featured = challenges.find((c) => c.status?.toUpperCase() === "LIVE") ?? challenges[0] ?? null;
+  if (isLoading) return <Loader variant="page" text="Loading Challenges…" />;
 
-  const total       = overview?.totalApplications  ?? 0;
-  const submitted   = overview?.submittedCount     ?? 0;
-  const underReview = overview?.underReviewCount   ?? 0;
-  const shortlisted = overview?.shortlistedCount   ?? 0;
-  const selected    = overview?.selectedCount      ?? 0;
-  const tracks      = overview?.tracks             ?? [];
+  const summary    = data?.summary;
+  const challenges = data?.challenges ?? [];
+  const featured   = challenges.find((c) => c.status?.toUpperCase() === "LIVE") ?? challenges[0] ?? null;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
+      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Innovation Challenges</h1>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">Manage innovation challenges, review applications, and coordinate judging</p>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+            Manage hackathons, review applications, and coordinate judging
+          </p>
         </div>
       </div>
 
-      <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(135deg, #9333ea 0%, #7c22c9 60%, #5b21b6 100%)" }}>
+      {/* Hero card */}
+      <div
+        className="rounded-2xl overflow-hidden"
+        style={{ background: "linear-gradient(135deg, #9333ea 0%, #7c22c9 60%, #5b21b6 100%)" }}
+      >
         <div className="p-6 text-white">
           <div className="flex items-start justify-between gap-6">
             <div className="flex-1 min-w-0">
@@ -47,34 +70,32 @@ export default function HackathonsPage() {
                 <>
                   <h2 className="text-2xl font-bold mb-1 truncate">{featured.title}</h2>
                   <p className="text-purple-200 text-sm mb-4">
-                    {getEventRegisterName(featured)} · {formatDate(featured.date)}
+                    {featured.organiserName} · {formatDate(featured.date)}
                   </p>
                 </>
               ) : (
                 <>
                   <h2 className="text-2xl font-bold mb-1">No active challenges yet</h2>
-                  <p className="text-purple-200 text-sm mb-4">Create your first innovation challenge to get started.</p>
+                  <p className="text-purple-200 text-sm mb-4">
+                    Create your first innovation challenge from Events.
+                  </p>
                 </>
               )}
-              <div className="flex items-center gap-3">
-                <Link href="/hackathons/applications">
-                  <Button className="h-9 text-sm bg-white text-purple-700 hover:bg-white/90 gap-2">
-                    View Applications <ArrowRight className="h-3.5 w-3.5" />
-                  </Button>
-                </Link>
-                <Link href="/hackathons/judging">
-                  <Button variant="outline" className="h-9 text-sm border-white/30 text-white hover:bg-white/10 gap-2">
-                    <Trophy className="h-3.5 w-3.5" /> Judging Panel
-                  </Button>
-                </Link>
-              </div>
+              {featured && (
+                <Button
+                  className="h-9 text-sm bg-white text-purple-700 hover:bg-white/90 gap-2"
+                  onClick={() => router.push(`/hackathons/${featured.id}`)}
+                >
+                  Open Challenge <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3 shrink-0">
               {[
-                { label: "Total Applications", value: total,       icon: FileText },
-                { label: "Shortlisted",         value: shortlisted, icon: CheckCircle2 },
-                { label: "Under Review",        value: underReview, icon: Clock },
-                { label: "Submitted",           value: submitted,   icon: Users },
+                { label: "Active Challenges",  value: summary?.activeChallenges  ?? 0, icon: Lightbulb },
+                { label: "Total Applications", value: summary?.totalApplications ?? 0, icon: FileText  },
+                { label: "Teams to Score",     value: summary?.teamsToScore      ?? 0, icon: Trophy    },
+                { label: "Shortlisted",        value: challenges.reduce((s, c) => s + (c.shortlistedTeams ?? 0), 0), icon: Users },
               ].map((s) => (
                 <div key={s.label} className="rounded-xl bg-white/10 p-3 min-w-[110px]">
                   <div className="text-2xl font-bold tabular-nums">{s.value}</div>
@@ -86,44 +107,103 @@ export default function HackathonsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <Card className="attend-card p-5 col-span-2">
-          <div className="attend-section-title mb-4">Application Status Breakdown</div>
-          <div className="flex flex-col gap-3">
-            {[
-              { label: "Submitted",    count: submitted,   color: "#3b82f6" },
-              { label: "Under Review", count: underReview, color: "#f59e0b" },
-              { label: "Shortlisted",  count: shortlisted, color: "#16a34a" },
-              { label: "Selected",     count: selected,    color: "#9333ea" },
-            ].map((s) => {
-              const pct = total > 0 ? Math.round((s.count / total) * 100) : 0;
+      {/* Search + status filter */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+          <Input
+            placeholder="Search challenges…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 h-9"
+          />
+        </div>
+        <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setStatusTab(f.value)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                statusTab === f.value
+                  ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
+                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Challenges table */}
+      <Card className="attend-card overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="attend-table-header">
+              <th className="px-5 py-3 text-left">Challenge</th>
+              <th className="px-5 py-3 text-left">Date</th>
+              <th className="px-5 py-3 text-left">Format</th>
+              <th className="px-5 py-3 text-left">Shortlisted</th>
+              <th className="px-5 py-3 text-left">Status</th>
+              <th className="px-5 py-3 text-left"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {challenges.map((c) => {
+              const ss = statusStyle(c.status);
               return (
-                <div key={s.label} className="flex items-center gap-3">
-                  <span className="text-xs text-[hsl(var(--muted-foreground))] w-24 shrink-0">{s.label}</span>
-                  <div className="flex-1 h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: s.color }} />
-                  </div>
-                  <span className="text-xs font-semibold tabular-nums w-6 text-right">{s.count}</span>
-                  <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums w-10 text-right">{pct}%</span>
-                </div>
+                <tr key={c.id} className="attend-table-row">
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "#7c22c918" }}
+                      >
+                        <Lightbulb className="h-4 w-4" style={{ color: "#7c22c9" }} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[220px]">
+                          {c.title}
+                        </p>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">{c.organiserName}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4 text-sm text-[hsl(var(--foreground))]">{formatDate(c.date)}</td>
+                  <td className="px-5 py-4">
+                    <span className="text-xs capitalize text-[hsl(var(--muted-foreground))]">
+                      {(c.format ?? "—").toLowerCase()}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 text-sm font-semibold tabular-nums">{c.shortlistedTeams ?? 0}</td>
+                  <td className="px-5 py-4">
+                    <span
+                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                      style={{ backgroundColor: ss.bg, color: ss.color }}
+                    >
+                      {c.status}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4">
+                    <Button
+                      size="sm"
+                      className="h-8 gap-1.5 text-xs"
+                      onClick={() => router.push(`/hackathons/${c.id}`)}
+                    >
+                      Open <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </td>
+                </tr>
               );
             })}
+          </tbody>
+        </table>
+        {challenges.length === 0 && (
+          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            No challenges found.
           </div>
-        </Card>
-        <Card className="attend-card p-5">
-          <div className="attend-section-title mb-4">Challenge Tracks</div>
-          <div className="flex flex-col gap-2">
-            {tracks.length > 0 ? tracks.map((t) => (
-              <div key={t.track} className="flex items-center justify-between py-2 border-b border-[hsl(var(--border))] last:border-0">
-                <span className="text-sm text-[hsl(var(--foreground))]">{t.track}</span>
-                <span className="text-sm font-semibold tabular-nums">{t.count}</span>
-              </div>
-            )) : (
-              <p className="text-sm text-[hsl(var(--muted-foreground))] italic">No track data yet</p>
-            )}
-          </div>
-        </Card>
-      </div>
+        )}
+      </Card>
     </div>
   );
 }

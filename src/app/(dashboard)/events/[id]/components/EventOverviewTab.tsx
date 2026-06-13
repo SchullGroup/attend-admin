@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
+import { useClientEventAgenda } from "@/api/client-events";
 import type { EventShim, LocalAgendaItem } from "./types";
 
 const FORMAT_ICON = { virtual: Monitor, hybrid: Users2, "in-person": MapPin };
@@ -37,16 +38,23 @@ export function EventOverviewTab({
   const attendeeLabel = isAGM ? "Expected Attendees" : "RSVPs";
   const attendeeValue = isAGM ? expectedAttendeesCount.toLocaleString() : event.rsvpCount.toLocaleString();
 
-  // Typed config accessors — the discriminated union keeps these safe at runtime
-  const productLaunchConfig      = (event as any).productLaunchConfig      as Record<string, any> | undefined;
-  const innovationChallengeConfig = (event as any).innovationChallengeConfig as Record<string, any> | undefined;
-  const agmConfig                = (event as any).agmConfig                as Record<string, any> | undefined;
-  const featured                 = (event as any).featured                 as boolean | undefined;
-  const endDate                  = (event as any).endDate                  as string | undefined;
+  // Fetch live agenda from dedicated endpoint
+  const { data: liveAgenda = [] } = useClientEventAgenda(event.id);
 
-  // Use API agenda items for AGM when available; fall back to local state
+  // Typed config accessors
+  const productLaunchConfig       = (event as any).productLaunchConfig      as Record<string, any> | undefined;
+  const innovationChallengeConfig = (event as any).innovationChallengeConfig as Record<string, any> | undefined;
+  const agmConfig                 = (event as any).agmConfig                as Record<string, any> | undefined;
+  const featured                  = (event as any).featured                 as boolean | undefined;
+  const endDate                   = (event as any).endDate                  as string | undefined;
+
+  // Prefer dedicated /agenda endpoint; fall back to event.agenda then local state
   const agmAgendaItems: LocalAgendaItem[] =
-    event.agenda?.length ? event.agenda : agendaItems;
+    liveAgenda.length
+      ? (liveAgenda as LocalAgendaItem[])
+      : event.agenda?.length
+        ? event.agenda
+        : agendaItems;
 
   return (
     <div className="grid grid-cols-3 gap-5">
@@ -260,12 +268,12 @@ export function EventOverviewTab({
           </Card>
         )}
 
-        {/* AGM agenda / Resolutions */}
+        {/* AGM Agenda */}
         {isAGM && agmAgendaItems.length > 0 && (
           <Card className="attend-card p-5">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-[hsl(var(--foreground))]">Resolutions</h2>
-              <button onClick={() => onNavigate("Resolutions")} className="text-xs text-[hsl(var(--primary))] hover:underline">Edit →</button>
+              <h2 className="font-semibold text-[hsl(var(--foreground))]">Agenda</h2>
+              <button onClick={() => onNavigate("Resolutions")} className="text-xs text-[hsl(var(--primary))] hover:underline">Manage →</button>
             </div>
             <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
               {agmAgendaItems.slice(0, 4).map((item) => (
