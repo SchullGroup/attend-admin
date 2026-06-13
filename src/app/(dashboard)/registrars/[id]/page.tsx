@@ -15,6 +15,7 @@ import {
   getRegistrarDisplayName,
   getRegistrarEnrolledAt,
 } from "@/api/registrars";
+import { LogoUpload } from "@/components/custom/logo-upload";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
@@ -91,12 +92,11 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="h-16 w-16 rounded-2xl bg-[hsl(var(--primary)/0.08)] flex items-center justify-center text-lg font-bold text-[hsl(var(--primary))] shrink-0">
-            {registrar.logoUrl
-              ? <img src={registrar.logoUrl} alt={displayName} className="h-full w-full rounded-2xl object-contain" />
-              : initials
-            }
-          </div>
+          <LogoUpload
+            registrarId={id}
+            currentLogoUrl={registrar.logoUrl}
+            initials={initials}
+          />
           <div>
             <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{displayName}</h1>
             <div className="flex items-center gap-2 mt-1.5">

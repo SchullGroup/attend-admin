@@ -329,7 +329,11 @@ export type EventDetailResponse = {
   startTime: string;
   streamUrl?: string;
   location?: string;
+  venue?: string;
+  endDate?: string;
+  endTime?: string;
   maximumCapacity?: number;
+  featured?: boolean;
   status: "DRAFT" | "PUBLISHED" | "UPCOMING" | "LIVE" | "ENDED" | "CANCELLED";
   registrationCount: number;
   agenda?: AgendaItemResponse[];
@@ -686,7 +690,7 @@ export interface CreateInnovationEventRequest {
   expectedDeliverable?: string;           // was `rulesSummary`
   submissionDeadline?:  string;
   allowedTechStack?:    string;           // was `techStack`
-  participationType?:   "SOLO" | "TEAM" | "BOTH";
+  participationType?:   "SOLO" | "TEAM" | "SOLO_AND_TEAM";
   minTeamSize?:         number;
   maxTeamSize?:         number;
   eligibilityCriteria?: string;           // was `eligibility`

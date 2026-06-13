@@ -1,7 +1,7 @@
 "use client";
 
 import { useGetMe } from "@/api/auth/hooks";
-import { useDashboardStats, useEvents, useRecentRegistrations } from "@/api/super-admin";
+import { useDashboardStats, useAdminDashboard, useEvents, useRecentRegistrations, useUsers } from "@/api/super-admin";
 import { useClientEvents } from "@/api/client-events";
 import { useRegisters } from "@/api/registers";
 import { useRegistrars } from "@/api/registrars";
@@ -28,6 +28,8 @@ export default function DashboardPage() {
 
   // All hooks called unconditionally — Rules of Hooks
   const { data: dashStats,        isLoading: statsLoading   } = useDashboardStats();
+  const { data: adminDashboard                              } = useAdminDashboard();
+  const { data: usersData,        isLoading: usersLoading   } = useUsers("", 0, 10);
   const { data: eventsData,       isLoading: eventsLoading  } = useEvents("", 0, 20);
   const { data: publishedData                               } = useEvents("PUBLISHED", 0, 1);
   const { data: registrarsData,   isLoading: regLoading     } = useRegistrars("", 0, 20);
@@ -70,6 +72,9 @@ export default function DashboardPage() {
         currentUser={currentUser}
         stats={stats}
         statsLoading={statsLoading}
+        adminDashboard={adminDashboard}
+        usersData={usersData}
+        usersLoading={usersLoading}
         allEvents={allEvents}
         eventsData={eventsData}
         eventsLoading={eventsLoading}

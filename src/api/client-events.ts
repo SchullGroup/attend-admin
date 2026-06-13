@@ -117,6 +117,8 @@ export interface DocumentItem {
   uploadedAt:       string;
   downloadCount:    number;
   fileData?:        string;   // base64, present only on single-document fetch
+  fileUrl?:         string;   // Cloudinary URL, preferred for download
+  downloadUrl?:     string;   // alias used by some API versions
 }
 
 export interface EventDocumentListResponse {
@@ -125,11 +127,14 @@ export interface EventDocumentListResponse {
 }
 
 export interface UploadDocumentRequest {
-  title:            string;
-  documentType:     string;
-  eventId:          string;
-  fileData:         string;   // base64-encoded
-  originalFilename: string;
+  title:             string;
+  documentType:      string;
+  eventId:           string;
+  /** Cloudinary URL — preferred over base64 */
+  fileUrl?:          string;
+  /** Legacy base64 fallback */
+  fileData?:         string;
+  originalFilename:  string;
 }
 
 // Attendees
@@ -500,8 +505,19 @@ export function useDownloadEventDocument() {
       return res.data.data;
     },
     onSuccess: (doc) => {
+      // Prefer Cloudinary URL — just open it directly
+      const directUrl = doc?.fileUrl ?? doc?.downloadUrl;
+      if (directUrl) {
+        const a    = document.createElement("a");
+        a.href     = directUrl;
+        a.download = doc.originalFilename || doc.title;
+        a.target   = "_blank";
+        a.rel      = "noopener noreferrer";
+        a.click();
+        return;
+      }
+      // Fall back: decode base64
       if (!doc?.fileData) return;
-      // Decode base64 and trigger download
       const binary = atob(doc.fileData);
       const bytes  = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -554,8 +570,11 @@ export interface AgmConfigRequest {
   }>;
   shareholderTargeting?:    "ALL_REGISTERED" | "CUSTOM_LIST";
   enableProxyVoting?:       boolean;
-  agmNoticeBase64?:         string;
+  /** Cloudinary URL of the uploaded AGM notice PDF */
+  agmNoticeUrl?:            string;
   agmNoticeFilename?:       string;
+  /** Legacy base64 field — prefer agmNoticeUrl */
+  agmNoticeBase64?:         string;
   shareholderListBase64?:   string;
   shareholderListFilename?: string;
 }
@@ -571,7 +590,19 @@ export interface ProductLaunchConfigRequest {
 }
 
 export interface InnovationChallengeConfigRequest {
-  audienceTargeting?: AudienceTargeting;
+  audienceTargeting?:   AudienceTargeting;
+  tracks?:              string[];
+  problemStatement?:    string;
+  expectedDeliverable?: string;
+  submissionDeadline?:  string;   // YYYY-MM-DD
+  allowedTechStack?:    string;
+  participationType?:   "SOLO" | "TEAM" | "SOLO_AND_TEAM";
+  minTeamSize?:         number;
+  maxTeamSize?:         number;
+  eligibilityCriteria?: string;
+  maximumEntries?:      number;
+  prizeTiers?:          Array<{ position: string; reward: string }>;
+  judgingCriteria?:     Array<{ criterion: string; weight: number }>;
 }
 
 export interface GeneralEventConfigRequest {
@@ -589,13 +620,16 @@ export interface CreateEventRequest {
   description?:                string;
   format:                      "VIRTUAL" | "IN_PERSON" | "HYBRID";
   date:                        string;       // YYYY-MM-DD (must be a future date)
+  endDate?:                    string;       // YYYY-MM-DD — for multi-day events
   startTime:                   string;       // HH:mm (no seconds)
   endTime?:                    string;       // HH:mm (no seconds) — optional end time
   /** Required when format is VIRTUAL or HYBRID. */
   streamUrl?:                  string;
-  /** Physical location label (used even for VIRTUAL as a room/link label). */
+  /** Physical location / venue */
   location?:                   string;
+  venue?:                      string;
   maximumCapacity:             number;
+  featured?:                   boolean;
   rsvpEnabled?:                boolean;
   agenda?:                     Array<{ time: string; title: string; speaker?: string }>;
   speakers?:                   SpeakerRequest[];

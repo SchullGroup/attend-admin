@@ -57,6 +57,21 @@ export function useDashboardStats() {
   });
 }
 
+/**
+ * Full admin dashboard overview — GET /api/v1/admin/dashboard
+ * Returns aggregated platform metrics, recent activity, and a KYC summary.
+ */
+export function useAdminDashboard() {
+  return useQuery({
+    queryKey: [...superAdminKeys.all, "dashboard"] as const,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<any>>("/api/v1/admin/dashboard");
+      return res.data.data ?? res.data;
+    },
+    staleTime: 60_000,
+  });
+}
+
 export function usePlatformStats() {
   return useQuery({
     queryKey: superAdminKeys.platformStats(),

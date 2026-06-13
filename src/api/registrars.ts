@@ -42,11 +42,12 @@ export interface RegistrarItem {
   repPhone?:            string;
   plan?:                string;
   registersCount?:      number;
-  eventCount?:         number;
+  eventCount?:          number;
   status:               string;
   enrolledAt?:          string;
   approvedAt?:          string;
   createdAt?:           string;
+  logoUrl?:             string;
 }
 
 export interface RegistrarsListResponse {
@@ -423,5 +424,63 @@ export function useActivateRegistrar() {
     },
     onError: (error: any) =>
       parseAndToastApiError(error, "Activation failed. Please try again."),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Logo upload — two-step: Cloudinary → registrar logo endpoint
+// ---------------------------------------------------------------------------
+
+/**
+ * Step 1: Upload a file to Cloudinary via the platform proxy.
+ * POST /api/v1/upload?folder=logos
+ * Returns { fileUrl, cloudinaryPublicId } from response.data.data
+ */
+export function useUploadToCloudinary() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await apiClient.post<ApiResponse<Record<string, string>>>(
+        "/api/v1/upload",
+        form,
+        {
+          params:  { folder: "logos" },
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
+      const d = res.data.data ?? {};
+      return {
+        fileUrl:           d["fileUrl"]            ?? d["url"]        ?? "",
+        cloudinaryPublicId: d["cloudinaryPublicId"] ?? d["public_id"] ?? "",
+      };
+    },
+    onError: (error: any) =>
+      parseAndToastApiError(error, "Image upload failed. Please try again."),
+  });
+}
+
+/**
+ * Step 2: Persist the Cloudinary URL as the registrar's logo.
+ * PUT /api/v1/admin/registrars/{id}/logo
+ * Body: { logoUrl }
+ */
+export function useUpdateRegistrarLogo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, logoUrl }: { id: string; logoUrl: string }) => {
+      const res = await apiClient.put<ApiResponse<any>>(
+        `/api/v1/admin/registrars/${id}/logo`,
+        { logoUrl }
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: registrarKeys.all });
+      queryClient.invalidateQueries({ queryKey: registrarKeys.detail(id) });
+      popup.success("Logo Updated", "The registrar logo has been saved successfully.", 2500);
+    },
+    onError: (error: any) =>
+      parseAndToastApiError(error, "Failed to save logo. Please try again."),
   });
 }

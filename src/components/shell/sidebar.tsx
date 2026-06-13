@@ -327,12 +327,20 @@ export function Sidebar() {
       {hasToken && (
         <div className="p-3 shrink-0" style={{ borderTop: "1px solid #e2e8f0" }}>
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
-            <div
-              className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-              style={{ backgroundColor: "rgba(17,24,39,0.10)", color: "#111827" }}
-            >
-              {displayInitials}
-            </div>
+            {currentUser?.avatarUrl ? (
+              <img
+                src={currentUser.avatarUrl}
+                alt={displayName}
+                className="h-8 w-8 rounded-full object-cover shrink-0 ring-2 ring-[hsl(var(--border))]"
+              />
+            ) : (
+              <div
+                className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                style={{ backgroundColor: "rgba(17,24,39,0.10)", color: "#111827" }}
+              >
+                {displayInitials}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold truncate" style={{ color: "#111827" }}>
                 {displayName}

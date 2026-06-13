@@ -2,7 +2,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Bell, Search, ChevronRight, CalendarDays, Users, Building2, X } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -285,16 +285,31 @@ export function Header() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="focus:outline-none">
-                <Avatar className="h-8 w-8 cursor-pointer">
-                  <AvatarFallback className="text-xs">
+                <Avatar className="h-8 w-8 cursor-pointer ring-2 ring-[hsl(var(--border))]">
+                  {currentUser.avatarUrl && (
+                    <AvatarImage src={currentUser.avatarUrl} alt={currentUser.fullName} className="object-cover" />
+                  )}
+                  <AvatarFallback className="text-xs bg-[hsl(var(--foreground)/0.1)] text-[hsl(var(--foreground))]">
                     {currentUser.initials || getInitials(currentUser.fullName)}
                   </AvatarFallback>
                 </Avatar>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel>{currentUser.fullName}</DropdownMenuLabel>
-              <DropdownMenuLabel className="font-normal -mt-1">{currentUser.email}</DropdownMenuLabel>
+            <DropdownMenuContent align="end" className="w-56">
+              <div className="flex items-center gap-3 px-3 py-2.5 border-b border-[hsl(var(--border))]">
+                <Avatar className="h-9 w-9 shrink-0">
+                  {currentUser.avatarUrl && (
+                    <AvatarImage src={currentUser.avatarUrl} alt={currentUser.fullName} className="object-cover" />
+                  )}
+                  <AvatarFallback className="text-xs bg-[hsl(var(--foreground)/0.1)] text-[hsl(var(--foreground))]">
+                    {currentUser.initials || getInitials(currentUser.fullName)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">{currentUser.fullName}</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{currentUser.email}</p>
+                </div>
+              </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
               <DropdownMenuSeparator />

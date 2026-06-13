@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Building2, Users, CalendarDays, Eye } from "lucide-react";
+import { Building2, Users, CalendarDays, Eye, ImageOff } from "lucide-react";
 import {
   useRegistrars,
   useSuspendRegistrar,
@@ -104,6 +104,7 @@ export default function RegistrarsPage() {
           <table className="w-full">
             <thead>
               <tr className="attend-table-header">
+                <th className="px-5 py-3 text-left w-10"></th>
                 <th className="px-5 py-3 text-left">Registrar</th>
                 <th className="px-5 py-3 text-left">RC Number</th>
                 <th className="px-5 py-3 text-left">Representative</th>
@@ -124,6 +125,18 @@ export default function RegistrarsPage() {
                 const isPending   = statusKey === "PENDING";
                 return (
                   <tr key={r.id} className="attend-table-row">
+                    {/* Logo avatar */}
+                    <td className="px-3 py-3">
+                      <div className="h-9 w-9 rounded-xl overflow-hidden bg-[hsl(var(--muted))] flex items-center justify-center shrink-0">
+                        {r.logoUrl ? (
+                          <img src={r.logoUrl} alt={getDisplayName(r)} className="h-full w-full object-contain" />
+                        ) : (
+                          <span className="text-xs font-bold text-[hsl(var(--muted-foreground))]">
+                            {getDisplayName(r).slice(0, 2).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-5 py-3 max-w-[160px]">
                       <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate" title={getDisplayName(r)}>{getDisplayName(r)}</p>
                       <p className="text-xs text-[hsl(var(--muted-foreground))] truncate" title={r.industry ?? "—"}>{r.industry ?? "—"}</p>
