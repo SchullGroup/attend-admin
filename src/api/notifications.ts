@@ -8,8 +8,35 @@ import { NotificationListResponse, NotificationResponse } from "@/types/super-ad
 import { ApiResponse } from "@/types/api";
 
 // ---------------------------------------------------------------------------
-// Query key factory
+// Client notification types  (GET /api/v1/client/notifications)
 // ---------------------------------------------------------------------------
+export interface ClientNotificationItem {
+  id:          string;
+  title:       string;
+  message:     string;
+  read:        boolean;
+  type:        string;
+  referenceId: string;
+  createdAt:   string;
+}
+
+export interface ClientNotificationListResponse {
+  unreadCount:   number;
+  page:          number;
+  limit:         number;
+  totalCount:    number;
+  notifications: ClientNotificationItem[];
+}
+
+// ---------------------------------------------------------------------------
+// Query key factories
+// ---------------------------------------------------------------------------
+export const clientNotificationKeys = {
+  all:  ["client", "notifications"] as const,
+  list: (page: number, limit: number, read?: boolean) =>
+          ["client", "notifications", "list", page, limit, read] as const,
+};
+
 export const notificationKeys = {
   all:  ["admin", "notifications"] as const,
   list: (page: number, limit: number, read?: boolean) =>
@@ -74,6 +101,55 @@ export function useMarkNotificationRead() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: notificationKeys.all });
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to mark notification as read."),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Client notification hooks  (GET /api/v1/client/notifications)
+// ---------------------------------------------------------------------------
+
+/**
+ * Client notification feed — GET /api/v1/client/notifications
+ *
+ * @param page  Zero-based page index.
+ * @param limit Items per page. Pass 1 when you only need the unread count.
+ * @param read  `false` = unread only; omit for all.
+ */
+export function useClientNotifications(page = 0, limit = 10, read?: boolean) {
+  return useQuery({
+    queryKey: clientNotificationKeys.list(page, limit, read),
+    queryFn: async () => {
+      const params: Record<string, string> = {
+        page:  page.toString(),
+        limit: limit.toString(),
+      };
+      if (read !== undefined) params.read = read.toString();
+      const res = await apiClient.get<ApiResponse<ClientNotificationListResponse>>(
+        "/api/v1/client/notifications",
+        { params }
+      );
+      return res.data.data;
+    },
+    refetchInterval:             30_000,
+    refetchIntervalInBackground: false,
+    staleTime:                   20_000,
+  });
+}
+
+/** Mark a client notification as read — PATCH /api/v1/client/notifications/{id}/read */
+export function useMarkClientNotificationRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiClient.patch<ApiResponse<string>>(
+        `/api/v1/client/notifications/${id}/read`
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: clientNotificationKeys.all });
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to mark notification as read."),
   });

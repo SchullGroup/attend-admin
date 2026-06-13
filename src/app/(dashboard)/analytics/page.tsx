@@ -1,435 +1,445 @@
 "use client";
+import { useState } from "react";
 import {
   CalendarDays,
   Users,
-  Building2,
-  Calendar,
-  Eye,
-  MessageSquare,
-  Download,
-  BarChart2,
+  FileText,
   TrendingUp,
+  ChevronLeft,
+  ChevronRight,
+  BarChart2,
 } from "lucide-react";
-import { usePlatformStats, useStakeholders, useEvents, useRecentRegistrations } from "@/api/super-admin";
-import { useParticipantStats } from "@/api/participants";
-import { StatCard } from "@/components/custom/stat-card";
+import {
+  useAnalyticsStats,
+  useAnalyticsByType,
+  useAnalyticsRsvpsByEvent,
+  useAnalyticsFillRateOverview,
+  useAnalyticsEventPerformance,
+  extractStat,
+} from "@/api/client-analytics";
 import { Card } from "@/components/ui/card";
-import { ModuleBadge } from "@/components/custom/module-badge";
 import { Loader } from "@/components/ui/Loader";
-import type { EventModule } from "@/types/mock";
+import { formatDate } from "@/lib/utils";
 
-const MODULE_CONFIG = {
-  AGM: { color: "#374151", bg: "#f3f4f6" },
-  LAUNCH: { color: "#ea6c00", bg: "#fff4eb" },
-  HACKATHON: { color: "#7c22c9", bg: "#f8f0ff" },
-  GENERAL: { color: "#374151", bg: "#eff5ff" },
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const TYPE_FALLBACK_COLORS: Record<string, string> = {
+  AGM:       "#374151",
+  LAUNCH:    "#ea6c00",
+  HACKATHON: "#7c22c9",
+  GENERAL:   "#2563eb",
 };
 
-const FORMAT_COLORS: Record<string, string> = {
-  virtual: "#111827",
-  hybrid: "#9333ea",
-  "in-person": "#374151",
-};
-
-function getModuleFromEvent(event: any): string {
-  if (!event.tags) return "GENERAL";
-  const tagsStr = event.tags.join(" ").toUpperCase();
-  if (tagsStr.includes("AGM") || tagsStr.includes("EGM")) return "AGM";
-  if (tagsStr.includes("LAUNCH") || tagsStr.includes("PRODUCT")) return "LAUNCH";
-  if (tagsStr.includes("HACKATHON") || tagsStr.includes("CHALLENGE")) return "HACKATHON";
-  return "GENERAL";
+function typeColor(item: { eventType?: string; type?: string; color?: string }): string {
+  if (item.color) return item.color;
+  const t = (item.eventType ?? item.type ?? "").toUpperCase();
+  return TYPE_FALLBACK_COLORS[t] ?? "#374151";
 }
 
+function typeBg(color: string): string {
+  return color + "1a"; // 10% opacity
+}
+
+function statusBadge(status: string, dotColor?: string) {
+  const s = status?.toUpperCase();
+  let bg = "#e5e7eb", color = "#374151";
+  if (s === "LIVE" || s === "ACTIVE")   { bg = "#dcfce7"; color = "#16a34a"; }
+  if (s === "UPCOMING")                  { bg = "#dbeafe"; color = "#2563eb"; }
+  if (s === "PAST" || s === "ENDED")    { bg = "#f3f4f6"; color = "#6b7280"; }
+  if (s === "DRAFT")                    { bg = "#fef3c7"; color = "#b45309"; }
+  const dot = dotColor ?? color;
+  return { bg, color, dot };
+}
+
+function fillRateColor(rate: number): string {
+  if (rate >= 80) return "#16a34a";
+  if (rate >= 50) return "#f59e0b";
+  return "#ef4444";
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+function StatCard({
+  title, value, subtitle, icon: Icon, accent,
+}: {
+  title: string; value: string | number; subtitle: string; icon: any; accent: string;
+}) {
+  return (
+    <Card className="attend-card p-5">
+      <div className="flex items-start justify-between mb-3">
+        <div
+          className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
+          style={{ backgroundColor: accent + "18" }}
+        >
+          <Icon className="h-4 w-4" style={{ color: accent }} />
+        </div>
+      </div>
+      <div className="text-2xl font-bold tabular-nums text-[hsl(var(--foreground))] mb-0.5">
+        {typeof value === "number" ? value.toLocaleString() : value}
+      </div>
+      <div className="text-sm font-medium text-[hsl(var(--foreground))]">{title}</div>
+      <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{subtitle}</div>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
 export default function AnalyticsPage() {
-  const { data: platformStatsData, isLoading: statsLoading } = usePlatformStats();
-  const { data: stakeholdersData, isLoading: stkLoading } = useStakeholders(0, 100);
-  const { data: participantStatsData, isLoading: partLoading } = useParticipantStats();
-  const { data: allEventsData, isLoading: eventsLoading } = useEvents("", 0, 100);
-  const { data: registrationsData, isLoading: regLoading } = useRecentRegistrations(0, 10);
+  const [perfPage, setPerfPage] = useState(0);
+  const perfSize = 10;
 
-  if (statsLoading || stkLoading || partLoading || eventsLoading || regLoading) {
-    return <Loader variant="page" text="Loading Analytics..." />;
-  }
+  const { data: stats,       isLoading: statsLoading  } = useAnalyticsStats();
+  const { data: byType,      isLoading: byTypeLoading  } = useAnalyticsByType();
+  const { data: rsvps,       isLoading: rsvpsLoading   } = useAnalyticsRsvpsByEvent();
+  const { data: fillRate,    isLoading: fillLoading     } = useAnalyticsFillRateOverview();
+  const { data: performance, isLoading: perfLoading     } = useAnalyticsEventPerformance(perfPage, perfSize);
 
-  const platformStats = platformStatsData?.data;
-  const stakeholdersList = stakeholdersData?.data?.content || [];
-  const participantStats = participantStatsData?.data || {};
-  const eventsList = allEventsData?.content || [];
-  const recentRegistrations = registrationsData?.data?.content || [];
+  const loading = statsLoading || byTypeLoading || rsvpsLoading || fillLoading || perfLoading;
+  if (loading) return <Loader variant="page" text="Loading Analytics…" />;
 
-  const totalRSVP = platformStats?.totalRsvps ?? 0;
-  const totalEvents = platformStats?.totalEvents ?? 0;
-  const totalStakeholders = platformStats?.totalStakeholders ?? 0;
-  const totalUsers = platformStats?.totalUsers ?? 0;
+  const byTypeItems  = byType?.items ?? [];
+  const rsvpEvents   = rsvps?.events ?? [];
+  const perfEvents   = performance?.events ?? [];
+  const totalPerf    = performance?.totalCount ?? 0;
+  const totalPages   = Math.ceil(totalPerf / perfSize);
 
-  const modules: EventModule[] = ["AGM", "LAUNCH", "HACKATHON", "GENERAL"];
+  // Fill rate — prefer per-event array, fall back to aggregate buckets
+  const fillEvents   = fillRate?.events ?? [];
 
-  const topStakeholders = [...stakeholdersList]
-    .sort((a, b) => (b.eventCount ?? 0) - (a.eventCount ?? 0))
-    .slice(0, 3);
-  const maxEvents = topStakeholders[0]?.eventCount ?? 1;
+  // Safely extract stat values — server may return { color, count } objects
+  const evStat  = extractStat(stats?.totalEvents);
+  const attStat = extractStat(stats?.totalAttendees);
+  const frRaw   = extractStat(stats?.avgFillRate);
+  const docStat = extractStat(stats?.documentsPublished ?? stats?.totalDocuments);
+  const avgFillRate = frRaw.value ?? fillRate?.averageFillRate ?? 0;
 
-  const totalParticipants = participantStats.totalParticipants || participantStats.total || 0;
-  const verifiedParticipants = participantStats.fullKyc || participantStats.verified || 0;
-  const pendingParticipants = participantStats.pendingKyc || participantStats.pending || 0;
-  const suspendedParticipants = participantStats.suspended || 0;
-  const basicParticipants = totalParticipants - verifiedParticipants - pendingParticipants - suspendedParticipants;
-
-  const KYC_ITEMS = [
-    { label: "Full KYC", value: verifiedParticipants, color: "#16a34a" },
-    { label: "Basic KYC", value: Math.max(0, basicParticipants), color: "#3b82f6" },
-    { label: "Pending", value: pendingParticipants, color: "#f59e0b" },
-    { label: "Suspended", value: suspendedParticipants, color: "#9ca3af" },
+  const statCards = [
+    {
+      title:    "Total Events",
+      value:    evStat.value,
+      subtitle: "All events on the platform",
+      icon:     CalendarDays,
+      accent:   evStat.color ?? "#374151",
+    },
+    {
+      title:    "Total Attendees",
+      value:    attStat.value,
+      subtitle: "Across all events",
+      icon:     Users,
+      accent:   attStat.color ?? "#2563eb",
+    },
+    {
+      title:    "Avg Fill Rate",
+      value:    `${Math.round(avgFillRate)}%`,
+      subtitle: "Average capacity utilisation",
+      icon:     TrendingUp,
+      accent:   frRaw.color ?? "#16a34a",
+    },
+    {
+      title:    "Documents Published",
+      value:    docStat.value,
+      subtitle: "Files shared across events",
+      icon:     FileText,
+      accent:   docStat.color ?? "#9333ea",
+    },
   ];
 
+  // RSVPs bar chart — max for scaling
+  const maxRsvp = Math.max(...rsvpEvents.map((e) => e.rsvpCount ?? 0), 1);
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
-            Analytics & Reports
-          </h1>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-            Platform performance overview
-          </p>
-        </div>
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[hsl(var(--border))] text-sm text-[hsl(var(--muted-foreground))]">
-          <Calendar className="h-4 w-4" />
-          Last 30 Days
-        </div>
+    <div className="flex flex-col gap-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Analytics</h1>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+          Platform performance overview
+        </p>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard
-          title="Total Registrations"
-          value={totalRSVP.toLocaleString()}
-          subtitle="RSVPs across all events"
-          icon={Users}
-          accent="#2563eb"
-          trend={{ value: "+14% vs last period", positive: true }}
-        />
-        <StatCard
-          title="Events Hosted"
-          value={totalEvents}
-          subtitle="All time"
-          icon={CalendarDays}
-          accent="#374151"
-        />
-        <StatCard
-          title="Stakeholders Enrolled"
-          value={totalStakeholders}
-          subtitle="Active & pending stakeholder organizations"
-          icon={Building2}
-          accent="#9333ea"
-        />
-        <StatCard
-          title="Platform Users"
-          value={totalUsers.toLocaleString()}
-          subtitle="Total accounts registered"
-          icon={Users}
-          accent="#f97316"
-        />
+      {/* Stat cards */}
+      <div className="grid grid-cols-4 gap-4">
+        {statCards.map((s) => (
+          <StatCard key={s.title} {...s} />
+        ))}
       </div>
 
-      {/* Stakeholders card */}
-      <Card className="attend-card p-5 mb-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Building2 className="h-4 w-4 text-[hsl(var(--primary))]" />
-          <div className="attend-section-title">Top Stakeholders by Events</div>
-        </div>
-        <div className="flex flex-col gap-4">
-          {topStakeholders.map((stk) => {
-            const currentCount = stk.eventCount ?? 0;
-            const pct =
-              maxEvents > 0
-                ? Math.round((currentCount / maxEvents) * 100)
-                : 0;
-            return (
-              <div key={stk.id} className="flex items-center gap-4">
-                <div className="w-36 shrink-0">
-                  <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">
-                    {stk.name}
-                  </p>
-                </div>
-                <div className="flex-1 h-2.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: `${pct}%`, backgroundColor: "#374151" }}
-                  />
-                </div>
-                <span className="text-sm font-semibold tabular-nums w-6 text-right text-[hsl(var(--foreground))]">
-                  {currentCount}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      <div className="grid grid-cols-2 gap-5 mb-5">
+      {/* Events by type + RSVPs by event */}
+      <div className="grid grid-cols-2 gap-5">
+        {/* Events by type */}
         <Card className="attend-card p-5">
-          <div className="attend-section-title mb-4">Events by Module</div>
-          <div className="grid grid-cols-2 gap-3">
-            {modules.map((mod) => {
-              const modEvents = eventsList.filter((e) => getModuleFromEvent(e) === mod);
-              const modRSVP = modEvents.reduce((s, e) => s + (e.registrationCount ?? 0), 0);
-              const cfg = MODULE_CONFIG[mod as keyof typeof MODULE_CONFIG];
-              return (
-                <div
-                  key={mod}
-                  className="rounded-xl p-4 border border-[hsl(var(--border))]"
-                  style={{ backgroundColor: cfg.bg }}
-                >
-                  <ModuleBadge module={mod} className="mb-3" />
-                  <div
-                    className="text-2xl font-bold tabular-nums mt-2"
-                    style={{ color: cfg.color }}
-                  >
-                    {modEvents.length}
-                  </div>
-                  <div
-                    className="text-xs mt-0.5"
-                    style={{ color: cfg.color + "aa" }}
-                  >
-                    Events
-                  </div>
-                  <div
-                    className="text-sm font-semibold mt-2 tabular-nums"
-                    style={{ color: cfg.color }}
-                  >
-                    {modRSVP.toLocaleString()}
-                  </div>
-                  <div className="text-xs" style={{ color: cfg.color + "aa" }}>
-                    Total RSVPs
-                  </div>
-                </div>
-              );
-            })}
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart2 className="h-4 w-4 text-[hsl(var(--primary))]" />
+            <span className="attend-section-title">Events by Type</span>
           </div>
-        </Card>
-
-        <Card className="attend-card p-5">
-          <div className="attend-section-title mb-4">
-            KYC Verification Breakdown
-          </div>
-          <div className="flex flex-col gap-3">
-            {KYC_ITEMS.map((item) => {
-              const pct =
-                totalParticipants > 0
-                  ? Math.round((item.value / totalParticipants) * 100)
-                  : 0;
-              return (
-                <div key={item.label} className="flex items-center gap-3">
-                  <span className="text-xs text-[hsl(var(--muted-foreground))] w-20 shrink-0">
-                    {item.label}
-                  </span>
-                  <div className="flex-1 h-2.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${pct}%`, backgroundColor: item.color }}
-                    />
-                  </div>
-                  <span className="text-xs font-semibold tabular-nums w-6 text-right">
-                    {item.value}
-                  </span>
-                  <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums w-10 text-right">
-                    {pct}%
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-5 pt-4 border-t border-[hsl(var(--border))]">
-            <div className="attend-section-title mb-3">
-              Event Format Distribution
+          {byTypeItems.length === 0 ? (
+            <div className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">
+              No data available.
             </div>
-            {(["VIRTUAL", "HYBRID", "IN_PERSON"] as const).map((fmt) => {
-              const count = eventsList.filter((e) => (e.format ?? "").toUpperCase() === fmt).length;
-              const pct =
-                eventsList.length > 0
-                  ? Math.round((count / eventsList.length) * 100)
-                  : 0;
-              return (
-                <div key={fmt} className="flex items-center gap-3 mb-2">
-                  <span className="text-xs text-[hsl(var(--muted-foreground))] w-20 capitalize shrink-0">
-                    {fmt.toLowerCase().replace("_", " ")}
-                  </span>
-                  <div className="flex-1 h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${pct}%`,
-                        backgroundColor: FORMAT_COLORS[fmt.toLowerCase() as keyof typeof FORMAT_COLORS],
-                      }}
-                    />
-                  </div>
-                  <span className="text-xs font-semibold tabular-nums w-6 text-right">
-                    {count}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      </div>
-
-      {/* ── Engagement Metrics ── */}
-      <Card className="attend-card p-5 mb-5">
-        <div className="flex items-center gap-2 mb-4">
-          <BarChart2 className="h-4 w-4 text-[hsl(var(--primary))]" />
-          <div className="attend-section-title">Engagement Metrics</div>
-        </div>
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          {[
-            {
-              label: "Avg Watch Time",
-              value: "47 min",
-              icon: Eye,
-              accent: "#2563eb",
-              subtitle: "per attendee",
-            },
-            {
-              label: "Poll Response Rate",
-              value: "68%",
-              icon: BarChart2,
-              accent: "#16a34a",
-              subtitle: "of active polls",
-            },
-            {
-              label: "Q&A Participation",
-              value: "12%",
-              icon: MessageSquare,
-              accent: "#9333ea",
-              subtitle: "of attendees",
-            },
-            {
-              label: "Document Downloads",
-              value: "2,341",
-              icon: Download,
-              accent: "#f97316",
-              subtitle: "total downloads",
-            },
-          ].map((stat) => (
-            <StatCard
-              key={stat.label}
-              title={stat.label}
-              value={stat.value}
-              subtitle={stat.subtitle}
-              icon={stat.icon}
-              accent={stat.accent}
-            />
-          ))}
-        </div>
-
-        <div className="attend-section-title mb-3">Per-Event Breakdown</div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="attend-table-header">
-                <th className="px-4 py-3 text-left">Event</th>
-                <th className="px-4 py-3 text-right">RSVPs</th>
-                <th className="px-4 py-3 text-right">Attended</th>
-                <th className="px-4 py-3 text-right">Attendance Rate</th>
-                <th className="px-4 py-3 text-right">Avg Watch</th>
-                <th className="px-4 py-3 text-right">Poll Responses</th>
-              </tr>
-            </thead>
-            <tbody>
-              {eventsList.slice(0, 4).map((event) => {
-                const rsvps = event.registrationCount ?? 0;
-                const attended = Math.round(rsvps * 0.85); // Simulated live attendance rate for visual completeness
-                const rate = 85;
-                const avgWatch = "45 min";
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {byTypeItems.map((item) => {
+                const label = item.eventType ?? item.type ?? "Unknown";
+                const count = item.count ?? item.eventCount ?? 0;
+                const pct   = item.percentage ?? 0;
+                const color = typeColor(item);
+                const bg    = typeBg(color);
                 return (
-                  <tr key={event.id} className="attend-table-row">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="h-2 w-2 rounded-full shrink-0"
-                          style={{ backgroundColor: "#2563eb" }}
-                        />
-                        <span className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[240px] truncate">
-                          {event.title}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right tabular-nums text-[hsl(var(--muted-foreground))]">
-                      {rsvps.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right tabular-nums font-medium">
-                      {attended.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span
-                        className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700"
-                      >
-                        {rate}%
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right tabular-nums text-[hsl(var(--muted-foreground))]">
-                      {avgWatch}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right tabular-nums text-[hsl(var(--muted-foreground))]">
-                      —
-                    </td>
-                  </tr>
+                  <div
+                    key={label}
+                    className="rounded-xl p-4 border border-[hsl(var(--border))]"
+                    style={{ backgroundColor: bg }}
+                  >
+                    <span
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold mb-3"
+                      style={{ backgroundColor: color + "22", color }}
+                    >
+                      {label}
+                    </span>
+                    <div className="text-2xl font-bold tabular-nums" style={{ color }}>
+                      {count}
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: color + "aa" }}>
+                      Events · {Math.round(pct)}%
+                    </div>
+                    {item.totalRsvps != null && (
+                      <>
+                        <div className="text-sm font-semibold mt-2 tabular-nums" style={{ color }}>
+                          {item.totalRsvps.toLocaleString()}
+                        </div>
+                        <div className="text-xs" style={{ color: color + "aa" }}>Total RSVPs</div>
+                      </>
+                    )}
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
+            </div>
+          )}
+        </Card>
+
+        {/* RSVPs by event bar chart */}
+        <Card className="attend-card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp className="h-4 w-4 text-[hsl(var(--primary))]" />
+            <span className="attend-section-title">RSVPs by Event</span>
+          </div>
+          {rsvpEvents.length === 0 ? (
+            <div className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">
+              No RSVP data available.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 overflow-y-auto max-h-[320px] pr-1">
+              {rsvpEvents.map((ev) => {
+                const barPct  = maxRsvp > 0 ? Math.round((ev.rsvpCount / maxRsvp) * 100) : 0;
+                const barColor = ev.barColor ?? rsvps?.barColor ?? "#2563eb";
+                return (
+                  <div key={ev.eventId}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span
+                        className="text-xs text-[hsl(var(--foreground))] font-medium truncate max-w-[60%]"
+                        title={ev.eventTitle}
+                      >
+                        {ev.eventTitle}
+                      </span>
+                      <span className="text-xs tabular-nums text-[hsl(var(--muted-foreground))]">
+                        {ev.rsvpCount.toLocaleString()} / {ev.capacity.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="h-2.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${barPct}%`, backgroundColor: barColor }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Fill Rate Overview */}
+      <Card className="attend-card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-[hsl(var(--primary))]" />
+            <span className="attend-section-title">Fill Rate Overview</span>
+          </div>
+          <span className="text-sm font-semibold text-[hsl(var(--muted-foreground))]">
+            Avg: {Math.round(avgFillRate)}%
+          </span>
         </div>
+
+        {fillEvents.length > 0 ? (
+          /* Per-event fill rate bars */
+          <div className="flex flex-col gap-3 overflow-y-auto max-h-[280px]">
+            {fillEvents.map((ev) => {
+              const pct   = Math.min(Math.round(ev.fillRate ?? 0), 100);
+              const color = ev.barColor ?? fillRate?.barColor ?? fillRateColor(pct);
+              return (
+                <div key={ev.eventId}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-[hsl(var(--foreground))] truncate max-w-[60%]">
+                      {ev.eventTitle}
+                    </span>
+                    <span className="text-xs tabular-nums text-[hsl(var(--muted-foreground))]">
+                      {pct}% · {ev.rsvpCount}/{ev.capacity}
+                    </span>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${pct}%`, backgroundColor: color }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* Aggregate bucket breakdown */
+          <div className="grid grid-cols-4 gap-4">
+            {[
+              { label: "Fully Booked",   value: fillRate?.fullyBooked   ?? 0, color: "#16a34a" },
+              { label: "Over Half Full", value: fillRate?.overHalfFull  ?? 0, color: "#3b82f6" },
+              { label: "Under Half Full",value: fillRate?.underHalfFull ?? 0, color: "#f59e0b" },
+              { label: "Empty",          value: fillRate?.empty         ?? 0, color: "#9ca3af" },
+            ].map((bucket) => (
+              <div key={bucket.label} className="rounded-xl p-4 border border-[hsl(var(--border))] text-center">
+                <div className="text-2xl font-bold tabular-nums" style={{ color: bucket.color }}>
+                  {bucket.value}
+                </div>
+                <div className="text-xs text-[hsl(var(--muted-foreground))] mt-1">{bucket.label}</div>
+                <div className="mt-3 h-1.5 rounded-full" style={{ backgroundColor: bucket.color + "33" }}>
+                  <div className="h-full rounded-full" style={{ width: "100%", backgroundColor: bucket.color }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
+      {/* Event Performance Table */}
       <Card className="attend-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
-          <h2 className="font-semibold text-[hsl(var(--foreground))]">
-            Recent Activity Log
-          </h2>
+        <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BarChart2 className="h-4 w-4 text-[hsl(var(--primary))]" />
+            <span className="font-semibold text-[hsl(var(--foreground))]">Event Performance</span>
+          </div>
+          {totalPerf > 0 && (
+            <span className="text-xs text-[hsl(var(--muted-foreground))]">
+              {totalPerf} event{totalPerf !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
+
         <table className="w-full">
           <thead>
             <tr className="attend-table-header">
-              <th className="px-5 py-3 text-left">Action</th>
-              <th className="px-5 py-3 text-left">By</th>
-              <th className="px-5 py-3 text-left">Context (Event)</th>
-              <th className="px-5 py-3 text-left">Time</th>
+              <th className="px-5 py-3 text-left">Event</th>
+              <th className="px-5 py-3 text-left">Date</th>
+              <th className="px-5 py-3 text-right">RSVPs</th>
+              <th className="px-5 py-3 text-right">Capacity</th>
+              <th className="px-5 py-3 text-right">Fill Rate</th>
+              <th className="px-5 py-3 text-left">Status</th>
             </tr>
           </thead>
           <tbody>
-            {recentRegistrations.slice(0, 5).map((log) => (
-              <tr key={log.id} className="attend-table-row">
-                <td className="px-5 py-3">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-3.5 w-3.5 text-[hsl(var(--primary))]" />
-                    <span className="text-sm text-[hsl(var(--foreground))]">
-                      New RSVP Registration
+            {perfEvents.map((ev) => {
+              const title  = ev.eventTitle ?? ev.title ?? "—";
+              const rate   = Math.round(ev.fillRate ?? 0);
+              const bs     = statusBadge(ev.status, ev.dotColor);
+              return (
+                <tr key={ev.eventId} className="attend-table-row">
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 rounded-full shrink-0"
+                        style={{ backgroundColor: bs.dot }}
+                      />
+                      <span className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[240px] truncate">
+                        {title}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                    {ev.date ? formatDate(ev.date) : "—"}
+                  </td>
+                  <td className="px-5 py-3 text-sm text-right tabular-nums text-[hsl(var(--muted-foreground))]">
+                    {(ev.rsvpCount ?? 0).toLocaleString()}
+                  </td>
+                  <td className="px-5 py-3 text-sm text-right tabular-nums text-[hsl(var(--muted-foreground))]">
+                    {(ev.capacity ?? 0).toLocaleString()}
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <div className="w-16 h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: `${Math.min(rate, 100)}%`, backgroundColor: fillRateColor(rate) }}
+                        />
+                      </div>
+                      <span
+                        className="text-xs font-semibold tabular-nums w-9 text-right"
+                        style={{ color: fillRateColor(rate) }}
+                      >
+                        {rate}%
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3">
+                    <span
+                      className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                      style={{ backgroundColor: bs.bg, color: bs.color }}
+                    >
+                      {ev.status}
                     </span>
-                  </div>
-                </td>
-                <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-                  {log.participantName || log.participantEmail}
-                </td>
-                <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-                  {log.eventTitle}
-                </td>
-                <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-                  {new Date(log.registeredAt).toLocaleString("en-NG", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                </td>
-              </tr>
-            ))}
-            {recentRegistrations.length === 0 && (
+                  </td>
+                </tr>
+              );
+            })}
+            {perfEvents.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">
-                  No recent registrations logged.
+                <td colSpan={6} className="py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
+                  No event performance data available.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="px-5 py-3 border-t border-[hsl(var(--border))] flex items-center justify-between">
+            <span className="text-xs text-[hsl(var(--muted-foreground))]">
+              Page {perfPage + 1} of {totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPerfPage((p) => Math.max(0, p - 1))}
+                disabled={perfPage === 0}
+                className="h-7 w-7 rounded-md border border-[hsl(var(--border))] flex items-center justify-center disabled:opacity-40 hover:bg-[hsl(var(--muted))] transition-colors"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setPerfPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={perfPage >= totalPages - 1}
+                className="h-7 w-7 rounded-md border border-[hsl(var(--border))] flex items-center justify-center disabled:opacity-40 hover:bg-[hsl(var(--muted))] transition-colors"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   );

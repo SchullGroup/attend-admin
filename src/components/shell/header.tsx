@@ -9,9 +9,47 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useGetMe, useLogout } from "@/api/auth/hooks";
-import { useAdminNotifications, useMarkNotificationRead } from "@/api/notifications";
+import { useClientStakeholder } from "@/api/client-organisation";
+import {
+  useAdminNotifications,
+  useMarkNotificationRead,
+  useClientNotifications,
+  useMarkClientNotificationRead,
+} from "@/api/notifications";
 import { useGlobalSearch } from "@/api/super-admin";
 import { timeAgo } from "@/lib/utils";
+
+// ---------------------------------------------------------------------------
+// Admin roles set (mirrors events/[id]/page.tsx logic)
+// ---------------------------------------------------------------------------
+const ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
+
+// ---------------------------------------------------------------------------
+// Web Audio notification chime
+// ---------------------------------------------------------------------------
+function playNotificationChime() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    // Two-tone soft chime: E5 then G#5
+    const notes = [659.25, 830.61];
+    notes.forEach((freq, i) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const start = ctx.currentTime + i * 0.18;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.18, start + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.55);
+      osc.start(start);
+      osc.stop(start + 0.55);
+    });
+  } catch {
+    // AudioContext not available (SSR or blocked)
+  }
+}
 
 const ROUTE_LABELS: Record<string, string> = {
   "/": "Dashboard",
@@ -26,6 +64,8 @@ const ROUTE_LABELS: Record<string, string> = {
   "/participants/kyc": "KYC Queue",
   "/documents": "Document Vault",
   "/analytics": "Analytics",
+  "/votes": "Vote Records",
+  "/notifications": "Notifications",
   "/settings": "Platform Settings",
   "/settings/roles": "Roles & Access",
 };
@@ -101,12 +141,44 @@ export function Header() {
     router.push(href);
   }
 
-  // ── Notifications ──────────────────────────────────────────────────────────
-  const { data: unreadData }        = useAdminNotifications(0, 1, false);
-  const unreadCount                 = unreadData?.data?.totalElements ?? 0;
-  const { data: notificationsData } = useAdminNotifications(0, 5);
-  const notifications               = notificationsData?.data?.content || [];
-  const { mutate: markAsRead }    = useMarkNotificationRead();
+  // ── Role detection (for picking the right notifications endpoint) ──────────
+  const isAdmin = ADMIN_ROLES.has(currentUser?.role?.toLowerCase() ?? "");
+
+  // ── Stakeholder logo for client users ──────────────────────────────────────
+  const { data: stakeholder } = useClientStakeholder({ enabled: !!currentUser && !isAdmin });
+  const avatarSrc = currentUser?.avatarUrl || (currentUser as any)?.logoUrl || stakeholder?.logoUrl || null;
+
+  // ── Admin notifications ────────────────────────────────────────────────────
+  const { data: adminUnreadData } = useAdminNotifications(0, 1, false);
+  const { data: adminNotifData  } = useAdminNotifications(0, 5);
+  const { mutate: markAdminRead } = useMarkNotificationRead();
+
+  // ── Client notifications ───────────────────────────────────────────────────
+  const { data: clientNotifData  } = useClientNotifications(0, 5);
+  const { mutate: markClientRead } = useMarkClientNotificationRead();
+
+  // ── Unified values ─────────────────────────────────────────────────────────
+  const unreadCount = isAdmin
+    ? (adminUnreadData?.data?.totalElements ?? 0)
+    : (clientNotifData?.unreadCount ?? 0);
+
+  const notifications: any[] = isAdmin
+    ? (adminNotifData?.data?.content ?? [])
+    : (clientNotifData?.notifications ?? []);
+
+  function markAsRead(id: string) {
+    if (isAdmin) markAdminRead(id);
+    else         markClientRead(id);
+  }
+
+  // ── Notification sound — chime when unread count increases ─────────────────
+  const prevUnread = useRef(unreadCount);
+  useEffect(() => {
+    if (unreadCount > prevUnread.current) {
+      playNotificationChime();
+    }
+    prevUnread.current = unreadCount;
+  }, [unreadCount]);
 
   function handleLogout() { logout(); }
 
@@ -262,7 +334,7 @@ export function Header() {
                 notifications.map((n: any) => (
                   <div
                     key={n.id}
-                    onClick={() => { if (!n.read) markAsRead(n.id); }}
+                    onClick={() => { if (!n.read) markAsRead(n.id as string); }}
                     className={`p-3 cursor-pointer hover:bg-[hsl(var(--muted)/0.4)] transition-colors ${!n.read ? "bg-[hsl(var(--primary)/0.03)]" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -286,8 +358,8 @@ export function Header() {
             <DropdownMenuTrigger asChild>
               <button className="focus:outline-none">
                 <Avatar className="h-8 w-8 cursor-pointer ring-2 ring-[hsl(var(--border))]">
-                  {currentUser.avatarUrl && (
-                    <AvatarImage src={currentUser.avatarUrl} alt={currentUser.fullName} className="object-cover" />
+                  {avatarSrc && (
+                    <AvatarImage src={avatarSrc} alt={currentUser.fullName} className="object-cover" />
                   )}
                   <AvatarFallback className="text-xs bg-[hsl(var(--foreground)/0.1)] text-[hsl(var(--foreground))]">
                     {currentUser.initials || getInitials(currentUser.fullName)}
@@ -298,8 +370,8 @@ export function Header() {
             <DropdownMenuContent align="end" className="w-56">
               <div className="flex items-center gap-3 px-3 py-2.5 border-b border-[hsl(var(--border))]">
                 <Avatar className="h-9 w-9 shrink-0">
-                  {currentUser.avatarUrl && (
-                    <AvatarImage src={currentUser.avatarUrl} alt={currentUser.fullName} className="object-cover" />
+                  {avatarSrc && (
+                    <AvatarImage src={avatarSrc} alt={currentUser.fullName} className="object-cover" />
                   )}
                   <AvatarFallback className="text-xs bg-[hsl(var(--foreground)/0.1)] text-[hsl(var(--foreground))]">
                     {currentUser.initials || getInitials(currentUser.fullName)}

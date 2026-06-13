@@ -15,30 +15,57 @@ import { ApiResponse } from "@/types/api";
 // Types — aligned with swagger schemas
 // ---------------------------------------------------------------------------
 
+/** A stat field the server may return as a plain number OR as { count, color }. */
+export type StatField = number | { count: number; color?: string };
+
+/** Extract the numeric value and optional accent color from a StatField. */
+export function extractStat(val: StatField | undefined): { value: number; color?: string } {
+  if (val == null) return { value: 0 };
+  if (typeof val === "number") return { value: val };
+  return { value: (val as any).count ?? 0, color: (val as any).color ?? undefined };
+}
+
 export interface AnalyticsStatsResponse {
-  totalEvents:       number;
-  totalRsvps:        number;
-  totalAttendees:    number;
-  avgFillRate:       number;
-  totalDocuments:    number;
+  totalEvents:          StatField;
+  totalRsvps:           StatField;
+  totalAttendees:       StatField;
+  avgFillRate:          StatField;
+  totalDocuments:       StatField;
+  documentsPublished?:  StatField;
 }
 
 export interface ByTypeItem {
-  eventType:  string;
-  count:      number;
-  percentage: number;
+  eventType:   string;
+  type?:       string;
+  count:       number;
+  eventCount?: number;
+  percentage:  number;
+  totalRsvps?: number;
+  color?:      string;
 }
 
 export interface ByTypeResponse {
   items: ByTypeItem[];
 }
 
+export interface FillRateEventItem {
+  eventId:    string;
+  eventTitle: string;
+  fillRate:   number;
+  capacity:   number;
+  rsvpCount:  number;
+  barColor?:  string;
+}
+
 export interface FillRateOverviewResponse {
-  averageFillRate: number;
-  fullyBooked:     number;
-  overHalfFull:    number;
-  underHalfFull:   number;
-  empty:           number;
+  averageFillRate:  number;
+  fullyBooked:      number;
+  overHalfFull:     number;
+  underHalfFull:    number;
+  empty:            number;
+  yaxisMarkers?:    number[];
+  barColor?:        string;
+  events?:          FillRateEventItem[];
 }
 
 export interface RsvpsByEventItem {
@@ -47,15 +74,18 @@ export interface RsvpsByEventItem {
   rsvpCount:  number;
   capacity:   number;
   fillRate:   number;
+  barColor?:  string;
 }
 
 export interface RsvpsByEventResponse {
-  events: RsvpsByEventItem[];
+  events:    RsvpsByEventItem[];
+  barColor?: string;
 }
 
 export interface EventPerformanceItem {
   eventId:       string;
   eventTitle:    string;
+  title?:        string;
   eventType:     string;
   date:          string;
   rsvpCount:     number;
@@ -63,6 +93,7 @@ export interface EventPerformanceItem {
   fillRate:      number;
   attendeeCount: number;
   status:        string;
+  dotColor?:     string;
 }
 
 export interface EventPerformanceResponse {

@@ -7,6 +7,8 @@ export interface AuthResponse {
   firstName: string;
   lastName: string;
   roles: string[];
+  logoUrl?: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface MeResponse {
@@ -18,6 +20,7 @@ export interface MeResponse {
   role: string;
   email: string;
   avatarUrl: string | null;
+  logoUrl?: string | null;
 }
 
 export type AuthApiResponse = ApiResponse<AuthResponse>;

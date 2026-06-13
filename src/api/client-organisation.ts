@@ -82,11 +82,26 @@ export interface InviteMemberRequest {
   role:      TeamMemberRole;
 }
 
+// Stakeholder profile (GET /api/v1/client/stakeholder)
+export interface StakeholderProfile {
+  id:        string;
+  name:      string;
+  email:     string;
+  phone?:    string;
+  address?:  string;
+  industry?: string;
+  website?:  string;
+  logoUrl?:  string | null;
+  status:    string;
+  createdAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Query keys
 // ---------------------------------------------------------------------------
 export const clientOrgKeys = {
   all:         ["clientOrg"] as const,
+  stakeholder: ["clientOrg", "stakeholder"] as const,
   profile:     ["clientOrg", "profile"] as const,
   team:        (role: string, status: string, page: number, size: number) =>
                  ["clientOrg", "team", { role, status, page, size }] as const,
@@ -97,6 +112,25 @@ export const clientOrgKeys = {
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
+
+/**
+ * Stakeholder profile for the authenticated user's organisation.
+ * GET /api/v1/client/stakeholder
+ * Returns logoUrl which is the primary branding image.
+ */
+export function useClientStakeholder(opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: clientOrgKeys.stakeholder,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<StakeholderProfile>>(
+        "/api/v1/client/stakeholder"
+      );
+      return res.data.data;
+    },
+    staleTime: 300_000,
+    enabled: opts?.enabled !== false,
+  });
+}
 
 /** Full organisation profile including branding. */
 export function useOrganisationProfile() {

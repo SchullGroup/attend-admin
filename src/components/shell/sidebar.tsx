@@ -22,11 +22,15 @@ import {
   PlusCircle,
   ScrollText,
   Users2,
+  Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGetMe, useLogout } from "@/api/auth/hooks";
+import { useClientStakeholder } from "@/api/client-organisation";
 import { usePendingEnrollments } from "@/api/super-admin";
 import Cookies from "js-cookie";
+
+const ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
 
 // ─── RBAC permission engine ──────────────────────────────────────────────────
 //
@@ -141,13 +145,21 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
+    label: "Votes",
+    clientOnly: true,
+    items: [
+      { title: "Vote Records", icon: Vote, href: "/votes" },
+    ],
+  },
+  {
     label: "System",
     items: [
-      { title: "Documents",    icon: FolderOpen, href: "/documents" },
-      { title: "Analytics",    icon: BarChart3,  href: "/analytics" },
-      { title: "Audit Log",    icon: ScrollText, href: "/audit" },
-      { title: "Settings",     icon: Settings,   href: "/settings" },
-      { title: "Team Members", icon: Users2,     href: "/settings/team", clientOnly: true },
+      { title: "Documents",      icon: FolderOpen, href: "/documents" },
+      { title: "Analytics",      icon: BarChart3,  href: "/analytics" },
+      { title: "Notifications",  icon: Bell,       href: "/notifications" },
+      { title: "Audit Log",      icon: ScrollText, href: "/audit" },
+      { title: "Settings",       icon: Settings,   href: "/settings" },
+      { title: "Team Members",   icon: Users2,     href: "/settings/team", clientOnly: true },
     ],
   },
 ];
@@ -159,6 +171,7 @@ const ALL_HREFS = [
   "/registrars", "/registrars/enrol",
   "/registers", "/registers/enrol",
   "/settings/team",
+  "/votes", "/notifications",
 ];
 
 function isActive(href: string, pathname: string): boolean {
@@ -197,6 +210,9 @@ export function Sidebar() {
   const { mutate: logout } = useLogout();
 
   const { data: pendingEnrollmentsData } = usePendingEnrollments(0, 1);
+
+  // Stakeholder logo — for client users whose avatarUrl is null
+  const { data: stakeholder } = useClientStakeholder({ enabled: !!currentUser && !ADMIN_ROLES.has(normaliseRole(currentUser?.role)) });
   const pendingCount = pendingEnrollmentsData?.data?.totalCount ?? 0;
 
   // Normalise once — used for both section filters and per-item action gates.
@@ -327,9 +343,9 @@ export function Sidebar() {
       {hasToken && (
         <div className="p-3 shrink-0" style={{ borderTop: "1px solid #e2e8f0" }}>
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
-            {currentUser?.avatarUrl ? (
+            {(currentUser?.avatarUrl || currentUser?.logoUrl || stakeholder?.logoUrl) ? (
               <img
-                src={currentUser.avatarUrl}
+                src={(currentUser?.avatarUrl || currentUser?.logoUrl || stakeholder?.logoUrl)!}
                 alt={displayName}
                 className="h-8 w-8 rounded-full object-cover shrink-0 ring-2 ring-[hsl(var(--border))]"
               />
