@@ -105,11 +105,11 @@ const SECTIONS: NavSection[] = [
   {
     label: "Platform Events",
     items: [
-      { title: "Create Event",      icon: PlusCircle,   href: "/events/create", clientOnly: true, action: "create_event"       },
+      { title: "Create Event",      icon: PlusCircle,   href: "/events/create", clientOnly: true, action: "create_event" },
       { title: "All Events",        icon: CalendarDays, href: "/events" },
       { title: "Live Control Room", icon: Radio,        href: "/events/live",   action: "live_control_room" },
       { title: "QR Check-In",       icon: QrCode,       href: "/events/qr-checkin" },
-      { title: "Vote Results",      icon: Vote,         href: "/events/votes" },
+      { title: "Vote Records",      icon: Vote,         href: "/votes",         clientOnly: true },
     ],
   },
   {
@@ -142,13 +142,6 @@ const SECTIONS: NavSection[] = [
     label: "People",
     items: [
       { title: "All Users", icon: Users, href: "/participants", superAdminOnly: true },
-    ],
-  },
-  {
-    label: "Votes",
-    clientOnly: true,
-    items: [
-      { title: "Vote Records", icon: Vote, href: "/votes" },
     ],
   },
   {
