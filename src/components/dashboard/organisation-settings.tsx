@@ -56,45 +56,49 @@ export function OrganisationSettings() {
   // Sync form when profile loads
   useEffect(() => {
     if (!profile) return;
-    setCompanyName(profile.companyName ?? "");
-    setWebsite(profile.website         ?? "");
-    setContactEmail(profile.contactEmail ?? "");
-    setPhone(profile.phone             ?? "");
+    const info = profile.organisationInfo;
+    setCompanyName(info?.companyName  ?? "");
+    setWebsite(info?.website          ?? "");
+    setContactEmail(info?.contactEmail ?? "");
+    setPhone(info?.phone              ?? "");
   }, [profile]);
 
   function handleReset() {
     if (!profile) return;
-    setCompanyName(profile.companyName ?? "");
-    setWebsite(profile.website         ?? "");
-    setContactEmail(profile.contactEmail ?? "");
-    setPhone(profile.phone             ?? "");
+    const info = profile.organisationInfo;
+    setCompanyName(info?.companyName  ?? "");
+    setWebsite(info?.website          ?? "");
+    setContactEmail(info?.contactEmail ?? "");
+    setPhone(info?.phone              ?? "");
   }
 
   function handleSave() {
     if (!profile) return;
+    const info = profile.organisationInfo;
     const payload: UpdateOrganisationInfoRequest = {
       companyName,
       website:      website      || undefined,
       contactEmail,
       phone:        phone        || undefined,
       // Non-mutable fields sent back unchanged to satisfy API contract
-      rcNumber:     profile.rcNumber,
-      industry:     profile.industry,
+      rcNumber:     info?.rcNumber  ?? "",
+      industry:     info?.industry,
     };
     updateMutation.mutate(payload);
   }
 
   // Branding values
-  const logoUrl      = profile?.logoUrl;
-  const primaryColor = profile?.primaryColor ?? "#374151";
-  const initials     = (profile?.companyName ?? "?")
+  const logoUrl      = profile?.branding?.logoUrl;
+  const primaryColor = profile?.branding?.primaryColor ?? "#374151";
+  const initials     = (profile?.organisationInfo?.companyName ?? "?")
     .split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 
+  const info = profile?.organisationInfo;
   const isDirty =
-    companyName !== (profile?.companyName ?? "") ||
-    website     !== (profile?.website     ?? "") ||
-    contactEmail !== (profile?.contactEmail ?? "") ||
-    phone       !== (profile?.phone       ?? "");
+    companyName  !== (info?.companyName  ?? "") ||
+    website      !== (info?.website      ?? "") ||
+    contactEmail !== (info?.contactEmail ?? "") ||
+    phone        !== (info?.phone        ?? "");
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -128,7 +132,7 @@ export function OrganisationSettings() {
           <div className="h-4 w-32 rounded bg-[hsl(var(--muted))] animate-pulse" />
         ) : (
           <p className="text-sm font-semibold text-[hsl(var(--foreground))] text-center">
-            {profile?.companyName ?? "—"}
+            {profile?.organisationInfo?.companyName ?? "—"}
           </p>
         )}
 
@@ -152,17 +156,7 @@ export function OrganisationSettings() {
           )}
         </div>
 
-        {/* Status badge */}
-        {!isLoading && profile?.status && (
-          <div className="w-full mt-auto pt-4 border-t border-[hsl(var(--border))]">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-[hsl(var(--muted-foreground))]">Account status</span>
-              <span className={`font-semibold ${profile.status === "ACTIVE" ? "text-green-600" : "text-amber-600"}`}>
-                {profile.status}
-              </span>
-            </div>
-          </div>
-        )}
+        {/* Status badge — omitted (not in new profile response) */}
       </Card>
 
       {/* ── Right: Editable form ── */}
@@ -245,8 +239,8 @@ export function OrganisationSettings() {
             </div>
 
             {/* Read-only — non-mutable platform assets */}
-            <ReadOnlyField label="Industry" value={profile?.industry} />
-            <ReadOnlyField label="RC Number" value={profile?.rcNumber} />
+            <ReadOnlyField label="Industry" value={profile?.organisationInfo?.industry} />
+            <ReadOnlyField label="RC Number" value={profile?.organisationInfo?.rcNumber} />
           </div>
         )}
 

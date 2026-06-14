@@ -26,18 +26,36 @@ import { ApiResponse } from "@/types/api";
 // Types
 // ---------------------------------------------------------------------------
 
-export interface CompanyProfileResponse {
-  id:              string;
-  companyName:     string;
-  industry?:       string;
-  rcNumber:        string;
-  contactEmail:    string;
-  phone?:          string;
-  website?:        string;
-  logoUrl?:        string;
-  primaryColor?:   string;
-  status:          string;
-  createdAt:       string;
+/** Nested shape returned by GET /api/v1/client/organisation/profile */
+export interface OrgInfoFields {
+  companyName:  string;
+  industry?:    string;
+  rcNumber:     string;
+  contactEmail: string;
+  phone?:       string;
+  website?:     string;
+}
+
+export interface OrgBrandingFields {
+  primaryColor?: string;
+  logoUrl?:      string;
+  logoInitial?:  string;
+}
+
+export interface OrganisationProfileResponse {
+  id:               string;
+  organisationInfo: OrgInfoFields;
+  branding:         OrgBrandingFields;
+}
+
+/** Flat shape kept for legacy consumers — remove if unused */
+export interface CompanyProfileResponse extends OrgInfoFields {
+  id:            string;
+  logoUrl?:      string;
+  primaryColor?: string;
+  logoInitial?:  string;
+  status?:       string;
+  createdAt?:    string;
 }
 
 export interface UpdateOrganisationInfoRequest {
@@ -137,7 +155,7 @@ export function useOrganisationProfile() {
   return useQuery({
     queryKey: clientOrgKeys.profile,
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<CompanyProfileResponse>>(
+      const res = await apiClient.get<ApiResponse<OrganisationProfileResponse>>(
         "/api/v1/client/organisation/profile"
       );
       return res.data.data;
@@ -212,22 +230,45 @@ export function useUpdateOrganisationInfo() {
   });
 }
 
-/** Upload company logo (multipart/form-data). Pass a File object. */
+/**
+ * Upload org logo — two-step:
+ *   1. POST /api/v1/upload (multipart) → { fileUrl, cloudinaryPublicId }
+ *   2. PUT  /api/v1/client/organisation/profile/branding/logo { logoUrl, cloudinaryPublicId }
+ */
 export function useUploadOrgLogo() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (file: File) => {
+      // Step 1 — upload to Cloudinary via backend proxy
       const form = new FormData();
       form.append("file", file);
-      const res = await apiClient.post<ApiResponse<any>>(
-        "/api/v1/client/organisation/profile/branding/logo",
+      const uploadRes = await apiClient.post<ApiResponse<Record<string, string>>>(
+        "/api/v1/upload",
         form,
-        { headers: { "Content-Type": undefined } }
+        {
+          params:           { folder: "logos" },
+          headers:          { "Content-Type": undefined },
+          maxBodyLength:    Infinity,
+          maxContentLength: Infinity,
+          timeout:          60_000,
+        }
+      );
+      const uploadData         = uploadRes.data?.data ?? {};
+      const logoUrl            = uploadData.fileUrl ?? uploadData.secure_url ?? uploadData.url ?? "";
+      const cloudinaryPublicId = uploadData.cloudinaryPublicId ?? uploadData.public_id ?? undefined;
+
+      if (!logoUrl) throw new Error("Upload failed — no URL returned.");
+
+      // Step 2 — save URL to org profile
+      const res = await apiClient.put<ApiResponse<any>>(
+        "/api/v1/client/organisation/profile/branding/logo",
+        { logoUrl, ...(cloudinaryPublicId ? { cloudinaryPublicId } : {}) }
       );
       return res.data.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: clientOrgKeys.profile });
+      queryClient.invalidateQueries({ queryKey: clientOrgKeys.stakeholder });
       popup.success("Logo Updated", "Your organisation logo has been saved.", 2500);
     },
     onError: (error: any) => parseAndToastApiError(error, "Logo upload failed."),
