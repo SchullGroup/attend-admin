@@ -178,11 +178,14 @@ export default function RegistersPage() {
                       </div>
                     </td>
 
-                    {/* Enrolled date */}
+                    {/* Enrolled date — fallback: enrolledAt → approvedAt → createdAt */}
                     <td className="px-5 py-3">
-                      {reg.enrolledAt
-                        ? <DateCell value={reg.enrolledAt} />
-                        : <i className="text-xs text-[hsl(var(--muted-foreground))]">—</i>}
+                      {(() => {
+                        const d = reg.enrolledAt ?? reg.approvedAt ?? reg.createdAt;
+                        return d
+                          ? <DateCell value={d} />
+                          : <i className="text-xs text-[hsl(var(--muted-foreground))]">—</i>;
+                      })()}
                     </td>
 
                     {/* Actions */}

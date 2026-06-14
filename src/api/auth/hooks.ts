@@ -18,7 +18,8 @@ export const useLogin = () => {
       const token = response.data.token;
       if (token) {
         Cookies.set("accessToken", token, {
-          secure: process.env.NODE_ENV === "production",
+          expires:  1, // 1 day — prevents it becoming a session cookie that vanishes on tab close
+          secure:   process.env.NODE_ENV === "production",
           sameSite: "strict",
         });
       }

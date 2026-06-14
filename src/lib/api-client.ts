@@ -85,8 +85,10 @@ apiClient.interceptors.response.use(
         const { data } = await axios.post("/api/auth/refresh");
 
         const newAccessToken = data.data.token;
+        if (!newAccessToken) throw new Error("No token in refresh response");
         Cookies.set("accessToken", newAccessToken, {
-          secure: process.env.NODE_ENV === "production",
+          expires:  1, // 1 day — keep consistent with login
+          secure:   process.env.NODE_ENV === "production",
           sameSite: "strict",
         });
 

@@ -301,7 +301,7 @@ export default function LoginPage() {
                 type="submit"
                 className="w-full h-11 text-sm font-semibold mt-1"
                 disabled={isPending}
-                style={{ backgroundColor: "#2563eb" }}
+                style={{ backgroundColor: "#111827" }}
               >
                 {isPending ? "Signing in…" : "Sign In"}
               </Button>
