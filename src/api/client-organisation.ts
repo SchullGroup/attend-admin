@@ -222,7 +222,7 @@ export function useUploadOrgLogo() {
       const res = await apiClient.post<ApiResponse<any>>(
         "/api/v1/client/organisation/profile/branding/logo",
         form,
-        { headers: { "Content-Type": "multipart/form-data" } }
+        { headers: { "Content-Type": undefined } }
       );
       return res.data.data;
     },

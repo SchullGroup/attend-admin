@@ -1,6 +1,10 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Upload, Download, Trash2, FileText, FileBarChart, Bell, BookOpen, Award, Package, Send, Search, Check, ChevronDown } from "lucide-react";
+import {
+  Upload, Download, Trash2, FileText, FileBarChart, Bell,
+  BookOpen, Award, Package, Send, Search, Check, ChevronDown,
+  Monitor,
+} from "lucide-react";
 import { useGetMe } from "@/api/auth/hooks";
 import { useGlobalDocuments as useAdminGlobalDocuments } from "@/api/super-admin";
 import {
@@ -8,45 +12,63 @@ import {
   useDeleteGlobalDocument,
   useDownloadGlobalDocument,
   useUploadGlobalDocument,
+  useDocumentEventFilterOptions,
+  useDocumentRegisterFilterOptions,
 } from "@/api/client-documents";
-import { useClientEventsDropdown } from "@/api/client-events";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { OrgFilter } from "@/components/custom/org-filter";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-const TYPE_FILTERS = [
-  { label: "All", value: "all" },
-  { label: "Notice", value: "notice" },
-  { label: "Agenda", value: "agenda" },
-  { label: "Minutes", value: "minutes" },
-  { label: "Report", value: "report" },
-  { label: "Press Kit", value: "press_kit" },
-  { label: "Certificate", value: "certificate" },
-];
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; color: string }> = {
-  notice: { label: "Notice", icon: Bell, bg: "#dbeafe", color: "#374151" },
-  agenda: { label: "Agenda", icon: BookOpen, bg: "#dcfce7", color: "#16a34a" },
-  minutes: { label: "Minutes", icon: FileText, bg: "#f3f4f6", color: "#6b7280" },
-  report: { label: "Report", icon: FileBarChart, bg: "#fef9c3", color: "#a16207" },
-  press_kit: { label: "Press Kit", icon: Package, bg: "#f3e8ff", color: "#7c22c9" },
-  certificate: { label: "Certificate", icon: Award, bg: "#fff4eb", color: "#ea6c00" },
+/** Allowed documentType values from the API */
+const DOC_TYPES = [
+  "NOTICE", "AGENDA", "MINUTES", "REPORT",
+  "PRESENTATION", "PRESS_KIT", "CERTIFICATE", "OTHER",
+] as const;
+
+type DocType = typeof DOC_TYPES[number];
+
+const TYPE_CONFIG: Record<DocType, { label: string; icon: React.ElementType; bg: string; color: string }> = {
+  NOTICE:       { label: "Notice",       icon: Bell,        bg: "#dbeafe", color: "#1d4ed8" },
+  AGENDA:       { label: "Agenda",       icon: BookOpen,    bg: "#dcfce7", color: "#16a34a" },
+  MINUTES:      { label: "Minutes",      icon: FileText,    bg: "#f3f4f6", color: "#6b7280" },
+  REPORT:       { label: "Report",       icon: FileBarChart,bg: "#fef9c3", color: "#a16207" },
+  PRESENTATION: { label: "Presentation", icon: Monitor,     bg: "#ede9fe", color: "#7c3aed" },
+  PRESS_KIT:    { label: "Press Kit",    bg: "#f3e8ff", color: "#7c22c9", icon: Package },
+  CERTIFICATE:  { label: "Certificate",  icon: Award,       bg: "#fff4eb", color: "#ea6c00" },
+  OTHER:        { label: "Other",        icon: FileText,    bg: "#f3f4f6", color: "#6b7280" },
 };
 
-const DOC_TYPES = ["notice", "agenda", "minutes", "report", "press_kit", "certificate"];
+const TYPE_FILTERS = [
+  { label: "All",          value: "" },
+  { label: "Notice",       value: "NOTICE" },
+  { label: "Agenda",       value: "AGENDA" },
+  { label: "Minutes",      value: "MINUTES" },
+  { label: "Report",       value: "REPORT" },
+  { label: "Presentation", value: "PRESENTATION" },
+  { label: "Press Kit",    value: "PRESS_KIT" },
+  { label: "Certificate",  value: "CERTIFICATE" },
+  { label: "Other",        value: "OTHER" },
+];
+
+const ADMIN_ROLES = new Set(["super_admin", "event_manager", "kyc_officer", "judge"]);
+
+// ─── EventCombobox ─────────────────────────────────────────────────────────────
 
 function EventCombobox({
-  events,
+  placeholder = "Select an event…",
+  options,
   value,
   onChange,
 }: {
-  events: { id: string; title: string; organiser: string }[];
+  placeholder?: string;
+  options: { id: string; label: string }[];
   value: string;
   onChange: (id: string) => void;
 }) {
@@ -55,10 +77,10 @@ function EventCombobox({
   const ref = useRef<HTMLDivElement>(null);
 
   const filtered = query.trim()
-    ? events.filter((e) => `${e.title} ${e.organiser}`.toLowerCase().includes(query.toLowerCase()))
-    : events;
+    ? options.filter((e) => e.label.toLowerCase().includes(query.toLowerCase()))
+    : options;
 
-  const selected = events.find((e) => e.id === value);
+  const selected = options.find((e) => e.id === value);
 
   useEffect(() => {
     function handleOutside(ev: MouseEvent) {
@@ -79,7 +101,7 @@ function EventCombobox({
         className="w-full flex items-center gap-2 h-10 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-left hover:border-[hsl(var(--ring)/0.5)] transition-colors"
       >
         <span className={cn("flex-1 truncate", !selected && "text-[hsl(var(--muted-foreground))]")}>
-          {selected ? selected.title : "Select an event…"}
+          {selected ? selected.label : placeholder}
         </span>
         <ChevronDown className={cn("h-4 w-4 text-[hsl(var(--muted-foreground))] shrink-0 transition-transform", open && "rotate-180")} />
       </button>
@@ -93,14 +115,14 @@ function EventCombobox({
                 autoFocus
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search events or organiser…"
+                placeholder="Search…"
                 className="flex-1 text-sm bg-transparent outline-none py-1 text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))]"
               />
             </div>
           </div>
           <div className="max-h-52 overflow-y-auto">
             {filtered.length === 0 ? (
-              <p className="px-4 py-4 text-center text-sm text-[hsl(var(--muted-foreground))]">No events found.</p>
+              <p className="px-4 py-4 text-center text-sm text-[hsl(var(--muted-foreground))]">No results.</p>
             ) : (
               filtered.map((e) => (
                 <button
@@ -108,17 +130,16 @@ function EventCombobox({
                   type="button"
                   onClick={() => { onChange(e.id); setOpen(false); setQuery(""); }}
                   className={cn(
-                    "w-full flex items-start gap-2 px-4 py-2.5 text-sm text-left hover:bg-[hsl(var(--muted))] transition-colors",
+                    "w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left hover:bg-[hsl(var(--muted))] transition-colors",
                     value === e.id && "bg-[hsl(var(--primary)/0.05)] text-[hsl(var(--primary))]"
                   )}
                 >
-                  <span className="w-3.5 shrink-0 mt-0.5 flex items-center justify-center">
+                  <span className="w-3.5 shrink-0 flex items-center justify-center">
                     {value === e.id && <Check className="h-3.5 w-3.5" />}
                   </span>
-                  <div>
-                    <p className={cn("font-medium", value === e.id ? "text-[hsl(var(--primary))]" : "text-[hsl(var(--foreground))]")}>{e.title}</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))]">{e.organiser}</p>
-                  </div>
+                  <span className={cn("font-medium", value === e.id ? "text-[hsl(var(--primary))]" : "text-[hsl(var(--foreground))]")}>
+                    {e.label}
+                  </span>
                 </button>
               ))
             )}
@@ -129,63 +150,57 @@ function EventCombobox({
   );
 }
 
-const ADMIN_ROLES = new Set(["super_admin", "event_manager", "kyc_officer", "judge"]);
+// ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function DocumentsPage() {
   const { data: userResponse } = useGetMe();
   const isAdmin = !userResponse?.data || ADMIN_ROLES.has(userResponse.data.role?.toLowerCase() ?? "");
 
-  const [filter,    setFilter]    = useState("all");
-  const [search,    setSearch]    = useState("");
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [form,      setForm]      = useState({ title: "", type: "notice", eventId: "" });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [typeFilter,     setTypeFilter]     = useState("");
+  const [search,         setSearch]         = useState("");
+  const [registerFilter, setRegisterFilter] = useState("");
+  const [eventFilter,    setEventFilter]    = useState("");
+  const [uploadOpen,     setUploadOpen]     = useState(false);
+  const [form,           setForm]           = useState({ title: "", type: "NOTICE" as DocType, eventId: "" });
+  const [selectedFile,   setSelectedFile]   = useState<File | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Both hooks called; role selects which result to use
-  const { data: adminDocsData, isLoading: adminLoading } =
-    useAdminGlobalDocuments(search, "", filter === "all" ? "" : filter, 0, 50);
+  // Client document hooks
   const { data: clientDocsData, isLoading: clientLoading } =
-    useClientGlobalDocuments(search, "", filter === "all" ? "" : filter, 0, 50);
+    useClientGlobalDocuments(search, registerFilter, eventFilter, typeFilter, 0, 50);
+
+  // Admin document hook (super admin only, kept for backward compat)
+  const { data: adminDocsData, isLoading: adminLoading } =
+    useAdminGlobalDocuments(search, "", typeFilter.toLowerCase(), 0, 50);
+
+  const { data: eventOptions  = [] } = useDocumentEventFilterOptions();
+  const { data: registerOptions = [] } = useDocumentRegisterFilterOptions();
 
   const deleteMutation   = useDeleteGlobalDocument();
   const downloadMutation = useDownloadGlobalDocument();
   const uploadMutation   = useUploadGlobalDocument();
-  const { data: eventOptions = [] } = useClientEventsDropdown();
 
   const isLoading = isAdmin ? adminLoading : clientLoading;
 
-  // Normalise both shapes to a flat list
-  const rawAdmin  = (adminDocsData?.data as any)?.content  ?? (adminDocsData?.data as any)?.documents ?? [];
-  const rawClient = clientDocsData?.content ?? [];
-  const docs: any[] = isAdmin ? rawAdmin : rawClient;
-
-  const filtered = docs.filter((d: any) =>
-    (filter === "all" || (d.documentType ?? d.type ?? "").toLowerCase() === filter) &&
-    (!search || (d.title ?? "").toLowerCase().includes(search.toLowerCase()))
-  );
+  // Normalise both list response shapes
+  const docs: any[] = isAdmin
+    ? ((adminDocsData?.data as any)?.content ?? (adminDocsData?.data as any)?.documents ?? [])
+    : (clientDocsData?.documents ?? []);
 
   function handleUpload() {
     if (!form.title || !form.eventId || !selectedFile) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const b64 = (reader.result as string).split(",")[1];
-      uploadMutation.mutate(
-        { title: form.title, documentType: form.type, eventId: form.eventId, fileData: b64, originalFilename: selectedFile.name },
-        {
-          onSuccess: () => {
-            setUploadOpen(false);
-            setForm({ title: "", type: "notice", eventId: "" });
-            setSelectedFile(null);
-          },
-        }
-      );
-    };
-    reader.readAsDataURL(selectedFile);
+    uploadMutation.mutate(
+      { file: selectedFile, title: form.title, documentType: form.type, eventId: form.eventId },
+      {
+        onSuccess: () => {
+          setUploadOpen(false);
+          setForm({ title: "", type: "NOTICE", eventId: "" });
+          setSelectedFile(null);
+        },
+      }
+    );
   }
-
-  const selectedEvent = null; // rsvpCount not needed in new shape
 
   return (
     <div>
@@ -196,13 +211,15 @@ export default function DocumentsPage() {
             {isLoading ? "Loading…" : `${docs.length} document${docs.length !== 1 ? "s" : ""}`}
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setUploadOpen(true)}>
-          <Upload className="h-4 w-4" />
-          Upload Document
-        </Button>
+        {!isAdmin && (
+          <Button className="gap-2" onClick={() => setUploadOpen(true)}>
+            <Upload className="h-4 w-4" />
+            Upload Document
+          </Button>
+        )}
       </div>
 
-      {/* Upload dialog */}
+      {/* ── Upload dialog ── */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
@@ -210,7 +227,7 @@ export default function DocumentsPage() {
           </DialogHeader>
           <div className="flex flex-col gap-4 mt-2">
             <div>
-              <Label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-1.5 block">Document Title</Label>
+              <Label className="attend-section-title mb-1.5 block">Document Title</Label>
               <Input
                 placeholder="e.g. Zenith Bank 2026 AGM Notice"
                 value={form.title}
@@ -219,39 +236,39 @@ export default function DocumentsPage() {
             </div>
 
             <div>
-              <Label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-1.5 block">Document Type</Label>
+              <Label className="attend-section-title mb-1.5 block">Document Type</Label>
               <div className="flex flex-wrap gap-2">
                 {DOC_TYPES.map((t) => (
                   <button
                     key={t}
                     onClick={() => setForm((f) => ({ ...f, type: t }))}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                       form.type === t
                         ? "bg-[hsl(var(--primary))] text-white border-[hsl(var(--primary))]"
                         : "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] border-transparent hover:border-[hsl(var(--border))]"
                     }`}
                   >
-                    {t.replace("_", " ").replace(/^\w/, (c) => c.toUpperCase())}
+                    {TYPE_CONFIG[t].label}
                   </button>
                 ))}
               </div>
             </div>
 
             <div>
-              <Label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-1.5 block">Event</Label>
+              <Label className="attend-section-title mb-1.5 block">Event</Label>
               <EventCombobox
-                events={eventOptions.map((e: { id: string; label: string }) => ({ id: e.id, title: e.label, organiser: "" }))}
+                options={eventOptions}
                 value={form.eventId}
                 onChange={(id) => setForm((f) => ({ ...f, eventId: id }))}
               />
             </div>
 
             <div>
-              <Label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-1.5 block">File</Label>
+              <Label className="attend-section-title mb-1.5 block">File</Label>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.docx,.xlsx"
+                accept=".pdf,.docx,.pptx"
                 className="hidden"
                 onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
               />
@@ -263,12 +280,11 @@ export default function DocumentsPage() {
                 {selectedFile ? (
                   <p className="text-sm font-medium text-[hsl(var(--foreground))]">{selectedFile.name}</p>
                 ) : (
-                  <p className="text-sm text-[hsl(var(--muted-foreground))]">Click to select a file or drag and drop</p>
+                  <p className="text-sm text-[hsl(var(--muted-foreground))]">Click to select a file</p>
                 )}
-                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">PDF, DOCX, XLSX up to 50 MB</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">PDF, DOCX, PPTX — max 10 MB</p>
               </div>
             </div>
-
 
             <div className="flex gap-2 justify-end pt-1">
               <Button variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>
@@ -284,14 +300,16 @@ export default function DocumentsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Filters ── */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
+        {/* Type tabs */}
+        <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 overflow-x-auto">
           {TYPE_FILTERS.map((f) => (
             <button
               key={f.value}
-              onClick={() => setFilter(f.value)}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                filter === f.value
+              onClick={() => setTypeFilter(f.value)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
+                typeFilter === f.value
                   ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
                   : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
               }`}
@@ -300,13 +318,49 @@ export default function DocumentsPage() {
             </button>
           ))}
         </div>
-        <div className="relative max-w-xs">
+
+        {/* Register filter (client only) */}
+        {!isAdmin && registerOptions.length > 0 && (
+          <select
+            value={registerFilter}
+            onChange={(e) => setRegisterFilter(e.target.value)}
+            className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
+          >
+            <option value="">All Organisers</option>
+            {registerOptions.map((r) => (
+              <option key={r.id} value={r.id}>{r.label}</option>
+            ))}
+          </select>
+        )}
+
+        {/* Event filter (client only) */}
+        {!isAdmin && eventOptions.length > 0 && (
+          <select
+            value={eventFilter}
+            onChange={(e) => setEventFilter(e.target.value)}
+            className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
+          >
+            <option value="">All Events</option>
+            {eventOptions.map((e) => (
+              <option key={e.id} value={e.id}>{e.label}</option>
+            ))}
+          </select>
+        )}
+
+        {/* Search */}
+        <div className="relative max-w-xs ml-auto">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
-          <input type="text" placeholder="Search documents…" value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
+          <input
+            type="text"
+            placeholder="Search documents…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
+          />
         </div>
       </div>
 
+      {/* ── Table ── */}
       <Card className="attend-card overflow-hidden">
         <table className="w-full">
           <thead>
@@ -314,20 +368,18 @@ export default function DocumentsPage() {
               <th className="px-5 py-3 text-left">Document</th>
               <th className="px-5 py-3 text-left">Type</th>
               <th className="px-5 py-3 text-left">Event</th>
-              <th className="px-5 py-3 text-left">File Size</th>
+              <th className="px-5 py-3 text-left">Organiser</th>
+              <th className="px-5 py-3 text-left">Size</th>
               <th className="px-5 py-3 text-left">Downloads</th>
               <th className="px-5 py-3 text-left">Uploaded</th>
               <th className="px-5 py-3 text-left">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((doc: any) => {
-              const typeKey   = (doc.documentType ?? doc.type ?? "notice").toLowerCase();
-              const typeConfig = TYPE_CONFIG[typeKey] ?? TYPE_CONFIG.notice;
+            {docs.map((doc: any) => {
+              const typeKey    = ((doc.documentType ?? doc.type ?? "OTHER") as string).toUpperCase() as DocType;
+              const typeConfig = TYPE_CONFIG[typeKey] ?? TYPE_CONFIG.OTHER;
               const TypeIcon   = typeConfig.icon;
-              const sizeLabel  = doc.sizeLabel ?? doc.fileSize ?? "—";
-              const downloads  = doc.downloadCount ?? 0;
-              const eventTitle = doc.eventTitle ?? "—";
               return (
                 <tr key={doc.id} className="attend-table-row">
                   <td className="px-5 py-3">
@@ -343,28 +395,61 @@ export default function DocumentsPage() {
                       {typeConfig.label}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[180px] truncate">{eventTitle}</td>
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{sizeLabel}</td>
-                  <td className="px-5 py-3 text-sm font-medium tabular-nums">{downloads.toLocaleString()}</td>
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{formatDate(doc.uploadedAt)}</td>
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[160px] truncate">
+                    {doc.eventName ?? doc.eventTitle ?? "—"}
+                  </td>
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[140px] truncate">
+                    {doc.registerName ?? "—"}
+                  </td>
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                    {doc.sizeLabel ?? "—"}
+                  </td>
+                  <td className="px-5 py-3 text-sm font-medium tabular-nums">
+                    {(doc.downloadCount ?? 0).toLocaleString()}
+                  </td>
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                    {formatDate(doc.uploadedAt)}
+                  </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5">
-                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                      <Button
+                        size="sm" variant="outline" className="h-7 text-xs gap-1"
                         disabled={downloadMutation.isPending}
-                        onClick={() => downloadMutation.mutate(doc.id)}>
+                        onClick={() => {
+                          if (doc.fileUrl) {
+                            const a = document.createElement("a");
+                            a.href = doc.fileUrl;
+                            a.download = doc.originalFilename || doc.title;
+                            a.target = "_blank";
+                            a.rel = "noopener noreferrer";
+                            a.click();
+                          } else {
+                            downloadMutation.mutate(doc.id);
+                          }
+                        }}
+                      >
                         <Download className="h-3 w-3" /> Download
                       </Button>
                       {confirmDeleteId === doc.id ? (
                         <div className="flex items-center gap-1">
-                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-600 bg-red-50 font-semibold hover:bg-red-100"
+                          <Button
+                            size="sm" variant="ghost"
+                            className="h-7 px-2 text-xs text-red-600 bg-red-50 font-semibold hover:bg-red-100"
                             disabled={deleteMutation.isPending}
-                            onClick={() => { deleteMutation.mutate(doc.id); setConfirmDeleteId(null); }}>
+                            onClick={() => { deleteMutation.mutate(doc.id); setConfirmDeleteId(null); }}
+                          >
                             Delete
                           </Button>
-                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setConfirmDeleteId(null)}>Cancel</Button>
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setConfirmDeleteId(null)}>
+                            Cancel
+                          </Button>
                         </div>
                       ) : (
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => setConfirmDeleteId(doc.id)}>
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => setConfirmDeleteId(doc.id)}
+                        >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
@@ -375,13 +460,13 @@ export default function DocumentsPage() {
             })}
           </tbody>
         </table>
-        {filtered.length === 0 && (
+        {docs.length === 0 && !isLoading && (
           <div className="py-14 text-center">
             <FileText className="h-10 w-10 mx-auto mb-3 text-[hsl(var(--muted-foreground))] opacity-30" />
-            <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-1">No documents match these filters</p>
-            {(filter !== "all" || search) && (
+            <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-1">No documents found</p>
+            {(typeFilter || search || registerFilter || eventFilter) && (
               <button
-                onClick={() => { setFilter("all"); setSearch(""); }}
+                onClick={() => { setTypeFilter(""); setSearch(""); setRegisterFilter(""); setEventFilter(""); }}
                 className="text-xs text-[hsl(var(--primary))] hover:underline mt-1"
               >
                 Clear filters

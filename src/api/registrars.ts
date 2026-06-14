@@ -446,7 +446,7 @@ export function useUploadToCloudinary() {
         form,
         {
           params:  { folder: "logos" },
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: { "Content-Type": undefined },
         }
       );
       const d = res.data.data ?? {};

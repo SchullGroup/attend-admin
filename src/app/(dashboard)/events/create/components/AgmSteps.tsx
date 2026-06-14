@@ -147,7 +147,7 @@ export function AgmNoticeStep({ s }: { s: AgmState }) {
       form.append("file", file);
       const res = await apiClient.post<any>("/api/v1/upload", form, {
         params:           { folder: "agm-notices" },
-        headers:          { "Content-Type": "multipart/form-data" },
+        headers:          { "Content-Type": undefined },
         maxBodyLength:    Infinity,
         maxContentLength: Infinity,
         timeout:          120_000,

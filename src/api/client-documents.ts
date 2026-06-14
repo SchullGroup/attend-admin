@@ -29,6 +29,10 @@ export interface GlobalDocumentItem {
   id:               string;
   title:            string;
   documentType:     string;
+  eventId?:         string;
+  eventName?:       string;
+  registerId?:      string;
+  registerName?:    string;
   fileType:         string;
   mimeType:         string;
   originalFilename: string;
@@ -36,25 +40,25 @@ export interface GlobalDocumentItem {
   sizeLabel:        string;
   uploadedAt:       string;
   downloadCount:    number;
-  eventId?:         string;
-  eventTitle?:      string;
+  fileUrl?:         string;
   fileData?:        string; // base64, present only on single-document fetch
 }
 
 export interface GlobalDocumentListResponse {
-  content:       GlobalDocumentItem[];
-  totalElements: number;
-  totalPages:    number;
-  size:          number;
-  number:        number; // current page (0-based)
+  totalCount: number;
+  label?:     string;
+  page:       number;
+  size:       number;
+  documents:  GlobalDocumentItem[];
 }
 
 export interface UploadGlobalDocumentRequest {
-  title:            string;
-  documentType:     string;
-  eventId:          string; // uuid — document must be linked to an event
-  fileData:         string; // base64-encoded file content
-  originalFilename: string;
+  title:               string;
+  documentType:        string;
+  eventId:             string;
+  fileUrl:             string;  // Cloudinary URL from /api/v1/upload
+  cloudinaryPublicId?: string;
+  originalFilename:    string;
 }
 
 export interface DocumentEventFilterOption {
@@ -70,12 +74,13 @@ export interface DocumentFilterEventsResponse {
 // Query keys
 // ---------------------------------------------------------------------------
 export const clientDocumentKeys = {
-  all:     ["clientDocuments"] as const,
-  list:    (search: string, eventId: string, type: string, page: number, size: number) =>
-             ["clientDocuments", "list", { search, eventId, type, page, size }] as const,
-  detail:  (id: string) => ["clientDocuments", "detail", id] as const,
-  filterEvents: ["clientDocuments", "filterEvents"] as const,
-  filterTypes:  ["clientDocuments", "filterTypes"] as const,
+  all:             ["clientDocuments"] as const,
+  list:            (search: string, registerId: string, eventId: string, type: string, page: number, size: number) =>
+                     ["clientDocuments", "list", { search, registerId, eventId, type, page, size }] as const,
+  detail:          (id: string) => ["clientDocuments", "detail", id] as const,
+  filterEvents:    ["clientDocuments", "filterEvents"] as const,
+  filterRegisters: ["clientDocuments", "filterRegisters"] as const,
+  filterTypes:     ["clientDocuments", "filterTypes"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -83,19 +88,20 @@ export const clientDocumentKeys = {
 // ---------------------------------------------------------------------------
 
 /**
- * Paginated document list with optional search, event, and type filters.
+ * Paginated document list with optional search, registerId, eventId, and type filters.
  *
  * GET /api/v1/client/documents
  */
 export function useGlobalDocuments(
-  search  = "",
-  eventId = "",
-  type    = "",
-  page    = 0,
-  size    = 20
+  search     = "",
+  registerId = "",
+  eventId    = "",
+  type       = "",
+  page       = 0,
+  size       = 20
 ) {
   return useQuery({
-    queryKey: clientDocumentKeys.list(search, eventId, type, page, size),
+    queryKey: clientDocumentKeys.list(search, registerId, eventId, type, page, size),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<GlobalDocumentListResponse>>(
         "/api/v1/client/documents",
@@ -103,9 +109,10 @@ export function useGlobalDocuments(
           params: {
             page,
             size,
-            ...(search  ? { search }  : {}),
-            ...(eventId ? { eventId } : {}),
-            ...(type    ? { type }    : {}),
+            ...(search     ? { search }     : {}),
+            ...(registerId ? { registerId } : {}),
+            ...(eventId    ? { eventId }    : {}),
+            ...(type       ? { type }       : {}),
           },
         }
       );
@@ -124,6 +131,20 @@ export function useDocumentEventFilterOptions() {
         "/api/v1/client/documents/filters/events"
       );
       return res.data.data?.events ?? [];
+    },
+    staleTime: 120_000,
+  });
+}
+
+/** Dropdown options for the register (organiser) filter on the document list. */
+export function useDocumentRegisterFilterOptions() {
+  return useQuery({
+    queryKey: clientDocumentKeys.filterRegisters,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<DocumentFilterEventsResponse>>(
+        "/api/v1/client/documents/filters/registers"
+      );
+      return res.data.data?.events ?? []; // API returns same shape { events: [{id, label}] }
     },
     staleTime: 120_000,
   });
@@ -167,11 +188,63 @@ export function useGlobalDocument(documentId: string) {
 // Mutations
 // ---------------------------------------------------------------------------
 
-/** Upload a document to the global vault (linked to a specific event). */
+/**
+ * Upload a document to the global vault.
+ * Two-step: POST /api/v1/upload (multipart) → POST /api/v1/client/documents (JSON).
+ */
 export function useUploadGlobalDocument() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: UploadGlobalDocumentRequest) => {
+    mutationFn: async ({
+      file,
+      title,
+      documentType,
+      eventId,
+    }: {
+      file:         File;
+      title:        string;
+      documentType: string;
+      eventId:      string;
+    }) => {
+      // Step 1 — upload file to Cloudinary via backend proxy
+      // Do NOT set Content-Type manually: the browser must set it with the multipart boundary.
+      // Setting it to undefined removes the axios instance default (application/json).
+      const form = new FormData();
+      form.append("file", file);
+      const uploadRes = await apiClient.post<ApiResponse<Record<string, string>>>(
+        "/api/v1/upload",
+        form,
+        {
+          params:           { folder: "documents" },
+          headers:          { "Content-Type": undefined },
+          maxBodyLength:    Infinity,
+          maxContentLength: Infinity,
+          timeout:          120_000,
+        }
+      );
+      const uploadData         = uploadRes.data?.data ?? {};
+      const fileUrl            =
+        uploadData.fileUrl        ??
+        uploadData.secure_url     ??
+        uploadData.url            ??
+        uploadData.downloadUrl    ??
+        "";
+      const cloudinaryPublicId  =
+        uploadData.cloudinaryPublicId ??
+        uploadData.public_id          ??
+        undefined;
+
+      if (!fileUrl) throw new Error("Upload failed — no file URL returned by server.");
+
+      // Step 2 — register in the global vault
+      const payload: UploadGlobalDocumentRequest = {
+        title,
+        documentType,
+        eventId,
+        fileUrl,
+        originalFilename: file.name,
+        ...(cloudinaryPublicId ? { cloudinaryPublicId } : {}),
+      };
       const res = await apiClient.post<ApiResponse<GlobalDocumentItem>>(
         "/api/v1/client/documents",
         payload
@@ -224,7 +297,7 @@ export function useUploadCloudinaryDocument() {
         formData,
         {
           params:  { folder: "documents" },
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: { "Content-Type": undefined },
         }
       );
       const uploadData = uploadRes.data.data ?? {};
@@ -261,7 +334,7 @@ export function useDeleteGlobalDocument() {
   });
 }
 
-/** Download a document: fetch its base64 fileData and trigger browser download. */
+/** Download a document — opens the Cloudinary URL directly, or falls back to base64. */
 export function useDownloadGlobalDocument() {
   return useMutation({
     mutationFn: async (documentId: string) => {
@@ -271,6 +344,18 @@ export function useDownloadGlobalDocument() {
       return res.data.data;
     },
     onSuccess: (doc) => {
+      // Prefer Cloudinary URL — just open it
+      const directUrl = (doc as any).fileUrl ?? (doc as any).downloadUrl;
+      if (directUrl) {
+        const a    = document.createElement("a");
+        a.href     = directUrl;
+        a.download = (doc as any).originalFilename || doc.title;
+        a.target   = "_blank";
+        a.rel      = "noopener noreferrer";
+        a.click();
+        return;
+      }
+      // Fall back: decode base64
       if (!doc?.fileData) return;
       const binary = atob(doc.fileData);
       const bytes  = new Uint8Array(binary.length);
@@ -279,7 +364,7 @@ export function useDownloadGlobalDocument() {
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href     = url;
-      a.download = doc.originalFilename || doc.title;
+      a.download = (doc as any).originalFilename || doc.title;
       a.click();
       URL.revokeObjectURL(url);
     },

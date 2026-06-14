@@ -1,11 +1,15 @@
 "use client";
+import { useState } from "react";
 import {
   FileText, Calendar, Clock, MapPin, Users, Users2, Radio, Monitor,
   ExternalLink, Star, Mic2, Package, Zap, Trophy, ListChecks, CalendarRange,
+  Plus, Trash2, Loader2, Pencil, Check, X,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { formatDate } from "@/lib/utils";
-import { useClientEventAgenda } from "@/api/client-events";
+import { useClientEventAgenda, useAddAgendaItem, useDeleteAgendaItem, useUpdateAgendaItem } from "@/api/client-events";
 import type { EventShim, LocalAgendaItem } from "./types";
 
 const FORMAT_ICON = { virtual: Monitor, hybrid: Users2, "in-person": MapPin };
@@ -40,6 +44,53 @@ export function EventOverviewTab({
 
   // Fetch live agenda from dedicated endpoint
   const { data: liveAgenda = [] } = useClientEventAgenda(event.id);
+  const addMutation    = useAddAgendaItem();
+  const updateMutation = useUpdateAgendaItem();
+  const deleteMutation = useDeleteAgendaItem();
+
+  // Add-form state
+  const [showForm, setShowForm]     = useState(false);
+  const [newTime,    setNewTime]    = useState("");
+  const [newTitle,   setNewTitle]   = useState("");
+  const [newSpeaker, setNewSpeaker] = useState("");
+
+  // Edit state — tracks which item is being edited
+  const [editingId,  setEditingId]  = useState<string | null>(null);
+  const [editTime,   setEditTime]   = useState("");
+  const [editTitle,  setEditTitle]  = useState("");
+  const [editSpeaker,setEditSpeaker]= useState("");
+
+  function startEdit(item: LocalAgendaItem) {
+    setEditingId(item.id ?? null);
+    setEditTime(item.time ?? "");
+    setEditTitle(item.title ?? "");
+    setEditSpeaker(item.speaker ?? "");
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditTime(""); setEditTitle(""); setEditSpeaker("");
+  }
+
+  function saveEdit(itemId: string) {
+    if (!editTitle.trim()) return;
+    updateMutation.mutate(
+      { eventId: event.id, itemId, data: { time: editTime.trim(), title: editTitle.trim(), speaker: editSpeaker.trim() || undefined } },
+      { onSuccess: cancelEdit }
+    );
+  }
+
+  function handleAddItem() {
+    if (!newTitle.trim()) return;
+    addMutation.mutate(
+      { eventId: event.id, item: { time: newTime.trim(), title: newTitle.trim(), speaker: newSpeaker.trim() || undefined } },
+      {
+        onSuccess: () => {
+          setNewTime(""); setNewTitle(""); setNewSpeaker(""); setShowForm(false);
+        },
+      }
+    );
+  }
 
   // Typed config accessors
   const productLaunchConfig       = (event as any).productLaunchConfig      as Record<string, any> | undefined;
@@ -49,7 +100,7 @@ export function EventOverviewTab({
   const endDate                   = (event as any).endDate                  as string | undefined;
 
   // Prefer dedicated /agenda endpoint; fall back to event.agenda then local state
-  const agmAgendaItems: LocalAgendaItem[] =
+  const allAgendaItems: LocalAgendaItem[] =
     liveAgenda.length
       ? (liveAgenda as LocalAgendaItem[])
       : event.agenda?.length
@@ -268,29 +319,184 @@ export function EventOverviewTab({
           </Card>
         )}
 
-        {/* AGM Agenda */}
-        {isAGM && agmAgendaItems.length > 0 && (
-          <Card className="attend-card p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-[hsl(var(--foreground))]">Agenda</h2>
-              <button onClick={() => onNavigate("Resolutions")} className="text-xs text-[hsl(var(--primary))] hover:underline">Manage →</button>
-            </div>
-            <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
-              {agmAgendaItems.slice(0, 4).map((item) => (
-                <div key={item.id} className="flex items-start gap-3 py-2.5">
-                  {item.time && <span className="text-xs font-mono font-semibold text-[hsl(var(--primary))] w-16 shrink-0 pt-0.5">{item.time}</span>}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{item.title}</p>
-                    {item.speaker && <p className="text-xs text-[hsl(var(--muted-foreground))]">{item.speaker}</p>}
-                  </div>
-                </div>
-              ))}
-              {agmAgendaItems.length > 4 && (
-                <p className="text-xs text-[hsl(var(--muted-foreground))] pt-2.5">+{agmAgendaItems.length - 4} more items</p>
+        {/* Agenda — shown for all event types */}
+        <Card className="attend-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-[hsl(var(--foreground))]">
+              Agenda
+              {allAgendaItems.length > 0 && (
+                <span className="ml-2 text-xs font-normal text-[hsl(var(--muted-foreground))]">
+                  {allAgendaItems.length} item{allAgendaItems.length !== 1 ? "s" : ""}
+                </span>
               )}
+            </h2>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() => setShowForm((v) => !v)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add item
+            </Button>
+          </div>
+
+          {/* Add form */}
+          {showForm && (
+            <div className="mb-4 p-4 rounded-xl bg-[hsl(var(--muted)/0.4)] border border-[hsl(var(--border))] flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-[hsl(var(--muted-foreground))] mb-1">Time <span className="text-[hsl(var(--muted-foreground))]">(optional)</span></label>
+                  <Input
+                    placeholder="e.g. 10:00 AM"
+                    value={newTime}
+                    onChange={(e) => setNewTime(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-[hsl(var(--muted-foreground))] mb-1">Speaker <span className="text-[hsl(var(--muted-foreground))]">(optional)</span></label>
+                  <Input
+                    placeholder="Speaker name"
+                    value={newSpeaker}
+                    onChange={(e) => setNewSpeaker(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-[hsl(var(--muted-foreground))] mb-1">Title <span className="text-red-500">*</span></label>
+                <Input
+                  placeholder="Agenda item title"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="h-8 text-sm"
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddItem(); }}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  disabled={!newTitle.trim() || addMutation.isPending}
+                  onClick={handleAddItem}
+                  className="h-8"
+                >
+                  {addMutation.isPending ? (
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Saving…</>
+                  ) : "Save item"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 text-[hsl(var(--muted-foreground))]"
+                  onClick={() => { setShowForm(false); setNewTime(""); setNewTitle(""); setNewSpeaker(""); }}
+                >
+                  Cancel
+                </Button>
+              </div>
             </div>
-          </Card>
-        )}
+          )}
+
+          {/* Items list */}
+          {allAgendaItems.length === 0 && !showForm ? (
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">No agenda items yet. Click "Add item" to get started.</p>
+          ) : (
+            <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
+              {allAgendaItems.map((item, idx) => {
+                const isEditing = editingId === item.id;
+                if (isEditing) {
+                  return (
+                    <div key={item.id ?? idx} className="py-3 flex flex-col gap-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          placeholder="Time (e.g. 10:00 AM)"
+                          value={editTime}
+                          onChange={(e) => setEditTime(e.target.value)}
+                          className="h-8 text-xs"
+                        />
+                        <Input
+                          placeholder="Speaker (optional)"
+                          value={editSpeaker}
+                          onChange={(e) => setEditSpeaker(e.target.value)}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                      <Input
+                        placeholder="Title *"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveEdit(item.id!); if (e.key === "Escape") cancelEdit(); }}
+                        className="h-8 text-xs"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={!editTitle.trim() || updateMutation.isPending}
+                          onClick={() => saveEdit(item.id!)}
+                        >
+                          {updateMutation.isPending ? (
+                            <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Saving…</>
+                          ) : (
+                            <><Check className="h-3 w-3 mr-1" /> Save</>
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs text-[hsl(var(--muted-foreground))]"
+                          onClick={cancelEdit}
+                        >
+                          <X className="h-3 w-3 mr-1" /> Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={item.id ?? idx} className="flex items-start gap-3 py-3 group">
+                    {item.time && (
+                      <span className="text-xs font-mono font-semibold text-[hsl(var(--primary))] w-16 shrink-0 pt-0.5">
+                        {item.time}
+                      </span>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{item.title}</p>
+                      {item.speaker && (
+                        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 flex items-center gap-1">
+                          <Mic2 className="h-3 w-3 shrink-0" /> {item.speaker}
+                        </p>
+                      )}
+                    </div>
+                    {item.id && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <button
+                          onClick={() => startEdit(item)}
+                          className="h-6 w-6 rounded-md flex items-center justify-center text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/0.08)] transition-all"
+                          title="Edit item"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={() => deleteMutation.mutate({ eventId: event.id, itemId: item.id! })}
+                          disabled={deleteMutation.isPending}
+                          className="h-6 w-6 rounded-md flex items-center justify-center text-[hsl(var(--muted-foreground))] hover:text-red-500 hover:bg-red-50 transition-all"
+                          title="Remove item"
+                        >
+                          {deleteMutation.isPending ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
       </div>
 
       {/* ── Right column ── */}
