@@ -2,6 +2,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Bell, Search, ChevronRight, CalendarDays, Users, Building2, X } from "lucide-react";
+import { NOTIFICATION_SOUND_KEY } from "@/app/(dashboard)/settings/page";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -175,7 +176,8 @@ export function Header() {
   const prevUnread = useRef(unreadCount);
   useEffect(() => {
     if (unreadCount > prevUnread.current) {
-      playNotificationChime();
+      const soundEnabled = localStorage.getItem(NOTIFICATION_SOUND_KEY) !== "false";
+      if (soundEnabled) playNotificationChime();
     }
     prevUnread.current = unreadCount;
   }, [unreadCount]);

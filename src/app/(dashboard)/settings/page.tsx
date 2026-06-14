@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useGetMe } from "@/api/auth/hooks";
 import { useChangePassword } from "@/api/auth/auth";
 import { ClientOrgSettings } from "@/components/dashboard/client-org-settings";
@@ -15,6 +16,7 @@ import {
 import {
   CheckCircle, XCircle, Settings, Shield, Link2,
   Loader2, RefreshCw, KeyRound, AlertCircle, Lock,
+  Eye, EyeOff, Volume2, VolumeX,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -65,9 +67,56 @@ function ROToggle({ checked }: { checked: boolean }) {
   );
 }
 
+// ─── Constant ─────────────────────────────────────────────────────────────
+export const NOTIFICATION_SOUND_KEY = "attend_notification_sound";
+
+// ─── Password field with eye toggle ───────────────────────────────────────
+
+function PwField({
+  id, label, value, onChange, disabled, autoComplete,
+}: {
+  id:           string;
+  label:        string;
+  value:        string;
+  onChange:     (v: string) => void;
+  disabled?:    boolean;
+  autoComplete?: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+        {label}
+      </Label>
+      <div className="relative">
+        <Input
+          id={id}
+          type={show ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="••••••••"
+          disabled={disabled}
+          autoComplete={autoComplete}
+          className="pr-10"
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => setShow((s) => !s)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+          aria-label={show ? "Hide password" : "Show password"}
+        >
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Change Password card (non-super-admin only) ───────────────────────────
 
 function ChangePasswordCard() {
+  const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword,     setNewPassword]     = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -88,9 +137,11 @@ function ChangePasswordCard() {
       { currentPassword, newPassword },
       {
         onSuccess: () => {
+          // API invalidates the current session — redirect to login
           setCurrentPassword("");
           setNewPassword("");
           setConfirmPassword("");
+          setTimeout(() => router.push("/login"), 1500);
         },
       }
     );
@@ -107,62 +158,23 @@ function ChangePasswordCard() {
 
       <form onSubmit={handleSubmit} noValidate>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
-          <div className="space-y-1.5">
-            <Label
-              htmlFor="currentPw"
-              className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]"
-            >
-              Current Password
-            </Label>
-            <Input
-              id="currentPw"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => { setCurrentPassword(e.target.value); setClientError(null); }}
-              placeholder="••••••••"
-              disabled={busy}
-              autoComplete="current-password"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label
-              htmlFor="newPw"
-              className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]"
-            >
-              New Password
-            </Label>
-            <Input
-              id="newPw"
-              type="password"
-              value={newPassword}
-              onChange={(e) => { setNewPassword(e.target.value); setClientError(null); }}
-              placeholder="••••••••"
-              disabled={busy}
-              autoComplete="new-password"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label
-              htmlFor="confirmPw"
-              className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]"
-            >
-              Confirm New Password
-            </Label>
-            <Input
-              id="confirmPw"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => { setConfirmPassword(e.target.value); setClientError(null); }}
-              placeholder="••••••••"
-              disabled={busy}
-              autoComplete="new-password"
-            />
-          </div>
+          <PwField
+            id="currentPw" label="Current Password"
+            value={currentPassword} onChange={(v) => { setCurrentPassword(v); setClientError(null); }}
+            disabled={busy} autoComplete="current-password"
+          />
+          <PwField
+            id="newPw" label="New Password"
+            value={newPassword} onChange={(v) => { setNewPassword(v); setClientError(null); }}
+            disabled={busy} autoComplete="new-password"
+          />
+          <PwField
+            id="confirmPw" label="Confirm New Password"
+            value={confirmPassword} onChange={(v) => { setConfirmPassword(v); setClientError(null); }}
+            disabled={busy} autoComplete="new-password"
+          />
         </div>
 
-        {/* Inline client-side validation error */}
         {clientError && (
           <p className="flex items-center gap-1.5 text-sm text-red-600 mb-4">
             <AlertCircle className="h-3.5 w-3.5 shrink-0" />
@@ -177,6 +189,63 @@ function ChangePasswordCard() {
           </Button>
         </div>
       </form>
+    </Card>
+  );
+}
+
+// ─── Notification Sound card ───────────────────────────────────────────────
+
+function NotificationSoundCard() {
+  const [enabled, setEnabled] = useState(true);
+
+  // Read persisted preference on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(NOTIFICATION_SOUND_KEY);
+    if (stored !== null) setEnabled(stored !== "false");
+  }, []);
+
+  function toggle() {
+    const next = !enabled;
+    setEnabled(next);
+    localStorage.setItem(NOTIFICATION_SOUND_KEY, String(next));
+  }
+
+  return (
+    <Card className="attend-card p-6">
+      <div className="flex items-center gap-2 mb-5">
+        {enabled
+          ? <Volume2 className="h-4 w-4 text-[hsl(var(--primary))]" />
+          : <VolumeX className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />}
+        <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">Notification Sound</h2>
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-[hsl(var(--foreground))]">
+            {enabled ? "Sound is on" : "Sound is off"}
+          </p>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+            Play a chime when new notifications arrive
+          </p>
+        </div>
+
+        {/* Toggle pill */}
+        <button
+          type="button"
+          onClick={toggle}
+          role="switch"
+          aria-checked={enabled}
+          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] focus-visible:ring-offset-2 ${
+            enabled ? "bg-[hsl(var(--primary))]" : "bg-[hsl(var(--muted))]"
+          }`}
+        >
+          <span
+            className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform duration-200 ${
+              enabled ? "translate-x-5" : "translate-x-0"
+            }`}
+          />
+        </button>
+      </div>
     </Card>
   );
 }
@@ -245,6 +314,9 @@ export default function SettingsPage() {
 
             {/* Change password */}
             <ChangePasswordCard />
+
+            {/* Notification sound toggle */}
+            <NotificationSoundCard />
           </>
         )}
 

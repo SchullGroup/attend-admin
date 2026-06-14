@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect } from "react";
 import {
   Upload, Building2, Globe, Mail, Phone, Hash, Briefcase,
-  Loader2, Pencil, Check, X, Palette,
+  Loader2, Check, X, Palette,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -76,45 +76,36 @@ function OrgInfoCard() {
 
   const info = profile?.organisationInfo;
 
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<OrgInfoFields>({
-    companyName: "", industry: "", rcNumber: "", contactEmail: "", phone: "", website: "",
-  });
+  const [phone,   setPhone]   = useState("");
+  const [website, setWebsite] = useState("");
 
-  // Sync form when profile loads or editing starts
+  // Sync editable fields when profile loads
   useEffect(() => {
     if (info) {
-      setForm({
-        companyName:  info.companyName  ?? "",
-        industry:     info.industry     ?? "",
-        rcNumber:     info.rcNumber     ?? "",
-        contactEmail: info.contactEmail ?? "",
-        phone:        info.phone        ?? "",
-        website:      info.website      ?? "",
-      });
+      setPhone(info.phone   ?? "");
+      setWebsite(info.website ?? "");
     }
-  }, [info, editing]);
+  }, [info]);
 
-  function set(key: keyof OrgInfoFields) {
-    return (v: string) => setForm((f) => ({ ...f, [key]: v }));
-  }
+  const isDirty =
+    phone   !== (info?.phone   ?? "") ||
+    website !== (info?.website ?? "");
 
   function handleSave() {
-    updateInfo.mutate(
-      {
-        companyName:  form.companyName.trim(),
-        industry:     form.industry?.trim()     || undefined,
-        rcNumber:     form.rcNumber.trim(),
-        contactEmail: form.contactEmail.trim(),
-        phone:        form.phone?.trim()        || undefined,
-        website:      form.website?.trim()      || undefined,
-      },
-      { onSuccess: () => setEditing(false) }
-    );
+    if (!info) return;
+    updateInfo.mutate({
+      companyName:  info.companyName,
+      rcNumber:     info.rcNumber,
+      contactEmail: info.contactEmail,
+      industry:     info.industry,
+      phone:        phone.trim()   || undefined,
+      website:      website.trim() || undefined,
+    });
   }
 
-  function handleCancel() {
-    setEditing(false);
+  function handleReset() {
+    setPhone(info?.phone   ?? "");
+    setWebsite(info?.website ?? "");
   }
 
   const busy = updateInfo.isPending;
@@ -126,17 +117,12 @@ function OrgInfoCard() {
           <h3 className="font-semibold text-[hsl(var(--foreground))] text-base">Organisation Info</h3>
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">Company name, registration, and contact details</p>
         </div>
-        {!isLoading && !editing && (
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setEditing(true)}>
-            <Pencil className="h-3.5 w-3.5" /> Edit
-          </Button>
-        )}
-        {editing && (
+        {!isLoading && isDirty && (
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={handleCancel} disabled={busy}>
-              <X className="h-3.5 w-3.5" /> Cancel
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={handleReset} disabled={busy}>
+              <X className="h-3.5 w-3.5" /> Reset
             </Button>
-            <Button size="sm" className="gap-1.5" onClick={handleSave} disabled={busy || !form.companyName.trim()}>
+            <Button size="sm" className="gap-1.5" onClick={handleSave} disabled={busy}>
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
               {busy ? "Saving…" : "Save"}
             </Button>
@@ -149,12 +135,14 @@ function OrgInfoCard() {
           ? [...Array(6)].map((_, i) => <FieldSkeleton key={i} />)
           : (
             <>
-              <Field id="companyName"  label="Company Name"  value={editing ? form.companyName  : info?.companyName}  onChange={set("companyName")}  icon={Building2} readOnly={!editing} placeholder="e.g. Acme Corp" />
-              <Field id="industry"     label="Industry"      value={editing ? form.industry     : info?.industry}     onChange={set("industry")}     icon={Briefcase} readOnly={!editing} placeholder="e.g. Finance" />
-              <Field id="rcNumber"     label="RC Number"     value={editing ? form.rcNumber     : info?.rcNumber}     onChange={set("rcNumber")}     icon={Hash}      readOnly={!editing} placeholder="RC123456" />
-              <Field id="contactEmail" label="Contact Email" value={editing ? form.contactEmail : info?.contactEmail} onChange={set("contactEmail")} icon={Mail}      readOnly={!editing} type="email" placeholder="contact@company.com" />
-              <Field id="phone"        label="Phone"         value={editing ? form.phone        : info?.phone}        onChange={set("phone")}        icon={Phone}     readOnly={!editing} type="tel" placeholder="+234 800 000 0000" />
-              <Field id="website"      label="Website"       value={editing ? form.website      : info?.website}      onChange={set("website")}      icon={Globe}     readOnly={!editing} type="url" placeholder="https://company.com" />
+              {/* Read-only fields */}
+              <Field id="companyName"  label="Company Name"  value={info?.companyName}  icon={Building2} readOnly />
+              <Field id="industry"     label="Industry"      value={info?.industry}     icon={Briefcase} readOnly />
+              <Field id="rcNumber"     label="RC Number"     value={info?.rcNumber}     icon={Hash}      readOnly />
+              <Field id="contactEmail" label="Contact Email" value={info?.contactEmail} icon={Mail}      readOnly type="email" />
+              {/* Editable fields */}
+              <Field id="phone"   label="Phone"   value={phone}   onChange={setPhone}   icon={Phone} type="tel" placeholder="+234 800 000 0000" />
+              <Field id="website" label="Website" value={website} onChange={setWebsite} icon={Globe} type="url" placeholder="https://company.com" />
             </>
           )}
       </div>
