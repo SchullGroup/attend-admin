@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Trophy, Users, FileText, Lightbulb, Star, ChevronDown,
   Plus, Trash2, ToggleLeft, ToggleRight, ListOrdered, Target, Award,
-  ClipboardList, UserCheck, BookOpen,
+  ClipboardList, UserCheck, BookOpen, ChevronRight, ExternalLink, Code,
 } from "lucide-react";
 import {
   useClientChallengeDetail,
@@ -53,6 +53,15 @@ function statusChip(status: string) {
 const STATUS_OPTIONS: ApplicationStatus[] = [
   "SUBMITTED", "UNDER_REVIEW", "SHORTLISTED", "SELECTED", "NOT_PROGRESSED",
 ];
+
+// Valid transitions per the API contract
+const VALID_TRANSITIONS: Record<string, ApplicationStatus[]> = {
+  SUBMITTED:      ["UNDER_REVIEW", "NOT_PROGRESSED"],
+  UNDER_REVIEW:   ["SHORTLISTED", "NOT_PROGRESSED"],
+  SHORTLISTED:    ["SELECTED", "NOT_PROGRESSED"],
+  SELECTED:       [],
+  NOT_PROGRESSED: [],
+};
 
 // ---------------------------------------------------------------------------
 // Overview tab
@@ -413,31 +422,44 @@ function ApplicationsTab({ challengeId }: { challengeId: string }) {
                     {app.submittedLabel || formatDate(app.submittedAt)}
                   </td>
                   <td className="px-5 py-3 text-right">
-                    <div className="relative inline-block">
+                    <div className="relative inline-flex items-center gap-1">
                       <Button
                         size="sm"
-                        variant="outline"
-                        className="h-7 text-xs gap-1"
-                        onClick={() => setOpenMenu(openMenu === app.id ? null : app.id)}
+                        variant="ghost"
+                        className="h-7 text-xs gap-1 px-2"
+                        onClick={() => setSelectedApp(app.id)}
                       >
-                        Status <ChevronDown className="h-3 w-3" />
+                        View <ChevronRight className="h-3 w-3" />
                       </Button>
-                      {openMenu === app.id && (
-                        <div className="absolute right-0 top-8 z-50 min-w-[170px] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-lg p-1">
-                          {STATUS_OPTIONS.map((s) => (
-                            <button
-                              key={s}
-                              className="w-full text-left px-3 py-1.5 text-xs rounded-lg hover:bg-[hsl(var(--accent))] transition-colors"
-                              onClick={() => {
-                                updateStatus.mutate({ challengeId, applicationId: app.id, status: s });
-                                setOpenMenu(null);
-                              }}
-                            >
-                              {statusChip(s)}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                      <div className="relative">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => setOpenMenu(openMenu === app.id ? null : app.id)}
+                        >
+                          Status <ChevronDown className="h-3 w-3" />
+                        </Button>
+                        {openMenu === app.id && (
+                          <div className="absolute right-0 top-8 z-50 min-w-[170px] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-lg p-1">
+                            {(VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).map((s) => (
+                              <button
+                                key={s}
+                                className="w-full text-left px-3 py-1.5 text-xs rounded-lg hover:bg-[hsl(var(--accent))] transition-colors"
+                                onClick={() => {
+                                  updateStatus.mutate({ challengeId, applicationId: app.id, status: s });
+                                  setOpenMenu(null);
+                                }}
+                              >
+                                {statusChip(s)}
+                              </button>
+                            ))}
+                            {(VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).length === 0 && (
+                              <p className="px-3 py-2 text-xs text-[hsl(var(--muted-foreground))]">No transitions</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -474,6 +496,15 @@ function ApplicationDetailPanel({
   if (isLoading) return <Loader variant="inline" text="Loading application…" />;
   if (!app) return <p className="text-sm text-[hsl(var(--muted-foreground))]">Not found.</p>;
 
+  const validNext = VALID_TRANSITIONS[app.status?.toUpperCase()] ?? [];
+  const links = [
+    { label: "Pitch Deck",    url: app.pitchDeckUrl,     icon: FileText },
+    { label: "GitHub",        url: app.githubUrl,        icon: Code },
+    { label: "Website",       url: app.websiteUrl,       icon: ExternalLink },
+    { label: "Video",         url: app.videoUrl,         icon: ExternalLink },
+    { label: "Presentation",  url: app.presentationUrl,  icon: ExternalLink },
+  ].filter((l) => l.url);
+
   return (
     <div className="flex flex-col gap-5">
       <button
@@ -497,6 +528,11 @@ function ApplicationDetailPanel({
               <div className="flex-1">
                 <h2 className="text-lg font-bold text-[hsl(var(--foreground))]">{app.teamName}</h2>
                 <p className="text-sm text-[hsl(var(--muted-foreground))]">{app.ideaTitle}</p>
+                {app.track && (
+                  <span className="text-xs px-2 py-0.5 rounded-full mt-1 inline-block font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
+                    {app.track}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 {statusChip(app.status)}
@@ -508,6 +544,65 @@ function ApplicationDetailPanel({
               </div>
             </div>
           </Card>
+
+          {/* Submission content */}
+          {app.ideaDescription && (
+            <Card className="attend-card p-5">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-2 flex items-center gap-2">
+                <Lightbulb className="h-4 w-4" /> Idea
+              </h2>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] leading-relaxed whitespace-pre-wrap">{app.ideaDescription}</p>
+            </Card>
+          )}
+
+          {app.problemStatement && (
+            <Card className="attend-card p-5">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-2 flex items-center gap-2">
+                <Target className="h-4 w-4" /> Problem Statement
+              </h2>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] leading-relaxed whitespace-pre-wrap">{app.problemStatement}</p>
+            </Card>
+          )}
+
+          {app.solutionDescription && (
+            <Card className="attend-card p-5">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-2 flex items-center gap-2">
+                <ClipboardList className="h-4 w-4" /> Solution
+              </h2>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] leading-relaxed whitespace-pre-wrap">{app.solutionDescription}</p>
+            </Card>
+          )}
+
+          {app.techStack && (
+            <Card className="attend-card p-5">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-2 flex items-center gap-2">
+                <Code className="h-4 w-4" /> Tech Stack
+              </h2>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] leading-relaxed whitespace-pre-wrap">{app.techStack}</p>
+            </Card>
+          )}
+
+          {/* Links */}
+          {links.length > 0 && (
+            <Card className="attend-card p-5">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3 flex items-center gap-2">
+                <ExternalLink className="h-4 w-4" /> Submission Links
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {links.map((l) => (
+                  <a
+                    key={l.label}
+                    href={l.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-[hsl(var(--border))] hover:bg-[hsl(var(--accent))] transition-colors"
+                  >
+                    <l.icon className="h-3.5 w-3.5" /> {l.label}
+                  </a>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Members */}
           {app.members?.length > 0 && (
@@ -547,10 +642,7 @@ function ApplicationDetailPanel({
                         </span>
                       </div>
                       <div className="h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${pct}%`, backgroundColor: "#7c22c9" }}
-                        />
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: "#7c22c9" }} />
                       </div>
                     </div>
                   );
@@ -562,25 +654,25 @@ function ApplicationDetailPanel({
 
         {/* Right sidebar */}
         <div className="flex flex-col gap-5">
-          {/* Status update */}
+          {/* Status update — only valid transitions */}
           <Card className="attend-card p-5">
-            <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3">Update Status</h2>
-            <div className="flex flex-col gap-2">
-              {STATUS_OPTIONS.map((s) => (
-                <button
-                  key={s}
-                  disabled={app.status === s}
-                  onClick={() => onStatusChange(app.id, s)}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors ${
-                    app.status === s
-                      ? "bg-[hsl(var(--muted))] cursor-not-allowed"
-                      : "hover:bg-[hsl(var(--accent))] border border-[hsl(var(--border))]"
-                  }`}
-                >
-                  {statusChip(s)}
-                </button>
-              ))}
-            </div>
+            <h2 className="font-semibold text-[hsl(var(--foreground))] mb-1">Update Status</h2>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3">Current: {statusChip(app.status)}</p>
+            {validNext.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                {validNext.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => onStatusChange(app.id, s)}
+                    className="w-full text-left px-3 py-2 rounded-lg text-xs transition-colors hover:bg-[hsl(var(--accent))] border border-[hsl(var(--border))]"
+                  >
+                    Move to {statusChip(s)}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">No further transitions available.</p>
+            )}
           </Card>
 
           {/* Status history */}
@@ -613,6 +705,12 @@ function ApplicationDetailPanel({
                 <span className="text-xs text-[hsl(var(--muted-foreground))]">Track</span>
                 <span className="text-xs font-medium text-[hsl(var(--foreground))]">{app.track || "—"}</span>
               </div>
+              {app.targetAudience && (
+                <div className="py-2 flex justify-between">
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">Target Audience</span>
+                  <span className="text-xs font-medium text-[hsl(var(--foreground))]">{app.targetAudience}</span>
+                </div>
+              )}
               <div className="py-2 flex justify-between">
                 <span className="text-xs text-[hsl(var(--muted-foreground))]">Submitted</span>
                 <span className="text-xs font-medium text-[hsl(var(--foreground))]">

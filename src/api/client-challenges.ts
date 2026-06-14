@@ -132,22 +132,34 @@ export interface StatusHistoryEntry {
 }
 
 export interface ApplicationDetail {
-  id:               string;
-  challengeId:      string;
-  challengeTitle:   string;
-  teamName:         string;
-  teamInitial:      string;
-  teamInitialColor: string;
-  ideaTitle:        string;
-  track:            string;
-  status:           string;
-  score:            number | null;
-  scoreOutOf:       number;
-  hasScore:         boolean;
-  submittedAt:      string;
-  members:          TeamMember[];
-  criteriaScores:   CriterionScore[];
-  statusHistory:    StatusHistoryEntry[];
+  id:                  string;
+  challengeId:         string;
+  challengeTitle:      string;
+  teamName:            string;
+  teamInitial:         string;
+  teamInitialColor:    string;
+  ideaTitle:           string;
+  track:               string;
+  status:              string;
+  score:               number | null;
+  scoreOutOf:          number;
+  hasScore:            boolean;
+  submittedAt:         string;
+  members:             TeamMember[];
+  criteriaScores:      CriterionScore[];
+  statusHistory:       StatusHistoryEntry[];
+  // Submission content fields (present on detail fetch)
+  ideaDescription?:    string;
+  solutionDescription?: string;
+  techStack?:          string;
+  problemStatement?:   string;
+  targetAudience?:     string;
+  // Links
+  presentationUrl?:    string;
+  githubUrl?:          string;
+  websiteUrl?:         string;
+  videoUrl?:           string;
+  pitchDeckUrl?:       string;
 }
 
 export interface LeaderboardEntry {
