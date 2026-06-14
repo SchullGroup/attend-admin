@@ -34,6 +34,11 @@ export function ClientView({
   const dateStr = new Date().toLocaleDateString("en-NG", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const timeStr = new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" });
 
+  // Upcoming = everything that isn't live, capped at 7 (latest-created first, API order preserved)
+  const upcomingEvents = allEvents
+    .filter((e) => e.status?.toUpperCase() !== "LIVE")
+    .slice(0, 7);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -46,21 +51,9 @@ export function ClientView({
             {dateStr} · {timeStr}
           </p>
         </div>
-        {liveEvents.length > 0 && (
-          <Link href="/events/live">
-            <div className="flex items-center gap-2.5 bg-red-600 text-white rounded-xl px-4 py-2.5 cursor-pointer hover:bg-red-700 transition-colors">
-              <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
-              <div>
-                <p className="text-xs font-semibold leading-none">{liveEvents[0]?.title?.split("—")[0]?.trim()}</p>
-                <p className="text-xs text-red-200 mt-0.5">Live now</p>
-              </div>
-              <Radio className="h-4 w-4 ml-1 opacity-70" />
-            </div>
-          </Link>
-        )}
       </div>
 
-      {/* Stats — 3 cards (Pending KYC removed per spec) */}
+      {/* Stats */}
       <StatGrid
         cols={3}
         bgOpacity="15"
@@ -71,7 +64,7 @@ export function ClientView({
         ]}
       />
 
-      {/* Quick Actions — 3 tiles */}
+      {/* Quick Actions */}
       <QuickActions
         cols={3}
         items={[
@@ -81,30 +74,62 @@ export function ClientView({
         ]}
       />
 
-      {/* Main grid */}
+      {/* ── Main grid: Events column + Registers ── */}
       <div className="grid grid-cols-5 gap-5">
-        {/* Left: Events */}
-        <div className="col-span-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border)/0.6)]">
-            <div>
-              <h2 className="font-semibold text-[hsl(var(--foreground))]">Platform Events</h2>
-              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                {allEvents.length} event{allEvents.length !== 1 ? "s" : ""} across all organisers
-              </p>
+        {/* Left col: Live Now (if any) + Upcoming Events */}
+        <div className="col-span-3 flex flex-col gap-4">
+
+          {/* Live Now (only when live events exist) */}
+          {(eventsLoading || liveEvents.length > 0) && (
+            <div className="rounded-xl border border-red-200 bg-red-50 overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-red-200">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                  <h2 className="font-semibold text-red-700 text-sm">Live Now</h2>
+                  {liveEvents.length > 0 && (
+                    <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white">
+                      {liveEvents.length}
+                    </span>
+                  )}
+                </div>
+                <Link href="/events/live">
+                  <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-100">
+                    Control Room <ArrowRight className="h-3 w-3" />
+                  </Button>
+                </Link>
+              </div>
+              <div>
+                {eventsLoading
+                  ? <EventRowSkeleton />
+                  : liveEvents.map((event) => <EventRow key={event.id} event={event} />)
+                }
+              </div>
             </div>
-            <Link href="/events">
-              <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-[hsl(var(--muted-foreground))]">
-                See all <ArrowRight className="h-3 w-3" />
-              </Button>
-            </Link>
-          </div>
-          <div>
-            {eventsLoading
-              ? [...Array(5)].map((_, i) => <EventRowSkeleton key={i} />)
-              : allEvents.length === 0
-                ? <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-10">No upcoming events.</p>
-                : allEvents.map((event) => <EventRow key={event.id} event={event} />)
-            }
+          )}
+
+          {/* Upcoming Events (7 latest) */}
+          <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border)/0.6)]">
+              <div>
+                <h2 className="font-semibold text-[hsl(var(--foreground))]">Upcoming Events</h2>
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                  Latest {upcomingEvents.length} event{upcomingEvents.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <Link href="/events">
+                <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-[hsl(var(--muted-foreground))]">
+                  See all <ArrowRight className="h-3 w-3" />
+                </Button>
+              </Link>
+            </div>
+            <div>
+              {eventsLoading
+                ? [...Array(5)].map((_, i) => <EventRowSkeleton key={i} />)
+                : upcomingEvents.length === 0
+                  ? <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-10">No upcoming events.</p>
+                  : upcomingEvents.map((event) => <EventRow key={event.id} event={event} />)
+              }
+            </div>
           </div>
         </div>
 

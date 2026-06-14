@@ -170,11 +170,11 @@ export default function DocumentsPage() {
   const { data: clientDocsData, isLoading: clientLoading } =
     useClientGlobalDocuments(search, registerFilter, eventFilter, typeFilter, 0, 50);
 
-  // Admin document hook (super admin only, kept for backward compat)
+  // Admin document hook (super admin only)
   const { data: adminDocsData, isLoading: adminLoading } =
     useAdminGlobalDocuments(search, "", typeFilter.toLowerCase(), 0, 50);
 
-  const { data: eventOptions  = [] } = useDocumentEventFilterOptions();
+  const { data: eventOptions    = [] } = useDocumentEventFilterOptions();
   const { data: registerOptions = [] } = useDocumentRegisterFilterOptions();
 
   const deleteMutation   = useDeleteGlobalDocument();
@@ -319,32 +319,30 @@ export default function DocumentsPage() {
           ))}
         </div>
 
-        {/* Register filter (client only) */}
-        {!isAdmin && registerOptions.length > 0 && (
-          <select
-            value={registerFilter}
-            onChange={(e) => setRegisterFilter(e.target.value)}
-            className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
-          >
-            <option value="">All Organisers</option>
-            {registerOptions.map((r) => (
-              <option key={r.id} value={r.id}>{r.label}</option>
-            ))}
-          </select>
-        )}
-
-        {/* Event filter (client only) */}
-        {!isAdmin && eventOptions.length > 0 && (
-          <select
-            value={eventFilter}
-            onChange={(e) => setEventFilter(e.target.value)}
-            className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
-          >
-            <option value="">All Events</option>
-            {eventOptions.map((e) => (
-              <option key={e.id} value={e.id}>{e.label}</option>
-            ))}
-          </select>
+        {/* Organiser + Event dropdowns (client only) */}
+        {!isAdmin && (
+          <div className="flex items-center gap-2">
+            <select
+              value={registerFilter}
+              onChange={(e) => setRegisterFilter(e.target.value)}
+              className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
+            >
+              <option value="">All Organisers</option>
+              {registerOptions.map((r) => (
+                <option key={r.id} value={r.id}>{r.label}</option>
+              ))}
+            </select>
+            <select
+              value={eventFilter}
+              onChange={(e) => setEventFilter(e.target.value)}
+              className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
+            >
+              <option value="">All Events</option>
+              {eventOptions.map((e) => (
+                <option key={e.id} value={e.id}>{e.label}</option>
+              ))}
+            </select>
+          </div>
         )}
 
         {/* Search */}
