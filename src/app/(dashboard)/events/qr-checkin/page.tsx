@@ -3,8 +3,10 @@ import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { QrCode, CheckCircle2, ShieldCheck, Clock, Users, Wifi, ChevronRight } from "lucide-react";
+import { useClientScanQr } from "@/api/client-events";
 
 const MOCK_ATTENDEES = [
   { name: "Ngozi Okafor",    email: "ngozi.okafor@email.com",     seatRef: "A-14", kycStatus: "Full KYC" },
@@ -46,12 +48,49 @@ function initials(name: string) {
 
 function ScannerView({ event, onBack }: { event: any; onBack: () => void }) {
   const [scanIndex, setScanIndex]   = useState(0);
+  const [qrToken, setQrToken]       = useState("");
   const [lastScan, setLastScan]     = useState<ScannedAttendee | null>(null);
   const [scanning, setScanning]     = useState(false);
   const [checkins, setCheckins]     = useState<CheckIn[]>(SEED_CHECKINS);
   const [totalToday, setTotalToday] = useState(SEED_CHECKINS.length);
 
-  function simulateScan() {
+  const scanQr = useClientScanQr();
+
+  function handleScan(tokenOverride?: string) {
+    const token = tokenOverride ?? qrToken.trim();
+
+    // If a real token is provided, call the API
+    if (token) {
+      setScanning(true);
+      scanQr.mutate(
+        { eventId: event.id, qrToken: token },
+        {
+          onSuccess: (data) => {
+            const name = data?.fullName ?? "Attendee";
+            const attendee: ScannedAttendee = {
+              name,
+              email:     data?.email     ?? "",
+              seatRef:   data?.seatRef   ?? "—",
+              kycStatus: data?.kycStatus ?? "Unknown",
+            };
+            setLastScan(attendee);
+            setQrToken("");
+            setScanning(false);
+            const time = new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" });
+            setCheckins((prev) => [
+              { name, time, method: "QR Scan", status: "Verified" },
+              ...prev,
+            ]);
+            setTotalToday((n) => n + 1);
+            toast.success(`${name} checked in successfully`);
+          },
+          onError: () => { setScanning(false); },
+        }
+      );
+      return;
+    }
+
+    // Fallback: simulate scan for demo purposes
     setScanning(true);
     setTimeout(() => {
       const attendee = MOCK_ATTENDEES[scanIndex % MOCK_ATTENDEES.length];
@@ -139,9 +178,17 @@ function ScannerView({ event, onBack }: { event: any; onBack: () => void }) {
                   </>
                 )}
               </div>
-              <Button className="w-full" disabled={scanning} onClick={simulateScan} style={{ backgroundColor: "#16a34a", color: "white" }}>
+              {/* QR token input for real scans */}
+              <Input
+                placeholder="Paste QR token…"
+                value={qrToken}
+                onChange={(e) => setQrToken(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && qrToken.trim()) handleScan(); }}
+                className="mb-2 text-sm"
+              />
+              <Button className="w-full" disabled={scanning} onClick={() => handleScan()} style={{ backgroundColor: "#16a34a", color: "white" }}>
                 <QrCode className="h-4 w-4 mr-2" />
-                {scanning ? "Scanning…" : "Simulate Scan"}
+                {scanning ? "Scanning…" : qrToken.trim() ? "Check In" : "Simulate Scan"}
               </Button>
             </div>
           </Card>

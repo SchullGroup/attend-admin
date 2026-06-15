@@ -18,6 +18,7 @@ import {
   useMarkClientNotificationRead,
 } from "@/api/notifications";
 import { useGlobalSearch } from "@/api/super-admin";
+import { useClientSearch, type SearchEvent, type SearchTeamMember, type SearchDocument } from "@/api/client-search";
 import { timeAgo } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -106,24 +107,40 @@ export function Header() {
   const { mutate: logout } = useLogout();
   const breadcrumbs = getBreadcrumbs(pathname);
 
+  // ── Role detection — must come before hooks that depend on it ─────────────
+  const isAdmin = ADMIN_ROLES.has(currentUser?.role?.toLowerCase() ?? "");
+
   // ── Search state ───────────────────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState("");
   const [searchOpen, setSearchOpen]   = useState(false);
   const debouncedQ = useDebounce(searchInput, 350);
   const searchRef  = useRef<HTMLDivElement>(null);
 
-  // Rule 3: q param bound via params: { q } inside the hook
-  const { data: searchResults, isFetching: searching } = useGlobalSearch({
-    q: debouncedQ,
+  // Both hooks called unconditionally (Rules of Hooks).
+  // Pass empty string to disable the hook that doesn't apply to the current role.
+  const { data: adminSearchResults, isFetching: adminSearching } = useGlobalSearch({
+    q: isAdmin ? debouncedQ : "",
     limit: 5,
   });
+  const { data: clientSearchResults, isFetching: clientSearching } = useClientSearch(
+    isAdmin ? "" : debouncedQ,
+    5
+  );
 
-  // Rule 2: unwrap the three grouped arrays from the payload
-  const resultEvents       = searchResults?.events       || [];
-  const resultParticipants = searchResults?.participants  || [];
-  const resultStakeholders = searchResults?.stakeholders  || [];
-  const hasResults = resultEvents.length + resultParticipants.length + resultStakeholders.length > 0;
-  const totalResults = searchResults?.totalResults ?? 0;
+  const searching = isAdmin ? adminSearching : clientSearching;
+
+  // Admin result groups: events / participants / stakeholders
+  const resultEvents: SearchEvent[] = isAdmin ? (adminSearchResults?.events as SearchEvent[] || []) : (clientSearchResults?.events || []);
+  const resultParticipants = isAdmin ? (adminSearchResults?.participants  || []) : [];
+  const resultStakeholders = isAdmin ? (adminSearchResults?.stakeholders  || []) : [];
+  // Client-only groups
+  const resultTeamMembers: SearchTeamMember[] = isAdmin ? [] : (clientSearchResults?.teamMembers || []);
+  const resultDocuments:   SearchDocument[]    = isAdmin ? [] : (clientSearchResults?.documents    || []);
+
+  const hasResults = resultEvents.length + resultParticipants.length + resultStakeholders.length + resultTeamMembers.length + resultDocuments.length > 0;
+  const totalResults = hasResults
+    ? resultEvents.length + resultParticipants.length + resultStakeholders.length + resultTeamMembers.length + resultDocuments.length
+    : 0;
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -141,9 +158,6 @@ export function Header() {
     setSearchInput("");
     router.push(href);
   }
-
-  // ── Role detection (for picking the right notifications endpoint) ──────────
-  const isAdmin = ADMIN_ROLES.has(currentUser?.role?.toLowerCase() ?? "");
 
   // ── Stakeholder logo for client users ──────────────────────────────────────
   const { data: stakeholder } = useClientStakeholder({ enabled: !!currentUser && !isAdmin });
@@ -285,7 +299,7 @@ export function Header() {
               </div>
             )}
 
-            {/* Stakeholders group */}
+            {/* Stakeholders group (admin only) */}
             {resultStakeholders.length > 0 && (
               <div>
                 <div className="px-4 pt-3 pb-1 flex items-center gap-1.5 border-t border-[hsl(var(--border)/0.5)]">
@@ -304,6 +318,57 @@ export function Header() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{s.name}</p>
                       {s.industry && <p className="text-xs text-[hsl(var(--muted-foreground))]">{s.industry}</p>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Team Members group (client only) */}
+            {resultTeamMembers.length > 0 && (
+              <div>
+                <div className="px-4 pt-3 pb-1 flex items-center gap-1.5 border-t border-[hsl(var(--border)/0.5)]">
+                  <Users className="h-3 w-3 text-[hsl(var(--muted-foreground))]" />
+                  <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Team Members</span>
+                </div>
+                {resultTeamMembers.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => handleSearchNav("/settings/team")}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.5)] transition-colors text-left"
+                  >
+                    <div className="h-7 w-7 rounded-full bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-xs font-bold text-[hsl(var(--primary))] shrink-0">
+                      {m.fullName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{m.fullName}</p>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{m.email}</p>
+                    </div>
+                    <span className="text-xs text-[hsl(var(--muted-foreground))] capitalize shrink-0">{m.role?.toLowerCase()}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Documents group (client only) */}
+            {resultDocuments.length > 0 && (
+              <div>
+                <div className="px-4 pt-3 pb-1 flex items-center gap-1.5 border-t border-[hsl(var(--border)/0.5)]">
+                  <CalendarDays className="h-3 w-3 text-[hsl(var(--muted-foreground))]" />
+                  <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Documents</span>
+                </div>
+                {resultDocuments.map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => handleSearchNav(d.eventId ? `/events/${d.eventId}` : "/documents")}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.5)] transition-colors text-left"
+                  >
+                    <div className="h-7 w-7 rounded-lg bg-[hsl(var(--muted))] flex items-center justify-center shrink-0">
+                      <Building2 className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{d.title}</p>
+                      {d.fileType && <p className="text-xs text-[hsl(var(--muted-foreground))] uppercase">{d.fileType}</p>}
                     </div>
                   </button>
                 ))}

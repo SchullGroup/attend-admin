@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   BarChart2,
+  UserCheck,
 } from "lucide-react";
 import {
   useAnalyticsStats,
@@ -15,6 +16,8 @@ import {
   useAnalyticsRsvpsByEvent,
   useAnalyticsFillRateOverview,
   useAnalyticsEventPerformance,
+  useAnalyticsCheckInOverview,
+  useAnalyticsMonthlyTrend,
   extractStat,
 } from "@/api/client-analytics";
 import { Card } from "@/components/ui/card";
@@ -95,13 +98,15 @@ export default function AnalyticsPage() {
   const [perfPage, setPerfPage] = useState(0);
   const perfSize = 10;
 
-  const { data: stats,       isLoading: statsLoading  } = useAnalyticsStats();
-  const { data: byType,      isLoading: byTypeLoading  } = useAnalyticsByType();
-  const { data: rsvps,       isLoading: rsvpsLoading   } = useAnalyticsRsvpsByEvent();
-  const { data: fillRate,    isLoading: fillLoading     } = useAnalyticsFillRateOverview();
-  const { data: performance, isLoading: perfLoading     } = useAnalyticsEventPerformance(perfPage, perfSize);
+  const { data: stats,        isLoading: statsLoading  } = useAnalyticsStats();
+  const { data: byType,       isLoading: byTypeLoading  } = useAnalyticsByType();
+  const { data: rsvps,        isLoading: rsvpsLoading   } = useAnalyticsRsvpsByEvent();
+  const { data: fillRate,     isLoading: fillLoading     } = useAnalyticsFillRateOverview();
+  const { data: performance,  isLoading: perfLoading     } = useAnalyticsEventPerformance(perfPage, perfSize);
+  const { data: checkInData,  isLoading: checkInLoading  } = useAnalyticsCheckInOverview();
+  const { data: trendData,    isLoading: trendLoading    } = useAnalyticsMonthlyTrend();
 
-  const loading = statsLoading || byTypeLoading || rsvpsLoading || fillLoading || perfLoading;
+  const loading = statsLoading || byTypeLoading || rsvpsLoading || fillLoading || perfLoading || checkInLoading || trendLoading;
   if (loading) return <Loader variant="page" text="Loading Analytics…" />;
 
   const byTypeItems  = byType?.items ?? [];
@@ -153,6 +158,16 @@ export default function AnalyticsPage() {
 
   // RSVPs bar chart — max for scaling
   const maxRsvp = Math.max(...rsvpEvents.map((e) => e.rsvpCount ?? 0), 1);
+
+  // Check-In Overview
+  const checkInEvents      = checkInData?.events ?? [];
+  const totalRegistrations = checkInData?.totalRegistrations ?? 0;
+  const totalCheckedIn     = checkInData?.totalCheckedIn     ?? 0;
+  const overallCheckInRate = checkInData?.overallCheckInRate ?? 0;
+
+  // Monthly Trend
+  const trendMonths = trendData?.trend ?? [];
+  const maxTrend    = Math.max(...trendMonths.map((m) => m.registrations), 1);
 
   return (
     <div className="flex flex-col gap-6">
@@ -327,6 +342,90 @@ export default function AnalyticsPage() {
         )}
       </Card>
 
+      {/* Check-In Overview + Monthly Trend */}
+      <div className="grid grid-cols-2 gap-5">
+
+        {/* Check-In Overview */}
+        <Card className="attend-card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <UserCheck className="h-4 w-4 text-[hsl(var(--primary))]" />
+            <span className="attend-section-title">Check-In Overview</span>
+          </div>
+
+          {/* Summary row */}
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {[
+              { label: "Registrations", value: totalRegistrations, color: "#2563eb" },
+              { label: "Checked In",    value: totalCheckedIn,     color: "#16a34a" },
+              { label: "Check-In Rate", value: `${Math.round(overallCheckInRate)}%`, color: "#f59e0b" },
+            ].map((s) => (
+              <div key={s.label} className="rounded-xl p-3 border border-[hsl(var(--border))] text-center">
+                <div className="text-xl font-bold tabular-nums" style={{ color: s.color }}>{s.value}</div>
+                <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Per-event breakdown */}
+          {checkInEvents.length > 0 ? (
+            <div className="flex flex-col gap-3 overflow-y-auto max-h-[240px]">
+              {checkInEvents.map((ev) => {
+                const pct = Math.min(Math.round(ev.checkInRate ?? 0), 100);
+                const color = fillRateColor(pct);
+                return (
+                  <div key={ev.eventId}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-[hsl(var(--foreground))] truncate max-w-[60%]">{ev.eventTitle}</span>
+                      <span className="text-xs tabular-nums text-[hsl(var(--muted-foreground))]">
+                        {ev.checkedIn}/{ev.totalRsvps} · {pct}%
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-6 text-center text-sm text-[hsl(var(--muted-foreground))]">No check-in data yet.</div>
+          )}
+        </Card>
+
+        {/* Monthly RSVP Trend */}
+        <Card className="attend-card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp className="h-4 w-4 text-[hsl(var(--primary))]" />
+            <span className="attend-section-title">Monthly RSVP Trend</span>
+          </div>
+          {trendMonths.length === 0 ? (
+            <div className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">No trend data available.</div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {trendMonths.map((m) => {
+                const pct = maxTrend > 0 ? Math.round((m.registrations / maxTrend) * 100) : 0;
+                return (
+                  <div key={m.month}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-[hsl(var(--foreground))]">{m.month}</span>
+                      <span className="text-xs tabular-nums text-[hsl(var(--muted-foreground))]">
+                        {m.registrations.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="h-2.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${pct}%`, backgroundColor: "#2563eb" }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
+
       {/* Event Performance Table */}
       <Card className="attend-card overflow-hidden">
         <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
@@ -349,6 +448,8 @@ export default function AnalyticsPage() {
               <th className="px-5 py-3 text-right">RSVPs</th>
               <th className="px-5 py-3 text-right">Capacity</th>
               <th className="px-5 py-3 text-right">Fill Rate</th>
+              <th className="px-5 py-3 text-right">Checked In</th>
+              <th className="px-5 py-3 text-right">Check-In Rate</th>
               <th className="px-5 py-3 text-left">Status</th>
             </tr>
           </thead>
@@ -395,6 +496,19 @@ export default function AnalyticsPage() {
                       </span>
                     </div>
                   </td>
+                  <td className="px-5 py-3 text-sm text-right tabular-nums text-[hsl(var(--muted-foreground))]">
+                    {(ev.checkedInCount ?? 0).toLocaleString()}
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    {(() => {
+                      const ciRate = Math.round(ev.checkInRate ?? 0);
+                      return (
+                        <span className="text-xs font-semibold tabular-nums" style={{ color: fillRateColor(ciRate) }}>
+                          {ciRate}%
+                        </span>
+                      );
+                    })()}
+                  </td>
                   <td className="px-5 py-3">
                     <span
                       className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold"
@@ -408,7 +522,7 @@ export default function AnalyticsPage() {
             })}
             {perfEvents.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
+                <td colSpan={8} className="py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
                   No event performance data available.
                 </td>
               </tr>

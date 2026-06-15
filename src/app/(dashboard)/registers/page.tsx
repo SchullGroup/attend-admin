@@ -23,7 +23,6 @@ import type { RegisterItem } from "@/types/super-admin";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
-import { DateCell } from "@/components/ui/date-cell";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -125,7 +124,7 @@ export default function RegistersPage() {
                 <th className="px-5 py-3 text-left">RC Number</th>
                 <th className="px-5 py-3 text-left">Events</th>
                 <th className="px-5 py-3 text-left">Status</th>
-                <th className="px-5 py-3 text-left">Enrolled</th>
+                <th className="px-5 py-3 text-left">Industry</th>
                 <th className="px-5 py-3 text-left">Actions</th>
               </tr>
             </thead>
@@ -178,14 +177,12 @@ export default function RegistersPage() {
                       </div>
                     </td>
 
-                    {/* Enrolled date — fallback: enrolledAt → approvedAt → createdAt */}
-                    <td className="px-5 py-3">
-                      {(() => {
-                        const d = reg.enrolledAt ?? reg.approvedAt ?? reg.createdAt;
-                        return d
-                          ? <DateCell value={d} />
-                          : <i className="text-xs text-[hsl(var(--muted-foreground))]">—</i>;
-                      })()}
+                    {/* Industry */}
+                    <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                      {reg.industry != null && reg.industry !== ""
+                        ? reg.industry
+                        : <i>—</i>
+                      }
                     </td>
 
                     {/* Actions */}

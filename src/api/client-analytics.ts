@@ -83,17 +83,51 @@ export interface RsvpsByEventResponse {
 }
 
 export interface EventPerformanceItem {
-  eventId:       string;
-  eventTitle:    string;
-  title?:        string;
-  eventType:     string;
-  date:          string;
-  rsvpCount:     number;
-  capacity:      number;
-  fillRate:      number;
-  attendeeCount: number;
-  status:        string;
-  dotColor?:     string;
+  eventId:        string;
+  eventTitle:     string;
+  title?:         string;
+  eventType:      string;
+  date:           string;
+  rsvpCount:      number;
+  capacity:       number;
+  fillRate:       number;
+  attendeeCount:  number;
+  checkedInCount: number;
+  checkInRate:    number;
+  status:         string;
+  dotColor?:      string;
+}
+
+// ---------------------------------------------------------------------------
+// Check-In Overview
+// ---------------------------------------------------------------------------
+
+export interface CheckInEventItem {
+  eventId:        string;
+  eventTitle:     string;
+  totalRsvps:     number;
+  checkedIn:      number;
+  checkInRate:    number;
+}
+
+export interface CheckInOverviewResponse {
+  totalRegistrations: number;
+  totalCheckedIn:     number;
+  overallCheckInRate: number;
+  events:             CheckInEventItem[];
+}
+
+// ---------------------------------------------------------------------------
+// Monthly RSVP Trend
+// ---------------------------------------------------------------------------
+
+export interface MonthlyTrendItem {
+  month:         string;   // e.g. "Jan 2025"
+  registrations: number;
+}
+
+export interface MonthlyTrendResponse {
+  trend: MonthlyTrendItem[];
 }
 
 export interface EventPerformanceResponse {
@@ -107,13 +141,15 @@ export interface EventPerformanceResponse {
 // Query keys
 // ---------------------------------------------------------------------------
 export const clientAnalyticsKeys = {
-  all:             ["clientAnalytics"] as const,
-  stats:           ["clientAnalytics", "stats"] as const,
-  byType:          ["clientAnalytics", "byType"] as const,
-  fillRateOverview:["clientAnalytics", "fillRateOverview"] as const,
-  rsvpsByEvent:    ["clientAnalytics", "rsvpsByEvent"] as const,
-  performance:     (page: number, size: number) =>
-                     ["clientAnalytics", "performance", { page, size }] as const,
+  all:              ["clientAnalytics"] as const,
+  stats:            ["clientAnalytics", "stats"] as const,
+  byType:           ["clientAnalytics", "byType"] as const,
+  fillRateOverview: ["clientAnalytics", "fillRateOverview"] as const,
+  rsvpsByEvent:     ["clientAnalytics", "rsvpsByEvent"] as const,
+  performance:      (page: number, size: number) =>
+                      ["clientAnalytics", "performance", { page, size }] as const,
+  checkInOverview:  ["clientAnalytics", "checkInOverview"] as const,
+  monthlyTrend:     ["clientAnalytics", "monthlyTrend"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -184,6 +220,34 @@ export function useAnalyticsEventPerformance(page = 0, size = 10) {
       const res = await apiClient.get<ApiResponse<EventPerformanceResponse>>(
         "/api/v1/client/analytics/event-performance",
         { params: { page, size } }
+      );
+      return res.data.data;
+    },
+    staleTime: 60_000,
+  });
+}
+
+/** Check-in overview: total registrations, checked-in count, overall rate, per-event breakdown. */
+export function useAnalyticsCheckInOverview() {
+  return useQuery({
+    queryKey: clientAnalyticsKeys.checkInOverview,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<CheckInOverviewResponse>>(
+        "/api/v1/client/analytics/check-in-overview"
+      );
+      return res.data.data;
+    },
+    staleTime: 60_000,
+  });
+}
+
+/** Monthly RSVP trend: always 6 months. Returns { trend: [{ month, registrations }] }. */
+export function useAnalyticsMonthlyTrend() {
+  return useQuery({
+    queryKey: clientAnalyticsKeys.monthlyTrend,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<MonthlyTrendResponse>>(
+        "/api/v1/client/analytics/monthly-trend"
       );
       return res.data.data;
     },

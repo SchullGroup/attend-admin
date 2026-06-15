@@ -852,3 +852,35 @@ export function useDeleteExpectedAttendee() {
     onError: (error: any) => parseAndToastApiError(error, "Delete failed."),
   });
 }
+
+// ---------------------------------------------------------------------------
+// QR Check-In Scan  — POST /api/v1/client/events/{eventId}/scan-qr
+// ---------------------------------------------------------------------------
+
+export interface ScanQrRequest {
+  qrToken: string;
+}
+
+export interface ScanQrResponse {
+  success:      boolean;
+  attendeeId?:  string;
+  fullName?:    string;
+  email?:       string;
+  kycStatus?:   string;
+  seatRef?:     string;
+  checkedInAt?: string;
+  message?:     string;
+}
+
+export function useClientScanQr() {
+  return useMutation({
+    mutationFn: async ({ eventId, qrToken }: { eventId: string; qrToken: string }) => {
+      const res = await apiClient.post<ApiResponse<ScanQrResponse>>(
+        `/api/v1/client/events/${eventId}/scan-qr`,
+        { qrToken }
+      );
+      return (res.data as any).data ?? res.data;
+    },
+    onError: (error: any) => parseAndToastApiError(error, "QR scan failed."),
+  });
+}

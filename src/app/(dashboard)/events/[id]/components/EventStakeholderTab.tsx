@@ -39,6 +39,7 @@ export function EventStakeholderTab({ stakeholderName, stakeholderData }: EventS
 
   const eventsCount  = d.eventsCount  ?? d.organizer?.eventsCount  ?? null;
 
+  const logoUrl  = d.logoUrl ?? d.registerLogoUrl ?? d.branding?.logoUrl ?? null;
   const initials = name !== "—"
     ? name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()
     : "?";
@@ -48,8 +49,11 @@ export function EventStakeholderTab({ stakeholderName, stakeholderData }: EventS
       {/* Identity block */}
       <Card className="attend-card p-5">
         <div className="flex items-center gap-4 mb-5">
-          <div className="h-14 w-14 rounded-2xl bg-[hsl(var(--primary)/0.08)] flex items-center justify-center text-base font-bold text-[hsl(var(--primary))] shrink-0">
-            {initials}
+          <div className="h-14 w-14 rounded-2xl bg-[hsl(var(--primary)/0.08)] flex items-center justify-center text-base font-bold text-[hsl(var(--primary))] shrink-0 overflow-hidden border border-[hsl(var(--border))]">
+            {logoUrl
+              ? <img src={logoUrl} alt={name} className="h-full w-full object-cover" />
+              : initials
+            }
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-lg font-bold text-[hsl(var(--foreground))] truncate">{name}</h2>

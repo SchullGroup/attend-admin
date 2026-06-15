@@ -158,6 +158,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     ...(isSuperAdmin ? ["Registrar"] : []),
     "Documents",
     ...(isAGM ? ["Resolutions", "Stakeholders"] : []),
+    ...(isLAUNCH ? ["Stakeholders"] : []),
     "Broadcast",
     ...(isAGM ? ["Vote Results", "Post-AGM"] : []),
     "Settings",
@@ -217,7 +218,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* ── Tab panels ── */}
-      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} expectedAttendeesCount={expectedAttendeesCount} />}
+      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} stakeholderLogoUrl={(apiEvent as any).logoUrl ?? (apiEvent as any).registerLogoUrl ?? (apiEvent as any).branding?.logoUrl ?? undefined} registerId={(apiEvent as any).registerId ?? undefined} expectedAttendeesCount={expectedAttendeesCount} />}
       {tab === "Attendees"          && <EventAttendeesTab   participants={participants} suspendUser={suspendUser} eventId={id} />}
       {tab === "Registrar" && isSuperAdmin && (
         <EventStakeholderTab
@@ -227,7 +228,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       )}
       {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} />}
       {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} />}
-      {tab === "Stakeholders"         && isAGM && <EventExpectedAttendeesTab  eventId={id} />}
+      {tab === "Stakeholders"         && (isAGM || isLAUNCH) && <EventExpectedAttendeesTab  eventId={id} />}
       {tab === "Broadcast"          && <EventBroadcastTab   rsvpCount={rsvpCount} broadcastMsg={broadcastMsg} setBroadcastMsg={setBroadcastMsg} broadcastChannel={broadcastChannel} setBroadcastChannel={setBroadcastChannel} broadcastHistory={broadcastHistory} setBroadcastHistory={setBroadcastHistory} />}
       {tab === "Vote Results"       && isAGM && <EventVoteResultsTab liveVotes={liveVotes} />}
       {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} liveVotes={liveVotes} participants={participants} />}
