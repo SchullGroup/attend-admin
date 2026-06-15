@@ -45,7 +45,21 @@ function toFormatKey(fmt: string): EventShim["format"] {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const ADMIN_ROLES = new Set(["super_admin", "event_manager", "kyc_officer", "judge"]);
+const ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin", "event_manager", "kyc_officer", "judge"]);
+
+function detectIsAdmin(user: { role?: string; roles?: string[] } | null | undefined): boolean {
+  if (!user) return false;
+  // Check single role string
+  const role = (user.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
+  if (ADMIN_ROLES.has(role)) return true;
+  // Check roles array (some API shapes return this instead)
+  if (Array.isArray((user as any).roles)) {
+    return (user as any).roles.some((r: string) =>
+      ADMIN_ROLES.has((r ?? "").toLowerCase().replace(/[-\s]/g, "_"))
+    );
+  }
+  return false;
+}
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -57,7 +71,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   // Wait for user to load before deciding; default false while loading so we
   // never fire admin endpoints for client users.
   const userReady    = !userLoading;
-  const isAdmin      = userReady && !!currentUser && ADMIN_ROLES.has(currentUser.role?.toLowerCase() ?? "");
+  const isAdmin      = userReady && detectIsAdmin(currentUser);
   const isClient     = userReady && !isAdmin;
 
   // ── Data — each hook only fires for the matching role ────────────────────
@@ -147,7 +161,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   // ── Tabs ──────────────────────────────────────────────────────────────────
-  const isSuperAdmin = (currentUser?.role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "super_admin";
+  const isSuperAdmin =
+    (currentUser?.role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "super_admin" ||
+    (Array.isArray((currentUser as any)?.roles) && (currentUser as any).roles.some((r: string) =>
+      (r ?? "").toLowerCase().replace(/[-\s]/g, "_") === "super_admin"
+    ));
 
   const expectedAttendeesCount = expectedAttendeesData?.totalCount ?? 0;
 
@@ -161,7 +179,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     ...(isLAUNCH ? ["Stakeholders"] : []),
     "Broadcast",
     ...(isAGM ? ["Vote Results", "Post-AGM"] : []),
-    "Settings",
+    // Super admin is read-only for events — no settings/mutations
+    ...(!isSuperAdmin ? ["Settings"] : []),
   ];
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -226,13 +245,13 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           stakeholderData={apiEvent as any}
         />
       )}
-      {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} />}
+      {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} isAdmin={isAdmin} />}
       {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} />}
       {tab === "Stakeholders"         && (isAGM || isLAUNCH) && <EventExpectedAttendeesTab  eventId={id} />}
       {tab === "Broadcast"          && <EventBroadcastTab   rsvpCount={rsvpCount} broadcastMsg={broadcastMsg} setBroadcastMsg={setBroadcastMsg} broadcastChannel={broadcastChannel} setBroadcastChannel={setBroadcastChannel} broadcastHistory={broadcastHistory} setBroadcastHistory={setBroadcastHistory} />}
       {tab === "Vote Results"       && isAGM && <EventVoteResultsTab liveVotes={liveVotes} />}
       {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} liveVotes={liveVotes} participants={participants} />}
-      {tab === "Settings"           && <EventSettingsTab    eventId={id} title={event.title} organiser={event.organiser} description={apiEvent.description} currentStatus={currentStatus} featured={(apiEvent as any).featured ?? false} onStatusChange={handleStatusChange} />}
+      {tab === "Settings" && !isSuperAdmin && <EventSettingsTab    eventId={id} title={event.title} organiser={event.organiser} description={apiEvent.description} currentStatus={currentStatus} featured={(apiEvent as any).featured ?? false} onStatusChange={handleStatusChange} />}
     </div>
   );
 }

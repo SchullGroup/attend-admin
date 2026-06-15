@@ -26,6 +26,7 @@ import {
   NotificationResponse,
   NotificationListResponse,
   EventDocumentDetailResponse,
+  EventDocumentSummary,
 } from "@/types/super-admin";
 import { ApiResponse } from "@/types/api";
 
@@ -394,7 +395,7 @@ export function useEventDetail(id: string, opts?: { enabled?: boolean }) {
     queryKey: superAdminKeys.eventDetail(id),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<EventDetailResponse>>(`/api/v1/admin/events/${id}`);
-      return res.data.data;
+      return res.data.data ?? (res.data as any);
     },
     enabled: !!id && (opts?.enabled ?? true),
     staleTime: 60_000,
@@ -419,8 +420,12 @@ export function useEventDocuments(id: string, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: superAdminKeys.eventDocuments(id),
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<any>>(`/api/v1/admin/events/${id}/documents`);
-      return res.data;
+      const res = await apiClient.get<ApiResponse<{ totalCount: number; documents: EventDocumentSummary[] }>>(
+        `/api/v1/admin/events/${id}/documents`
+      );
+      // API wraps in { data: { totalCount, documents: [] } }
+      const payload = res.data.data ?? (res.data as any);
+      return (payload?.documents ?? payload) as EventDocumentSummary[];
     },
     enabled: !!id && (opts?.enabled ?? true),
   });
@@ -450,7 +455,7 @@ export function useEventDocument(eventId: string, documentId: string, enabled = 
       const res = await apiClient.get<ApiResponse<EventDocumentDetailResponse>>(
         `/api/v1/admin/events/${eventId}/documents/${documentId}`
       );
-      return res.data;
+      return (res.data.data ?? res.data) as EventDocumentDetailResponse;
     },
     enabled: enabled && !!eventId && !!documentId,
     staleTime: Infinity,
@@ -459,11 +464,8 @@ export function useEventDocument(eventId: string, documentId: string, enabled = 
 }
 
 /**
- * Mutation variant — use when you want to trigger a one-off download
- * imperatively (e.g. from a table row action button) without pre-fetching.
- *
- * The `onSuccess` callback receives the full response; call
- * `triggerBase64Download` inside your component to hand off to the browser.
+ * Mutation variant — fetches the admin document detail to get the fileUrl,
+ * then opens it for download. Works for both fileUrl and legacy fileData responses.
  */
 export function useDownloadEventDocument() {
   return useMutation({
@@ -471,7 +473,27 @@ export function useDownloadEventDocument() {
       const res = await apiClient.get<ApiResponse<EventDocumentDetailResponse>>(
         `/api/v1/admin/events/${eventId}/documents/${documentId}`
       );
-      return res.data;
+      return (res.data.data ?? res.data) as EventDocumentDetailResponse;
+    },
+    onSuccess: (doc) => {
+      // Prefer direct fileUrl; fall back to legacy base64 fileData
+      if (doc.fileUrl) {
+        const a = document.createElement("a");
+        a.href = doc.fileUrl;
+        a.download = doc.originalFilename || doc.title;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.click();
+      } else if (doc.fileData) {
+        const byteChars = atob(doc.fileData);
+        const bytes = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+        const blob = new Blob([bytes], { type: doc.mimeType || "application/octet-stream" });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement("a");
+        a.href = url; a.download = doc.originalFilename || doc.title; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5_000);
+      }
     },
     onError: (error: any) => {
       popup.error("Download Failed", error?.response?.data?.message || "Could not download the document.");

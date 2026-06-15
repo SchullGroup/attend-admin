@@ -593,17 +593,31 @@ export interface GlobalDocumentListResponse {
 export interface EventDocumentDetailResponse {
   id:               string;
   title:            string;
+  documentType?:    string;
   fileType:         string;
   mimeType:         string;
   originalFilename: string;
   sizeBytes:        number;
-  /**
-   * Raw Base64-encoded file content.
-   * Can be very large — never store in component state directly.
-   * Use the `useEventDocument` hook which decodes lazily only when the
-   * caller explicitly requests a download.
-   */
-  fileData:         string;
+  sizeLabel?:       string;
+  uploadedAt?:      string;
+  downloadCount?:   number;
+  /** Direct download URL returned by the admin detail endpoint. */
+  fileUrl?:         string;
+  /** Legacy base64 payload — may be present on older API versions. */
+  fileData?:        string;
+}
+
+/** Shape of each item in GET /api/v1/admin/events/{id}/documents */
+export interface EventDocumentSummary {
+  id:            string;
+  title:         string;
+  eventId?:      string;
+  eventTitle?:   string;
+  documentType?: string;
+  fileType?:     string;
+  sizeBytes?:    number;
+  sizeLabel?:    string;
+  downloadCount?: number;
 }
 
 // Super Admin Request Types

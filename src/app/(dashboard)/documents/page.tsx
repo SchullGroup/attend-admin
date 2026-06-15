@@ -428,28 +428,30 @@ export default function DocumentsPage() {
                       >
                         <Download className="h-3 w-3" /> Download
                       </Button>
-                      {confirmDeleteId === doc.id ? (
-                        <div className="flex items-center gap-1">
+                      {!isAdmin && (
+                        confirmDeleteId === doc.id ? (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm" variant="ghost"
+                              className="h-7 px-2 text-xs text-red-600 bg-red-50 font-semibold hover:bg-red-100"
+                              disabled={deleteMutation.isPending}
+                              onClick={() => { deleteMutation.mutate(doc.id); setConfirmDeleteId(null); }}
+                            >
+                              Delete
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setConfirmDeleteId(null)}>
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
                           <Button
                             size="sm" variant="ghost"
-                            className="h-7 px-2 text-xs text-red-600 bg-red-50 font-semibold hover:bg-red-100"
-                            disabled={deleteMutation.isPending}
-                            onClick={() => { deleteMutation.mutate(doc.id); setConfirmDeleteId(null); }}
+                            className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => setConfirmDeleteId(doc.id)}
                           >
-                            Delete
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
-                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setConfirmDeleteId(null)}>
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          size="sm" variant="ghost"
-                          className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
-                          onClick={() => setConfirmDeleteId(doc.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        )
                       )}
                     </div>
                   </td>
