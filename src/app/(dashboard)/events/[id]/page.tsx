@@ -175,9 +175,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     // Registrar tab only for super admin (overview already shows it for others)
     ...(isSuperAdmin ? ["Registrar"] : []),
     "Documents",
-    ...(isAGM ? ["Resolutions", "Stakeholders"] : []),
-    ...(isLAUNCH ? ["Stakeholders"] : []),
-    "Broadcast",
+    ...(isAGM && !isSuperAdmin ? ["Resolutions", "Stakeholders"] : isAGM ? ["Resolutions"] : []),
+    ...(!isSuperAdmin && isLAUNCH ? ["Stakeholders"] : []),
+    // Broadcast is a write operation — hidden for super admin (read-only)
+    ...(!isSuperAdmin ? ["Broadcast"] : []),
     ...(isAGM ? ["Vote Results", "Post-AGM"] : []),
     // Super admin is read-only for events — no settings/mutations
     ...(!isSuperAdmin ? ["Settings"] : []),
@@ -237,7 +238,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* ── Tab panels ── */}
-      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} stakeholderLogoUrl={(apiEvent as any).logoUrl ?? (apiEvent as any).registerLogoUrl ?? (apiEvent as any).branding?.logoUrl ?? undefined} expectedAttendeesCount={expectedAttendeesCount} />}
+      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} stakeholderLogoUrl={(apiEvent as any).logoUrl ?? (apiEvent as any).registerLogoUrl ?? (apiEvent as any).branding?.logoUrl ?? undefined} expectedAttendeesCount={expectedAttendeesCount} isSuperAdmin={isSuperAdmin} />}
       {tab === "Attendees"          && <EventAttendeesTab   participants={participants} suspendUser={suspendUser} eventId={id} />}
       {tab === "Registrar" && isSuperAdmin && (
         <EventStakeholderTab
@@ -246,9 +247,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         />
       )}
       {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} isAdmin={isAdmin} />}
-      {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} />}
-      {tab === "Stakeholders"         && (isAGM || isLAUNCH) && <EventExpectedAttendeesTab  eventId={id} />}
-      {tab === "Broadcast"          && <EventBroadcastTab   rsvpCount={rsvpCount} broadcastMsg={broadcastMsg} setBroadcastMsg={setBroadcastMsg} broadcastChannel={broadcastChannel} setBroadcastChannel={setBroadcastChannel} broadcastHistory={broadcastHistory} setBroadcastHistory={setBroadcastHistory} />}
+      {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin} />}
+      {tab === "Stakeholders" && !isSuperAdmin && (isAGM || isLAUNCH) && <EventExpectedAttendeesTab  eventId={id} />}
+      {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab   rsvpCount={rsvpCount} broadcastMsg={broadcastMsg} setBroadcastMsg={setBroadcastMsg} broadcastChannel={broadcastChannel} setBroadcastChannel={setBroadcastChannel} broadcastHistory={broadcastHistory} setBroadcastHistory={setBroadcastHistory} />}
       {tab === "Vote Results"       && isAGM && <EventVoteResultsTab liveVotes={liveVotes} />}
       {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} liveVotes={liveVotes} participants={participants} />}
       {tab === "Settings" && !isSuperAdmin && <EventSettingsTab    eventId={id} title={event.title} organiser={event.organiser} description={apiEvent.description} currentStatus={currentStatus} featured={(apiEvent as any).featured ?? false} onStatusChange={handleStatusChange} />}

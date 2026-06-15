@@ -170,9 +170,9 @@ export default function DocumentsPage() {
   const { data: clientDocsData, isLoading: clientLoading } =
     useClientGlobalDocuments(search, registerFilter, eventFilter, typeFilter, 0, 50);
 
-  // Admin document hook (super admin only)
+  // Admin document hook (super admin only) — pass type as-is (uppercase)
   const { data: adminDocsData, isLoading: adminLoading } =
-    useAdminGlobalDocuments(search, "", typeFilter.toLowerCase(), 0, 50);
+    useAdminGlobalDocuments(search, "", typeFilter, 0, 50);
 
   const { data: eventOptions    = [] } = useDocumentEventFilterOptions();
   const { data: registerOptions = [] } = useDocumentRegisterFilterOptions();
@@ -185,7 +185,7 @@ export default function DocumentsPage() {
 
   // Normalise both list response shapes
   const docs: any[] = isAdmin
-    ? ((adminDocsData?.data as any)?.content ?? (adminDocsData?.data as any)?.documents ?? [])
+    ? (adminDocsData?.documents ?? (adminDocsData as any)?.content ?? [])
     : (clientDocsData?.documents ?? []);
 
   function handleUpload() {

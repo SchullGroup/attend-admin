@@ -26,25 +26,27 @@ export type ApplicationStatus =
   | "SUBMITTED" | "UNDER_REVIEW" | "SHORTLISTED" | "SELECTED" | "NOT_PROGRESSED";
 
 export interface ChallengeItem {
-  id:                 string;
-  title:              string;
-  eventType:          string;
-  date:               string;
-  format:             string;
-  status:             string;
-  organizerName?:     string;
-  registerName?:      string;
-  registrationCount?: number;
-  applicationCount?:  number;
-  shortlistedCount?:  number;
+  id:               string;
+  title:            string;
+  organiserName:    string;
+  date:             string;
+  format:           string;
+  shortlistedTeams: number;
+  status:           string;
+}
+
+export interface ChallengeSummary {
+  activeChallenges:  number;
+  teamsToScore:      number;
+  totalApplications: number;
 }
 
 export interface ChallengeListResponse {
-  content:       ChallengeItem[];
-  totalElements: number;
-  totalPages:    number;
-  size:          number;
-  number:        number;
+  summary:    ChallengeSummary;
+  totalCount: number;
+  page:       number;
+  size:       number;
+  challenges: ChallengeItem[];
 }
 
 export interface ChallengeOverview {
@@ -118,15 +120,19 @@ export const challengeKeys = {
 // ---------------------------------------------------------------------------
 
 /** Paginated challenge list. */
-export function useAdminChallenges(page = 0, size = 20) {
+export function useAdminChallenges(search = "", organiserId = "", status = "", page = 0, size = 20) {
   return useQuery({
-    queryKey: challengeKeys.list(page, size),
+    queryKey: [...challengeKeys.list(page, size), search, organiserId, status] as const,
     queryFn: async () => {
+      const params: Record<string, string | number> = { page, size };
+      if (search)      params.search      = search;
+      if (organiserId) params.organiserId = organiserId;
+      if (status)      params.status      = status;
       const res = await apiClient.get<ApiResponse<ChallengeListResponse>>(
         "/api/v1/admin/challenges",
-        { params: { page, size } }
+        { params }
       );
-      return res.data.data;
+      return (res.data.data ?? (res.data as any)) as ChallengeListResponse;
     },
     staleTime: 30_000,
   });

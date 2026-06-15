@@ -32,11 +32,14 @@ interface Props {
   stakeholderName?:        string;
   stakeholderLogoUrl?:     string;
   expectedAttendeesCount?: number;
+  /** When true, all agenda write actions (add, edit, delete) are hidden */
+  isSuperAdmin?:           boolean;
 }
 
 export function EventOverviewTab({
   event, fill, eventDocs, agendaItems, isAGM, onNavigate,
   stakeholderName, stakeholderLogoUrl, expectedAttendeesCount = 0,
+  isSuperAdmin = false,
 }: Props) {
   const FormatIcon    = FORMAT_ICON[event.format] ?? Monitor;
   const isLAUNCH      = event.module === "LAUNCH";
@@ -332,19 +335,21 @@ export function EventOverviewTab({
                 </span>
               )}
             </h2>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 gap-1.5 text-xs"
-              onClick={() => setShowForm((v) => !v)}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add item
-            </Button>
+            {!isSuperAdmin && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() => setShowForm((v) => !v)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add item
+              </Button>
+            )}
           </div>
 
-          {/* Add form */}
-          {showForm && (
+          {/* Add form — hidden for super_admin */}
+          {!isSuperAdmin && showForm && (
             <div className="mb-4 p-4 rounded-xl bg-[hsl(var(--muted)/0.4)] border border-[hsl(var(--border))] flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -405,7 +410,7 @@ export function EventOverviewTab({
           ) : (
             <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
               {allAgendaItems.map((item, idx) => {
-                const isEditing = editingId === item.id;
+                const isEditing = !isSuperAdmin && editingId === item.id;
                 if (isEditing) {
                   return (
                     <div key={item.id ?? idx} className="py-3 flex flex-col gap-2">
@@ -470,7 +475,7 @@ export function EventOverviewTab({
                         </p>
                       )}
                     </div>
-                    {item.id && (
+                    {item.id && !isSuperAdmin && (
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                         <button
                           onClick={() => startEdit(item)}

@@ -26,13 +26,15 @@ export interface AgmResolution {
 }
 
 interface Props {
-  eventId:       string;
-  isAGM:         boolean;
+  eventId:        string;
+  isAGM:          boolean;
   /** Pre-configured resolutions from agmConfig — passed directly from the API response */
   agmResolutions?: AgmResolution[];
   /** Local state items — used only for unsaved new rows before persisting */
-  agendaItems:   LocalAgendaItem[];
+  agendaItems:    LocalAgendaItem[];
   setAgendaItems: React.Dispatch<React.SetStateAction<LocalAgendaItem[]>>;
+  /** When true, all write actions (add, edit, delete) are hidden */
+  isSuperAdmin?:  boolean;
 }
 
 function Label({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -43,7 +45,7 @@ function Label({ children, className = "" }: { children: React.ReactNode; classN
   );
 }
 
-export function EventResolutionsTab({ eventId, isAGM, agmResolutions = [], agendaItems, setAgendaItems }: Props) {
+export function EventResolutionsTab({ eventId, isAGM, agmResolutions = [], agendaItems, setAgendaItems, isSuperAdmin = false }: Props) {
   // Live data from server (agenda endpoint)
   const { data: serverItems = [], isLoading } = useClientEventAgenda(eventId);
 
@@ -111,10 +113,12 @@ export function EventResolutionsTab({ eventId, isAGM, agmResolutions = [], agend
             </p>
           )}
         </div>
-        <Button size="sm" variant="outline" onClick={addLocalRow} className="gap-1.5">
-          <PlusCircle className="h-3.5 w-3.5" />
-          {isAGM ? "Add Resolution" : "Add Item"}
-        </Button>
+        {!isSuperAdmin && (
+          <Button size="sm" variant="outline" onClick={addLocalRow} className="gap-1.5">
+            <PlusCircle className="h-3.5 w-3.5" />
+            {isAGM ? "Add Resolution" : "Add Item"}
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-col gap-3">
@@ -174,52 +178,60 @@ export function EventResolutionsTab({ eventId, isAGM, agmResolutions = [], agend
                 <Input
                   placeholder="10:00 AM"
                   defaultValue={item.time}
+                  readOnly={isSuperAdmin}
+                  className={isSuperAdmin ? "opacity-70 cursor-default" : ""}
                   onBlur={(e) =>
-                    item.id &&
+                    !isSuperAdmin && item.id &&
                     updateMutation.mutate({ eventId, itemId: item.id, data: { time: e.target.value } })
                   }
                 />
               </div>
             )}
-            <div className={isAGM ? "col-span-9" : "col-span-5"}>
+            <div className={isAGM ? (isSuperAdmin ? "col-span-12" : "col-span-9") : "col-span-5"}>
               <Label className="mb-1.5">{isAGM ? "Resolution title" : "Title"}</Label>
               <Input
                 placeholder={isAGM ? "e.g. Adoption of Financial Statements" : "Agenda item title"}
                 defaultValue={item.title}
+                readOnly={isSuperAdmin}
+                className={isSuperAdmin ? "opacity-70 cursor-default" : ""}
                 onBlur={(e) =>
-                  item.id &&
+                  !isSuperAdmin && item.id &&
                   updateMutation.mutate({ eventId, itemId: item.id, data: { title: e.target.value } })
                 }
               />
             </div>
             {!isAGM && (
-              <div className="col-span-4">
+              <div className={isSuperAdmin ? "col-span-5" : "col-span-4"}>
                 <Label className="mb-1.5">Speaker (optional)</Label>
                 <Input
                   placeholder="Speaker name"
                   defaultValue={item.speaker ?? ""}
+                  readOnly={isSuperAdmin}
+                  className={isSuperAdmin ? "opacity-70 cursor-default" : ""}
                   onBlur={(e) =>
-                    item.id &&
+                    !isSuperAdmin && item.id &&
                     updateMutation.mutate({ eventId, itemId: item.id, data: { speaker: e.target.value } })
                   }
                 />
               </div>
             )}
-            <div className="col-span-1 flex justify-center pb-1">
-              <button
-                type="button"
-                disabled={deleteMutation.isPending}
-                onClick={() => item.id && deleteMutation.mutate({ eventId, itemId: item.id })}
-                className="text-[hsl(var(--muted-foreground))] hover:text-red-500 transition-colors disabled:opacity-40"
-              >
-                {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              </button>
-            </div>
+            {!isSuperAdmin && (
+              <div className="col-span-1 flex justify-center pb-1">
+                <button
+                  type="button"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => item.id && deleteMutation.mutate({ eventId, itemId: item.id })}
+                  className="text-[hsl(var(--muted-foreground))] hover:text-red-500 transition-colors disabled:opacity-40"
+                >
+                  {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                </button>
+              </div>
+            )}
           </div>
         ))}
 
-        {/* ── Unsaved local rows (user-added, not yet persisted) ── */}
-        {newUserRows.map((item, idx) => (
+        {/* ── Unsaved local rows (user-added, not yet persisted) — hidden for super_admin ── */}
+        {!isSuperAdmin && newUserRows.map((item, idx) => (
           <div key={item.id} className="grid grid-cols-12 gap-2 items-end border border-[hsl(var(--primary)/0.2)] rounded-lg p-2 bg-[hsl(var(--primary)/0.02)]">
             {isAGM ? (
               <div className="col-span-2 flex items-center pb-1">

@@ -579,12 +579,30 @@ export interface KycQueueResponse {
   content?:    KycQueueItem[];
 }
 
+export interface GlobalDocumentItem {
+  id:               string;
+  title:            string;
+  documentType:     string;
+  eventId:          string;
+  eventName:        string;
+  registerId:       string;
+  registerName:     string;
+  fileType:         string;
+  mimeType:         string;
+  originalFilename: string;
+  sizeBytes:        number;
+  sizeLabel:        string;
+  uploadedAt:       string;
+  downloadCount:    number;
+  fileUrl:          string;
+}
+
 export interface GlobalDocumentListResponse {
-  content: any[];
-  totalElements: number;
-  totalPages: number;
-  size: number;
-  number: number;
+  totalCount:  number;
+  label?:      string;
+  page:        number;
+  size:        number;
+  documents:   GlobalDocumentItem[];
 }
 
 // ---------------------------------------------------------------------------

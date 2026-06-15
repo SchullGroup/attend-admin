@@ -237,14 +237,15 @@ export function useGlobalDocuments(search = "", eventId = "", type = "", page = 
         page: page.toString(),
         size: limit.toString(),
       });
-      if (search) params.append("search", search);
+      if (search)  params.append("search",  search);
       if (eventId) params.append("eventId", eventId);
-      if (type) params.append("type", type);
+      if (type)    params.append("type",    type);
 
       const res = await apiClient.get<ApiResponse<GlobalDocumentListResponse>>(
         `/api/v1/admin/documents?${params.toString()}`
       );
-      return res.data;
+      // Return the payload directly: { totalCount, documents: [...] }
+      return (res.data.data ?? (res.data as any)) as GlobalDocumentListResponse;
     },
   });
 }

@@ -5,11 +5,15 @@ import {
   Lightbulb, ArrowRight, Trophy, Users, FileText, ChevronRight, Search,
 } from "lucide-react";
 import { useClientChallenges } from "@/api/client-challenges";
+import { useAdminChallenges } from "@/api/admin-challenges";
+import { useGetMe } from "@/api/auth/hooks";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
+
+const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
 
 const STATUS_FILTERS = [
   { label: "All",       value: "" },
@@ -32,12 +36,20 @@ export default function HackathonsPage() {
   const [search,    setSearch]    = useState("");
   const [statusTab, setStatusTab] = useState("");
 
-  const { data, isLoading } = useClientChallenges(search, statusTab, 0, 50);
+  const { data: userResponse } = useGetMe();
+  const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
+  const isSuperAdmin   = SUPER_ADMIN_ROLES.has(normalizedRole);
+
+  const { data: clientData, isLoading: clientLoading } = useClientChallenges(search, statusTab, 0, 50);
+  const { data: adminData,  isLoading: adminLoading  } = useAdminChallenges(search, "", statusTab, 0, 50);
+
+  const isLoading  = isSuperAdmin ? adminLoading : clientLoading;
+  const data       = isSuperAdmin ? adminData    : clientData;
 
   if (isLoading) return <Loader variant="page" text="Loading Challenges…" />;
 
   const summary    = data?.summary;
-  const challenges = data?.challenges ?? [];
+  const challenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; shortlistedTeams?: number; status?: string }>;
   const featured   = challenges.find((c) => c.status?.toUpperCase() === "LIVE") ?? challenges[0] ?? null;
 
   return (
@@ -70,7 +82,7 @@ export default function HackathonsPage() {
                 <>
                   <h2 className="text-2xl font-bold mb-1 truncate">{featured.title}</h2>
                   <p className="text-purple-200 text-sm mb-4">
-                    {featured.organiserName} · {formatDate(featured.date)}
+                    {featured.organiserName} · {formatDate(featured.date ?? "")}
                   </p>
                 </>
               ) : (
@@ -150,7 +162,7 @@ export default function HackathonsPage() {
           </thead>
           <tbody>
             {challenges.map((c) => {
-              const ss = statusStyle(c.status);
+              const ss = statusStyle(c.status ?? "");
               return (
                 <tr key={c.id} className="attend-table-row">
                   <td className="px-5 py-4">
@@ -169,7 +181,7 @@ export default function HackathonsPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-sm text-[hsl(var(--foreground))]">{formatDate(c.date)}</td>
+                  <td className="px-5 py-4 text-sm text-[hsl(var(--foreground))]">{formatDate(c.date ?? "")}</td>
                   <td className="px-5 py-4">
                     <span className="text-xs capitalize text-[hsl(var(--muted-foreground))]">
                       {(c.format ?? "—").toLowerCase()}
