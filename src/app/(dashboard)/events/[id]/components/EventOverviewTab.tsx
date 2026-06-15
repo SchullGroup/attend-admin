@@ -1,6 +1,5 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import {
   FileText, Calendar, Clock, MapPin, Users, Users2, Radio, Monitor,
   ExternalLink, Star, Mic2, Package, Zap, Trophy, ListChecks, CalendarRange,
@@ -32,13 +31,12 @@ interface Props {
   onNavigate:              (tab: string) => void;
   stakeholderName?:        string;
   stakeholderLogoUrl?:     string;
-  registerId?:             string;
   expectedAttendeesCount?: number;
 }
 
 export function EventOverviewTab({
   event, fill, eventDocs, agendaItems, isAGM, onNavigate,
-  stakeholderName, stakeholderLogoUrl, registerId, expectedAttendeesCount = 0,
+  stakeholderName, stakeholderLogoUrl, expectedAttendeesCount = 0,
 }: Props) {
   const FormatIcon    = FORMAT_ICON[event.format] ?? Monitor;
   const isLAUNCH      = event.module === "LAUNCH";
@@ -524,33 +522,18 @@ export function EventOverviewTab({
         {stakeholderName && (
           <Card className="attend-card p-5">
             <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3">Registrar</h2>
-            {registerId ? (
-              <Link href={`/registers/${registerId}`} className="flex items-center gap-3 group">
-                <div className="h-10 w-10 rounded-xl bg-[hsl(var(--muted))] flex items-center justify-center font-bold text-sm shrink-0 text-[hsl(var(--muted-foreground))] overflow-hidden border border-[hsl(var(--border))]">
-                  {stakeholderLogoUrl
-                    ? <img src={stakeholderLogoUrl} alt={stakeholderName} className="h-full w-full object-cover" />
-                    : stakeholderName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)
-                  }
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-[hsl(var(--foreground))] group-hover:text-[hsl(var(--primary))] transition-colors truncate">{stakeholderName}</p>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Managing registrar · View profile →</p>
-                </div>
-              </Link>
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-[hsl(var(--muted))] flex items-center justify-center font-bold text-sm shrink-0 text-[hsl(var(--muted-foreground))] overflow-hidden border border-[hsl(var(--border))]">
-                  {stakeholderLogoUrl
-                    ? <img src={stakeholderLogoUrl} alt={stakeholderName} className="h-full w-full object-cover" />
-                    : stakeholderName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)
-                  }
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{stakeholderName}</p>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Managing registrar</p>
-                </div>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-[hsl(var(--muted))] flex items-center justify-center font-bold text-sm shrink-0 text-[hsl(var(--muted-foreground))] overflow-hidden border border-[hsl(var(--border))]">
+                {stakeholderLogoUrl
+                  ? <img src={stakeholderLogoUrl} alt={stakeholderName} className="h-full w-full object-cover" />
+                  : stakeholderName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)
+                }
               </div>
-            )}
+              <div>
+                <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{stakeholderName}</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">Managing registrar</p>
+              </div>
+            </div>
           </Card>
         )}
 
