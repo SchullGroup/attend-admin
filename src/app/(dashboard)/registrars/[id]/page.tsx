@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, Building2, Mail, Phone, Hash, Globe,
-  CalendarDays, Users, Eye, ClipboardList,
+  CalendarDays, Users, Eye, ClipboardList, MapPin,
 } from "lucide-react";
 import {
   useRegistrarDetail,
@@ -148,7 +148,9 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                 { icon: Hash,      label: "RC Number", value: registrar.rcNumber ?? "—"  },
                 { icon: Globe,     label: "Industry",  value: registrar.industry  ?? "—" },
                 { icon: Building2, label: "Plan",      value: registrar.plan      ?? "—" },
-              ] as { icon: React.ElementType; label: string; value: string }[]).map(({ icon: Icon, label, value }) => (
+                { icon: MapPin,    label: "Address",   value: (registrar as any).address  ?? null },
+                { icon: Globe,     label: "Website",   value: (registrar as any).website  ?? null },
+              ] as { icon: React.ElementType; label: string; value: string | null }[]).filter((f) => f.value).map(({ icon: Icon, label, value }) => (
                 <div key={label} className="flex items-start gap-3">
                   <div className="h-8 w-8 rounded-lg bg-[hsl(var(--muted))] flex items-center justify-center shrink-0 mt-0.5">
                     <Icon className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
@@ -283,6 +285,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                 <thead>
                   <tr className="attend-table-header">
                     <th className="px-5 py-3 text-left">Event</th>
+                    <th className="px-5 py-3 text-left">Format</th>
                     <th className="px-5 py-3 text-left">Date</th>
                     <th className="px-5 py-3 text-left">RSVPs</th>
                     <th className="px-5 py-3 text-left">Status</th>
@@ -306,6 +309,12 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                               </p>
                             </div>
                           </div>
+                        </td>
+                        <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                          {evt.format
+                            ? <span className="capitalize text-xs">{evt.format.toLowerCase().replace(/_/g, " ")}</span>
+                            : "—"
+                          }
                         </td>
                         <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
                           {formatDate(evt.date)}

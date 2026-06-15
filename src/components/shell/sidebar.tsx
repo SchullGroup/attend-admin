@@ -141,7 +141,8 @@ const SECTIONS: NavSection[] = [
   {
     label: "People",
     items: [
-      { title: "All Users", icon: Users, href: "/participants", superAdminOnly: true },
+      { title: "All Users",      icon: Users,   href: "/participants",         superAdminOnly: true },
+      { title: "Client Admins",  icon: Users2,  href: "/admin/client-admins",  superAdminOnly: true },
     ],
   },
   {

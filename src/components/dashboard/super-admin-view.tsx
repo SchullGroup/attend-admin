@@ -125,7 +125,13 @@ export function SuperAdminView({
           </p>
         </div>
         {(stats?.liveBanner?.live || liveEvents.length > 0) && (
-          <Link href="/events/live">
+          <Link href={
+            stats?.liveBanner?.eventId
+              ? `/events/${stats.liveBanner.eventId}`
+              : liveEvents[0]?.id
+              ? `/events/${liveEvents[0].id}`
+              : "/events/live"
+          }>
             <div className="flex items-center gap-2.5 bg-red-600 text-white rounded-xl px-4 py-2.5 cursor-pointer hover:bg-red-700 transition-colors">
               <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
               <div>
@@ -133,7 +139,7 @@ export function SuperAdminView({
                   {stats?.liveBanner?.organizerName ?? liveEvents[0]?.title?.split("—")[0]?.trim()}
                 </p>
                 <p className="text-xs text-red-200 mt-0.5">
-                  {onlineCount > 0 ? `${onlineCount.toLocaleString()} online` : "Live now"}
+                  {stats?.liveNow?.label ?? (onlineCount > 0 ? `${onlineCount.toLocaleString()} online` : "Live now")}
                 </p>
               </div>
               <Radio className="h-4 w-4 ml-1 opacity-70" />

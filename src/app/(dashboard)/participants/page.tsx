@@ -1,26 +1,26 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Search, Shield, Users, ShieldCheck, ShieldOff } from "lucide-react";
-import { useParticipants, useSuspendParticipant, useReactivateParticipant } from "@/api/participants";
+import {
+  Search, Users, ShieldCheck, Shield, ShieldOff, CheckCircle2,
+} from "lucide-react";
+// CheckCircle2 kept for verified count stat only
+import { useUsers, useSuspendUser, useActivateUser } from "@/api/super-admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
-import type { ParticipantItem } from "@/types/super-admin";
+import type { UserSummaryResponse } from "@/types/super-admin";
 
-// Rule 4A: exact backend enum values; "ALL" sentinel is converted to undefined before the API call
-const KYC_FILTERS = [
-  { label: "All",       value: "ALL"      },
-  { label: "Full KYC",  value: "FULL_KYC" },
-  { label: "Basic KYC", value: "BASIC_KYC"},
-  { label: "Pending",   value: "PENDING"  },
-  { label: "No KYC",    value: "NO_KYC"   },
+const STATUS_FILTERS = [
+  { label: "All",       value: "" },
+  { label: "Active",    value: "ACTIVE" },
+  { label: "Suspended", value: "SUSPENDED" },
+  { label: "Pending",   value: "PENDING" },
 ];
 
-// 400ms debounce — isolates keystroke state from query state
 function useDebounce<T>(value: T, ms = 400): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -31,43 +31,46 @@ function useDebounce<T>(value: T, ms = 400): T {
 }
 
 export default function ParticipantsPage() {
-  const [searchInput, setSearchInput]   = useState("");   // raw — updates on every keystroke
-  const [activeKycTab, setActiveKycTab] = useState("ALL");
-  const [confirmId, setConfirmId]       = useState<string | null>(null);
-  const [page, setPage]                 = useState(0);
+  const [searchInput,    setSearchInput]    = useState("");
+  const [activeStatus,   setActiveStatus]   = useState("");
+  const [confirmId,      setConfirmId]      = useState<string | null>(null);
+  const [page,           setPage]           = useState(0);
   const LIMIT = 20;
 
   const debouncedSearch = useDebounce(searchInput, 400);
 
-  // 3-character minimum guard — prevents loading flicker on 1–2 letter entries.
-  // Passes `undefined` (not empty string) so the param is omitted from the URL entirely.
-  const finalSearch  = debouncedSearch.trim().length >= 3 ? debouncedSearch.trim() : undefined;
-  const finalKyc     = activeKycTab === "ALL" ? undefined : activeKycTab;
-
-  // Cache key: ["admin","participants","list",{ search: finalSearch, kycStatus: finalKyc, ... }]
-  const { data, isLoading } = useParticipants({
-    search:    finalSearch,
-    kycStatus: finalKyc,
-    page,
-    limit: LIMIT,
-  });
-  const suspendMutation     = useSuspendParticipant();
-  const reactivateMutation  = useReactivateParticipant();
+  // GET /api/v1/admin/users — page, limit (no kycStatus filter per spec)
+  const { data, isLoading } = useUsers("", page, LIMIT);
+  const suspendMutation  = useSuspendUser();
+  const activateMutation = useActivateUser();
 
   if (isLoading) return <Loader variant="page" text="Loading Users…" />;
 
   const raw = data as any;
-  const participants: ParticipantItem[] =
-    Array.isArray(raw?.participants) ? raw.participants :
-    Array.isArray(raw?.content)      ? raw.content      :
-    Array.isArray(raw)               ? raw              :
-    [];
+  const allUsers: UserSummaryResponse[] =
+    Array.isArray(raw?.content) ? raw.content :
+    Array.isArray(raw)          ? raw          : [];
 
-  const totalElements = raw?.totalCount ?? raw?.totalElements ?? participants.length;
-  const totalPages    = raw?.totalPages ?? Math.ceil(totalElements / LIMIT);
+  // Client-side status filter (API doesn't expose status param per spec)
+  const users = activeStatus
+    ? allUsers.filter((u) => (u.status ?? "").toUpperCase() === activeStatus)
+    : allUsers;
 
-  const fullKYC    = participants.filter((p) => p.kycStatus?.toUpperCase() === "FULL").length;
-  const pendingKYC = participants.filter((p) => p.kycStatus?.toUpperCase() === "PENDING").length;
+  // Also filter by search client-side if debounced search is present
+  const searchedUsers = debouncedSearch.trim().length >= 2
+    ? users.filter((u) => {
+        const name = `${u.firstName} ${u.lastName}`.toLowerCase();
+        const s = debouncedSearch.toLowerCase();
+        return name.includes(s) || u.email.toLowerCase().includes(s) || (u.phone ?? "").includes(s);
+      })
+    : users;
+
+  const totalElements = raw?.totalElements ?? raw?.totalCount ?? allUsers.length;
+  const totalPages    = raw?.totalPages    ?? Math.ceil(totalElements / LIMIT);
+
+  const activeCount    = allUsers.filter((u) => u.status?.toUpperCase() === "ACTIVE").length;
+  const suspendedCount = allUsers.filter((u) => u.status?.toUpperCase() === "SUSPENDED").length;
+  const verifiedCount  = allUsers.filter((u) => u.emailVerified).length;
 
   return (
     <div>
@@ -88,8 +91,8 @@ export default function ParticipantsPage() {
               <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
             </div>
             <div>
-              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">{fullKYC}</div>
-              <div className="text-xs text-[hsl(var(--muted-foreground))]">Full KYC</div>
+              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">{activeCount}</div>
+              <div className="text-xs text-[hsl(var(--muted-foreground))]">Active</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -97,31 +100,40 @@ export default function ParticipantsPage() {
               <Shield className="h-3.5 w-3.5 text-yellow-600" />
             </div>
             <div>
-              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">{pendingKYC}</div>
-              <div className="text-xs text-[hsl(var(--muted-foreground))]">Pending KYC</div>
+              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">{suspendedCount}</div>
+              <div className="text-xs text-[hsl(var(--muted-foreground))]">Suspended</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-lg bg-purple-50 flex items-center justify-center">
+              <CheckCircle2 className="h-3.5 w-3.5 text-purple-600" />
+            </div>
+            <div>
+              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">{verifiedCount}</div>
+              <div className="text-xs text-[hsl(var(--muted-foreground))]">Email Verified</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Search + KYC tab filters */}
-      <div className="flex items-center gap-3 mb-4">
+      {/* Search + status filters */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))] pointer-events-none" />
           <Input
-            placeholder="Search by name or email…"
+            placeholder="Search by name, email, or phone…"
             value={searchInput}
             onChange={(e) => { setSearchInput(e.target.value); setPage(0); }}
             className="pl-9"
           />
         </div>
         <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
-          {KYC_FILTERS.map((f) => (
+          {STATUS_FILTERS.map((f) => (
             <button
               key={f.value}
-              onClick={() => { setActiveKycTab(f.value); setPage(0); }}
+              onClick={() => { setActiveStatus(f.value); setPage(0); }}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                activeKycTab === f.value
+                activeStatus === f.value
                   ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
                   : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
               }`}
@@ -138,62 +150,104 @@ export default function ParticipantsPage() {
             <tr className="attend-table-header">
               <th className="px-5 py-3 text-left">User</th>
               <th className="px-5 py-3 text-left">Phone</th>
-              <th className="px-5 py-3 text-left">KYC Status</th>
-              <th className="px-5 py-3 text-left">Events Attended</th>
-              <th className="px-5 py-3 text-left">Account Status</th>
-              <th className="px-5 py-3 text-left">Registered</th>
+              <th className="px-5 py-3 text-left">Roles</th>
+              <th className="px-5 py-3 text-left">KYC</th>
+              <th className="px-5 py-3 text-left">Status</th>
+              <th className="px-5 py-3 text-left">Joined</th>
               <th className="px-5 py-3 text-left">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {participants.map((p) => {
-              const isSuspended = p.accountStatus?.toUpperCase() === "SUSPENDED";
+            {searchedUsers.map((u) => {
+              const fullName   = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email;
+              const initials   = `${u.firstName?.[0] ?? ""}${u.lastName?.[0] ?? ""}`.toUpperCase() || u.email[0].toUpperCase();
+              const isSuspended = u.status?.toUpperCase() === "SUSPENDED";
+              const isConfirm   = confirmId === u.id;
+
+              const roles: string[] =
+                Array.isArray(u.roles) && u.roles.length > 0
+                  ? u.roles
+                  : u.role
+                  ? [u.role]
+                  : [];
+
               return (
-                <tr key={p.id} className="attend-table-row">
+                <tr key={u.id} className="attend-table-row">
+                  {/* User */}
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2.5">
-                      <div
-                        className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                        style={{
-                          backgroundColor: p.avatarColor ? `${p.avatarColor}22` : "hsl(var(--primary)/0.1)",
-                          color: p.avatarColor ?? "hsl(var(--primary))",
-                        }}
-                      >
-                        {p.initials || p.fullName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                      <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]">
+                        {initials}
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-[hsl(var(--foreground))]">{p.fullName}</div>
-                        <div className="text-xs text-[hsl(var(--muted-foreground))]">{p.email}</div>
+                        <div className="text-sm font-medium text-[hsl(var(--foreground))]">{fullName}</div>
+                        <div className="text-xs text-[hsl(var(--muted-foreground))]">{u.email}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{p.phone ?? "—"}</td>
-                  <td className="px-5 py-3"><StatusBadge status={p.kycStatus?.toLowerCase()} /></td>
-                  <td className="px-5 py-3 text-sm font-medium tabular-nums text-center">{p.eventsAttended ?? 0}</td>
-                  <td className="px-5 py-3"><StatusBadge status={p.accountStatus?.toLowerCase()} /></td>
+
+                  {/* Phone */}
                   <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-                    {p.joinedAt ? formatDate(p.joinedAt) : p.joinedLabel ?? "—"}
+                    {u.phone ?? "—"}
                   </td>
+
+                  {/* Roles */}
                   <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      <Link href={`/participants/${p.id}`}>
+                    {roles.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {roles.map((r) => (
+                          <span
+                            key={r}
+                            className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[hsl(var(--primary)/0.08)] text-[hsl(var(--primary))]"
+                          >
+                            {r.replace(/_/g, " ")}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-[hsl(var(--muted-foreground))]">—</span>
+                    )}
+                  </td>
+
+                  {/* KYC */}
+                  <td className="px-5 py-3">
+                    {u.kycStatus
+                      ? <StatusBadge status={u.kycStatus.toLowerCase()} />
+                      : <span className="text-sm text-[hsl(var(--muted-foreground))]">—</span>
+                    }
+                  </td>
+
+                  {/* Status */}
+                  <td className="px-5 py-3">
+                    <StatusBadge status={u.status?.toLowerCase()} />
+                  </td>
+
+                  {/* Joined */}
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                    {u.createdAt ? formatDate(u.createdAt) : "—"}
+                  </td>
+
+                  {/* Actions */}
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <Link href={`/participants/${u.id}`}>
                         <Button size="sm" variant="outline" className="h-7 text-xs">View</Button>
                       </Link>
                       {isSuspended ? (
                         <Button
                           size="sm" variant="outline"
                           className="h-7 text-xs text-green-700 border-green-200 hover:bg-green-50"
-                          disabled={reactivateMutation.isPending}
-                          onClick={() => reactivateMutation.mutate(p.id)}
+                          disabled={activateMutation.isPending}
+                          onClick={() => activateMutation.mutate(u.id)}
                         >
                           Restore
                         </Button>
-                      ) : confirmId === p.id ? (
+                      ) : isConfirm ? (
                         <Button
                           size="sm" variant="outline"
                           className="h-7 text-xs text-red-600 border-red-400 bg-red-50"
                           disabled={suspendMutation.isPending}
-                          onClick={() => { suspendMutation.mutate({ id: p.id, data: { reason: "Suspended by admin" } }); setConfirmId(null); }}
+                          onClick={() => { suspendMutation.mutate(u.id); setConfirmId(null); }}
                         >
                           Confirm?
                         </Button>
@@ -201,7 +255,7 @@ export default function ParticipantsPage() {
                         <Button
                           size="sm" variant="outline"
                           className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50"
-                          onClick={() => setConfirmId(p.id)}
+                          onClick={() => setConfirmId(u.id)}
                         >
                           <ShieldOff className="h-3 w-3 mr-1" /> Suspend
                         </Button>
@@ -213,9 +267,12 @@ export default function ParticipantsPage() {
             })}
           </tbody>
         </table>
-        {participants.length === 0 && (
+
+        {searchedUsers.length === 0 && (
           <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
-            {finalSearch ? `No users matching "${finalSearch}".` : "No users in this category."}
+            {debouncedSearch.trim().length >= 2
+              ? `No users matching "${debouncedSearch}".`
+              : "No users in this category."}
           </div>
         )}
       </Card>

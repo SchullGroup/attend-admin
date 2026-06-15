@@ -14,6 +14,7 @@ import {
   EventSummaryResponse,
   RegistrationSummaryResponse,
   UserSummaryResponse,
+  ClientAdminItem,
   GlobalDocumentListResponse,
   PagedResponse,
   PagedApiResponse,
@@ -43,6 +44,9 @@ export const superAdminKeys = {
   eventDocument:  (eventId: string, documentId: string) => [...superAdminKeys.all, "event-document", eventId, documentId] as const,
   // Search — keyed by query string + pagination so each unique query caches independently
   search: (q: string, page: number, limit: number) => [...superAdminKeys.all, "search", q, page, limit] as const,
+  userDetail: (id: string) => ["admin", "user-detail", id] as const,
+  clientAdmins: (page: number, limit: number) => ["admin", "client-admins", page, limit] as const,
+  clientAdminDetail: (id: string) => ["admin", "client-admin-detail", id] as const,
 };
 
 // --- Queries ---
@@ -156,6 +160,71 @@ export function useUsers(kycStatus = "", page = 0, limit = 20) {
       );
       return res.data.data; // unwrap envelope → PagedResponse<UserSummaryResponse>
     },
+  });
+}
+
+/**
+ * Single user detail — GET /api/v1/admin/users/{id}
+ * Returns the same UserSummaryResponse shape as the list.
+ */
+export function useAdminUserDetail(id: string, opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: superAdminKeys.userDetail(id),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<UserSummaryResponse>>(
+        `/api/v1/admin/users/${id}`
+      );
+      return res.data.data ?? (res.data as any);
+    },
+    enabled: !!id && (opts?.enabled ?? true),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Paginated client admins list — GET /api/v1/admin/client-admins
+ * Returns { content: ClientAdminItem[], page, size, totalElements, totalPages, last }
+ */
+export function useClientAdmins(page = 0, limit = 20) {
+  return useQuery({
+    queryKey: superAdminKeys.clientAdmins(page, limit),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<PagedResponse<ClientAdminItem>>>(
+        "/api/v1/admin/client-admins",
+        { params: { page, limit } }
+      );
+      const body = res.data;
+      const payload = body?.data ?? body;
+      const content: ClientAdminItem[] =
+        Array.isArray(payload?.content) ? payload.content :
+        Array.isArray(payload)          ? payload          : [];
+      return {
+        content,
+        totalElements: payload?.totalElements ?? (payload as any)?.totalCount ?? content.length,
+        totalPages:    payload?.totalPages    ?? 1,
+        page:          payload?.page          ?? page,
+        size:          payload?.size          ?? limit,
+        last:          payload?.last          ?? false,
+      } as PagedResponse<ClientAdminItem>;
+    },
+  });
+}
+
+/**
+ * Single client admin detail — GET /api/v1/admin/client-admins/{id}
+ * Returns the same ClientAdminItem shape as the list.
+ */
+export function useClientAdminDetail(id: string, opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: superAdminKeys.clientAdminDetail(id),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<ClientAdminItem>>(
+        `/api/v1/admin/client-admins/${id}`
+      );
+      return res.data.data ?? (res.data as any);
+    },
+    enabled: !!id && (opts?.enabled ?? true),
+    staleTime: 60_000,
   });
 }
 

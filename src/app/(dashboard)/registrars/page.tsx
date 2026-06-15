@@ -30,6 +30,7 @@ const TABS = [
 function getDisplayName(r: RegistrarItem)  { return r.companyName || r.name || "—"; }
 function getRepName(r: RegistrarItem)      { return r.representativeName || r.repName || "—"; }
 function getRepEmail(r: RegistrarItem)     { return r.contactEmail || r.repEmail || "—"; }
+function getRepPhone(r: RegistrarItem)     { return r.representativePhone || r.repPhone || null; }
 
 export default function RegistrarsPage() {
   const [activeTab, setActiveTab] = useState("all");
@@ -107,13 +108,14 @@ export default function RegistrarsPage() {
                 <th className="px-5 py-3 text-left w-10"></th>
                 <th className="px-5 py-3 text-left">Registrar</th>
                 <th className="px-5 py-3 text-left">RC Number</th>
+                <th className="px-5 py-3 text-left">Plan</th>
                 <th className="px-5 py-3 text-left">Representative</th>
                 <th className="px-5 py-3 text-left">Registers</th>
                 <th className="px-5 py-3 text-left">Events</th>
                 <th className="px-5 py-3 text-left">Status</th>
                 <th className="px-5 py-3 text-left">Enrolled</th>
                 <th className="px-5 py-3 text-left">Actions</th>
-                    <th className="px-5 py-3 text-left"></th>
+                <th className="px-5 py-3 text-left"></th>
               </tr>
             </thead>
             <tbody>
@@ -143,8 +145,17 @@ export default function RegistrarsPage() {
                     </td>
                     <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{r.rcNumber ?? "—"}</td>
                     <td className="px-5 py-3">
+                      {r.plan
+                        ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] capitalize">{r.plan}</span>
+                        : <span className="text-sm text-[hsl(var(--muted-foreground))]">—</span>
+                      }
+                    </td>
+                    <td className="px-5 py-3">
                       <p className="text-sm text-[hsl(var(--foreground))]">{getRepName(r)}</p>
                       <p className="text-xs text-[hsl(var(--muted-foreground))]">{getRepEmail(r)}</p>
+                      {getRepPhone(r) && (
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">{getRepPhone(r)}</p>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-sm font-medium tabular-nums text-center">{r.registersCount ?? 0}</td>
                     <td className="px-5 py-3 text-sm font-medium tabular-nums text-center">{r.eventCount ?? 0}</td>

@@ -654,6 +654,7 @@ export default function ParticipantKycDashboard() {
                 <th className="px-5 py-3 text-left">Participant</th>
                 <th className="px-5 py-3 text-left">Contact</th>
                 <th className="px-5 py-3 text-left">KYC Status</th>
+                <th className="px-5 py-3 text-left">Account</th>
                 <th className="px-5 py-3 text-left">BVN</th>
                 <th className="px-5 py-3 text-left">CHN</th>
                 <th className="px-5 py-3 text-left">Submitted</th>
@@ -692,9 +693,16 @@ export default function ParticipantKycDashboard() {
                       <p className="text-sm text-[hsl(var(--foreground))]">{p.email ?? "—"}</p>
                       <p className="text-xs text-[hsl(var(--muted-foreground))]">{p.phone ?? "—"}</p>
                     </td>
-                    {/* Status */}
+                    {/* KYC Status */}
                     <td className="px-5 py-3">
                       <KycChip status={p.kycStatus} />
+                    </td>
+                    {/* Account Status */}
+                    <td className="px-5 py-3">
+                      {p.accountStatus
+                        ? <KycChip status={p.accountStatus} />
+                        : <span className="text-sm text-[hsl(var(--muted-foreground))]">—</span>
+                      }
                     </td>
                     {/* BVN chip */}
                     <td className="px-5 py-3">

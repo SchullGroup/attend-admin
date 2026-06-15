@@ -428,9 +428,40 @@ export interface UserSummaryResponse {
   email: string;
   firstName: string;
   lastName: string;
-  role: string;
+  /** Alias for role — present on some response shapes */
+  role?: string;
+  roles?: string[];
+  phone?: string | null;
   status: "ACTIVE" | "SUSPENDED" | "PENDING";
+  kycStatus?: string | null;
+  emailVerified?: boolean;
+  stakeholderName?: string | null;
   createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Client Admins — GET /api/v1/admin/client-admins
+// ---------------------------------------------------------------------------
+
+export interface ClientAdminAdminUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string | null;
+}
+
+export interface ClientAdminItem {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  industry?: string | null;
+  website?: string | null;
+  status: string;
+  createdAt: string;
+  admin?: ClientAdminAdminUser | null;
 }
 
 // Participants & KYC Types
