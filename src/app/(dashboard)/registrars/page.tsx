@@ -42,7 +42,7 @@ export default function RegistrarsPage() {
 
   const registrars     = data?.registrars ?? [];
   const active         = registrars.filter((r) => r.status?.toUpperCase() === "ACTIVE").length;
-  const totalRegisters = registrars.reduce((s, r) => s + (r.registersCount ?? 0), 0);
+  const totalRegisters = registrars.reduce((s, r) => s + (r.registerCount ?? r.registersCount ?? 0), 0);
   const totalEvents    = registrars.reduce((s, r) => s + (r.eventCount   ?? 0), 0);
 
   return (
@@ -146,7 +146,7 @@ export default function RegistrarsPage() {
                         : <span className="text-sm text-[hsl(var(--muted-foreground))]">—</span>
                       }
                     </td>
-                    <td className="px-5 py-3 text-sm font-medium tabular-nums text-center">{r.registersCount ?? 0}</td>
+                    <td className="px-5 py-3 text-sm font-medium tabular-nums text-center">{r.registerCount ?? r.registersCount ?? 0}</td>
                     <td className="px-5 py-3 text-sm font-medium tabular-nums text-center">{r.eventCount ?? 0}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1.5">

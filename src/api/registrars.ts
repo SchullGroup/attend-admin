@@ -42,6 +42,7 @@ export interface RegistrarItem {
   repPhone?:            string;
   plan?:                string;
   registersCount?:      number;
+  registerCount?:       number;   // alias used by some response shapes
   eventCount?:          number;
   status:               string;
   enrolledAt?:          string;

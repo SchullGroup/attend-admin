@@ -28,6 +28,71 @@ function normaliseRole(raw: string | undefined | null): string {
   return (raw ?? "").toLowerCase().replace(/[-\s]+/g, "_");
 }
 
+// ─── Judge Profile view ────────────────────────────────────────────────────
+
+function JudgeSettingsView({ user }: { user: Record<string, any> }) {
+  const fields = [
+    { label: "Full Name",     value: user?.fullName ?? user?.name ?? "—" },
+    { label: "Email",         value: user?.email ?? "—" },
+    { label: "Role",          value: "Judge" },
+    { label: "Organisation",  value: user?.organisation ?? user?.organizationName ?? user?.companyName ?? "—" },
+  ];
+
+  return (
+    <>
+      {/* Profile card — read-only */}
+      <Card className="attend-card p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <Settings className="h-4 w-4 text-[hsl(var(--primary))]" />
+            <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">My Profile</h2>
+          </div>
+          <span className="flex items-center gap-1 text-xs text-[hsl(var(--muted-foreground))]">
+            <Lock className="h-3 w-3" /> Read-only
+          </span>
+        </div>
+
+        <div className="flex items-center gap-4 mb-6">
+          {/* Avatar */}
+          <div className="h-14 w-14 rounded-full bg-[hsl(var(--primary)/0.12)] flex items-center justify-center shrink-0">
+            <span className="text-lg font-bold text-[hsl(var(--primary))]">
+              {(user?.fullName ?? user?.name ?? "J").charAt(0).toUpperCase()}
+            </span>
+          </div>
+          <div>
+            <p className="text-base font-semibold text-[hsl(var(--foreground))]">
+              {user?.fullName ?? user?.name ?? "—"}
+            </p>
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">{user?.email ?? "—"}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {fields.map((f) => (
+            <div key={f.label} className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                {f.label}
+              </Label>
+              <Input
+                value={f.value}
+                readOnly
+                disabled
+                className="bg-[hsl(var(--muted))] cursor-not-allowed text-[hsl(var(--muted-foreground))]"
+              />
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Change password */}
+      <ChangePasswordCard />
+
+      {/* Notification sound */}
+      <NotificationSoundCard />
+    </>
+  );
+}
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 type IntegrationStatus = "connected" | "disconnected" | "pending";
@@ -256,9 +321,9 @@ export default function SettingsPage() {
   const { data: userResponse } = useGetMe();
   const normalizedRole = normaliseRole(userResponse?.data?.role);
 
-  // Super Admin is gated strictly. All other roles — client_admin, event_manager,
-  // viewer, kyc_officer, etc. — fall into the non-admin branch.
+  // Role gates
   const isSuperAdmin = normalizedRole === "super_admin";
+  const isJudge      = normalizedRole === "judge";
 
   // Integrations state — only mounted for Super Admin
   const [integrations,     setIntegrations]     = useState<Integration[]>(INITIAL_INTEGRATIONS);
@@ -297,6 +362,8 @@ export default function SettingsPage() {
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
           {isSuperAdmin
             ? "Global platform configuration — read-only system view"
+            : isJudge
+            ? "View your profile and manage your account security"
             : "Manage your organisation profile, branding, and account security"}
         </p>
       </div>
@@ -304,10 +371,17 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-5">
 
         {/* ══════════════════════════════════════════════════════════════════
-            NON-SUPER-ADMIN VIEW
+            JUDGE VIEW — read-only profile + change password
+            ══════════════════════════════════════════════════════════════════ */}
+        {isJudge && (
+          <JudgeSettingsView user={userResponse?.data as Record<string, any>} />
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            NON-SUPER-ADMIN, NON-JUDGE VIEW
             Covers: client_admin, event_manager, viewer, kyc_officer, etc.
             ══════════════════════════════════════════════════════════════════ */}
-        {!isSuperAdmin && (
+        {!isSuperAdmin && !isJudge && (
           <>
             {/* Organisation profile + logo upload */}
             <ClientOrgSettings />

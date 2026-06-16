@@ -152,14 +152,13 @@ const SECTIONS: NavSection[] = [
   },
   {
     label: "System",
-    judgeHidden: true,
     items: [
-      { title: "Documents",      icon: FolderOpen, href: "/documents" },
-      { title: "Analytics",      icon: BarChart3,  href: "/analytics" },
-      { title: "Notifications",  icon: Bell,       href: "/notifications" },
-      { title: "Audit Log",      icon: ScrollText, href: "/audit" },
+      { title: "Documents",      icon: FolderOpen, href: "/documents",     judgeHidden: true },
+      { title: "Analytics",      icon: BarChart3,  href: "/analytics",     judgeHidden: true },
+      { title: "Notifications",  icon: Bell,       href: "/notifications",  judgeHidden: true },
+      { title: "Audit Log",      icon: ScrollText, href: "/audit",          judgeHidden: true },
       { title: "Settings",       icon: Settings,   href: "/settings" },
-      { title: "Team Members",   icon: Users2,     href: "/settings/team", clientOnly: true },
+      { title: "Team Members",   icon: Users2,     href: "/settings/team",  clientOnly: true },
     ],
   },
 ];
@@ -221,7 +220,11 @@ export function Sidebar() {
   const isJudge        = JUDGE_ROLES.has(normalizedRole);
 
   const hasToken      = typeof window !== "undefined" && !!Cookies.get("accessToken");
-  const displayName   = currentUser?.fullName || "Admin User";
+  // For client users show the registrar/organisation name; for admins/judges use personal name
+  const isClientUser  = !isSuperAdmin && !isJudge;
+  const displayName   = isClientUser
+    ? (stakeholder?.name || currentUser?.fullName || "Admin User")
+    : (currentUser?.fullName || "Admin User");
   const displayRole   = currentUser?.role
     ? (ROLE_LABELS[normalizedRole] ?? currentUser.role)
     : "Administrator";

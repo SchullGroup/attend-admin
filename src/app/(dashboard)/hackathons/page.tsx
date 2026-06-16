@@ -40,11 +40,12 @@ export default function HackathonsPage() {
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
   const isSuperAdmin   = SUPER_ADMIN_ROLES.has(normalizedRole);
 
-  const { data: clientData, isLoading: clientLoading } = useClientChallenges(search, statusTab, 0, 50);
-  const { data: adminData,  isLoading: adminLoading  } = useAdminChallenges(search, "", statusTab, 0, 50);
+  const { data: clientData, isLoading: clientLoading, isFetching: clientFetching } = useClientChallenges(search, statusTab, 0, 50);
+  const { data: adminData,  isLoading: adminLoading,  isFetching: adminFetching  } = useAdminChallenges(search, "", statusTab, 0, 50);
 
-  const isLoading  = isSuperAdmin ? adminLoading : clientLoading;
-  const data       = isSuperAdmin ? adminData    : clientData;
+  const isLoading  = isSuperAdmin ? adminLoading  : clientLoading;
+  const isFetching = isSuperAdmin ? adminFetching : clientFetching;
+  const data       = isSuperAdmin ? adminData     : clientData;
 
   if (isLoading) return <Loader variant="page" text="Loading Challenges…" />;
 
@@ -148,7 +149,12 @@ export default function HackathonsPage() {
       </div>
 
       {/* Challenges table */}
-      <Card className="attend-card overflow-hidden">
+      <Card className="attend-card overflow-hidden relative">
+        {isFetching && !isLoading && (
+          <div className="absolute inset-0 bg-[hsl(var(--background))]/60 flex items-center justify-center z-10 rounded-xl">
+            <div className="h-5 w-5 rounded-full border-2 border-purple-600 border-t-transparent animate-spin" />
+          </div>
+        )}
         <table className="w-full">
           <thead>
             <tr className="attend-table-header">

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { EventRow, EventRowSkeleton } from "@/components/dashboard/event-row";
 import { StatGrid } from "@/components/dashboard/stat-card";
 import { QuickActions } from "@/components/dashboard/quick-actions";
+import { useOrganisationProfile } from "@/api/client-organisation";
 import type { EventSummaryResponse } from "@/types/super-admin";
 import type { RegisterItem } from "@/types/super-admin";
 
@@ -31,6 +32,9 @@ export function ClientView({
   topRegisters,
   liveEvents,
 }: ClientViewProps) {
+  const { data: orgProfile } = useOrganisationProfile();
+  const orgName = orgProfile?.organisationInfo?.companyName ?? currentUser?.fullName ?? "Admin";
+
   const dateStr = new Date().toLocaleDateString("en-NG", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const timeStr = new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" });
 
@@ -45,7 +49,7 @@ export function ClientView({
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
-            Welcome back, {currentUser?.fullName ?? "Admin"}.
+            Welcome back, {orgName}.
           </h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
             {dateStr} · {timeStr}
