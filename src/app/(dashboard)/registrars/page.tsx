@@ -142,7 +142,7 @@ export default function RegistrarsPage() {
                     <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{r.rcNumber ?? "—"}</td>
                     <td className="px-5 py-3">
                       {r.plan
-                        ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] capitalize">{r.plan}</span>
+                        ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">{r.plan.toUpperCase()}</span>
                         : <span className="text-sm text-[hsl(var(--muted-foreground))]">—</span>
                       }
                     </td>

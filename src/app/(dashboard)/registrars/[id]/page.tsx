@@ -112,8 +112,8 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                 <span className="text-sm text-[hsl(var(--muted-foreground))]">{statusInfo.label}</span>
               </div>
               {registrar.plan && (
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] capitalize">
-                  {registrar.plan}
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
+                  {registrar.plan.toUpperCase()}
                 </span>
               )}
               {registrar.industry && (

@@ -180,6 +180,7 @@ export interface LeaderboardResponse {
 
 export interface JudgeItem {
   id:              string;
+  userId?:         string;   // team member id, if assigned from org team
   initials:        string;
   color:           string;
   name:            string;
@@ -191,8 +192,9 @@ export interface JudgeItem {
 }
 
 export interface AddJudgeRequest {
+  userId?:         string;   // team member id when adding from org team
   name:            string;
-  organization:    string;
+  organization?:   string;
   specialtyTrack?: string;
 }
 
@@ -209,6 +211,7 @@ export const clientChallengeKeys = {
   application: (cId: string, aId: string) =>
                  ["clientChallenges", cId, "applications", aId] as const,
   leaderboard: (id: string) => ["clientChallenges", id, "leaderboard"] as const,
+  judges:      (id: string) => ["clientChallenges", id, "judges"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -299,6 +302,22 @@ export function useClientChallengeLeaderboard(challengeId: string) {
   });
 }
 
+export function useClientChallengeJudges(challengeId: string) {
+  return useQuery({
+    queryKey: clientChallengeKeys.judges(challengeId),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<JudgeItem[]>>(
+        `/api/v1/client/challenges/${challengeId}/judges`
+      );
+      // API may return array directly or wrapped; handle both
+      const raw = res.data.data ?? (res.data as any);
+      return (Array.isArray(raw) ? raw : (raw as any)?.judges ?? []) as JudgeItem[];
+    },
+    enabled: !!challengeId,
+    staleTime: 30_000,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------
@@ -369,6 +388,7 @@ export function useAddJudge() {
     },
     onSuccess: (_, { challengeId }) => {
       queryClient.invalidateQueries({ queryKey: clientChallengeKeys.detail(challengeId) });
+      queryClient.invalidateQueries({ queryKey: clientChallengeKeys.judges(challengeId) });
       popup.success("Judge Added", "New judge has been assigned to this challenge.", 2500);
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to add judge."),
@@ -385,6 +405,7 @@ export function useRemoveJudge() {
     },
     onSuccess: (_, { challengeId }) => {
       queryClient.invalidateQueries({ queryKey: clientChallengeKeys.detail(challengeId) });
+      queryClient.invalidateQueries({ queryKey: clientChallengeKeys.judges(challengeId) });
       popup.success("Judge Removed", "Judge has been unassigned.", 2000);
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to remove judge."),

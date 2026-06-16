@@ -30,7 +30,8 @@ import { useClientStakeholder } from "@/api/client-organisation";
 import { usePendingEnrollments } from "@/api/super-admin";
 import Cookies from "js-cookie";
 
-const ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
+const ADMIN_ROLES  = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
+const JUDGE_ROLES  = new Set(["judge"]);
 
 // ─── RBAC permission engine ──────────────────────────────────────────────────
 //
@@ -87,6 +88,8 @@ type NavItem = {
   href:           string;
   superAdminOnly?: boolean;
   clientOnly?:    boolean;
+  judgeHidden?:   boolean;  // hide from JUDGE role
+  judgeOnly?:     boolean;  // show ONLY to JUDGE role (within client users)
   action?:        PermAction;
 };
 
@@ -94,6 +97,7 @@ type NavSection = {
   label:           string;
   superAdminOnly?: boolean;
   clientOnly?:     boolean;
+  judgeHidden?:    boolean;  // hide entire section from JUDGE role
   items:           NavItem[];
 };
 
@@ -104,6 +108,7 @@ const SECTIONS: NavSection[] = [
   },
   {
     label: "Platform Events",
+    judgeHidden: true,
     items: [
       { title: "Create Event",      icon: PlusCircle,   href: "/events/create", clientOnly: true, action: "create_event" },
       { title: "All Events",        icon: CalendarDays, href: "/events" },
@@ -121,7 +126,6 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
-    // Registrars = managing firms — super_admin only
     label: "Registrars",
     superAdminOnly: true,
     items: [
@@ -130,9 +134,9 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
-    // Registers = client-scoped organisations — hidden from super_admin
     label: "Registers",
     clientOnly: true,
+    judgeHidden: true,
     items: [
       { title: "All Registers",  icon: ClipboardList, href: "/registers" },
       { title: "Enrol Register", icon: UserCog,       href: "/registers/enrol", action: "enrol_register" },
@@ -140,6 +144,7 @@ const SECTIONS: NavSection[] = [
   },
   {
     label: "People",
+    judgeHidden: true,
     items: [
       { title: "All Users",      icon: Users,   href: "/participants",         superAdminOnly: true },
       { title: "Client Admins",  icon: Users2,  href: "/admin/client-admins",  superAdminOnly: true },
@@ -147,6 +152,7 @@ const SECTIONS: NavSection[] = [
   },
   {
     label: "System",
+    judgeHidden: true,
     items: [
       { title: "Documents",      icon: FolderOpen, href: "/documents" },
       { title: "Analytics",      icon: BarChart3,  href: "/analytics" },
@@ -212,6 +218,7 @@ export function Sidebar() {
   // Normalise once — used for both section filters and per-item action gates.
   const normalizedRole = normaliseRole(currentUser?.role);
   const isSuperAdmin   = isSuperAdminRole(normalizedRole);
+  const isJudge        = JUDGE_ROLES.has(normalizedRole);
 
   const hasToken      = typeof window !== "undefined" && !!Cookies.get("accessToken");
   const displayName   = currentUser?.fullName || "Admin User";
@@ -247,11 +254,13 @@ export function Sidebar() {
           // Section-level role gates
           if (section.superAdminOnly && !isSuperAdmin) return null;
           if (section.clientOnly     &&  isSuperAdmin) return null;
+          if (section.judgeHidden    &&  isJudge)      return null;
 
           // Item-level role gates
           const visibleItems = section.items.filter((item) => {
             if (item.superAdminOnly && !isSuperAdmin) return false;
             if (item.clientOnly     &&  isSuperAdmin) return false;
+            if (item.judgeHidden    &&  isJudge)      return false;
             // Action gate: only apply for non-super-admin users
             if (item.action && !isSuperAdmin && !hasAccess(normalizedRole, item.action)) return false;
             return true;

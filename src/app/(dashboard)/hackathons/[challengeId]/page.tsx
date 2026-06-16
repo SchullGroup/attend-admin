@@ -15,10 +15,12 @@ import {
   useToggleApplicationsOpen,
   useAddJudge,
   useRemoveJudge,
+  useClientChallengeJudges,
   type ApplicationStatus,
   type ApplicationItem,
   type JudgeItem,
 } from "@/api/client-challenges";
+import { useOrganisationTeam, type TeamMember } from "@/api/client-organisation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -837,32 +839,59 @@ function LeaderboardTab({ challengeId }: { challengeId: string }) {
 // Judges tab
 // ---------------------------------------------------------------------------
 function JudgesTab({ challengeId }: { challengeId: string }) {
-  const { data: challenge, isLoading } = useClientChallengeDetail(challengeId);
+  const { data: challenge, isLoading: challengeLoading } = useClientChallengeDetail(challengeId);
+  const { data: judges = [], isLoading: judgesLoading }  = useClientChallengeJudges(challengeId);
   const addJudge    = useAddJudge();
   const removeJudge = useRemoveJudge();
 
-  const [showForm,  setShowForm]  = useState(false);
-  const [name,      setName]      = useState("");
-  const [org,       setOrg]       = useState("");
-  const [track,     setTrack]     = useState("");
+  const [showForm,       setShowForm]       = useState(false);
+  const [selectedId,     setSelectedId]     = useState("");
+  const [specialtyTrack, setSpecialtyTrack] = useState("");
+  // Manual fallback state (when no team judges exist)
+  const [manualName,  setManualName]  = useState("");
+  const [manualOrg,   setManualOrg]   = useState("");
+  const [manualTrack, setManualTrack] = useState("");
+  const [useManual,   setUseManual]   = useState(false);
 
-  // The judges list isn't a separate endpoint — we get judge count from detail,
-  // but the actual list would need to come from an endpoint if it exists.
-  // For now show the count + add/remove UI.
-  const judges: JudgeItem[] = (challenge as any)?.judges ?? [];
+  // Fetch all team members, filter to JUDGE role, exclude already-assigned
+  const { data: teamData, isLoading: teamLoading } = useOrganisationTeam("", "", 0, 100);
+  const allTeamJudges: TeamMember[] = (teamData?.members ?? []).filter((m) => m.role?.toUpperCase() === "JUDGE");
+  const judgeMembers:  TeamMember[] = allTeamJudges.filter(
+    (m) => !judges.some((j) => j.userId === m.id || j.name === m.fullName)
+  );
 
-  if (isLoading) return <Loader variant="inline" text="Loading…" />;
+  if (challengeLoading || judgesLoading) return <Loader variant="inline" text="Loading…" />;
+
+  const selectedMember = judgeMembers.find((m) => m.id === selectedId) ?? null;
 
   function handleAdd() {
-    if (!name.trim()) return;
-    addJudge.mutate(
-      { challengeId, data: { name: name.trim(), organization: org.trim(), specialtyTrack: track.trim() || undefined } },
-      {
-        onSuccess: () => {
-          setName(""); setOrg(""); setTrack(""); setShowForm(false);
+    if (useManual) {
+      if (!manualName.trim()) return;
+      addJudge.mutate(
+        { challengeId, data: { name: manualName.trim(), organization: manualOrg.trim() || undefined, specialtyTrack: manualTrack.trim() || undefined } },
+        { onSuccess: () => { setManualName(""); setManualOrg(""); setManualTrack(""); setShowForm(false); setUseManual(false); } }
+      );
+    } else {
+      if (!selectedMember) return;
+      addJudge.mutate(
+        {
+          challengeId,
+          data: {
+            userId:         selectedMember.id,
+            name:           selectedMember.fullName,
+            specialtyTrack: specialtyTrack.trim() || undefined,
+          },
         },
-      }
-    );
+        { onSuccess: () => { setSelectedId(""); setSpecialtyTrack(""); setShowForm(false); } }
+      );
+    }
+  }
+
+  function openForm() {
+    setShowForm(true);
+    setUseManual(judgeMembers.length === 0);
+    setSelectedId(""); setSpecialtyTrack("");
+    setManualName(""); setManualOrg(""); setManualTrack("");
   }
 
   return (
@@ -873,57 +902,141 @@ function JudgesTab({ challengeId }: { challengeId: string }) {
             Judges {challenge?.judgeCount != null ? `(${challenge.judgeCount})` : ""}
           </h2>
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-            Manage judges assigned to this challenge
+            Assign enrolled judges from your team to this challenge
           </p>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={() => setShowForm((v) => !v)}>
-          <Plus className="h-3.5 w-3.5" /> Add Judge
+        <Button size="sm" className="gap-1.5" onClick={openForm}>
+          <Plus className="h-3.5 w-3.5" /> Assign Judge
         </Button>
       </div>
 
-      {/* Add judge form */}
+      {/* Assign judge panel */}
       {showForm && (
         <Card className="attend-card p-5">
-          <h3 className="font-semibold text-[hsl(var(--foreground))] mb-4">New Judge</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] mb-1.5">
-                Name *
-              </label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Judge name"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] mb-1.5">
-                Organisation
-              </label>
-              <Input
-                value={org}
-                onChange={(e) => setOrg(e.target.value)}
-                placeholder="Organisation (optional)"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] mb-1.5">
-                Specialty Track
-              </label>
-              <Input
-                value={track}
-                onChange={(e) => setTrack(e.target.value)}
-                placeholder="Track (optional)"
-              />
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-[hsl(var(--foreground))]">
+              {useManual ? "Add Judge Manually" : "Assign Team Judge"}
+            </h3>
+            {judgeMembers.length > 0 && (
+              <button
+                onClick={() => setUseManual((v) => !v)}
+                className="text-xs text-[hsl(var(--primary))] hover:underline"
+              >
+                {useManual ? "← Pick from team" : "Enter manually"}
+              </button>
+            )}
           </div>
+
+          {!useManual ? (
+            /* Team picker */
+            teamLoading ? (
+              <Loader variant="inline" text="Loading team…" />
+            ) : judgeMembers.length === 0 ? (
+              <div className="text-center py-6">
+                {allTeamJudges.length > 0 ? (
+                  <>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">All team judges are already assigned to this challenge.</p>
+                    <button className="mt-3 text-xs text-[hsl(var(--primary))] hover:underline" onClick={() => setUseManual(true)}>
+                      Add an external judge manually
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">No JUDGE members in your team yet.</p>
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                      Go to <strong>Settings → Team</strong> and invite a member with the Judge role.
+                    </p>
+                    <button className="mt-3 text-xs text-[hsl(var(--primary))] hover:underline" onClick={() => setUseManual(true)}>
+                      Add judge manually instead
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {/* Member list picker */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">
+                    Select Judge *
+                  </label>
+                  <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto rounded-lg border border-[hsl(var(--border))] p-1">
+                    {judgeMembers.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => setSelectedId(m.id)}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                          selectedId === m.id
+                            ? "bg-[#7c22c9] text-white"
+                            : "hover:bg-[hsl(var(--accent))]"
+                        }`}
+                      >
+                        <div
+                          className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                          style={{
+                            backgroundColor: selectedId === m.id ? "rgba(255,255,255,0.25)" : "#7c22c918",
+                            color:           selectedId === m.id ? "#fff" : "#7c22c9",
+                          }}
+                        >
+                          {m.fullName?.slice(0, 2).toUpperCase() || "??"}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold truncate">{m.fullName}</p>
+                          <p className={`text-xs truncate ${selectedId === m.id ? "text-purple-200" : "text-[hsl(var(--muted-foreground))]"}`}>
+                            {m.email}
+                          </p>
+                        </div>
+                        {m.status === "ACTIVE" && (
+                          <span className={`ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
+                            selectedId === m.id ? "bg-white/20 text-white" : "bg-green-100 text-green-700"
+                          }`}>
+                            Active
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">
+                    Specialty Track (optional)
+                  </label>
+                  <Input
+                    value={specialtyTrack}
+                    onChange={(e) => setSpecialtyTrack(e.target.value)}
+                    placeholder="e.g. Fintech, Healthcare…"
+                  />
+                </div>
+              </div>
+            )
+          ) : (
+            /* Manual entry fallback */
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Name *</label>
+                <Input value={manualName} onChange={(e) => setManualName(e.target.value)} placeholder="Judge full name" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Organisation</label>
+                <Input value={manualOrg} onChange={(e) => setManualOrg(e.target.value)} placeholder="Organisation (optional)" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Specialty Track</label>
+                <Input value={manualTrack} onChange={(e) => setManualTrack(e.target.value)} placeholder="Track (optional)" />
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 mt-4">
             <Button
               size="sm"
-              disabled={!name.trim() || addJudge.isPending}
+              disabled={
+                addJudge.isPending ||
+                (useManual ? !manualName.trim() : !selectedId)
+              }
               onClick={handleAdd}
             >
-              {addJudge.isPending ? "Adding…" : "Add Judge"}
+              {addJudge.isPending ? "Assigning…" : "Assign Judge"}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>
               Cancel
@@ -1003,7 +1116,7 @@ function JudgesTab({ challengeId }: { challengeId: string }) {
           <UserCheck className="h-8 w-8 mx-auto text-[hsl(var(--muted-foreground))] mb-3" />
           <p className="text-sm font-medium text-[hsl(var(--foreground))]">No judges assigned yet</p>
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-            Add judges using the button above to start the scoring process.
+            Assign a judge from your team using the button above.
           </p>
         </Card>
       )}

@@ -86,7 +86,7 @@ export default function EnrolRegistrarPage() {
       {
         companyName:         form.name.trim(),
         representativeName:  form.repName.trim(),
-        contactEmail:        form.repEmail.trim(),
+        representativeEmail: form.repEmail.trim(),
         representativePhone: form.repPhone.trim() || undefined,
         password:            form.password.trim(),
         plan:                form.plan,

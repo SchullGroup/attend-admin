@@ -76,7 +76,7 @@ export interface PendingRegistrarItem {
 export interface EnrollRegistrarRequest {
   companyName:          string;
   representativeName:   string;
-  contactEmail:         string;
+  representativeEmail:  string;
   representativePhone?: string;
   password:             string;
   plan:                 string;

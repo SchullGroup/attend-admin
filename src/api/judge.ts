@@ -18,15 +18,17 @@ import { ApiResponse } from "@/types/api";
 // ---------------------------------------------------------------------------
 
 export interface JudgeChallengeItem {
-  id:              string;
-  title:           string;
-  organiserName?:  string;
-  date?:           string;
-  format?:         string;
-  status?:         string;
+  id:               string;
+  title:            string;
+  type?:            string;   // e.g. "INNOVATION_CHALLENGE" | "HACKATHON" | "EVENT"
+  organiserName?:   string;
+  date?:            string;
+  format?:          string;
+  status?:          string;
   shortlistedCount?: number;
-  scoredCount?:    number;
-  pendingCount?:   number;
+  scoredCount?:     number;
+  pendingCount?:    number;
+  totalCount?:      number;
 }
 
 export interface JudgeChallengeListResponse {
