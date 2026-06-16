@@ -9,6 +9,12 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 
+const PLAN_OPTIONS = [
+  { label: "Starter",    value: "STARTER"    },
+  { label: "Growth",     value: "GROWTH"     },
+  { label: "Enterprise", value: "ENTERPRISE" },
+];
+
 const INDUSTRY_OPTIONS = [
   "Financial Services", "Banking & Finance", "Insurance", "Oil & Gas", "FMCG",
   "Telecommunications", "Technology / Fintech", "Healthcare", "Real Estate",
@@ -21,6 +27,7 @@ interface EnrolForm {
   name:     string;  // → companyName
   industry: string;
   rcNumber: string;
+  plan:     string;  // → plan
   repName:  string;  // → representativeName
   repEmail: string;  // → contactEmail
   repPhone: string;  // → representativePhone
@@ -28,7 +35,7 @@ interface EnrolForm {
 }
 
 const EMPTY_FORM: EnrolForm = {
-  name: "", industry: "", rcNumber: "",
+  name: "", industry: "", rcNumber: "", plan: "STARTER",
   repName: "", repEmail: "", repPhone: "", password: "",
 };
 
@@ -75,14 +82,16 @@ export default function EnrolRegistrarPage() {
       return;
     }
 
-    // Spec payload: companyName, contactEmail, plan, rcNumber (null ok), industry (null ok)
     enrollMutation.mutate(
       {
-        companyName:  form.name.trim(),
-        contactEmail: form.repEmail.trim(),
-        plan:         "STARTER",
-        rcNumber:     form.rcNumber.trim() || null,   // spec: nullable
-        industry:     form.industry        || null,   // spec: nullable
+        companyName:         form.name.trim(),
+        representativeName:  form.repName.trim(),
+        contactEmail:        form.repEmail.trim(),
+        representativePhone: form.repPhone.trim() || undefined,
+        password:            form.password.trim(),
+        plan:                form.plan,
+        rcNumber:            form.rcNumber.trim() || null,
+        industry:            form.industry        || null,
       },
       {
         onSuccess: () => {
@@ -134,7 +143,19 @@ export default function EnrolRegistrarPage() {
               />
             </div>
 
-            <div className="flex flex-col gap-1.5 col-span-2">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
+                Plan <span className="text-red-500">*</span>
+              </label>
+              <CustomSelect
+                value={form.plan}
+                onChange={(v) => handleChange("plan", v)}
+                placeholder="Select plan…"
+                options={PLAN_OPTIONS}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">RC Number</label>
               <input
                 type="text"
@@ -173,6 +194,7 @@ export default function EnrolRegistrarPage() {
               </label>
               <input
                 type="email"
+                autoComplete="off"
                 value={form.repEmail}
                 onChange={(e) => handleChange("repEmail", e.target.value)}
                 placeholder="e.g. adaeze@dataport.ng"
@@ -199,6 +221,7 @@ export default function EnrolRegistrarPage() {
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   value={form.password}
                   onChange={(e) => handleChange("password", e.target.value)}
                   placeholder="Set initial password"

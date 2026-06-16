@@ -26,10 +26,11 @@ const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
   ADMIN:         { bg: "#f3f4f6", color: "#374151" },
   EVENT_MANAGER: { bg: "#dbeafe", color: "#374151" },
   VIEWER:        { bg: "#f3f4f6", color: "#6b7280" },
+  JUDGE:         { bg: "#faf5ff", color: "#7c22c9" },
 };
 
 const ROLE_LABELS: Record<string, string> = {
-  ADMIN: "Admin", EVENT_MANAGER: "Event Manager", VIEWER: "Viewer",
+  ADMIN: "Admin", EVENT_MANAGER: "Event Manager", VIEWER: "Viewer", JUDGE: "Judge",
 };
 
 export default function TeamPage() {
@@ -88,6 +89,7 @@ export default function TeamPage() {
                     <SelectItem value="ADMIN">Admin — Full access</SelectItem>
                     <SelectItem value="EVENT_MANAGER">Event Manager — Create &amp; manage events</SelectItem>
                     <SelectItem value="VIEWER">Viewer — Read-only access</SelectItem>
+                    <SelectItem value="JUDGE">Judge — Score innovation challenges</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

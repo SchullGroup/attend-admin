@@ -1,10 +1,11 @@
 "use client";
-import { use } from "react";
+import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, Building2, Mail, Phone, Hash, Globe,
   CalendarDays, Users, Eye, ClipboardList, MapPin,
+  UserCheck, X,
 } from "lucide-react";
 import {
   useRegistrarDetail,
@@ -12,9 +13,11 @@ import {
   useRegistrarEvents,
   useActivateRegistrar,
   useSuspendRegistrar,
+  useRejectRegistrar,
   getRegistrarDisplayName,
   getRegistrarEnrolledAt,
 } from "@/api/registrars";
+import { Input } from "@/components/ui/input";
 import { LogoUpload } from "@/components/custom/logo-upload";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -40,6 +43,9 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
   const { data: registrarEvents    } = useRegistrarEvents(id);
   const activateMutation = useActivateRegistrar();
   const suspendMutation  = useSuspendRegistrar();
+  const rejectMutation   = useRejectRegistrar();
+  const [rejectOpen,  setRejectOpen]  = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
 
   if (isLoading) return <Loader variant="page" text="Loading registrar…" />;
 
@@ -59,6 +65,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
   const statusInfo   = STATUS_DOT[statusKey] ?? STATUS_DOT.PENDING;
   const isActive     = statusKey === "ACTIVE";
   const isSuspended  = statusKey === "SUSPENDED";
+  const isPending    = statusKey === "PENDING";
 
   // Handle both flat fields and nested `representative` object from API
   const rep = (registrar as any).representative ?? {};
@@ -116,6 +123,13 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {isPending && (
+            <Button variant="outline" size="sm"
+              className="gap-1.5 border-red-200 text-red-600 hover:bg-red-50"
+              onClick={() => { setRejectOpen(true); setRejectReason(""); }}>
+              <X className="h-3.5 w-3.5" /> Reject
+            </Button>
+          )}
           {isActive && (
             <Button variant="outline" size="sm"
               className="gap-1.5 border-red-200 text-red-600 hover:bg-red-50"
@@ -132,7 +146,40 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
             </Button>
           )}
         </div>
-      </div>
+      </div>  {/* end header flex */}
+
+      {/* ── Reject modal ── */}
+      {rejectOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-[hsl(var(--card))] rounded-2xl shadow-xl w-full max-w-md p-6">
+            <h2 className="text-base font-semibold text-[hsl(var(--foreground))] mb-1">Reject Registrar</h2>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mb-4">
+              A rejection notice will be sent to the representative. Provide a reason below (optional).
+            </p>
+            <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] mb-1.5">Reason</label>
+            <Input
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="e.g. Incomplete documentation"
+              className="mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setRejectOpen(false)}>Cancel</Button>
+              <Button
+                size="sm"
+                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={rejectMutation.isPending}
+                onClick={() => rejectMutation.mutate(
+                  { id, reason: rejectReason.trim() || undefined },
+                  { onSuccess: () => { setRejectOpen(false); router.push("/registrars"); } }
+                )}
+              >
+                {rejectMutation.isPending ? "Rejecting…" : "Confirm Reject"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Main grid ── */}
       <div className="grid grid-cols-3 gap-5">
@@ -268,6 +315,88 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
               </table>
             )}
           </Card>
+
+          {/* ── Admin User card ── */}
+          {(registrar as any).adminUser && (() => {
+            const au = (registrar as any).adminUser;
+            const auName = au.fullName || au.name || au.email;
+            return (
+              <Card className="attend-card p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <UserCheck className="h-4 w-4 text-[hsl(var(--primary))]" />
+                  <h2 className="font-semibold text-[hsl(var(--foreground))]">Admin Account</h2>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-sm font-bold text-[hsl(var(--primary))] shrink-0">
+                    {auName.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{auName}</p>
+                    <p className="text-xs text-[hsl(var(--muted-foreground))]">{au.email}</p>
+                    {au.role && <p className="text-xs text-[hsl(var(--muted-foreground))] capitalize">{au.role.toLowerCase().replace(/_/g, " ")}</p>}
+                  </div>
+                  {au.status && (
+                    <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-semibold"
+                      style={{
+                        backgroundColor: au.status === "ACTIVE" ? "#16a34a18" : "#6b728018",
+                        color: au.status === "ACTIVE" ? "#16a34a" : "#6b7280",
+                      }}>
+                      {au.status}
+                    </span>
+                  )}
+                </div>
+              </Card>
+            );
+          })()}
+
+          {/* ── Team members ── */}
+          {Array.isArray((registrar as any).team) && (registrar as any).team.length > 0 && (
+            <Card className="attend-card overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border)/0.6)]">
+                <h2 className="font-semibold text-[hsl(var(--foreground))]">Team</h2>
+                <span className="text-xs text-[hsl(var(--muted-foreground))]">{(registrar as any).team.length} members</span>
+              </div>
+              <table className="w-full">
+                <thead>
+                  <tr className="attend-table-header">
+                    <th className="px-5 py-3 text-left">Name</th>
+                    <th className="px-5 py-3 text-left">Email</th>
+                    <th className="px-5 py-3 text-left">Role</th>
+                    <th className="px-5 py-3 text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(registrar as any).team.map((member: any) => (
+                    <tr key={member.id} className="attend-table-row">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-7 w-7 rounded-full bg-[hsl(var(--muted))] flex items-center justify-center text-xs font-bold text-[hsl(var(--muted-foreground))] shrink-0">
+                            {(member.fullName || member.email).slice(0, 2).toUpperCase()}
+                          </div>
+                          <span className="text-sm font-medium text-[hsl(var(--foreground))]">{member.fullName || "—"}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{member.email}</td>
+                      <td className="px-5 py-3">
+                        {member.role
+                          ? <span className="text-xs px-2 py-0.5 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] capitalize">{member.role.toLowerCase().replace(/_/g, " ")}</span>
+                          : <span className="text-xs text-[hsl(var(--muted-foreground))]">—</span>
+                        }
+                      </td>
+                      <td className="px-5 py-3">
+                        {member.status && (
+                          <span className="text-xs font-semibold"
+                            style={{ color: member.status === "ACTIVE" ? "#16a34a" : "#6b7280" }}>
+                            {member.status}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          )}
 
           {/* Events */}
           <Card className="attend-card overflow-hidden">

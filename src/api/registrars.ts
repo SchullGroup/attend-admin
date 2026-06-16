@@ -74,11 +74,14 @@ export interface PendingRegistrarItem {
 
 /** Payload for POST /api/v1/admin/registrars/enroll */
 export interface EnrollRegistrarRequest {
-  companyName:  string;
-  contactEmail: string;
-  plan:         string;
-  rcNumber:     string | null;   // nullable — send null, not undefined
-  industry:     string | null;   // nullable — send null, not undefined
+  companyName:          string;
+  representativeName:   string;
+  contactEmail:         string;
+  representativePhone?: string;
+  password:             string;
+  plan:                 string;
+  rcNumber:             string | null;   // nullable — send null, not undefined
+  industry:             string | null;   // nullable — send null, not undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -215,6 +218,24 @@ export interface RegistrarDetailResponse {
   }>;
   registersCount?: number;
   eventsCount?:    number;
+  /** Team members — returned by GET /api/v1/admin/registrars/{id} */
+  team?:           Array<{
+    id:       string;
+    fullName: string;
+    email:    string;
+    role?:    string;
+    status?:  string;
+  }>;
+  /** Admin user account linked to this registrar */
+  adminUser?:      {
+    id:        string;
+    fullName?: string;
+    name?:     string;
+    email:     string;
+    role?:     string;
+    status?:   string;
+    createdAt?: string;
+  };
 }
 
 export function useRegistrarDetail(id: string) {

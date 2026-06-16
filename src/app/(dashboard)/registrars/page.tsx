@@ -109,7 +109,7 @@ export default function RegistrarsPage() {
                 <th className="px-5 py-3 text-left">Registers</th>
                 <th className="px-5 py-3 text-left">Events</th>
                 <th className="px-5 py-3 text-left">Status</th>
-                <th className="px-5 py-3 text-left">Enrolled</th>
+                <th className="px-5 py-3 text-left">Approved</th>
                 <th className="px-5 py-3 text-left">Actions</th>
                 <th className="px-5 py-3 text-left"></th>
               </tr>
@@ -155,7 +155,7 @@ export default function RegistrarsPage() {
                       </div>
                     </td>
                     <td className="px-5 py-3">
-                      <DateCell value={getRegistrarEnrolledAt(r)} />
+                      <DateCell value={r.approvedAt ?? getRegistrarEnrolledAt(r)} />
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1.5">

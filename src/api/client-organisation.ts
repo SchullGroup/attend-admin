@@ -71,7 +71,7 @@ export interface UpdateBrandingColorRequest {
   primaryColor: string; // hex #RRGGBB
 }
 
-export type TeamMemberRole = "ADMIN" | "EVENT_MANAGER" | "VIEWER";
+export type TeamMemberRole = "ADMIN" | "EVENT_MANAGER" | "VIEWER" | "JUDGE";
 export type TeamMemberStatus = "ACTIVE" | "INVITED" | "REVOKED";
 
 export interface TeamMember {

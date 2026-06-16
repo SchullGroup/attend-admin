@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Trophy, ArrowLeft, ChevronRight, Search, Lightbulb,
-  Star, UserCheck, Plus, Trash2,
+  Star, UserCheck, Plus, Trash2, CheckCircle2, MessageSquare,
 } from "lucide-react";
 import {
   useClientChallenges,
@@ -13,11 +13,19 @@ import {
   useRemoveJudge,
   type JudgeItem,
 } from "@/api/client-challenges";
+import {
+  useJudgeEvents,
+  useJudgeScoringPanel,
+  useSubmitJudgeScore,
+} from "@/api/judge";
+import { useGetMe } from "@/api/auth/hooks";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
+
+const JUDGE_ROLES = new Set(["judge"]);
 
 // ---------------------------------------------------------------------------
 // Status chip
@@ -298,12 +306,273 @@ function ChallengeJudging({ challengeId }: { challengeId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Judge scoring panel (JUDGE role)
+// ---------------------------------------------------------------------------
+
+function JudgeScoringPanel({ challengeId, challengeTitle, onBack }: {
+  challengeId:    string;
+  challengeTitle: string;
+  onBack:         () => void;
+}) {
+  const { data, isLoading } = useJudgeScoringPanel(challengeId);
+  const submitScore = useSubmitJudgeScore();
+
+  const [scores,   setScores]   = useState<Record<string, string>>({});
+  const [comments, setComments] = useState<Record<string, string>>({});
+  const [saved,    setSaved]    = useState<Record<string, boolean>>({});
+
+  if (isLoading) return <Loader variant="page" text="Loading scoring panel…" />;
+
+  const applications = data?.applications ?? [];
+  const criteria     = data?.criteria     ?? [];
+
+  function handleSubmit(appId: string) {
+    const score = parseFloat(scores[appId] ?? "");
+    if (isNaN(score) || score < 0 || score > 100) return;
+    submitScore.mutate(
+      { challengeId, applicationId: appId, data: { score, comment: comments[appId]?.trim() || undefined } },
+      { onSuccess: () => setSaved((s) => ({ ...s, [appId]: true })) }
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <button onClick={onBack}
+          className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-4 transition-colors">
+          <ArrowLeft className="h-3.5 w-3.5" /> All Challenges
+        </button>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{data?.challengeTitle || challengeTitle}</h1>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
+          Score each shortlisted team below · {applications.length} teams to score
+        </p>
+      </div>
+
+      {criteria.length > 0 && (
+        <Card className="attend-card p-5">
+          <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3 text-sm">Scoring Criteria</h2>
+          <div className="flex flex-wrap gap-2">
+            {criteria.map((c) => (
+              <span key={c.name} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] font-medium">
+                {c.name}
+                {c.weight ? <span className="font-bold text-[hsl(var(--foreground))]">·{c.weight}%</span> : null}
+              </span>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <div className="flex flex-col gap-4">
+        {applications.map((app, idx) => {
+          const alreadyScored = app.score != null || saved[app.applicationId];
+          return (
+            <Card key={app.applicationId} className="attend-card p-5">
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <span className="h-6 w-6 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))] text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                    {idx + 1}
+                  </span>
+                  <div>
+                    <p className="text-sm font-bold text-[hsl(var(--foreground))]">{app.teamName}</p>
+                    {app.ideaTitle && <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{app.ideaTitle}</p>}
+                    {app.track && (
+                      <span className="mt-1 inline-flex text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
+                        {app.track}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {alreadyScored && (
+                  <div className="flex items-center gap-1.5 text-green-700 text-xs font-semibold shrink-0">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {saved[app.applicationId] ? "Saved" : `Scored: ${app.score}`}
+                  </div>
+                )}
+              </div>
+
+              {!saved[app.applicationId] ? (
+                <div className="flex items-end gap-3">
+                  <div className="flex flex-col gap-1.5 w-28">
+                    <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Score (0–100)</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      placeholder={app.score != null ? String(app.score) : "e.g. 85"}
+                      value={scores[app.applicationId] ?? ""}
+                      onChange={(e) => setScores((s) => ({ ...s, [app.applicationId]: e.target.value }))}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5 flex-1">
+                    <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] flex items-center gap-1">
+                      <MessageSquare className="h-3 w-3" /> Comment (optional)
+                    </label>
+                    <Input
+                      placeholder={app.comment ?? "Add a comment…"}
+                      value={comments[app.applicationId] ?? ""}
+                      onChange={(e) => setComments((s) => ({ ...s, [app.applicationId]: e.target.value }))}
+                      className="h-9"
+                    />
+                  </div>
+                  <Button
+                    size="sm" className="h-9 shrink-0"
+                    disabled={!scores[app.applicationId] || submitScore.isPending}
+                    onClick={() => handleSubmit(app.applicationId)}
+                  >
+                    Submit
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  Score: <strong>{scores[app.applicationId] ?? app.score}</strong>
+                  {(comments[app.applicationId] || app.comment) && ` · "${comments[app.applicationId] || app.comment}"`}
+                </p>
+              )}
+            </Card>
+          );
+        })}
+
+        {applications.length === 0 && (
+          <Card className="attend-card p-12 text-center">
+            <Trophy className="h-8 w-8 mx-auto mb-3 text-[hsl(var(--muted-foreground))] opacity-30" />
+            <p className="text-sm font-medium text-[hsl(var(--foreground))]">No shortlisted teams yet</p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Teams will appear here once shortlisted by the organiser.</p>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Judge challenge picker (JUDGE role)
+// ---------------------------------------------------------------------------
+
+function JudgeJudgingPage() {
+  const [selectedId,    setSelectedId]    = useState<string | null>(null);
+  const [selectedTitle, setSelectedTitle] = useState("");
+  const [search,        setSearch]        = useState("");
+
+  const { data, isLoading } = useJudgeEvents();
+  const challenges = data?.challenges ?? [];
+
+  if (isLoading) return <Loader variant="page" text="Loading your challenges…" />;
+
+  if (selectedId) {
+    return (
+      <JudgeScoringPanel
+        challengeId={selectedId}
+        challengeTitle={selectedTitle}
+        onBack={() => setSelectedId(null)}
+      />
+    );
+  }
+
+  const filtered = search
+    ? challenges.filter((c) =>
+        c.title.toLowerCase().includes(search.toLowerCase()) ||
+        (c.organiserName ?? "").toLowerCase().includes(search.toLowerCase())
+      )
+    : challenges;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">My Scoring Panel</h1>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+          Challenges assigned to you for judging
+        </p>
+      </div>
+
+      <div className="relative max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+        <Input
+          placeholder="Search challenges…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9 h-9"
+        />
+      </div>
+
+      <Card className="attend-card overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="attend-table-header">
+              <th className="px-5 py-3 text-left">Challenge</th>
+              <th className="px-5 py-3 text-left">Date</th>
+              <th className="px-5 py-3 text-left">Shortlisted</th>
+              <th className="px-5 py-3 text-left">Scored</th>
+              <th className="px-5 py-3 text-left">Status</th>
+              <th className="px-5 py-3 text-right"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((c) => {
+              const s = (c.status ?? "").toUpperCase();
+              const style = s === "LIVE" ? { bg: "#16a34a18", color: "#16a34a" }
+                : s === "PUBLISHED"      ? { bg: "#0891b218", color: "#0891b2" }
+                : s === "ENDED"          ? { bg: "#6b728018", color: "#6b7280" }
+                : { bg: "#7c22c918", color: "#7c22c9" };
+              return (
+                <tr key={c.id} className="attend-table-row cursor-pointer"
+                  onClick={() => { setSelectedId(c.id); setSelectedTitle(c.title); }}>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#7c22c918" }}>
+                        <Lightbulb className="h-4 w-4" style={{ color: "#7c22c9" }} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[240px]">{c.title}</p>
+                        {c.organiserName && <p className="text-xs text-[hsl(var(--muted-foreground))]">{c.organiserName}</p>}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4 text-sm text-[hsl(var(--foreground))]">{c.date ? formatDate(c.date) : "—"}</td>
+                  <td className="px-5 py-4 text-sm font-semibold tabular-nums">{c.shortlistedCount ?? "—"}</td>
+                  <td className="px-5 py-4 text-sm font-semibold tabular-nums text-green-700">{c.scoredCount ?? "—"}</td>
+                  <td className="px-5 py-4">
+                    {c.status && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.color }}>
+                        {c.status}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-5 py-4 text-right">
+                    <Button size="sm" className="h-8 gap-1.5 text-xs"
+                      onClick={(e) => { e.stopPropagation(); setSelectedId(c.id); setSelectedTitle(c.title); }}>
+                      Score <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {filtered.length === 0 && (
+          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            {search ? "No challenges match your search." : "No challenges assigned to you yet."}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 export default function JudgingPage() {
   const router = useRouter();
   const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
   const [search,              setSearch]              = useState("");
+
+  const { data: userResponse } = useGetMe();
+  const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
+  const isJudge = JUDGE_ROLES.has(normalizedRole);
+
+  // JUDGE role → dedicated scoring UI
+  if (isJudge) return <JudgeJudgingPage />;
 
   const { data, isLoading } = useClientChallenges("", "", 0, 100);
   const challenges = data?.challenges ?? [];
