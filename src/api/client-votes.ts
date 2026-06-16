@@ -22,19 +22,31 @@ import { ApiResponse } from "@/types/api";
 // ---------------------------------------------------------------------------
 
 export interface VoteListItem {
-  eventId:          string;
-  title:            string;
-  date:             string;
-  status:           string;
-  resolutionCount:  number;
-  totalVotesCast:   number;
+  id:                 string;
+  eventId?:           string;   // alias — some shapes return eventId instead
+  title:              string;
+  stakeholderName?:   string;
+  registerId?:        string;
+  registerName?:      string;
+  date:               string;
+  dateLabel?:         string;
+  totalResolutions?:  number;
+  resolutionCount?:   number;   // alias
+  closedResolutions?: number;
+  resolutionLabel?:   string;
+  votesCast?:         number;
+  totalVotesCast?:    number;   // alias
+  votesCastLabel?:    string;
+  status:             string;
+  canManageVotes?:    boolean;
 }
 
 export interface VoteListResponse {
   totalCount:  number;
   page:        number;
   size:        number;
-  events:      VoteListItem[];
+  records:     VoteListItem[];
+  events?:     VoteListItem[];   // alias in case old shape is returned
 }
 
 export interface VoteStats {
@@ -138,7 +150,13 @@ export function useClientVoteList(search = "", status = "", page = 0, size = 20)
           },
         }
       );
-      return res.data.data;
+      const raw = (res.data.data ?? (res.data as any)) as any;
+      return {
+        totalCount: raw?.totalCount ?? raw?.totalElements ?? 0,
+        page:       raw?.page       ?? page,
+        size:       raw?.size       ?? size,
+        records:    raw?.records    ?? raw?.events ?? raw?.content ?? [],
+      } as VoteListResponse;
     },
     staleTime: 30_000,
   });

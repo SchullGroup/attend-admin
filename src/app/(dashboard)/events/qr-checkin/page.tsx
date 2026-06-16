@@ -1,12 +1,12 @@
 "use client";
 import { useState } from "react";
-import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Loader } from "@/components/ui/Loader";
 import { toast } from "sonner";
 import { QrCode, CheckCircle2, ShieldCheck, Clock, Users, Wifi, ChevronRight } from "lucide-react";
-import { useClientScanQr } from "@/api/client-events";
+import { useClientScanQr, useClientEvents } from "@/api/client-events";
 
 const MOCK_ATTENDEES = [
   { name: "Ngozi Okafor",    email: "ngozi.okafor@email.com",     seatRef: "A-14", kycStatus: "Full KYC" },
@@ -274,12 +274,19 @@ function ScannerView({ event, onBack }: { event: any; onBack: () => void }) {
 // ── Level 1: events table ─────────────────────────────────────────────────────
 
 export default function QRCheckInPage() {
-  const { events } = useStore();
-  const liveEvents = events.filter((e) => e.status === "live" || e.status === "published");
+  const { data: eventsData, isLoading } = useClientEvents("ALL", 0, 100);
+  const allEvents  = eventsData?.events ?? [];
+  // Show LIVE and PUBLISHED events — check-in makes sense for both
+  const liveEvents = allEvents.filter(
+    (e) => e.status === "LIVE" || e.status === "PUBLISHED"
+  );
+
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   const selectedEvent = liveEvents.find((e) => e.id === selectedEventId);
-  if (selectedEvent) return <ScannerView event={selectedEvent} onBack={() => setSelectedEventId(null)} />;
+  if (selectedEvent) return <ScannerView event={{ ...selectedEvent, organiser: selectedEvent.registerName ?? "", module: selectedEvent.eventType ?? "GENERAL" }} onBack={() => setSelectedEventId(null)} />;
+
+  if (isLoading) return <Loader variant="page" text="Loading events…" />;
 
   return (
     <div className="flex flex-col gap-6">
@@ -290,9 +297,9 @@ export default function QRCheckInPage() {
 
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Active Events",         value: liveEvents.length,                       icon: QrCode,      accent: "#111827" },
-          { label: "Total Check-Ins Today", value: SEED_CHECKINS.length * liveEvents.length, icon: Users,       accent: "#7c22c9" },
-          { label: "Avg. KYC Verified",     value: "96%",                                   icon: ShieldCheck, accent: "#16a34a" },
+          { label: "Available Events", value: liveEvents.length, icon: QrCode,      accent: "#111827" },
+          { label: "Live Now",         value: allEvents.filter(e => e.status === "LIVE").length, icon: Users, accent: "#7c22c9" },
+          { label: "Published",        value: allEvents.filter(e => e.status === "PUBLISHED").length, icon: ShieldCheck, accent: "#16a34a" },
         ].map((stat) => (
           <Card key={stat.label} className="attend-card p-4 flex items-center gap-3">
             <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: stat.accent + "18" }}>
@@ -325,20 +332,23 @@ export default function QRCheckInPage() {
             </thead>
             <tbody>
               {liveEvents.map((evt) => {
-                const modColor = MODULE_COLORS[evt.module] ?? "#111827";
+                const modColor = MODULE_COLORS[evt.eventType ?? "GENERAL"] ?? "#111827";
+                const isLive   = evt.status === "LIVE";
                 return (
                   <tr key={evt.id} className="attend-table-row">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <div
                           className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
-                          style={{ backgroundColor: evt.color ?? "#111827" }}
+                          style={{ backgroundColor: modColor }}
                         >
-                          {initials(evt.organiser ?? evt.title)}
+                          {initials(evt.registerName ?? evt.title)}
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[220px]">{evt.title}</p>
-                          <p className="text-xs text-[hsl(var(--muted-foreground))]">{evt.organiser}</p>
+                          {evt.registerName && (
+                            <p className="text-xs text-[hsl(var(--muted-foreground))]">{evt.registerName}</p>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -347,23 +357,25 @@ export default function QRCheckInPage() {
                         className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold text-white"
                         style={{ backgroundColor: modColor }}
                       >
-                        {evt.module}
+                        {evt.eventType ?? "—"}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-sm text-[hsl(var(--foreground))] capitalize">{evt.format}</td>
+                    <td className="px-5 py-4 text-sm text-[hsl(var(--foreground))] capitalize">
+                      {evt.format?.toLowerCase() ?? "—"}
+                    </td>
                     <td className="px-5 py-4">
                       <span
                         className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold"
-                        style={evt.status === "live"
+                        style={isLive
                           ? { backgroundColor: "#16a34a18", color: "#16a34a" }
                           : { backgroundColor: "#11182710", color: "#374151" }}
                       >
-                        {evt.status === "live" && <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />}
+                        {isLive && <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />}
                         <span className="capitalize">{evt.status}</span>
                       </span>
                     </td>
                     <td className="px-5 py-4 text-sm font-semibold tabular-nums text-[hsl(var(--foreground))]">
-                      {SEED_CHECKINS.length}
+                      {evt.rsvpCount ?? 0}
                     </td>
                     <td className="px-5 py-4">
                       <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setSelectedEventId(evt.id)}>
@@ -375,6 +387,11 @@ export default function QRCheckInPage() {
               })}
             </tbody>
           </table>
+          {liveEvents.length === 0 && (
+            <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
+              No live or published events available for check-in.
+            </div>
+          )}
         </div>
       </Card>
     </div>

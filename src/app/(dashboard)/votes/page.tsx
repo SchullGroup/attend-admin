@@ -37,7 +37,7 @@ export default function VotesPage() {
 
   if (statsLoading && listLoading) return <Loader variant="page" text="Loading Votes…" />;
 
-  const events     = list?.events ?? [];
+  const events     = list?.records ?? list?.events ?? [];
   const totalCount = list?.totalCount ?? 0;
   const totalPages = Math.ceil(totalCount / size);
 
@@ -123,9 +123,9 @@ export default function VotesPage() {
                   const ss = statusStyle(ev.status);
                   return (
                     <tr
-                      key={ev.eventId}
+                      key={ev.id ?? ev.eventId}
                       className="attend-table-row cursor-pointer"
-                      onClick={() => router.push(`/votes/${ev.eventId}`)}
+                      onClick={() => router.push(`/votes/${ev.id ?? ev.eventId}`)}
                     >
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
@@ -135,19 +135,29 @@ export default function VotesPage() {
                           >
                             <Vote className="h-4 w-4" style={{ color: "#2563eb" }} />
                           </div>
-                          <span className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[260px]">
-                            {ev.title}
-                          </span>
+                          <div>
+                            <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[240px]">
+                              {ev.title}
+                            </p>
+                            {ev.registerName && (
+                              <p className="text-xs text-[hsl(var(--muted-foreground))]">{ev.registerName}</p>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-5 py-4 text-sm text-[hsl(var(--muted-foreground))]">
-                        {formatDate(ev.date)}
+                        {ev.dateLabel ?? formatDate(ev.date)}
                       </td>
                       <td className="px-5 py-4 text-sm text-right font-semibold tabular-nums">
-                        {ev.resolutionCount ?? 0}
+                        {ev.totalResolutions ?? ev.resolutionCount ?? 0}
+                        {ev.closedResolutions != null && (
+                          <span className="text-xs text-[hsl(var(--muted-foreground))] font-normal ml-1">
+                            ({ev.closedResolutions} closed)
+                          </span>
+                        )}
                       </td>
                       <td className="px-5 py-4 text-sm text-right tabular-nums text-[hsl(var(--muted-foreground))]">
-                        {(ev.totalVotesCast ?? 0).toLocaleString()}
+                        {(ev.votesCast ?? ev.totalVotesCast ?? 0).toLocaleString()}
                       </td>
                       <td className="px-5 py-4">
                         <span

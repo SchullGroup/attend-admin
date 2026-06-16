@@ -50,7 +50,11 @@ export default function HackathonsPage() {
   if (isLoading) return <Loader variant="page" text="Loading Challenges…" />;
 
   const summary    = data?.summary;
-  const challenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; shortlistedTeams?: number; status?: string }>;
+  const allChallenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; shortlistedTeams?: number; status?: string }>;
+  // Client-side filter ensures tabs match even if the backend ignores the status param
+  const challenges = statusTab
+    ? allChallenges.filter((c) => c.status?.toUpperCase() === statusTab.toUpperCase())
+    : allChallenges;
   const featured   = challenges.find((c) => c.status?.toUpperCase() === "LIVE") ?? challenges[0] ?? null;
 
   return (
