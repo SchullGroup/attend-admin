@@ -5,6 +5,7 @@ import {
   ArrowLeft, Trophy, Users, FileText, Lightbulb, Star, ChevronDown,
   Plus, Trash2, ToggleLeft, ToggleRight, ListOrdered, Target, Award,
   ClipboardList, UserCheck, BookOpen, ChevronRight, ExternalLink, Code,
+  Globe, Video, FolderOpen, Settings,
 } from "lucide-react";
 import {
   useClientChallengeDetail,
@@ -16,9 +17,11 @@ import {
   useAddJudge,
   useRemoveJudge,
   useClientChallengeJudges,
+  useUpdateSubmissionRequirements,
   type ApplicationStatus,
   type ApplicationItem,
   type JudgeItem,
+  type SubmissionRequirements,
 } from "@/api/client-challenges";
 import { useOrganisationTeam, type TeamMember } from "@/api/client-organisation";
 import { Button } from "@/components/ui/button";
@@ -836,6 +839,117 @@ function LeaderboardTab({ challengeId }: { challengeId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Settings tab — Submission Requirements
+// ---------------------------------------------------------------------------
+
+const SUBMISSION_FIELDS: {
+  key: keyof SubmissionRequirements;
+  label: string;
+  description: string;
+  Icon: React.ElementType;
+}[] = [
+  { key: "requireSourceCode",          label: "Source Code / GitHub URL",  description: "Repository or project URL",      Icon: Code  },
+  { key: "requireLiveDemoUrl",         label: "Live Demo URL",             description: "Deployed demo link",             Icon: Globe },
+  { key: "requireProjectDescription",  label: "Project Description",       description: "What it does (300 chars)",       Icon: FileText },
+  { key: "requirePitchDeck",           label: "Pitch Deck Upload",         description: "PDF or PPTX, max 20MB",          Icon: FileText },
+  { key: "requirePitchVideoUrl",       label: "Pitch Video URL",           description: "YouTube or Loom pitch",          Icon: Video },
+  { key: "requireDemoVideo",           label: "Demo Video",                description: "URL or file upload, max 500MB",  Icon: Video },
+  { key: "requireAdditionalDocuments", label: "Additional Documents",      description: "Supporting files or appendices", Icon: FolderOpen },
+];
+
+function SettingsTab({ challengeId }: { challengeId: string }) {
+  const { data: challenge, isLoading } = useClientChallengeDetail(challengeId);
+  const updateReqs = useUpdateSubmissionRequirements();
+
+  if (isLoading) return <Loader variant="inline" text="Loading…" />;
+
+  const reqs: SubmissionRequirements = challenge?.submissionRequirements ?? {
+    requireSourceCode:          false,
+    requireLiveDemoUrl:         false,
+    requireProjectDescription:  false,
+    requirePitchDeck:           false,
+    requirePitchVideoUrl:       false,
+    requireDemoVideo:           false,
+    requireAdditionalDocuments: false,
+  };
+
+  function toggle(key: keyof SubmissionRequirements) {
+    updateReqs.mutate({
+      challengeId,
+      data: { [key]: !reqs[key] },
+    });
+  }
+
+  return (
+    <div className="max-w-2xl flex flex-col gap-6">
+      {/* Submission Requirements card */}
+      <Card className="attend-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+          <Settings className="h-4 w-4 text-[#7c22c9]" />
+          <h2 className="font-semibold text-[hsl(var(--foreground))]">Submission Requirements</h2>
+          <span className="text-xs text-[hsl(var(--muted-foreground))] ml-auto">
+            Toggle which fields applicants must fill in
+          </span>
+        </div>
+
+        <div className="divide-y divide-[hsl(var(--border))]">
+          {/* Pair up items into rows of 2 */}
+          {[0, 2, 4, 6].map((startIdx) => {
+            const pair = SUBMISSION_FIELDS.slice(startIdx, startIdx + 2);
+            return (
+              <div key={startIdx} className={`grid gap-0 ${pair.length === 2 ? "grid-cols-2 divide-x divide-[hsl(var(--border))]" : "grid-cols-1"}`}>
+                {pair.map(({ key, label, description, Icon }) => (
+                  <div key={key} className="flex items-center justify-between px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "#7c22c918" }}
+                      >
+                        <Icon className="h-4 w-4" style={{ color: "#7c22c9" }} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</p>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">{description}</p>
+                      </div>
+                    </div>
+                    {/* Toggle switch */}
+                    <button
+                      onClick={() => toggle(key)}
+                      disabled={updateReqs.isPending}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none shrink-0 ml-4 ${
+                        reqs[key] ? "bg-[#7c22c9]" : "bg-[hsl(var(--muted))]"
+                      }`}
+                      aria-checked={reqs[key]}
+                      role="switch"
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                          reqs[key] ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+
+        {updateReqs.isPending && (
+          <div className="px-5 py-2 border-t border-[hsl(var(--border))]">
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">Saving…</p>
+          </div>
+        )}
+      </Card>
+
+      <p className="text-xs text-[hsl(var(--muted-foreground))]">
+        Changes take effect immediately. Applicants will see updated requirements when they open the submission form.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Judges tab
 // ---------------------------------------------------------------------------
 function JudgesTab({ challengeId }: { challengeId: string }) {
@@ -1127,7 +1241,7 @@ function JudgesTab({ challengeId }: { challengeId: string }) {
 // ---------------------------------------------------------------------------
 // Page — orchestrator
 // ---------------------------------------------------------------------------
-const TABS = ["Overview", "Applications", "Leaderboard", "Judges"] as const;
+const TABS = ["Overview", "Applications", "Leaderboard", "Judges", "Settings"] as const;
 type Tab = typeof TABS[number];
 
 export default function ChallengeDetailPage({
@@ -1217,7 +1331,11 @@ export default function ChallengeDetailPage({
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
             }`}
           >
-            {t}
+            {t === "Settings" ? (
+              <span className="flex items-center justify-center gap-1">
+                <Settings className="h-3.5 w-3.5" /> Settings
+              </span>
+            ) : t}
             {t === "Applications" && challenge.applicationCount > 0 && (
               <span className="ml-1.5 text-[10px] font-bold bg-[#7c22c918] text-[#7c22c9] rounded-full px-1.5 py-0.5">
                 {challenge.applicationCount}
@@ -1232,6 +1350,7 @@ export default function ChallengeDetailPage({
       {tab === "Applications" && <ApplicationsTab challengeId={challengeId} />}
       {tab === "Leaderboard"  && <LeaderboardTab  challengeId={challengeId} />}
       {tab === "Judges"       && <JudgesTab        challengeId={challengeId} />}
+      {tab === "Settings"     && <SettingsTab      challengeId={challengeId} />}
     </div>
   );
 }

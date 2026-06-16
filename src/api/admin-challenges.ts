@@ -132,7 +132,14 @@ export function useAdminChallenges(search = "", organiserId = "", status = "", p
         "/api/v1/admin/challenges",
         { params }
       );
-      return (res.data.data ?? (res.data as any)) as ChallengeListResponse;
+      const raw = (res.data.data ?? (res.data as any)) as any;
+      return {
+        summary:    raw?.summary    ?? { activeChallenges: 0, teamsToScore: 0, totalApplications: 0 },
+        totalCount: raw?.totalCount ?? raw?.totalElements ?? 0,
+        page:       raw?.page       ?? page,
+        size:       raw?.size       ?? size,
+        challenges: Array.isArray(raw) ? raw : (raw?.challenges ?? raw?.content ?? []),
+      } as ChallengeListResponse;
     },
     staleTime: 30_000,
   });

@@ -55,25 +55,36 @@ export interface PrizeTier {
   reward:   string;
 }
 
+export interface SubmissionRequirements {
+  requireSourceCode:           boolean;
+  requireLiveDemoUrl:          boolean;
+  requireProjectDescription:   boolean;
+  requirePitchDeck:            boolean;
+  requirePitchVideoUrl:        boolean;
+  requireDemoVideo:            boolean;
+  requireAdditionalDocuments:  boolean;
+}
+
 export interface ChallengeDetail {
-  id:                    string;
-  title:                 string;
-  description:           string;
-  status:                string;
-  applicationsOpen:      boolean;
-  date:                  string;
-  applicationCount:      number;
-  shortlistedCount:      number;
-  judgeCount:            number;
-  topPrizePool:          string;
-  applicationDeadline:   string;
-  minTeamSize:           number;
-  maxTeamSize:           number;
-  tracks:                string[];
-  prizeTiers:            PrizeTier[];
-  problemStatement:      string;
-  expectedDeliverable:   string;
-  eligibilityCriteria:   string;
+  id:                      string;
+  title:                   string;
+  description:             string;
+  status:                  string;
+  applicationsOpen:        boolean;
+  date:                    string;
+  applicationCount:        number;
+  shortlistedCount:        number;
+  judgeCount:              number;
+  topPrizePool:            string;
+  applicationDeadline:     string;
+  minTeamSize:             number;
+  maxTeamSize:             number;
+  tracks:                  string[];
+  prizeTiers:              PrizeTier[];
+  problemStatement:        string;
+  expectedDeliverable:     string;
+  eligibilityCriteria:     string;
+  submissionRequirements?: SubmissionRequirements;
 }
 
 export interface ApplicationTab {
@@ -226,7 +237,15 @@ export function useClientChallenges(search = "", status = "", page = 0, size = 2
         "/api/v1/client/challenges",
         { params: { ...(search ? { search } : {}), ...(status ? { status } : {}), page, size } }
       );
-      return res.data.data;
+      // Handle both enveloped ({ status, data: { challenges } }) and flat responses
+      const raw = (res.data.data ?? (res.data as any)) as any;
+      return {
+        summary:    raw?.summary    ?? { activeChallenges: 0, teamsToScore: 0, totalApplications: 0 },
+        totalCount: raw?.totalCount ?? raw?.totalElements ?? 0,
+        page:       raw?.page       ?? page,
+        size:       raw?.size       ?? size,
+        challenges: Array.isArray(raw) ? raw : (raw?.challenges ?? raw?.content ?? []),
+      } as ChallengeListResponse;
     },
     staleTime: 30_000,
   });
@@ -409,5 +428,30 @@ export function useRemoveJudge() {
       popup.success("Judge Removed", "Judge has been unassigned.", 2000);
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to remove judge."),
+  });
+}
+
+/** Toggle which submission fields applicants must fill in. */
+export function useUpdateSubmissionRequirements() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      challengeId,
+      data,
+    }: {
+      challengeId: string;
+      data: Partial<SubmissionRequirements>;
+    }) => {
+      const res = await apiClient.patch<ApiResponse<any>>(
+        `/api/v1/client/challenges/${challengeId}/submission-requirements`,
+        data
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, { challengeId }) => {
+      queryClient.invalidateQueries({ queryKey: clientChallengeKeys.detail(challengeId) });
+      popup.success("Saved", "Submission requirements updated.", 2000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to update requirements."),
   });
 }
