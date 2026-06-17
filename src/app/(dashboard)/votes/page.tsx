@@ -168,7 +168,15 @@ export default function VotesPage() {
                         </span>
                       </td>
                       <td className="px-5 py-4">
-                        <Button size="sm" variant="ghost" className="h-8 gap-1 text-xs">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 gap-1 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/votes/${ev.id ?? ev.eventId}`);
+                          }}
+                        >
                           View <ChevronRight className="h-3.5 w-3.5" />
                         </Button>
                       </td>

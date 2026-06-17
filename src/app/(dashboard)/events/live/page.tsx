@@ -1,18 +1,22 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { StatusBadge } from "@/components/custom/status-badge";
-import { toast } from "sonner";
+import { Loader } from "@/components/ui/Loader";
 import {
   Check, X, Users, Vote, MessageSquare, UserCheck, Clock,
-  Wifi, Radio, Building2, Tv2, Link2, BarChart2,
-  Trophy, Package, ChevronRight, ExternalLink, Pencil, Plus, Trash2,
+  Wifi, Radio, Building2, Tv2, Link2, ShieldCheck, CheckCircle2,
+  ChevronRight, ExternalLink, Pencil,
 } from "lucide-react";
-import type { LiveSession, LivePoll, ProxyVoteEntry } from "@/types/mock";
+import {
+  useLiveRoomDetail,
+  useLiveAttendance,
+  useApproveQuestion,
+  useRejectQuestion,
+  type LiveResolution,
+} from "@/api/client-live";
+import { useClientEvents } from "@/api/client-events";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -22,157 +26,68 @@ function formatElapsed(minutes: number) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+function formatTime(iso: string) {
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return iso;
+  }
+}
+
+const MODULE_COLORS: Record<string, string> = {
+  AGM:                  "#7c22c9",
+  AGM_EGM:              "#7c22c9",
+  LAUNCH:               "#ea6c00",
+  PRODUCT_LAUNCH:       "#ea6c00",
+  HACKATHON:            "#7c22c9",
+  INNOVATION_CHALLENGE: "#7c22c9",
+  GENERAL:              "#0891b2",
+  GENERAL_EVENT:        "#0891b2",
+};
+
+function eventColor(eventType: string) {
+  return MODULE_COLORS[eventType] ?? "#7c22c9";
+}
+
 function initials(name: string) {
   return name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
 }
 
-function VoteBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+// ── Vote bar ──────────────────────────────────────────────────────────────────
+
+function VoteBar({
+  label, value, total, color,
+}: { label: string; value: number; total: number; color: string }) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
     <div className="flex items-center gap-3">
       <span className="text-sm text-[hsl(var(--muted-foreground))] w-16 shrink-0">{label}</span>
       <div className="flex-1 h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }} />
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${pct}%`, backgroundColor: color }}
+        />
       </div>
       <span className="text-sm font-semibold tabular-nums w-10 text-right">{pct}%</span>
-      <span className="text-sm text-[hsl(var(--muted-foreground))] tabular-nums w-20 text-right">{value.toLocaleString()}</span>
+      <span className="text-sm text-[hsl(var(--muted-foreground))] tabular-nums w-20 text-right">
+        {value.toLocaleString()}
+      </span>
     </div>
   );
 }
 
-// ── Poll option bar ───────────────────────────────────────────────────────────
+// ── Resolutions panel ─────────────────────────────────────────────────────────
 
-function PollOptionBar({ text, votes, total, color }: { text: string; votes: number; total: number; color: string }) {
-  const pct = total > 0 ? Math.round((votes / total) * 100) : 0;
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-[hsl(var(--foreground))] font-medium truncate max-w-[70%]">{text}</span>
-        <span className="text-[hsl(var(--muted-foreground))] tabular-nums font-semibold">{pct}%</span>
-      </div>
-      <div className="h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }} />
-      </div>
-      <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">{votes.toLocaleString()} votes</span>
-    </div>
-  );
-}
-
-// ── Session tab pill ──────────────────────────────────────────────────────────
-
-function SessionTab({ session, active, onClick }: { session: LiveSession; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all border whitespace-nowrap ${
-        active
-          ? "text-white shadow-sm border-transparent"
-          : "bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))] border-[hsl(var(--border))] hover:border-[hsl(var(--foreground)/0.2)] hover:text-[hsl(var(--foreground))]"
-      }`}
-      style={active ? { backgroundColor: session.color, borderColor: session.color } : {}}
-    >
-      <span className="relative flex h-2 w-2 shrink-0">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: active ? "#ffffff" : "#dc2626" }} />
-        <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: active ? "#ffffff" : "#dc2626" }} />
-      </span>
-      <span className="max-w-[180px] truncate">{session.organiser}</span>
-      <span className={`text-xs px-1.5 py-0.5 rounded-md font-semibold ${active ? "bg-white/20 text-white" : "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"}`}>
-        {session.attendees.toLocaleString()}
-      </span>
-    </button>
-  );
-}
-
-// ── Resolution panel ──────────────────────────────────────────────────────────
-
-type ProxyInputs = { for: string; against: string; abstain: string; forUnits: string; againstUnits: string; abstainUnits: string };
-
-function ResolutionsPanel({
-  session, onOpen, onClose, onProxyVotes,
-}: {
-  session: LiveSession;
-  onOpen: (resId: string, duration: number) => void;
-  onClose: (resId: string) => void;
-  onProxyVotes: (resId: string, proxy: ProxyVoteEntry) => void;
-}) {
-  const [durations, setDurations] = useState<Record<string, string>>(() =>
-    Object.fromEntries(session.votes.map((v) => [v.resolutionId, String(v.durationSeconds ?? 30)]))
-  );
-  const [countdowns, setCountdowns] = useState<Record<string, number>>({});
-  const [showProxy, setShowProxy] = useState<Record<string, boolean>>({});
-  const [proxyInputs, setProxyInputs] = useState<Record<string, ProxyInputs>>(() =>
-    Object.fromEntries(session.votes.map((v) => [v.resolutionId, { for: "", against: "", abstain: "", forUnits: "", againstUnits: "", abstainUnits: "" }]))
-  );
-  const timers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
-
-  function runTimer(resId: string, secs: number) {
-    clearInterval(timers.current[resId]);
-    setCountdowns((prev) => ({ ...prev, [resId]: secs }));
-    timers.current[resId] = setInterval(() => {
-      setCountdowns((prev) => {
-        const remaining = (prev[resId] ?? 0) - 1;
-        if (remaining <= 0) {
-          clearInterval(timers.current[resId]);
-          onClose(resId);
-          toast.success(`Voting closed — ${session.votes.find((v) => v.resolutionId === resId)?.title ?? "Resolution"}`);
-          return { ...prev, [resId]: 0 };
-        }
-        return { ...prev, [resId]: remaining };
-      });
-    }, 1000);
-  }
-
-  function startCountdown(resId: string) {
-    const secs = Math.max(5, parseInt(durations[resId] ?? "30", 10) || 30);
-    runTimer(resId, secs);
-    onOpen(resId, secs);
-    toast.success(`Voting open — ${session.votes.find((v) => v.resolutionId === resId)?.title ?? "Resolution"} · ${secs}s`);
-  }
-
-  function forceClose(resId: string) {
-    clearInterval(timers.current[resId]);
-    setCountdowns((prev) => ({ ...prev, [resId]: 0 }));
-    onClose(resId);
-    toast.success(`Voting closed — ${session.votes.find((v) => v.resolutionId === resId)?.title ?? "Resolution"}`);
-  }
-
-  function saveProxyVotes(resId: string) {
-    const p = proxyInputs[resId];
-    if (!p) return;
-    onProxyVotes(resId, {
-      for: parseInt(p.for || "0", 10),
-      against: parseInt(p.against || "0", 10),
-      abstain: parseInt(p.abstain || "0", 10),
-      forUnits: parseInt(p.forUnits || "0", 10),
-      againstUnits: parseInt(p.againstUnits || "0", 10),
-      abstainUnits: parseInt(p.abstainUnits || "0", 10),
-    });
-    toast.success("Proxy votes saved and combined with digital totals.");
-  }
-
-  useEffect(() => {
-    session.votes.forEach((v) => {
-      if (v.status === "open" && v.durationSeconds && countdowns[v.resolutionId] == null) {
-        runTimer(v.resolutionId, v.durationSeconds);
-      }
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const t = timers.current;
-    return () => { Object.values(t).forEach(clearInterval); };
-  }, []);
-
-  if (session.votes.length === 0) {
+function ResolutionsPanel({ resolutions, color }: { resolutions: LiveResolution[]; color: string }) {
+  if (resolutions.length === 0) {
     return (
       <Card className="attend-card overflow-hidden">
         <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
           <h2 className="font-semibold text-[hsl(var(--foreground))]">Session Segments</h2>
         </div>
         <div className="px-5 py-8 flex flex-col items-center gap-3 text-center">
-          <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${session.color}18` }}>
-            <Wifi className="h-5 w-5" style={{ color: session.color }} />
+          <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}18` }}>
+            <Wifi className="h-5 w-5" style={{ color }} />
           </div>
           <p className="text-sm font-medium text-[hsl(var(--foreground))]">Presentation-mode session</p>
           <p className="text-xs text-[hsl(var(--muted-foreground))] max-w-xs">
@@ -183,749 +98,198 @@ function ResolutionsPanel({
     );
   }
 
+  const closed = resolutions.filter((r) => r.status === "CLOSED").length;
+
   return (
     <Card className="attend-card overflow-hidden">
       <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
         <h2 className="font-semibold text-[hsl(var(--foreground))]">Resolutions</h2>
         <span className="text-xs text-[hsl(var(--muted-foreground))]">
-          {session.votes.filter((v) => v.status === "closed").length} / {session.votes.length} closed
+          {closed} / {resolutions.length} closed
         </span>
       </div>
       <div className="divide-y divide-[hsl(var(--border))]">
-        {session.votes.map((v, i) => {
-          const proxy = v.proxyVotes;
-          const digitalTotal = v.for + v.against + v.abstain;
-          const combinedFor = v.for + (proxy?.for ?? 0);
-          const combinedAgainst = v.against + (proxy?.against ?? 0);
-          const combinedAbstain = v.abstain + (proxy?.abstain ?? 0);
-          const combinedTotal = combinedFor + combinedAgainst + combinedAbstain;
-          const passed = v.result === "passed";
-          const remaining = countdowns[v.resolutionId];
-          const isUrgent = remaining != null && remaining <= 10 && remaining > 0;
+        {resolutions.map((res, i) => {
+          const total     = res.forCount + res.againstCount + res.abstainCount;
+          const isPending = res.status === "PENDING";
+          const isOpen    = res.status === "OPEN";
+          const isClosed  = res.status === "CLOSED";
 
           return (
-            <div key={v.resolutionId} className="px-5 py-4">
-              {/* Header row */}
-              <div className="flex items-start justify-between gap-4 mb-3">
+            <div key={res.id} className="px-5 py-4">
+              <div className="flex items-start justify-between gap-4 mb-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2.5 mb-1 flex-wrap">
-                    <span className="text-xs font-bold text-[hsl(var(--muted-foreground))]">RES. {i + 1}</span>
-                    <StatusBadge status={v.status} />
-                    {v.status === "closed" && (
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${passed ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                        {passed ? "PASSED" : "FAILED"}
+                    <span className="text-xs font-bold text-[hsl(var(--muted-foreground))]">
+                      RES. {res.order ?? i + 1}
+                    </span>
+                    {isPending && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                        Pending
+                      </span>
+                    )}
+                    {isOpen && (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                        Open
+                      </span>
+                    )}
+                    {isClosed && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
+                        Closed
+                      </span>
+                    )}
+                    {res.specialResolution ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                        <ShieldCheck className="h-3 w-3" /> Special
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 rounded-full px-2 py-0.5">
+                        <CheckCircle2 className="h-3 w-3" /> Ordinary
                       </span>
                     )}
                   </div>
-                  <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{v.title}</div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {v.status === "pending" && (
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          min={5}
-                          max={300}
-                          value={durations[v.resolutionId] ?? "30"}
-                          onChange={(e) => setDurations((prev) => ({ ...prev, [v.resolutionId]: e.target.value }))}
-                          className="h-7 w-16 text-xs text-center px-1"
-                        />
-                        <span className="text-xs text-[hsl(var(--muted-foreground))]">sec</span>
-                      </div>
-                      <Button size="sm" className="h-7 text-xs gap-1" onClick={() => startCountdown(v.resolutionId)}>
-                        <Vote className="h-3 w-3" /> Start Voting
-                      </Button>
-                    </div>
-                  )}
-                  {v.status === "open" && (
-                    <div className="flex items-center gap-2">
-                      {remaining != null && remaining > 0 && (
-                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${isUrgent ? "bg-red-50 border-red-200 animate-pulse" : "bg-amber-50 border-amber-200"}`}>
-                          <Clock className={`h-3.5 w-3.5 ${isUrgent ? "text-red-600" : "text-amber-600"}`} />
-                          <span className={`text-base font-bold tabular-nums ${isUrgent ? "text-red-700" : "text-amber-700"}`}>{remaining}s</span>
-                        </div>
-                      )}
-                      <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={() => forceClose(v.resolutionId)}>
-                        Force Close
-                      </Button>
-                    </div>
+                  <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{res.title}</p>
+                  {res.description && (
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{res.description}</p>
                   )}
                 </div>
-              </div>
-
-              {/* Vote bars */}
-              {(v.status === "open" || v.status === "closed") && combinedTotal > 0 && (
-                <div className="flex flex-col gap-2 mt-3 bg-[hsl(var(--muted)/0.4)] rounded-xl p-3">
-                  <VoteBar label="For" value={combinedFor} total={combinedTotal} color="#16a34a" />
-                  <VoteBar label="Against" value={combinedAgainst} total={combinedTotal} color="#dc2626" />
-                  <VoteBar label="Abstain" value={combinedAbstain} total={combinedTotal} color="#9ca3af" />
-                  <div className="pt-1 mt-1 border-t border-[hsl(var(--border))] flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
-                    <span>Digital votes: <span className="font-semibold text-[hsl(var(--foreground))]">{digitalTotal.toLocaleString()}</span></span>
-                    {proxy && <span>+ Proxy: <span className="font-semibold text-[hsl(var(--foreground))]">{(proxy.for + proxy.against + proxy.abstain).toLocaleString()}</span></span>}
-                    <span>Total: <span className="font-semibold text-[hsl(var(--foreground))]">{combinedTotal.toLocaleString()}</span></span>
-                  </div>
-                </div>
-              )}
-
-              {v.status === "pending" && (
-                <div className="text-xs text-[hsl(var(--muted-foreground))] mt-2 italic">Set a duration above and press Start Voting when the chairman calls this resolution.</div>
-              )}
-
-              {/* Proxy vote entry — closed resolutions, hybrid events */}
-              {v.status === "closed" && session.format === "hybrid" && (
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    className="flex items-center gap-1.5 text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
-                    onClick={() => setShowProxy((prev) => ({ ...prev, [v.resolutionId]: !prev[v.resolutionId] }))}
-                  >
-                    <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showProxy[v.resolutionId] ? "rotate-90" : ""}`} />
-                    Enter proxy votes (physical ballots)
-                  </button>
-                  {showProxy[v.resolutionId] && (
-                    <div className="mt-2 p-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] space-y-2">
-                      <p className="text-xs text-[hsl(var(--muted-foreground))]">Enter counts from physically submitted proxy forms. These are combined with digital votes above.</p>
-                      {(["for", "against", "abstain"] as const).map((key) => (
-                        <div key={key} className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-[hsl(var(--foreground))] w-14 capitalize">{key}</span>
-                          <Input
-                            type="number"
-                            min={0}
-                            placeholder="Count"
-                            value={proxyInputs[v.resolutionId]?.[key] ?? ""}
-                            onChange={(e) => setProxyInputs((prev) => ({ ...prev, [v.resolutionId]: { ...prev[v.resolutionId], [key]: e.target.value } }))}
-                            className="h-7 w-24 text-xs px-2"
-                          />
-                          <Input
-                            type="number"
-                            min={0}
-                            placeholder="Units"
-                            value={proxyInputs[v.resolutionId]?.[`${key}Units` as keyof ProxyInputs] ?? ""}
-                            onChange={(e) => setProxyInputs((prev) => ({ ...prev, [v.resolutionId]: { ...prev[v.resolutionId], [`${key}Units`]: e.target.value } }))}
-                            className="h-7 w-28 text-xs px-2"
-                          />
-                        </div>
-                      ))}
-                      <Button size="sm" className="h-7 text-xs mt-1" onClick={() => saveProxyVotes(v.resolutionId)}>
-                        Save Proxy Votes
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </Card>
-  );
-}
-
-// ── Poll Management Panel ─────────────────────────────────────────────────────
-
-function PollForm({
-  initial,
-  color,
-  onSave,
-  onCancel,
-}: {
-  initial?: { question: string; options: string[] };
-  color: string;
-  onSave: (question: string, options: string[]) => void;
-  onCancel: () => void;
-}) {
-  const [question, setQuestion] = useState(initial?.question ?? "");
-  const [options, setOptions] = useState<string[]>(initial?.options ?? ["", ""]);
-
-  function updateOption(i: number, val: string) {
-    setOptions((prev) => prev.map((o, idx) => idx === i ? val : o));
-  }
-  function addOption() {
-    if (options.length < 6) setOptions((prev) => [...prev, ""]);
-  }
-  function removeOption(i: number) {
-    if (options.length > 2) setOptions((prev) => prev.filter((_, idx) => idx !== i));
-  }
-
-  const canSave = question.trim().length > 0 && options.filter((o) => o.trim()).length >= 2;
-
-  return (
-    <div className="px-5 py-4 bg-[hsl(var(--muted)/0.3)] border-t border-[hsl(var(--border))]">
-      <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-3">
-        {initial ? "Edit Poll" : "New Poll"}
-      </p>
-      <div className="flex flex-col gap-3">
-        <Input
-          placeholder="Poll question…"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          className="text-sm"
-        />
-        <div className="flex flex-col gap-2">
-          {options.map((opt, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <span className="text-xs text-[hsl(var(--muted-foreground))] w-4 text-right shrink-0">{i + 1}.</span>
-              <Input
-                placeholder={`Option ${i + 1}`}
-                value={opt}
-                onChange={(e) => updateOption(i, e.target.value)}
-                className="text-sm flex-1"
-              />
-              <button
-                type="button"
-                onClick={() => removeOption(i)}
-                disabled={options.length <= 2}
-                className="h-7 w-7 flex items-center justify-center rounded-lg text-[hsl(var(--muted-foreground))] hover:text-red-500 disabled:opacity-30 transition-colors"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-          {options.length < 6 && (
-            <button
-              type="button"
-              onClick={addOption}
-              className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] ml-6 mt-1 transition-colors"
-            >
-              <Plus className="h-3.5 w-3.5" /> Add option
-            </button>
-          )}
-        </div>
-        <div className="flex gap-2 pt-1">
-          <Button
-            size="sm"
-            className="h-7 text-xs"
-            style={{ backgroundColor: color, color: "white" }}
-            disabled={!canSave}
-            onClick={() => onSave(question.trim(), options.filter((o) => o.trim()))}
-          >
-            {initial ? "Save Changes" : "Create Poll"}
-          </Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCancel}>
-            Cancel
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PollManagementPanel({
-  session,
-  onLaunch,
-  onClose,
-  onAdd,
-  onUpdate,
-}: {
-  session: LiveSession;
-  onLaunch: (pollId: string) => void;
-  onClose: (pollId: string) => void;
-  onAdd: (poll: LivePoll) => void;
-  onUpdate: (pollId: string, updates: Partial<LivePoll>) => void;
-}) {
-  const [creating, setCreating] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-
-  if (session.module === "AGM") return null;
-
-  const statusBadge = (status: LivePoll["status"]) => {
-    if (status === "active") return (
-      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-        <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />Active
-      </span>
-    );
-    if (status === "closed") return (
-      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">Closed</span>
-    );
-    return (
-      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Draft</span>
-    );
-  };
-
-  return (
-    <Card className="attend-card overflow-hidden">
-      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
-        <BarChart2 className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
-        <h2 className="font-semibold text-[hsl(var(--foreground))]">Poll Management</h2>
-        <span className="ml-2 text-xs text-[hsl(var(--muted-foreground))]">
-          {session.polls.filter((p) => p.status === "active").length} active
-        </span>
-        <Button
-          size="sm"
-          variant="outline"
-          className="ml-auto h-7 text-xs gap-1"
-          onClick={() => { setCreating(true); setEditingId(null); }}
-          disabled={creating}
-        >
-          <Plus className="h-3.5 w-3.5" /> Create Poll
-        </Button>
-      </div>
-
-      {session.polls.length === 0 && !creating && (
-        <div className="px-5 py-8 flex flex-col items-center gap-2 text-center">
-          <BarChart2 className="h-8 w-8 text-[hsl(var(--muted-foreground))] opacity-40" />
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">No polls yet. Create one to engage attendees.</p>
-        </div>
-      )}
-
-      <div className="divide-y divide-[hsl(var(--border))]">
-        {session.polls.map((poll) => {
-          const total = poll.options.reduce((s, o) => s + o.votes, 0);
-          const isEditing = editingId === poll.id;
-          return (
-            <div key={poll.id}>
-              <div className="px-5 py-4">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      {statusBadge(poll.status)}
-                    </div>
-                    <p className="text-sm font-semibold text-[hsl(var(--foreground))] leading-snug">{poll.question}</p>
-                    {poll.status === "draft" && (
-                      <p className="text-xs text-[hsl(var(--muted-foreground))] italic mt-0.5">
-                        {poll.options.length} options · not yet launched
-                      </p>
-                    )}
-                  </div>
-                  <div className="shrink-0 flex items-center gap-1.5">
-                    {poll.status === "draft" && (
-                      <>
-                        <button
-                          type="button"
-                          className="h-7 w-7 flex items-center justify-center rounded-lg border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
-                          onClick={() => { setEditingId(isEditing ? null : poll.id); setCreating(false); }}
-                          title="Edit poll"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <Button
-                          size="sm"
-                          className="h-7 text-xs"
-                          style={{ backgroundColor: session.color, color: "white" }}
-                          onClick={() => {
-                            onLaunch(poll.id);
-                            toast.success("Poll launched successfully");
-                          }}
-                        >
-                          Launch
-                        </Button>
-                      </>
-                    )}
-                    {poll.status === "active" && (
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="h-7 text-xs"
-                        onClick={() => {
-                          onClose(poll.id);
-                          toast.success("Poll closed");
-                        }}
-                      >
-                        Close Poll
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                {(poll.status === "active" || poll.status === "closed") && (
-                  <div className="bg-[hsl(var(--muted)/0.4)] rounded-xl p-3 flex flex-col gap-3">
-                    {poll.options.map((opt) => (
-                      <PollOptionBar
-                        key={opt.id}
-                        text={opt.text}
-                        votes={opt.votes}
-                        total={total}
-                        color={session.color}
-                      />
-                    ))}
-                    {total > 0 && (
-                      <div className="pt-1 mt-1 border-t border-[hsl(var(--border))] text-xs text-[hsl(var(--muted-foreground))]">
-                        Total responses: <span className="font-semibold text-[hsl(var(--foreground))]">{total.toLocaleString()}</span>
-                      </div>
-                    )}
+                {isOpen && res.secondsRemaining != null && res.secondsRemaining > 0 && (
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border shrink-0 ${
+                    res.secondsRemaining <= 10
+                      ? "bg-red-50 border-red-200 animate-pulse"
+                      : "bg-amber-50 border-amber-200"
+                  }`}>
+                    <Clock className={`h-3.5 w-3.5 ${res.secondsRemaining <= 10 ? "text-red-600" : "text-amber-600"}`} />
+                    <span className={`text-base font-bold tabular-nums ${res.secondsRemaining <= 10 ? "text-red-700" : "text-amber-700"}`}>
+                      {res.secondsRemaining}s
+                    </span>
                   </div>
                 )}
               </div>
-              {isEditing && (
-                <PollForm
-                  color={session.color}
-                  initial={{ question: poll.question, options: poll.options.map((o) => o.text) }}
-                  onSave={(q, opts) => {
-                    onUpdate(poll.id, {
-                      question: q,
-                      options: opts.map((text, i) => ({ id: poll.options[i]?.id ?? `o${Date.now()}_${i}`, text, votes: poll.options[i]?.votes ?? 0 })),
-                    });
-                    setEditingId(null);
-                    toast.success("Poll updated");
-                  }}
-                  onCancel={() => setEditingId(null)}
-                />
+
+              {(isOpen || isClosed) && total > 0 && (
+                <div className="flex flex-col gap-2 mt-3 bg-[hsl(var(--muted)/0.4)] rounded-xl p-3">
+                  <VoteBar label="For"     value={res.forCount}     total={total} color="#16a34a" />
+                  <VoteBar label="Against" value={res.againstCount} total={total} color="#dc2626" />
+                  <VoteBar label="Abstain" value={res.abstainCount} total={total} color="#9ca3af" />
+                  <div className="pt-1 mt-1 border-t border-[hsl(var(--border))] flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
+                    <span>Total votes: <span className="font-semibold text-[hsl(var(--foreground))]">{total.toLocaleString()}</span></span>
+                    {(res.forShares + res.againstShares + res.abstainShares) > 0 && (
+                      <span>
+                        Total shares:{" "}
+                        <span className="font-semibold text-[hsl(var(--foreground))]">
+                          {(res.forShares + res.againstShares + res.abstainShares).toLocaleString()}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {isPending && (
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2 italic">
+                  Voting has not started for this resolution.
+                </p>
               )}
             </div>
           );
         })}
       </div>
-
-      {creating && (
-        <PollForm
-          color={session.color}
-          onSave={(question, options) => {
-            const id = `poll_${Date.now()}`;
-            onAdd({
-              id,
-              question,
-              options: options.map((text, i) => ({ id: `${id}_o${i}`, text, votes: 0 })),
-              status: "draft",
-            });
-            setCreating(false);
-            toast.success("Poll created as draft");
-          }}
-          onCancel={() => setCreating(false)}
-        />
-      )}
     </Card>
   );
 }
 
-// ── Press Kit Release Card ────────────────────────────────────────────────────
-
-function PressKitCard({ session, onRelease }: { session: LiveSession; onRelease: () => void }) {
-  if (session.module !== "LAUNCH") return null;
-  const released = session.pressKitReleased ?? false;
-
-  return (
-    <Card className="attend-card overflow-hidden">
-      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
-        <Package className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
-        <h2 className="font-semibold text-[hsl(var(--foreground))]">Press Kit Release</h2>
-      </div>
-      <div className="px-5 py-5 flex flex-col gap-4">
-        <div className="flex items-center gap-3">
-          <div
-            className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ backgroundColor: released ? "#16a34a18" : "#ea6c0018" }}
-          >
-            <Package className="h-5 w-5" style={{ color: released ? "#16a34a" : "#ea6c00" }} />
-          </div>
-          <div>
-            <p className="text-sm font-semibold" style={{ color: released ? "#16a34a" : "#ea6c00" }}>
-              {released ? "Released ✓" : "Embargoed — Not Yet Released"}
-            </p>
-            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-              {released ? "Press kit has been distributed to media contacts." : "Press kit will be sent to all registered media contacts."}
-            </p>
-          </div>
-        </div>
-        <Button
-          disabled={released}
-          onClick={() => {
-            onRelease();
-            toast.success("Press kit released to media contacts");
-          }}
-          className="w-full text-sm"
-          style={!released ? { backgroundColor: session.color, color: "white" } : {}}
-        >
-          {released ? "Press Kit Released" : "Release Press Kit Now"}
-        </Button>
-      </div>
-    </Card>
-  );
-}
-
-// ── Winner Announcement Card ──────────────────────────────────────────────────
-
-function WinnerCard({ session, onDeclare }: { session: LiveSession; onDeclare: (team: string) => void }) {
-  const [teamInput, setTeamInput] = useState("");
-  if (session.module !== "HACKATHON") return null;
-
-  const declared = !!session.winnerTeam;
-
-  return (
-    <Card className="attend-card overflow-hidden">
-      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
-        <Trophy className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
-        <h2 className="font-semibold text-[hsl(var(--foreground))]">Winner Announcement</h2>
-      </div>
-      <div className="px-5 py-5">
-        {declared ? (
-          <div className="flex flex-col items-center gap-3 py-4 text-center">
-            <div className="text-3xl">🏆</div>
-            <p className="text-base font-bold" style={{ color: "#b45309" }}>
-              {session.winnerTeam} declared winner!
-            </p>
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">Winner has been announced to all attendees.</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">Enter the winning team name and declare the winner to all attendees.</p>
-            <Input
-              placeholder="Team Name"
-              value={teamInput}
-              onChange={(e) => setTeamInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && teamInput.trim()) {
-                  onDeclare(teamInput.trim());
-                  toast.success(`${teamInput.trim()} declared as winner!`);
-                }
-              }}
-            />
-            <Button
-              disabled={!teamInput.trim()}
-              onClick={() => {
-                if (teamInput.trim()) {
-                  onDeclare(teamInput.trim());
-                  toast.success(`${teamInput.trim()} declared as winner!`);
-                }
-              }}
-              className="w-full"
-              style={{ backgroundColor: "#7c22c9", color: "white" }}
-            >
-              <Trophy className="h-4 w-4 mr-2" />
-              Declare Winner
-            </Button>
-          </div>
-        )}
-      </div>
-    </Card>
-  );
-}
-
-// ── Stream preview URLs (keyed by session id) ────────────────────────────────
-
-const DEFAULT_STREAM_URLS: Record<string, string> = {
-  live_001: "https://www.youtube.com/embed/0VBkkEdBOgg?autoplay=0&controls=1&rel=0&modestbranding=1",
-  live_002: "https://www.youtube.com/embed/0VBkkEdBOgg?autoplay=0&controls=1&rel=0&modestbranding=1",
-  live_003: "https://www.youtube.com/embed/0VBkkEdBOgg?autoplay=0&controls=1&rel=0&modestbranding=1",
-};
+// ── Stream helpers ────────────────────────────────────────────────────────────
 
 function isZoomUrl(url: string) {
   return /zoom\.us\/j\/|zoomus\.cn\/j\//.test(url);
 }
 
 function parseStreamUrl(url: string): string {
-  const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|live\/))([A-Za-z0-9_-]{11})/);
-  if (ytMatch) return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=0&controls=1&rel=0&modestbranding=1`;
+  const yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|live\/))([A-Za-z0-9_-]{11})/);
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=0&controls=1&rel=0&modestbranding=1`;
   return url;
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Session detail ─────────────────────────────────────────────────────────────
 
-const MODULE_COLORS: Record<string, string> = {
-  AGM:      "#111827",
-  LAUNCH:   "#ea6c00",
-  HACKATHON:"#7c22c9",
-  GENERAL:  "#0891b2",
-};
+function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => void }) {
+  const [streamInput, setStreamInput] = useState("");
+  const [streamUrl,   setStreamUrl]   = useState("");
 
-export default function LiveControlPage() {
-  const { liveSessions, openVoting, closeVoting, submitProxyVotes, approveQA, rejectQA, launchPoll, closePoll, addPoll, updatePoll, releasePressKit, declareWinner } = useStore();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [streamInputs, setStreamInputs] = useState<Record<string, string>>({});
-  const [streamUrls, setStreamUrls] = useState<Record<string, string>>(DEFAULT_STREAM_URLS);
+  const { data: room, isLoading } = useLiveRoomDetail(eventId);
+  const { data: attendance = []  } = useLiveAttendance(eventId);
+  const approveMutation            = useApproveQuestion();
+  const rejectMutation             = useRejectQuestion();
 
-  function getStreamInput(sessionId: string) {
-    return streamInputs[sessionId] ?? streamUrls[sessionId] ?? "";
-  }
-  function applyStream(sessionId: string) {
-    const raw = streamInputs[sessionId] ?? streamUrls[sessionId] ?? "";
-    setStreamUrls((prev) => ({ ...prev, [sessionId]: parseStreamUrl(raw) }));
-  }
+  if (isLoading) return <Loader variant="page" text="Loading live room…" />;
 
-  const totalAttendees = liveSessions.reduce((sum, s) => sum + s.attendees, 0);
-  const session = liveSessions.find((s) => s.id === selectedId);
-
-  if (liveSessions.length === 0) {
+  if (!room) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <Radio className="h-8 w-8 text-[hsl(var(--muted-foreground))]" />
-        <p className="text-sm text-[hsl(var(--muted-foreground))]">No live sessions at the moment.</p>
+        <p className="text-sm text-[hsl(var(--muted-foreground))]">Could not load live room data.</p>
+        <Button size="sm" variant="outline" onClick={onBack}>Go back</Button>
       </div>
     );
   }
 
-  // ── Organisers table ────────────────────────────────────────────────────────
-  if (!session) {
-    return (
-      <div className="flex flex-col gap-6">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Live Control Room</h1>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-                {liveSessions.length} LIVE
-              </span>
-            </div>
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              {totalAttendees.toLocaleString()} total attendees connected across all sessions
-            </p>
-          </div>
-        </div>
+  const color     = eventColor(room.eventType);
+  const pending   = room.pendingQuestions ?? [];
+  const recentAtt = attendance.length > 0 ? attendance : (room.recentAttendance ?? []);
 
-        {/* Summary stat cards */}
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: "Active Sessions",   value: liveSessions.length,    icon: Radio,  color: "#dc2626" },
-            { label: "Total Attendees",   value: totalAttendees.toLocaleString(), icon: Users,  color: "#7c22c9" },
-            { label: "Open Resolutions",  value: liveSessions.reduce((n, s) => n + s.votes.filter((v) => v.status === "open").length, 0), icon: Vote, color: "#16a34a" },
-          ].map(({ label, value, icon: Icon, color }) => (
-            <Card key={label} className="attend-card p-4 flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}18` }}>
-                <Icon className="h-4.5 w-4.5" style={{ color }} />
-              </div>
-              <div>
-                <p className="text-lg font-bold text-[hsl(var(--foreground))]">{value}</p>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">{label}</p>
-              </div>
-            </Card>
-          ))}
-        </div>
-
-        {/* Organisers table */}
-        <Card className="attend-card overflow-hidden">
-          <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
-            <h2 className="font-semibold text-[hsl(var(--foreground))]">Live Organisers</h2>
-            <span className="text-xs text-[hsl(var(--muted-foreground))]">{liveSessions.length} sessions running</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px]">
-              <thead>
-                <tr className="attend-table-header">
-                  <th className="px-5 py-3 text-left">Organiser</th>
-                  <th className="px-5 py-3 text-left">Module</th>
-                  <th className="px-5 py-3 text-left">Format</th>
-                  <th className="px-5 py-3 text-left">Attendees</th>
-                  <th className="px-5 py-3 text-left">Elapsed</th>
-                  <th className="px-5 py-3 text-left">Quorum</th>
-                  <th className="px-5 py-3 text-left"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {liveSessions.map((sess) => {
-                  const modColor = MODULE_COLORS[sess.module] ?? "#111827";
-                  return (
-                    <tr key={sess.id} className="attend-table-row">
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
-                            style={{ backgroundColor: sess.color }}
-                          >
-                            {initials(sess.organiser)}
-                          </div>
-                          <div>
-                            <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{sess.organiser}</p>
-                            <p className="text-xs text-[hsl(var(--muted-foreground))] truncate max-w-[220px]">{sess.eventTitle}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span
-                          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold text-white"
-                          style={{ backgroundColor: modColor }}
-                        >
-                          <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
-                          {sess.module}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className="text-sm text-[hsl(var(--foreground))] capitalize">{sess.format}</span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-1.5">
-                          <Users className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
-                          <span className="text-sm font-semibold text-[hsl(var(--foreground))] tabular-nums">
-                            {sess.attendees.toLocaleString()}
-                          </span>
-                          {sess.capacity && (
-                            <span className="text-xs text-[hsl(var(--muted-foreground))]">/ {sess.capacity.toLocaleString()}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-1.5">
-                          <Clock className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
-                          <span className="text-sm tabular-nums text-[hsl(var(--foreground))]">{formatElapsed(sess.elapsedMinutes)}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4">
-                        {sess.quorumPct != null ? (
-                          <span className={`text-sm font-semibold tabular-nums ${sess.quorumPct >= 50 ? "text-green-600" : "text-amber-600"}`}>
-                            {sess.quorumPct}%
-                          </span>
-                        ) : (
-                          <span className="text-xs text-[hsl(var(--muted-foreground))]">N/A</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4">
-                        <Button
-                          size="sm"
-                          className="h-8 gap-1.5 text-xs"
-                          onClick={() => setSelectedId(sess.id)}
-                        >
-                          Manage <ChevronRight className="h-3.5 w-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </div>
-    );
+  function applyStream() {
+    setStreamUrl(parseStreamUrl(streamInput));
   }
 
-  // ── Session detail (control room) ─────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-6">
 
-      {/* Header with back button */}
+      {/* Back + edit */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <button
-            onClick={() => setSelectedId(null)}
+            onClick={onBack}
             className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
           >
             <ChevronRight className="h-4 w-4 rotate-180" />
             Back to Live Sessions
           </button>
-          <Link href={`/events/${session.eventId}`}>
+          <Link href={`/events/${room.eventId}`}>
             <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
               <Pencil className="h-3.5 w-3.5" /> Edit Event
             </Button>
           </Link>
         </div>
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{session.organiser}</h1>
+          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{room.organiserName}</h1>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">
             <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
             LIVE
           </span>
         </div>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">{session.eventTitle}</p>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">{room.title}</p>
       </div>
 
-      {/* ── Selected session header card ── */}
+      {/* Gradient header card */}
       <div
         className="rounded-2xl p-5 text-white"
-        style={{ background: `linear-gradient(135deg, ${session.color}ee, ${session.color}bb)` }}
+        style={{ background: `linear-gradient(135deg, ${color}ee, ${color}bb)` }}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <Building2 className="h-4 w-4 opacity-70" />
-              <span className="text-sm font-medium opacity-80">{session.organiser}</span>
+              <span className="text-sm font-medium opacity-80">{room.organiserName}</span>
               <span className="text-xs bg-white/20 rounded-full px-2 py-0.5 font-semibold uppercase tracking-wide">
-                {session.module}
+                {room.eventType}
               </span>
             </div>
-            <h2 className="text-lg font-bold leading-snug">{session.eventTitle}</h2>
-            {session.venue && (
-              <p className="text-sm opacity-70 mt-1">{session.venue} · {session.format}</p>
-            )}
+            <h2 className="text-lg font-bold leading-snug">{room.title}</h2>
+            <p className="text-sm opacity-70 mt-1">
+              {[room.venue, room.format].filter(Boolean).join(" · ")}
+            </p>
           </div>
           <div className="flex items-center gap-1.5 bg-white/15 rounded-xl px-3 py-2 shrink-0">
             <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
@@ -933,13 +297,37 @@ export default function LiveControlPage() {
           </div>
         </div>
 
-        {/* Stats row */}
+        {/* Stats */}
         <div className="grid grid-cols-4 gap-3 mt-4">
           {[
-            { icon: Users, label: "Attendees", value: session.attendees.toLocaleString(), sub: session.capacity ? `of ${session.capacity.toLocaleString()} cap` : "connected" },
-            { icon: UserCheck, label: "Quorum", value: session.quorumPct != null ? `${session.quorumPct}%` : "N/A", sub: session.quorumPct != null ? "of required" : "non-voting event" },
-            { icon: Vote, label: "Resolutions", value: session.votes.length > 0 ? `${session.votes.filter((v) => v.status === "closed").length} / ${session.votes.length}` : "—", sub: session.votes.length > 0 ? "closed" : "no votes" },
-            { icon: Clock, label: "Elapsed", value: formatElapsed(session.elapsedMinutes), sub: "session time" },
+            {
+              icon:  Users,
+              label: "Attendees",
+              value: room.attendeeCount.toLocaleString(),
+              sub:   room.capacity ? `of ${room.capacity.toLocaleString()} cap` : "connected",
+            },
+            {
+              icon:  UserCheck,
+              label: "Checked In",
+              value: room.checkedInCount.toLocaleString(),
+              sub:   room.attendeeCount > 0
+                ? `${Math.round((room.checkedInCount / room.attendeeCount) * 100)}% of attendees`
+                : "check-ins",
+            },
+            {
+              icon:  Vote,
+              label: "Resolutions",
+              value: room.resolutions.length > 0
+                ? `${room.resolutions.filter((r) => r.status === "CLOSED").length} / ${room.resolutions.length}`
+                : "—",
+              sub:   room.resolutions.length > 0 ? "closed" : "no votes",
+            },
+            {
+              icon:  Clock,
+              label: "Elapsed",
+              value: formatElapsed(room.elapsedMinutes),
+              sub:   "session time",
+            },
           ].map(({ icon: Icon, label, value, sub }) => (
             <div key={label} className="bg-white/15 rounded-xl p-3">
               <div className="flex items-center gap-1.5 mb-1.5">
@@ -951,20 +339,48 @@ export default function LiveControlPage() {
             </div>
           ))}
         </div>
+
+        {/* Quorum bar (AGM only) */}
+        {room.quorumPct != null && (
+          <div className="mt-4 bg-white/10 rounded-xl p-3">
+            <div className="flex items-center justify-between mb-2 text-xs font-medium opacity-80">
+              <span>Quorum Progress</span>
+              <span className="tabular-nums">
+                {room.quorumPct}%
+                {room.requiredQuorumPct != null && ` / ${room.requiredQuorumPct}% required`}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-white/20 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${Math.min(room.quorumPct, 100)}%`,
+                  backgroundColor:
+                    room.requiredQuorumPct != null && room.quorumPct >= room.requiredQuorumPct
+                      ? "#4ade80"
+                      : "#fbbf24",
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ── Stream preview ── */}
+      {/* Stream preview */}
       <Card className="attend-card overflow-hidden">
         <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
           <Tv2 className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
           <h2 className="font-semibold text-[hsl(var(--foreground))]">Stream Preview</h2>
-          <span className="ml-auto text-xs font-semibold px-2.5 py-0.5 rounded-full" style={{ backgroundColor: session.color + "18", color: session.color }}>
-            {session.module}
+          <span
+            className="ml-auto text-xs font-semibold px-2.5 py-0.5 rounded-full"
+            style={{ backgroundColor: color + "18", color }}
+          >
+            {room.eventType}
           </span>
         </div>
         <div className="relative bg-black" style={{ aspectRatio: "16/9" }}>
-          {streamUrls[session.id] ? (
-            isZoomUrl(streamUrls[session.id]) ? (
+          {streamUrl ? (
+            isZoomUrl(streamUrl) ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
                 <div className="rounded-2xl bg-[#0B5CFF]/15 p-4">
                   <svg viewBox="0 0 40 40" className="h-10 w-10 fill-[#0B5CFF]">
@@ -973,10 +389,10 @@ export default function LiveControlPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-white">Zoom Meeting</p>
-                  <p className="text-xs text-gray-400 mt-1">This AGM is hosted on Zoom — cannot be previewed inline.</p>
+                  <p className="text-xs text-gray-400 mt-1">Cannot be previewed inline.</p>
                 </div>
                 <a
-                  href={streamUrls[session.id]}
+                  href={streamUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 rounded-xl bg-[#0B5CFF] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0B5CFF]/90"
@@ -986,8 +402,8 @@ export default function LiveControlPage() {
               </div>
             ) : (
               <iframe
-                key={streamUrls[session.id]}
-                src={streamUrls[session.id]}
+                key={streamUrl}
+                src={streamUrl}
                 className="absolute inset-0 w-full h-full"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
@@ -996,98 +412,87 @@ export default function LiveControlPage() {
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
               <Tv2 className="h-12 w-12 text-gray-600" />
-              <p className="text-sm text-gray-400">No stream configured for this session</p>
+              <p className="text-sm text-gray-400">No stream configured</p>
             </div>
           )}
         </div>
         <div className="px-5 py-4 border-t border-[hsl(var(--border))]">
-          <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] mb-2 uppercase tracking-wide">Stream URL</label>
+          <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] mb-2 uppercase tracking-wide">
+            Stream URL
+          </label>
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
               <input
                 type="text"
-                value={getStreamInput(session.id)}
-                onChange={(e) => setStreamInputs((prev) => ({ ...prev, [session.id]: e.target.value }))}
+                value={streamInput}
+                onChange={(e) => setStreamInput(e.target.value)}
                 placeholder="Paste YouTube or Zoom URL…"
                 className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
-                onKeyDown={(e) => e.key === "Enter" && applyStream(session.id)}
+                onKeyDown={(e) => e.key === "Enter" && applyStream()}
               />
             </div>
-            <Button size="sm" onClick={() => applyStream(session.id)} className="px-4 shrink-0">Apply</Button>
+            <Button size="sm" onClick={applyStream} className="px-4 shrink-0">Apply</Button>
           </div>
         </div>
       </Card>
 
-      {/* ── Content grid ── */}
+      {/* Content grid */}
       <div className="grid grid-cols-3 gap-5">
-        {/* Left col: Resolutions + Polls + Press Kit + Winner */}
-        <div className="col-span-2 flex flex-col gap-5">
-          <ResolutionsPanel
-            session={session}
-            onOpen={(resId, duration) => openVoting(session.id, resId, duration)}
-            onClose={(resId) => closeVoting(session.id, resId)}
-            onProxyVotes={(resId, proxy) => submitProxyVotes(session.id, resId, proxy)}
-          />
-          <PollManagementPanel
-            session={session}
-            onLaunch={(pollId) => launchPoll(session.id, pollId)}
-            onClose={(pollId) => closePoll(session.id, pollId)}
-            onAdd={(poll) => addPoll(session.id, poll)}
-            onUpdate={(pollId, updates) => updatePoll(session.id, pollId, updates)}
-          />
-          <PressKitCard
-            session={session}
-            onRelease={() => releasePressKit(session.id)}
-          />
-          <WinnerCard
-            session={session}
-            onDeclare={(team) => declareWinner(session.id, team)}
-          />
+        {/* Left: Resolutions */}
+        <div className="col-span-2">
+          <ResolutionsPanel resolutions={room.resolutions} color={color} />
         </div>
 
-        {/* Right: Q&A + attendance */}
+        {/* Right: Q&A + Attendance */}
         <div className="col-span-1 flex flex-col gap-5">
 
           {/* Q&A Queue */}
           <Card className="attend-card overflow-hidden">
             <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
               <MessageSquare className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
-              <h2 className="font-semibold text-[hsl(var(--foreground))]">Q&A Queue</h2>
+              <h2 className="font-semibold text-[hsl(var(--foreground))]">Q&amp;A Queue</h2>
               <span className="ml-auto text-xs bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))] rounded-full px-2 py-0.5 font-semibold">
-                {session.qaQueue.filter((q) => q.approved === null).length} pending
+                {pending.length} pending
               </span>
             </div>
             <div className="divide-y divide-[hsl(var(--border))]">
-              {session.qaQueue.length === 0 ? (
-                <p className="px-5 py-6 text-sm text-[hsl(var(--muted-foreground))] text-center italic">No questions yet.</p>
-              ) : session.qaQueue.map((q) => (
+              {pending.length === 0 ? (
+                <p className="px-5 py-6 text-sm text-[hsl(var(--muted-foreground))] text-center italic">
+                  No pending questions.
+                </p>
+              ) : pending.map((q) => (
                 <div key={q.id} className="px-5 py-4">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-semibold text-[hsl(var(--foreground))]">{q.name}</span>
-                    <span className="text-xs text-[hsl(var(--muted-foreground))]">{q.time}</span>
-                  </div>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3 leading-relaxed">{q.question}</p>
-                  {q.approved === null ? (
-                    <div className="flex gap-2">
-                      <Button size="sm" className="h-7 text-xs flex-1 gap-1" onClick={() => approveQA(session.id, q.id)}>
-                        <Check className="h-3 w-3" /> Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs flex-1 gap-1 text-red-600 border-red-200 hover:bg-red-50"
-                        onClick={() => rejectQA(session.id, q.id)}
-                      >
-                        <X className="h-3 w-3" /> Reject
-                      </Button>
-                    </div>
-                  ) : (
-                    <span className={`inline-flex items-center gap-1 text-xs font-medium ${q.approved ? "text-green-600" : "text-red-500"}`}>
-                      {q.approved ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                      {q.approved ? "Approved" : "Rejected"}
+                    <span className="text-xs font-semibold text-[hsl(var(--foreground))]">
+                      {q.anonymous ? "Anonymous" : q.askerName}
                     </span>
-                  )}
+                    <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                      {formatTime(q.submittedAt)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3 leading-relaxed">
+                    {q.content}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs flex-1 gap-1"
+                      disabled={approveMutation.isPending || rejectMutation.isPending}
+                      onClick={() => approveMutation.mutate({ eventId, questionId: q.id })}
+                    >
+                      <Check className="h-3 w-3" /> Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs flex-1 gap-1 text-red-600 border-red-200 hover:bg-red-50"
+                      disabled={approveMutation.isPending || rejectMutation.isPending}
+                      onClick={() => rejectMutation.mutate({ eventId, questionId: q.id })}
+                    >
+                      <X className="h-3 w-3" /> Reject
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1095,31 +500,192 @@ export default function LiveControlPage() {
 
           {/* Attendance log */}
           <Card className="attend-card overflow-hidden">
-            <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
-              <h2 className="font-semibold text-[hsl(var(--foreground))]">Attendance Log</h2>
+            <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+              <UserCheck className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+              <h2 className="font-semibold text-[hsl(var(--foreground))]">Recent Check-ins</h2>
+              <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">live</span>
             </div>
             <div className="divide-y divide-[hsl(var(--border))]">
-              {session.recentJoins.map((join, i) => (
+              {recentAtt.length === 0 ? (
+                <p className="px-5 py-6 text-sm text-[hsl(var(--muted-foreground))] text-center italic">
+                  No recent check-ins.
+                </p>
+              ) : recentAtt.map((entry, i) => (
                 <div key={i} className="px-5 py-3 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <div
                       className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                      style={{ backgroundColor: session.color }}
+                      style={{ backgroundColor: color }}
                     >
-                      {initials(join.name)}
+                      {entry.initials || initials(entry.name)}
                     </div>
                     <div>
-                      <div className="text-xs font-medium text-[hsl(var(--foreground))]">{join.name}</div>
-                      <div className="text-xs text-[hsl(var(--muted-foreground))]">{join.method}</div>
+                      <div className="text-xs font-medium text-[hsl(var(--foreground))]">{entry.name}</div>
+                      <div className="text-xs text-[hsl(var(--muted-foreground))] capitalize">{entry.mode}</div>
                     </div>
                   </div>
-                  <span className="text-xs text-[hsl(var(--muted-foreground))]">{join.time}</span>
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">{formatTime(entry.joinedAt)}</span>
                 </div>
               ))}
             </div>
           </Card>
+
         </div>
       </div>
     </div>
   );
+}
+
+// ── Session list ──────────────────────────────────────────────────────────────
+
+function SessionList({ onSelect }: { onSelect: (eventId: string) => void }) {
+  const { data, isLoading } = useClientEvents("ALL", 0, 100);
+  const sessions = (data?.events ?? []).filter((e) => e.status === "LIVE");
+
+  if (isLoading) return <Loader variant="page" text="Loading live sessions…" />;
+
+  if (sessions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <Radio className="h-8 w-8 text-[hsl(var(--muted-foreground))]" />
+        <p className="text-sm text-[hsl(var(--muted-foreground))]">No live sessions at the moment.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Live Control Room</h1>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+              {sessions.length} LIVE
+            </span>
+          </div>
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            Select an event to open its control room
+          </p>
+        </div>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: "Active Sessions", value: sessions.length,                                               icon: Radio,  color: "#dc2626" },
+          { label: "AGM/EGM Events",  value: sessions.filter((s) => s.eventType?.includes("AGM")).length,  icon: Vote,   color: "#7c22c9" },
+          { label: "Other Events",    value: sessions.filter((s) => !s.eventType?.includes("AGM")).length, icon: Users,  color: "#0891b2" },
+        ].map(({ label, value, icon: Icon, color }) => (
+          <Card key={label} className="attend-card p-4 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}18` }}>
+              <Icon className="h-4 w-4" style={{ color }} />
+            </div>
+            <div>
+              <p className="text-lg font-bold text-[hsl(var(--foreground))]">{value}</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">{label}</p>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Table */}
+      <Card className="attend-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
+          <h2 className="font-semibold text-[hsl(var(--foreground))]">Live Events</h2>
+          <span className="text-xs text-[hsl(var(--muted-foreground))]">{sessions.length} sessions running</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[600px]">
+            <thead>
+              <tr className="attend-table-header">
+                <th className="px-5 py-3 text-left">Event</th>
+                <th className="px-5 py-3 text-left">Type</th>
+                <th className="px-5 py-3 text-left">Format</th>
+                <th className="px-5 py-3 text-right">RSVP</th>
+                <th className="px-5 py-3 text-left"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sessions.map((sess) => {
+                const color = eventColor(sess.eventType);
+                return (
+                  <tr key={sess.id} className="attend-table-row">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
+                          style={{ backgroundColor: color }}
+                        >
+                          {initials(sess.registerName ?? sess.title)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[220px]">
+                            {sess.title}
+                          </p>
+                          {sess.registerName && (
+                            <p className="text-xs text-[hsl(var(--muted-foreground))]">{sess.registerName}</p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span
+                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold text-white"
+                        style={{ backgroundColor: color }}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                        {sess.eventType}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className="text-sm text-[hsl(var(--foreground))] capitalize">
+                        {sess.format?.toLowerCase()}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Users className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+                        <span className="text-sm font-semibold tabular-nums">{sess.rsvpCount.toLocaleString()}</span>
+                        {sess.capacity > 0 && (
+                          <span className="text-xs text-[hsl(var(--muted-foreground))]">/ {sess.capacity.toLocaleString()}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <Button
+                        size="sm"
+                        className="h-8 gap-1.5 text-xs"
+                        onClick={() => onSelect(sess.id)}
+                      >
+                        Manage <ChevronRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default function LiveControlPage() {
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
+  if (selectedEventId) {
+    return (
+      <SessionDetail
+        eventId={selectedEventId}
+        onBack={() => setSelectedEventId(null)}
+      />
+    );
+  }
+
+  return <SessionList onSelect={setSelectedEventId} />;
 }

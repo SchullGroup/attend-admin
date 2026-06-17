@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Users, UserPlus, Trash2, Loader2, Hash, Mail, Phone, X, Check,
+  Upload, FileText, AlertCircle, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ import {
   type ExpectedAttendee,
 } from "@/api/client-events";
 import { cn } from "@/lib/utils";
+import Papa from "papaparse";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,6 +32,81 @@ interface AddForm {
 const EMPTY_FORM: AddForm = {
   firstName: "", lastName: "", email: "", phone: "", shareholderRef: "",
 };
+
+interface CsvRow {
+  firstName:      string;
+  lastName:       string;
+  email:          string;
+  phone:          string;
+  shareholderRef: string;
+  _error?:        string;
+}
+
+// ─── CSV column auto-mapper ───────────────────────────────────────────────────
+
+function normaliseKey(k: string) {
+  return k.toLowerCase().replace(/[\s_\-\.]/g, "");
+}
+
+const FIRST_NAME_KEYS  = new Set(["firstname", "first", "fname", "givenname"]);
+const LAST_NAME_KEYS   = new Set(["lastname", "last", "lname", "surname", "familyname"]);
+const FULL_NAME_KEYS   = new Set(["fullname", "name", "shareholdername"]);
+const EMAIL_KEYS       = new Set(["email", "emailaddress", "mail"]);
+const PHONE_KEYS       = new Set(["phone", "phonenumber", "mobile", "tel", "telephone"]);
+const REF_KEYS         = new Set(["shareholderref", "ref", "shareholderid", "memberid",
+                                   "shareholderno", "accountnumber", "sharecount", "shares"]);
+
+function mapCsvRow(raw: Record<string, string>): CsvRow {
+  const norm: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) norm[normaliseKey(k)] = (v ?? "").trim();
+
+  // Resolve first / last name — handle "fullname" split
+  let firstName = "";
+  let lastName  = "";
+  for (const [k, v] of Object.entries(norm)) {
+    if (FIRST_NAME_KEYS.has(k))  { firstName = v; break; }
+  }
+  for (const [k, v] of Object.entries(norm)) {
+    if (LAST_NAME_KEYS.has(k))   { lastName  = v; break; }
+  }
+  if (!firstName && !lastName) {
+    for (const [k, v] of Object.entries(norm)) {
+      if (FULL_NAME_KEYS.has(k)) {
+        const parts = v.trim().split(/\s+/);
+        firstName   = parts[0]  ?? "";
+        lastName    = parts.slice(1).join(" ") || "";
+        break;
+      }
+    }
+  }
+
+  let email = "";
+  for (const [k, v] of Object.entries(norm)) {
+    if (EMAIL_KEYS.has(k)) { email = v; break; }
+  }
+
+  let phone = "";
+  for (const [k, v] of Object.entries(norm)) {
+    if (PHONE_KEYS.has(k)) { phone = v; break; }
+  }
+
+  let shareholderRef = "";
+  for (const [k, v] of Object.entries(norm)) {
+    if (REF_KEYS.has(k)) { shareholderRef = v; break; }
+  }
+
+  const missingEmail = !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const missingName  = !firstName && !lastName;
+
+  return {
+    firstName,
+    lastName,
+    email,
+    phone,
+    shareholderRef,
+    _error: missingEmail ? "Invalid email" : missingName ? "Name missing" : undefined,
+  };
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -71,6 +148,13 @@ export function EventExpectedAttendeesTab({ eventId }: { eventId: string }) {
   const [form,         setForm]         = useState<AddForm>(EMPTY_FORM);
   const [touched,      setTouched]      = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+
+  // CSV import state
+  const [csvRows,       setCsvRows]       = useState<CsvRow[]>([]);
+  const [csvFileName,   setCsvFileName]   = useState("");
+  const [showCsvPreview, setShowCsvPreview] = useState(false);
+  const [csvUploading,  setCsvUploading]  = useState(false);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   // ── Queries & mutations ──────────────────────────────────────────────────
   const { data, isLoading } = useExpectedAttendees(eventId);
@@ -128,6 +212,54 @@ export function EventExpectedAttendeesTab({ eventId }: { eventId: string }) {
     clearMutation.mutate(eventId, { onSuccess: () => setConfirmClear(false) });
   }
 
+  // ── CSV import ────────────────────────────────────────────────────────────
+
+  function handleCsvFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvFileName(file.name);
+    Papa.parse<Record<string, string>>(file, {
+      header:           true,
+      skipEmptyLines:   true,
+      transformHeader:  (h) => h.trim(),
+      complete: (result) => {
+        const rows = result.data.map(mapCsvRow);
+        setCsvRows(rows);
+        setShowCsvPreview(true);
+      },
+    });
+    e.target.value = "";
+  }
+
+  function handleCsvImport() {
+    const valid = csvRows.filter((r) => !r._error);
+    if (!valid.length) return;
+    setCsvUploading(true);
+    addMutation.mutate(
+      {
+        eventId,
+        payload: {
+          attendees: valid.map((r) => ({
+            firstName:      r.firstName,
+            lastName:       r.lastName,
+            email:          r.email.toLowerCase(),
+            phone:          r.phone   || undefined,
+            shareholderRef: r.shareholderRef || undefined,
+          })),
+        },
+      },
+      {
+        onSuccess: () => {
+          setCsvRows([]);
+          setCsvFileName("");
+          setShowCsvPreview(false);
+          setCsvUploading(false);
+        },
+        onError: () => setCsvUploading(false),
+      }
+    );
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
@@ -178,6 +310,23 @@ export function EventExpectedAttendeesTab({ eventId }: { eventId: string }) {
               )
             )}
 
+            {/* Import CSV */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => csvInputRef.current?.click()}
+            >
+              <Upload className="h-3.5 w-3.5" /> Import CSV
+            </Button>
+            <input
+              ref={csvInputRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleCsvFile}
+            />
+
             {/* Add attendee toggle */}
             <Button
               size="sm"
@@ -192,6 +341,87 @@ export function EventExpectedAttendeesTab({ eventId }: { eventId: string }) {
           </div>
         </div>
       </Card>
+
+      {/* ── CSV preview ── */}
+      {showCsvPreview && csvRows.length > 0 && (
+        <Card className="attend-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-[hsl(var(--primary))]" />
+              <div>
+                <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{csvFileName}</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  {csvRows.filter(r => !r._error).length} valid · {csvRows.filter(r => r._error).length} with errors
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm" variant="ghost"
+                className="h-7 text-xs text-[hsl(var(--muted-foreground))]"
+                onClick={() => { setCsvRows([]); setCsvFileName(""); setShowCsvPreview(false); }}
+              >
+                <X className="h-3.5 w-3.5 mr-1" /> Discard
+              </Button>
+              <Button
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                disabled={csvUploading || csvRows.filter(r => !r._error).length === 0}
+                onClick={handleCsvImport}
+              >
+                {csvUploading
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Importing…</>
+                  : <><Check className="h-3.5 w-3.5" /> Import {csvRows.filter(r => !r._error).length} shareholders</>
+                }
+              </Button>
+            </div>
+          </div>
+
+          {/* Column mapping hint */}
+          <div className="px-5 py-2 bg-[hsl(var(--muted)/0.4)] border-b border-[hsl(var(--border))] text-xs text-[hsl(var(--muted-foreground))]">
+            Columns auto-mapped from: <span className="font-mono">firstName / lastName / fullName / email / phone / shareholderRef</span>
+          </div>
+
+          <div className="overflow-x-auto max-h-72 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="attend-table-header">
+                  <th className="px-4 py-2.5 text-left">#</th>
+                  <th className="px-4 py-2.5 text-left">Name</th>
+                  <th className="px-4 py-2.5 text-left">Email</th>
+                  <th className="px-4 py-2.5 text-left">Phone</th>
+                  <th className="px-4 py-2.5 text-left">Ref</th>
+                  <th className="px-4 py-2.5 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {csvRows.map((row, i) => (
+                  <tr key={i} className={cn("attend-table-row", row._error && "bg-red-50")}>
+                    <td className="px-4 py-2.5 text-[hsl(var(--muted-foreground))] tabular-nums">{i + 1}</td>
+                    <td className="px-4 py-2.5 font-medium text-[hsl(var(--foreground))]">
+                      {[row.firstName, row.lastName].filter(Boolean).join(" ") || <span className="italic text-[hsl(var(--muted-foreground))]">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-[hsl(var(--muted-foreground))]">{row.email || "—"}</td>
+                    <td className="px-4 py-2.5 text-[hsl(var(--muted-foreground))]">{row.phone || "—"}</td>
+                    <td className="px-4 py-2.5 text-[hsl(var(--muted-foreground))] font-mono text-xs">{row.shareholderRef || "—"}</td>
+                    <td className="px-4 py-2.5">
+                      {row._error ? (
+                        <span className="flex items-center gap-1 text-xs text-red-600 font-semibold">
+                          <AlertCircle className="h-3.5 w-3.5" /> {row._error}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-xs text-green-600 font-semibold">
+                          <Check className="h-3.5 w-3.5" /> Ready
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {/* ── Inline add form ── */}
       {showForm && (

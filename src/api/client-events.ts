@@ -99,6 +99,7 @@ export interface UpdateEventRequest {
   date?:            string;
   startTime?:       string;
   streamUrl?:       string;
+  venue?:           string;
   maximumCapacity?: number;
   agenda?:          AgendaItemDto[];
   speakers?:        SpeakerRequest[];

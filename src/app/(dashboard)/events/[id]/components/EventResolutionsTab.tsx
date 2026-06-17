@@ -199,6 +199,24 @@ export function EventResolutionsTab({ eventId, isAGM, agmResolutions = [], agend
                   updateMutation.mutate({ eventId, itemId: item.id, data: { title: e.target.value } })
                 }
               />
+              {isAGM && !isSuperAdmin && (
+                <div className="mt-2">
+                  <Label className="mb-1.5">Description <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span></Label>
+                  <textarea
+                    rows={2}
+                    placeholder="Additional context for shareholders…"
+                    defaultValue={item.speaker ?? ""}
+                    className="flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none"
+                    onBlur={(e) =>
+                      item.id &&
+                      updateMutation.mutate({ eventId, itemId: item.id, data: { speaker: e.target.value } })
+                    }
+                  />
+                </div>
+              )}
+              {isAGM && isSuperAdmin && item.speaker && (
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1.5 leading-relaxed">{item.speaker}</p>
+              )}
             </div>
             {!isAGM && (
               <div className={isSuperAdmin ? "col-span-5" : "col-span-4"}>
@@ -250,6 +268,18 @@ export function EventResolutionsTab({ eventId, isAGM, agmResolutions = [], agend
                 value={item.title}
                 onChange={(e) => updateLocalRow(item.id, "title", e.target.value)}
               />
+              {isAGM && (
+                <div className="mt-2">
+                  <Label className="mb-1.5">Description <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span></Label>
+                  <textarea
+                    rows={2}
+                    placeholder="Additional context for shareholders…"
+                    value={item.speaker ?? ""}
+                    onChange={(e) => updateLocalRow(item.id, "speaker", e.target.value)}
+                    className="flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none"
+                  />
+                </div>
+              )}
             </div>
             {!isAGM && (
               <div className="col-span-3">
