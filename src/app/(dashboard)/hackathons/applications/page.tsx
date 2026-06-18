@@ -554,71 +554,102 @@ function JudgeAppDetail({ challengeId, applicationId, onBack }: { challengeId: s
   if (!app) return <p className="text-sm text-[hsl(var(--muted-foreground))]">Application not found.</p>;
 
   const links = [
-    { label: "Source Code",    url: app.sourceCodeUrl },
-    { label: "Live Demo",      url: app.liveDemoUrl },
-    { label: "Pitch Deck",     url: app.pitchDeckUrl },
-    { label: "Pitch Video",    url: app.pitchVideoUrl },
-    { label: "Demo Video",     url: app.demoVideoUrl },
-    { label: "Idea Video",     url: app.ideaVideoUrl },
-    { label: "Supporting Doc", url: app.ideaSupportingDocUrl },
-    { label: "Additional Docs",url: app.additionalDocumentsUrl },
-  ].filter((l) => l.url);
+    { label: "Pitch Deck",      url: app.pitchDeckUrl,           icon: FileText,     desc: "PDF / PPTX"        },
+    { label: "Pitch Video",     url: app.pitchVideoUrl,          icon: Video,        desc: "YouTube or Loom"   },
+    { label: "Idea Video",      url: app.ideaVideoUrl,           icon: Video,        desc: "Idea walkthrough"  },
+    { label: "Demo Video",      url: app.demoVideoUrl,           icon: Video,        desc: "Product demo"      },
+    { label: "Source Code",     url: app.sourceCodeUrl,          icon: Code,         desc: "GitHub / GitLab"   },
+    { label: "Live Demo",       url: app.liveDemoUrl,            icon: Globe,        desc: "Deployed app"      },
+    { label: "Supporting Doc",  url: app.ideaSupportingDocUrl,   icon: FileText,     desc: "Idea support file" },
+    { label: "Additional Docs", url: app.additionalDocumentsUrl, icon: Link2,        desc: "Extra documents"   },
+  ].filter((l) => !!l.url) as { label: string; url: string; icon: React.ElementType; desc: string }[];
 
   return (
     <div className="flex flex-col gap-5">
-      <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors">
+      <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors self-start">
         <ArrowLeft className="h-3.5 w-3.5" /> Back to Applications
       </button>
 
       <div className="grid grid-cols-3 gap-5">
         {/* Main */}
         <div className="col-span-2 flex flex-col gap-5">
+
+          {/* Header */}
           <Card className="attend-card p-5">
-            <div className="flex items-start gap-4">
-              <div className="h-12 w-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shrink-0" style={{ backgroundColor: app.teamInitialColor || "#7c22c9" }}>
-                {app.teamInitial || app.teamName?.[0]}
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0"
+                   style={{ backgroundColor: app.teamInitialColor || "#7c22c9" }}>
+                {app.teamInitial || app.teamName?.slice(0, 2).toUpperCase()}
               </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="text-xl font-bold text-[hsl(var(--foreground))]">{app.ideaTitle}</h2>
-                <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">{app.teamName} · {app.track}</p>
-                <div className="flex items-center gap-3 mt-2">
-                  {statusChip(app.status)}
-                  {app.score !== null && app.score !== undefined && (
-                    <span className="text-sm font-bold tabular-nums" style={{ color: "#7c22c9" }}>
-                      {app.score} / {app.scoreOutOf}
-                    </span>
-                  )}
-                </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-bold text-[hsl(var(--foreground))]">{app.teamName}</h2>
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">{app.ideaTitle}</p>
+                {app.track && (
+                  <span className="text-xs px-2 py-0.5 rounded-full mt-1 inline-block font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
+                    {app.track}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                {statusChip(app.status)}
+                {app.hasScore && app.score != null && (
+                  <span className="text-lg font-black text-[hsl(var(--foreground))] tabular-nums">
+                    {app.score}<span className="text-sm font-normal text-[hsl(var(--muted-foreground))]">/{app.scoreOutOf || 100}</span>
+                  </span>
+                )}
               </div>
             </div>
-            {app.ideaDescription && (
-              <div className="mt-4 pt-4 border-t border-[hsl(var(--border))]">
-                <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-1">Idea</p>
-                <p className="text-sm text-[hsl(var(--foreground))] leading-relaxed">{app.ideaDescription}</p>
-              </div>
-            )}
-            {app.projectDescription && (
-              <div className="mt-4 pt-4 border-t border-[hsl(var(--border))]">
-                <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-1">Project Description</p>
-                <p className="text-sm text-[hsl(var(--foreground))] leading-relaxed">{app.projectDescription}</p>
-              </div>
-            )}
           </Card>
 
-          {/* Submission links */}
+          {/* Idea */}
+          {app.ideaDescription && (
+            <Card className="attend-card p-5">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-2 flex items-center gap-2">
+                <Lightbulb className="h-4 w-4" /> Idea
+              </h2>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] leading-relaxed whitespace-pre-wrap">{app.ideaDescription}</p>
+            </Card>
+          )}
+
+          {/* Project description */}
+          {app.projectDescription && (
+            <Card className="attend-card p-5">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-2 flex items-center gap-2">
+                <ClipboardList className="h-4 w-4" /> Project Description
+              </h2>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] leading-relaxed whitespace-pre-wrap">{app.projectDescription}</p>
+            </Card>
+          )}
+
+          {/* Submission links — 2-per-row card grid matching client admin */}
           {links.length > 0 && (
             <Card className="attend-card overflow-hidden">
-              <div className="px-5 py-3 border-b border-[hsl(var(--border))]">
-                <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Submission Links</p>
+              <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+                <ExternalLink className="h-4 w-4" style={{ color: "#7c22c9" }} />
+                <h2 className="font-semibold text-[hsl(var(--foreground))]">Submission Links</h2>
               </div>
               <div className="divide-y divide-[hsl(var(--border))]">
-                {links.map((l) => (
-                  <a key={l.label} href={ensureAbsoluteUrl(l.url!)} target="_blank" rel="noopener noreferrer"
-                     className="flex items-center justify-between px-5 py-3 hover:bg-[hsl(var(--accent))] transition-colors group">
-                    <span className="text-sm font-medium text-[hsl(var(--foreground))] group-hover:text-[#7c22c9] transition-colors">{l.label}</span>
-                    <ExternalLink className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
-                  </a>
-                ))}
+                {[0, 2, 4, 6, 8, 10].map((startIdx) => {
+                  const pair = links.slice(startIdx, startIdx + 2);
+                  if (pair.length === 0) return null;
+                  return (
+                    <div key={startIdx} className={`grid gap-0 ${pair.length === 2 ? "grid-cols-2 divide-x divide-[hsl(var(--border))]" : "grid-cols-1"}`}>
+                      {pair.map((l) => (
+                        <a key={l.label} href={ensureAbsoluteUrl(l.url)} target="_blank" rel="noopener noreferrer"
+                           className="flex items-center gap-3 px-5 py-4 hover:bg-[hsl(var(--accent))] transition-colors group">
+                          <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: "#7c22c918" }}>
+                            <l.icon className="h-4 w-4" style={{ color: "#7c22c9" }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-[hsl(var(--foreground))] group-hover:text-[#7c22c9] transition-colors">{l.label}</p>
+                            <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{l.desc}</p>
+                          </div>
+                          <ExternalLink className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))] shrink-0" />
+                        </a>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
             </Card>
           )}
@@ -626,14 +657,24 @@ function JudgeAppDetail({ challengeId, applicationId, onBack }: { challengeId: s
           {/* Criteria scores */}
           {app.criteriaScores?.length > 0 && (
             <Card className="attend-card p-5">
-              <p className="text-sm font-semibold text-[hsl(var(--foreground))] mb-3">Criteria Scores</p>
-              <div className="flex flex-col gap-2">
-                {app.criteriaScores.map((c) => (
-                  <div key={c.criterion} className="flex items-center justify-between">
-                    <span className="text-sm text-[hsl(var(--foreground))]">{c.criterion} <span className="text-xs text-[hsl(var(--muted-foreground))]">(×{c.weight})</span></span>
-                    <span className="text-sm font-bold tabular-nums" style={{ color: "#7c22c9" }}>{c.score}</span>
-                  </div>
-                ))}
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4 flex items-center gap-2">
+                <Trophy className="h-4 w-4" /> Judging Criteria Scores
+              </h2>
+              <div className="flex flex-col gap-3">
+                {app.criteriaScores.map((c) => {
+                  const pct = c.weight > 0 ? Math.min(Math.round((c.score / c.weight) * 100), 100) : 0;
+                  return (
+                    <div key={c.criterion}>
+                      <div className="flex justify-between mb-1">
+                        <span className="text-xs font-medium text-[hsl(var(--foreground))]">{c.criterion}</span>
+                        <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">{c.score}/{c.weight}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: "#7c22c9" }} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </Card>
           )}
@@ -646,24 +687,36 @@ function JudgeAppDetail({ challengeId, applicationId, onBack }: { challengeId: s
             <div className="flex flex-col gap-2 text-sm">
               <div className="flex justify-between"><span className="text-[hsl(var(--muted-foreground))]">Track</span><span className="font-medium">{app.track}</span></div>
               <div className="flex justify-between"><span className="text-[hsl(var(--muted-foreground))]">Submitted</span><span className="font-medium">{formatDate(app.submittedAt)}</span></div>
-              <div className="flex justify-between"><span className="text-[hsl(var(--muted-foreground))]">Challenge</span><span className="font-medium truncate max-w-[120px]">{app.challengeTitle}</span></div>
+              <div className="flex justify-between gap-2"><span className="text-[hsl(var(--muted-foreground))] shrink-0">Challenge</span><span className="font-medium text-right truncate">{app.challengeTitle}</span></div>
             </div>
           </Card>
-          {app.members?.length > 0 && (
+
+          {/* Team members */}
+          {(app.members?.length ?? 0) > 0 && (
             <Card className="attend-card p-5">
-              <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-3">Team Members</p>
-              <div className="flex flex-col gap-3">
-                {app.members.map((m) => (
-                  <div key={m.id} className="flex items-center gap-2">
-                    <div className="h-7 w-7 rounded-full bg-[hsl(var(--muted))] flex items-center justify-center text-xs font-bold shrink-0">
-                      {m.fullName?.[0] ?? "?"}
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3 flex items-center gap-2">
+                <Users className="h-4 w-4" /> Team Members ({app.members.length})
+              </h2>
+              <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
+                {app.members.map((m) => {
+                  const displayName = m.fullName || (m as any).name || (m as any).firstName || "Unknown";
+                  return (
+                    <div key={m.id} className="py-2.5 flex items-center gap-3">
+                      <div className="h-7 w-7 rounded-full bg-[hsl(var(--muted))] flex items-center justify-center text-xs font-bold shrink-0">
+                        {displayName.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[hsl(var(--foreground))]">{displayName}</p>
+                        {m.email && <p className="text-xs text-[hsl(var(--muted-foreground))]">{m.email}</p>}
+                      </div>
+                      {m.role && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: "#faf5ff", color: "#7c22c9" }}>
+                          {m.role}
+                        </span>
+                      )}
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{m.fullName}</p>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{m.email}</p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </Card>
           )}
