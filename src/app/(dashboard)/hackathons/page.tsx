@@ -2,10 +2,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Lightbulb, ArrowRight, Trophy, Users, FileText, ChevronRight, Search,
+  Lightbulb, ArrowRight, Trophy, Users, FileText, ChevronRight, Search, Star,
 } from "lucide-react";
 import { useClientChallenges } from "@/api/client-challenges";
 import { useAdminChallenges } from "@/api/admin-challenges";
+import { useJudgeChallenges } from "@/api/judge";
 import { useGetMe } from "@/api/auth/hooks";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,6 +15,7 @@ import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
 
 const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
+const JUDGE_ROLES       = new Set(["judge"]);
 
 const STATUS_FILTERS = [
   { label: "All",       value: "" },
@@ -31,6 +33,149 @@ function statusStyle(status: string): { bg: string; color: string } {
   return { bg: "#7c22c918", color: "#7c22c9" };
 }
 
+// ---------------------------------------------------------------------------
+// Judge challenges view — GET /api/v1/judge/challenges
+// ---------------------------------------------------------------------------
+function JudgeChallengesView() {
+  const router = useRouter();
+  const [search, setSearch] = useState("");
+
+  const { data, isLoading } = useJudgeChallenges(search, "", 0, 100);
+
+  if (isLoading) return <Loader variant="page" text="Loading Challenges…" />;
+
+  const summary    = data?.summary;
+  const challenges = data?.challenges ?? [];
+  const featured   = challenges.find((c) => c.status?.toUpperCase() === "LIVE") ?? challenges[0] ?? null;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Innovation Challenges</h1>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+          Your assigned challenges
+        </p>
+      </div>
+
+      {/* Hero */}
+      <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(135deg, #9333ea 0%, #7c22c9 60%, #5b21b6 100%)" }}>
+        <div className="p-6 text-white">
+          <div className="flex items-start justify-between gap-6">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                  <Lightbulb className="h-4 w-4 text-white" />
+                </div>
+                <span className="text-sm font-semibold text-purple-200">Innovation Challenge</span>
+              </div>
+              {featured ? (
+                <>
+                  <h2 className="text-2xl font-bold mb-1 truncate">{featured.title}</h2>
+                  <p className="text-purple-200 text-sm mb-4">
+                    {featured.organiserName} · {formatDate(featured.date ?? "")}
+                  </p>
+                  <Button
+                    className="h-9 text-sm bg-white text-purple-700 hover:bg-white/90 gap-2"
+                    onClick={() => router.push(`/hackathons/applications?id=${featured.id}`)}
+                  >
+                    View Applications <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              ) : (
+                <h2 className="text-2xl font-bold mb-1">No challenges assigned yet</h2>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3 shrink-0">
+              {[
+                { label: "Active Challenges",  value: summary?.activeChallenges  ?? 0, icon: Lightbulb },
+                { label: "Total Applications", value: summary?.totalApplications ?? 0, icon: FileText  },
+                { label: "Shortlisted",        value: summary?.shortlisted ?? summary?.teamsToScore ?? 0, icon: Trophy },
+                { label: "Challenges",         value: challenges.length,                icon: Users },
+              ].map((s) => (
+                <div key={s.label} className="rounded-xl bg-white/10 p-3 min-w-[110px]">
+                  <div className="text-2xl font-bold tabular-nums">{s.value}</div>
+                  <div className="text-xs text-purple-200 mt-0.5">{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+        <Input
+          placeholder="Search challenges…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9 h-9"
+        />
+      </div>
+
+      {/* Table */}
+      <Card className="attend-card overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="attend-table-header">
+              <th className="px-5 py-3 text-left">Challenge</th>
+              <th className="px-5 py-3 text-left">Date</th>
+              <th className="px-5 py-3 text-left">Format</th>
+              <th className="px-5 py-3 text-left">Shortlisted</th>
+              <th className="px-5 py-3 text-left">Status</th>
+              <th className="px-5 py-3 text-left"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {challenges.map((c) => {
+              const ss = statusStyle(c.status ?? "");
+              return (
+                <tr key={c.id} className="attend-table-row">
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#7c22c918" }}>
+                        <Lightbulb className="h-4 w-4" style={{ color: "#7c22c9" }} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[220px]">{c.title}</p>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">{c.organiserName}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4 text-sm text-[hsl(var(--foreground))]">{formatDate(c.date ?? "")}</td>
+                  <td className="px-5 py-4 text-xs capitalize text-[hsl(var(--muted-foreground))]">{(c.format ?? "—").toLowerCase()}</td>
+                  <td className="px-5 py-4 text-sm font-semibold tabular-nums">{c.shortlistedCount ?? 0}</td>
+                  <td className="px-5 py-4">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ backgroundColor: ss.bg, color: ss.color }}>
+                      {c.status}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4">
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/hackathons/applications?id=${c.id}`)}>
+                        Applications
+                      </Button>
+                      <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/hackathons/judging?id=${c.id}`)}>
+                        Score <Star className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {challenges.length === 0 && (
+          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">No challenges assigned yet.</div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 export default function HackathonsPage() {
   const router = useRouter();
   const [search,    setSearch]    = useState("");
@@ -39,9 +184,14 @@ export default function HackathonsPage() {
   const { data: userResponse } = useGetMe();
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
   const isSuperAdmin   = SUPER_ADMIN_ROLES.has(normalizedRole);
+  const isJudge        = JUDGE_ROLES.has(normalizedRole);
 
+  // Always call these — hooks must not be conditional
   const { data: clientData, isLoading: clientLoading, isFetching: clientFetching } = useClientChallenges(search, statusTab, 0, 50);
   const { data: adminData,  isLoading: adminLoading,  isFetching: adminFetching  } = useAdminChallenges(search, "", statusTab, 0, 50);
+
+  // Judge gets its own view
+  if (isJudge) return <JudgeChallengesView />;
 
   const isLoading  = isSuperAdmin ? adminLoading  : clientLoading;
   const isFetching = isSuperAdmin ? adminFetching : clientFetching;
@@ -51,7 +201,6 @@ export default function HackathonsPage() {
 
   const summary    = data?.summary;
   const allChallenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; shortlistedTeams?: number; shortlistedCount?: number; status?: string }>;
-  // Client-side filter ensures tabs match even if the backend ignores the status param
   const challenges = statusTab
     ? allChallenges.filter((c) => c.status?.toUpperCase() === statusTab.toUpperCase())
     : allChallenges;
@@ -59,7 +208,6 @@ export default function HackathonsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Innovation Challenges</h1>
@@ -69,11 +217,7 @@ export default function HackathonsPage() {
         </div>
       </div>
 
-      {/* Hero card */}
-      <div
-        className="rounded-2xl overflow-hidden"
-        style={{ background: "linear-gradient(135deg, #9333ea 0%, #7c22c9 60%, #5b21b6 100%)" }}
-      >
+      <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(135deg, #9333ea 0%, #7c22c9 60%, #5b21b6 100%)" }}>
         <div className="p-6 text-white">
           <div className="flex items-start justify-between gap-6">
             <div className="flex-1 min-w-0">
@@ -93,9 +237,7 @@ export default function HackathonsPage() {
               ) : (
                 <>
                   <h2 className="text-2xl font-bold mb-1">No active challenges yet</h2>
-                  <p className="text-purple-200 text-sm mb-4">
-                    Create your first innovation challenge from Events.
-                  </p>
+                  <p className="text-purple-200 text-sm mb-4">Create your first innovation challenge from Events.</p>
                 </>
               )}
               {featured && (
@@ -124,7 +266,6 @@ export default function HackathonsPage() {
         </div>
       </div>
 
-      {/* Search + status filter */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
@@ -152,7 +293,6 @@ export default function HackathonsPage() {
         </div>
       </div>
 
-      {/* Challenges table */}
       <Card className="attend-card overflow-hidden relative">
         {isFetching && !isLoading && (
           <div className="absolute inset-0 bg-[hsl(var(--background))]/60 flex items-center justify-center z-10 rounded-xl">
@@ -177,41 +317,27 @@ export default function HackathonsPage() {
                 <tr key={c.id} className="attend-table-row">
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      <div
-                        className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: "#7c22c918" }}
-                      >
+                      <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#7c22c918" }}>
                         <Lightbulb className="h-4 w-4" style={{ color: "#7c22c9" }} />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[220px]">
-                          {c.title}
-                        </p>
+                        <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[220px]">{c.title}</p>
                         <p className="text-xs text-[hsl(var(--muted-foreground))]">{c.organiserName}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-5 py-4 text-sm text-[hsl(var(--foreground))]">{formatDate(c.date ?? "")}</td>
                   <td className="px-5 py-4">
-                    <span className="text-xs capitalize text-[hsl(var(--muted-foreground))]">
-                      {(c.format ?? "—").toLowerCase()}
-                    </span>
+                    <span className="text-xs capitalize text-[hsl(var(--muted-foreground))]">{(c.format ?? "—").toLowerCase()}</span>
                   </td>
                   <td className="px-5 py-4 text-sm font-semibold tabular-nums">{c.shortlistedCount ?? c.shortlistedTeams ?? 0}</td>
                   <td className="px-5 py-4">
-                    <span
-                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold"
-                      style={{ backgroundColor: ss.bg, color: ss.color }}
-                    >
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ backgroundColor: ss.bg, color: ss.color }}>
                       {c.status}
                     </span>
                   </td>
                   <td className="px-5 py-4">
-                    <Button
-                      size="sm"
-                      className="h-8 gap-1.5 text-xs"
-                      onClick={() => router.push(`/hackathons/${c.id}`)}
-                    >
+                    <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/hackathons/${c.id}`)}>
                       Open <ChevronRight className="h-3.5 w-3.5" />
                     </Button>
                   </td>
@@ -221,9 +347,7 @@ export default function HackathonsPage() {
           </tbody>
         </table>
         {challenges.length === 0 && (
-          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
-            No challenges found.
-          </div>
+          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">No challenges found.</div>
         )}
       </Card>
     </div>

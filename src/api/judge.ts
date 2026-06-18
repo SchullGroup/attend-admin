@@ -13,6 +13,11 @@ import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
+import type {
+  ChallengeListResponse,
+  ApplicationListResponse,
+  LeaderboardResponse,
+} from "@/api/client-challenges";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -123,11 +128,16 @@ export interface JudgeApplicationDetail {
 // Query keys
 // ---------------------------------------------------------------------------
 export const judgeKeys = {
-  all:         ["judge"] as const,
-  judging:     ["judge", "judging"] as const,
-  scoring:     (challengeId: string) => ["judge", challengeId, "scoring"] as const,
-  application: (challengeId: string, applicationId: string) =>
-                 ["judge", challengeId, "application", applicationId] as const,
+  all:          ["judge"] as const,
+  judging:      ["judge", "judging"] as const,
+  challenges:   (search: string, status: string, page: number, size: number) =>
+                  ["judge", "challenges", { search, status, page, size }] as const,
+  applications: (challengeId: string, status: string, track: string, page: number, size: number) =>
+                  ["judge", challengeId, "applications", { status, track, page, size }] as const,
+  leaderboard:  (challengeId: string) => ["judge", challengeId, "leaderboard"] as const,
+  scoring:      (challengeId: string) => ["judge", challengeId, "scoring"] as const,
+  application:  (challengeId: string, applicationId: string) =>
+                  ["judge", challengeId, "application", applicationId] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -147,6 +157,72 @@ export function useJudgeEvents() {
         raw?.challenges ?? (raw as any)?.content ?? (Array.isArray(raw) ? raw : []);
       return { challenges, totalCount: raw?.totalCount ?? challenges.length } as JudgeChallengeListResponse;
     },
+    staleTime: 30_000,
+  });
+}
+
+/** All challenges visible to the logged-in judge. */
+export function useJudgeChallenges(search = "", status = "", page = 0, size = 50) {
+  return useQuery({
+    queryKey: judgeKeys.challenges(search, status, page, size),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<ChallengeListResponse>>(
+        "/api/v1/judge/challenges",
+        { params: { ...(search ? { search } : {}), ...(status ? { status } : {}), page, size } }
+      );
+      const raw = (res.data.data ?? (res.data as any)) as any;
+      return {
+        summary:    raw?.summary    ?? { activeChallenges: 0, teamsToScore: 0, totalApplications: 0 },
+        totalCount: raw?.totalCount ?? raw?.totalElements ?? 0,
+        page:       raw?.page       ?? page,
+        size:       raw?.size       ?? size,
+        challenges: Array.isArray(raw) ? raw : (raw?.challenges ?? raw?.content ?? []),
+      } as ChallengeListResponse;
+    },
+    staleTime: 30_000,
+  });
+}
+
+/** Applications list for a challenge (judge view). */
+export function useJudgeChallengeApplications(
+  challengeId: string,
+  status = "",
+  track  = "",
+  page   = 0,
+  size   = 100
+) {
+  return useQuery({
+    queryKey: judgeKeys.applications(challengeId, status, track, page, size),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<ApplicationListResponse>>(
+        `/api/v1/judge/challenges/${challengeId}/applications`,
+        {
+          params: {
+            ...(status ? { status } : {}),
+            ...(track  ? { track }  : {}),
+            page,
+            size,
+          },
+        }
+      );
+      return res.data.data;
+    },
+    enabled:   !!challengeId,
+    staleTime: 30_000,
+  });
+}
+
+/** Leaderboard for a challenge (judge view). */
+export function useJudgeChallengeLeaderboard(challengeId: string) {
+  return useQuery({
+    queryKey: judgeKeys.leaderboard(challengeId),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<LeaderboardResponse>>(
+        `/api/v1/judge/challenges/${challengeId}/judging/leaderboard`
+      );
+      return res.data.data;
+    },
+    enabled:   !!challengeId,
     staleTime: 30_000,
   });
 }

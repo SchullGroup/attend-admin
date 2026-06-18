@@ -121,8 +121,8 @@ const SECTIONS: NavSection[] = [
     label: "Innovation Challenges",
     items: [
       { title: "Challenges",   icon: Lightbulb, href: "/hackathons" },
-      { title: "Applications", icon: FileApp,   href: "/hackathons/applications", clientOnly: true },
-      { title: "Judging",      icon: Star,      href: "/hackathons/judging",      clientOnly: true },
+      { title: "Applications", icon: FileApp,   href: "/hackathons/applications" },
+      { title: "Judging",      icon: Star,      href: "/hackathons/judging" },
     ],
   },
   {
@@ -264,6 +264,7 @@ export function Sidebar() {
             if (item.superAdminOnly && !isSuperAdmin) return false;
             if (item.clientOnly     &&  isSuperAdmin) return false;
             if (item.judgeHidden    &&  isJudge)      return false;
+            if (item.judgeOnly      && !isJudge)      return false;
             // Action gate: only apply for non-super-admin users
             if (item.action && !isSuperAdmin && !hasAccess(normalizedRole, item.action)) return false;
             return true;
