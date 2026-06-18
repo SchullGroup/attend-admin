@@ -16,6 +16,7 @@ import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
+import { clientEventKeys } from "@/api/client-events";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -117,6 +118,23 @@ export interface OfflineVoteRequest {
 
 export interface OpenResolutionRequest {
   durationSeconds?: number;
+}
+
+export interface CreateResolutionRequest {
+  title:              string;
+  description?:       string;
+  specialResolution?: boolean;
+  order?:             number;
+}
+
+export interface ResolutionItem {
+  id:                  string;
+  order?:              number;
+  title:               string;
+  description?:        string;
+  isSpecialResolution?: boolean;
+  specialResolution?:  boolean;
+  status?:             string;
 }
 
 // ---------------------------------------------------------------------------
@@ -274,5 +292,37 @@ export function useCloseResolutionVoting() {
       popup.success("Voting Closed", "This resolution's voting period has ended.", 2500);
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to close voting."),
+  });
+}
+
+/**
+ * Add a new resolution to an AGM/EGM event.
+ * POST /api/v1/client/votes/{eventId}/resolutions
+ * Invalidates the event detail cache so agmConfig.resolutions refreshes.
+ */
+export function useAddResolution() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      eventId,
+      data,
+    }: {
+      eventId: string;
+      data:    CreateResolutionRequest;
+    }) => {
+      const res = await apiClient.post<ApiResponse<ResolutionItem>>(
+        `/api/v1/client/votes/${eventId}/resolutions`,
+        data
+      );
+      return (res.data.data ?? (res.data as any)) as ResolutionItem;
+    },
+    onSuccess: (_, { eventId }) => {
+      // Refresh agmConfig.resolutions in the event detail
+      queryClient.invalidateQueries({ queryKey: clientEventKeys.detail(eventId) });
+      // Also refresh vote results if they're open
+      queryClient.invalidateQueries({ queryKey: clientVoteKeys.results(eventId) });
+      popup.success("Resolution Added", "The resolution has been saved.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to add resolution."),
   });
 }
