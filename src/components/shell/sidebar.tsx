@@ -112,7 +112,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { title: "Create Event",      icon: PlusCircle,   href: "/events/create", clientOnly: true, action: "create_event" },
       { title: "All Events",        icon: CalendarDays, href: "/events" },
-      { title: "Live Control Room", icon: Radio,        href: "/events/live",   action: "live_control_room" },
+      { title: "Live Control Room", icon: Radio,        href: "/events/live",   clientOnly: true, action: "live_control_room" },
       { title: "QR Check-In",       icon: QrCode,       href: "/events/qr-checkin" },
       { title: "Vote Records",      icon: Vote,         href: "/votes",         clientOnly: true },
     ],
