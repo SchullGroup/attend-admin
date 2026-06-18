@@ -37,7 +37,9 @@ export interface ChallengeItem {
 
 export interface ChallengeSummary {
   activeChallenges:  number;
-  teamsToScore:      number;
+  teamsToScore?:     number;
+  shortlisted?:      number;
+  selected?:         number;
   totalApplications: number;
 }
 

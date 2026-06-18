@@ -50,7 +50,7 @@ export default function HackathonsPage() {
   if (isLoading) return <Loader variant="page" text="Loading Challenges…" />;
 
   const summary    = data?.summary;
-  const allChallenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; shortlistedTeams?: number; status?: string }>;
+  const allChallenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; shortlistedTeams?: number; shortlistedCount?: number; status?: string }>;
   // Client-side filter ensures tabs match even if the backend ignores the status param
   const challenges = statusTab
     ? allChallenges.filter((c) => c.status?.toUpperCase() === statusTab.toUpperCase())
@@ -111,8 +111,8 @@ export default function HackathonsPage() {
               {[
                 { label: "Active Challenges",  value: summary?.activeChallenges  ?? 0, icon: Lightbulb },
                 { label: "Total Applications", value: summary?.totalApplications ?? 0, icon: FileText  },
-                { label: "Teams to Score",     value: summary?.teamsToScore      ?? 0, icon: Trophy    },
-                { label: "Shortlisted",        value: challenges.reduce((s, c) => s + (c.shortlistedTeams ?? 0), 0), icon: Users },
+                { label: "Teams to Score",     value: summary?.teamsToScore ?? summary?.shortlisted ?? 0, icon: Trophy },
+                { label: "Shortlisted",        value: challenges.reduce((s, c) => s + (c.shortlistedCount ?? c.shortlistedTeams ?? 0), 0), icon: Users },
               ].map((s) => (
                 <div key={s.label} className="rounded-xl bg-white/10 p-3 min-w-[110px]">
                   <div className="text-2xl font-bold tabular-nums">{s.value}</div>
@@ -197,7 +197,7 @@ export default function HackathonsPage() {
                       {(c.format ?? "—").toLowerCase()}
                     </span>
                   </td>
-                  <td className="px-5 py-4 text-sm font-semibold tabular-nums">{c.shortlistedTeams ?? 0}</td>
+                  <td className="px-5 py-4 text-sm font-semibold tabular-nums">{c.shortlistedCount ?? c.shortlistedTeams ?? 0}</td>
                   <td className="px-5 py-4">
                     <span
                       className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold"

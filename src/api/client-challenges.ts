@@ -27,19 +27,22 @@ export type ApplicationStatus =
   | "SUBMITTED" | "UNDER_REVIEW" | "SHORTLISTED" | "SELECTED" | "NOT_PROGRESSED";
 
 export interface ChallengeSummary {
-  activeChallenges:   number;
-  teamsToScore:       number;
-  totalApplications:  number;
+  activeChallenges:  number;
+  teamsToScore?:     number;   // legacy
+  shortlisted?:      number;   // API field
+  selected?:         number;   // API field
+  totalApplications: number;
 }
 
 export interface ChallengeListItem {
-  id:               string;
-  title:            string;
-  organiserName:    string;
-  date:             string;
-  format:           string;
-  shortlistedTeams: number;
-  status:           string;
+  id:                string;
+  title:             string;
+  organiserName:     string;
+  date:              string;
+  format:            string;
+  shortlistedTeams?: number;   // legacy
+  shortlistedCount?: number;   // API field
+  status:            string;
 }
 
 export interface ChallengeListResponse {
@@ -124,9 +127,12 @@ export interface ApplicationListResponse {
 }
 
 export interface TeamMember {
-  id:       string;
-  fullName: string;
-  email:    string;
+  id:        string;
+  name?:     string;     // API field
+  fullName?: string;     // legacy alias
+  email:     string;
+  role?:     string | null;
+  lead?:     boolean;
 }
 
 export interface CriterionScore {
@@ -143,34 +149,43 @@ export interface StatusHistoryEntry {
 }
 
 export interface ApplicationDetail {
-  id:                  string;
-  challengeId:         string;
-  challengeTitle:      string;
-  teamName:            string;
-  teamInitial:         string;
-  teamInitialColor:    string;
-  ideaTitle:           string;
-  track:               string;
-  status:              string;
-  score:               number | null;
-  scoreOutOf:          number;
-  hasScore:            boolean;
-  submittedAt:         string;
-  members:             TeamMember[];
-  criteriaScores:      CriterionScore[];
-  statusHistory:       StatusHistoryEntry[];
-  // Submission content fields (present on detail fetch)
-  ideaDescription?:    string;
-  solutionDescription?: string;
-  techStack?:          string;
-  problemStatement?:   string;
-  targetAudience?:     string;
-  // Links
-  presentationUrl?:    string;
-  githubUrl?:          string;
-  websiteUrl?:         string;
-  videoUrl?:           string;
-  pitchDeckUrl?:       string;
+  id:                    string;
+  challengeId:           string;
+  challengeTitle:        string;
+  teamName:              string;
+  teamInitial:           string;
+  teamInitialColor:      string;
+  ideaTitle:             string;
+  ideaDescription?:      string;
+  track:                 string;
+  status:                string;
+  score:                 number | null;
+  scoreOutOf:            number;
+  hasScore:              boolean;
+  submittedAt:           string;
+  members:               TeamMember[];
+  criteriaScores:        CriterionScore[];
+  statusHistory:         StatusHistoryEntry[];
+  // Submission content
+  projectDescription?:   string;
+  solutionDescription?:  string;
+  techStack?:            string;
+  problemStatement?:     string;
+  targetAudience?:       string;
+  // Media / document links
+  ideaVideoUrl?:         string;
+  ideaSupportingDocUrl?: string;
+  sourceCodeUrl?:        string;
+  liveDemoUrl?:          string;
+  pitchDeckUrl?:         string;
+  pitchVideoUrl?:        string;
+  demoVideoUrl?:         string;
+  additionalDocumentsUrl?: string;
+  // Legacy link fields (kept for backwards compat)
+  presentationUrl?:      string;
+  githubUrl?:            string;
+  websiteUrl?:           string;
+  videoUrl?:             string;
 }
 
 export interface LeaderboardEntry {
@@ -382,7 +397,9 @@ export function useUpdateClientApplicationStatus() {
       return res.data.data;
     },
     onSuccess: (_, { challengeId }) => {
-      queryClient.invalidateQueries({ queryKey: ["clientChallenges", challengeId] });
+      // Invalidate the entire clientChallenges cache so the list shortlisted
+      // count and the detail application list both refresh automatically.
+      queryClient.invalidateQueries({ queryKey: clientChallengeKeys.all });
       popup.success("Status Updated", "Application status changed.", 2000);
     },
     onError: (error: any) => parseAndToastApiError(error, "Status update failed."),

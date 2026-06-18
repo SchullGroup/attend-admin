@@ -1,11 +1,11 @@
 "use client";
-import { use, useState } from "react";
+import React, { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Trophy, Users, FileText, Lightbulb, Star, ChevronDown,
   Plus, Trash2, ToggleLeft, ToggleRight, ListOrdered, Target, Award,
   ClipboardList, UserCheck, BookOpen, ChevronRight, ExternalLink, Code,
-  Globe, Video, FolderOpen, Settings,
+  Globe, Video, FolderOpen, Settings, Link2,
 } from "lucide-react";
 import {
   useClientChallengeDetail,
@@ -34,6 +34,12 @@ import { popup } from "@/lib/popup-store";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function ensureAbsoluteUrl(url: string): string {
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `https://${url}`;
+}
 
 function statusChip(status: string) {
   const s = status?.toUpperCase();
@@ -502,13 +508,22 @@ function ApplicationDetailPanel({
   if (!app) return <p className="text-sm text-[hsl(var(--muted-foreground))]">Not found.</p>;
 
   const validNext = VALID_TRANSITIONS[app.status?.toUpperCase()] ?? [];
+
   const links = [
-    { label: "Pitch Deck",    url: app.pitchDeckUrl,     icon: FileText },
-    { label: "GitHub",        url: app.githubUrl,        icon: Code },
-    { label: "Website",       url: app.websiteUrl,       icon: ExternalLink },
-    { label: "Video",         url: app.videoUrl,         icon: ExternalLink },
-    { label: "Presentation",  url: app.presentationUrl,  icon: ExternalLink },
-  ].filter((l) => l.url);
+    { label: "Pitch Deck",      url: app.pitchDeckUrl,           icon: FileText,     desc: "PDF / PPTX"           },
+    { label: "Pitch Video",     url: app.pitchVideoUrl,          icon: Video,        desc: "YouTube or Loom"      },
+    { label: "Idea Video",      url: app.ideaVideoUrl,           icon: Video,        desc: "Idea walkthrough"     },
+    { label: "Demo Video",      url: app.demoVideoUrl,           icon: Video,        desc: "Product demo"         },
+    { label: "Source Code",     url: app.sourceCodeUrl,          icon: Code,         desc: "GitHub / GitLab"      },
+    { label: "Live Demo",       url: app.liveDemoUrl,            icon: Globe,        desc: "Deployed app"         },
+    { label: "Supporting Doc",  url: app.ideaSupportingDocUrl,   icon: FileText,     desc: "Idea support file"    },
+    { label: "Additional Docs", url: app.additionalDocumentsUrl, icon: Link2,        desc: "Extra documents"      },
+    // Legacy fallbacks
+    { label: "GitHub",          url: app.githubUrl,              icon: Code,         desc: "Repository"           },
+    { label: "Website",         url: app.websiteUrl,             icon: ExternalLink, desc: "Website"              },
+    { label: "Video",           url: app.videoUrl,               icon: Video,        desc: "Video"                },
+    { label: "Presentation",    url: app.presentationUrl,        icon: ExternalLink, desc: "Presentation file"    },
+  ].filter((l) => !!l.url) as { label: string; url: string; icon: React.ElementType; desc: string }[];
 
   return (
     <div className="flex flex-col gap-5">
@@ -520,7 +535,9 @@ function ApplicationDetailPanel({
       </button>
 
       <div className="grid grid-cols-3 gap-5">
+        {/* ── Left column ── */}
         <div className="col-span-2 flex flex-col gap-5">
+
           {/* Team header */}
           <Card className="attend-card p-5">
             <div className="flex items-center gap-4">
@@ -550,7 +567,7 @@ function ApplicationDetailPanel({
             </div>
           </Card>
 
-          {/* Submission content */}
+          {/* Idea */}
           {app.ideaDescription && (
             <Card className="attend-card p-5">
               <h2 className="font-semibold text-[hsl(var(--foreground))] mb-2 flex items-center gap-2">
@@ -560,6 +577,17 @@ function ApplicationDetailPanel({
             </Card>
           )}
 
+          {/* Project description */}
+          {app.projectDescription && (
+            <Card className="attend-card p-5">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-2 flex items-center gap-2">
+                <ClipboardList className="h-4 w-4" /> Project Description
+              </h2>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] leading-relaxed whitespace-pre-wrap">{app.projectDescription}</p>
+            </Card>
+          )}
+
+          {/* Problem statement */}
           {app.problemStatement && (
             <Card className="attend-card p-5">
               <h2 className="font-semibold text-[hsl(var(--foreground))] mb-2 flex items-center gap-2">
@@ -569,6 +597,7 @@ function ApplicationDetailPanel({
             </Card>
           )}
 
+          {/* Solution */}
           {app.solutionDescription && (
             <Card className="attend-card p-5">
               <h2 className="font-semibold text-[hsl(var(--foreground))] mb-2 flex items-center gap-2">
@@ -578,6 +607,7 @@ function ApplicationDetailPanel({
             </Card>
           )}
 
+          {/* Tech stack */}
           {app.techStack && (
             <Card className="attend-card p-5">
               <h2 className="font-semibold text-[hsl(var(--foreground))] mb-2 flex items-center gap-2">
@@ -587,29 +617,45 @@ function ApplicationDetailPanel({
             </Card>
           )}
 
-          {/* Links */}
+          {/* Submission links */}
           {links.length > 0 && (
-            <Card className="attend-card p-5">
-              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3 flex items-center gap-2">
-                <ExternalLink className="h-4 w-4" /> Submission Links
-              </h2>
-              <div className="flex flex-wrap gap-2">
-                {links.map((l) => (
-                  <a
-                    key={l.label}
-                    href={l.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-[hsl(var(--border))] hover:bg-[hsl(var(--accent))] transition-colors"
-                  >
-                    <l.icon className="h-3.5 w-3.5" /> {l.label}
-                  </a>
-                ))}
+            <Card className="attend-card overflow-hidden">
+              <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+                <ExternalLink className="h-4 w-4" style={{ color: "#7c22c9" }} />
+                <h2 className="font-semibold text-[hsl(var(--foreground))]">Submission Links</h2>
+              </div>
+              <div className="divide-y divide-[hsl(var(--border))]">
+                {[0, 2, 4, 6, 8, 10].map((startIdx) => {
+                  const pair = links.slice(startIdx, startIdx + 2);
+                  if (pair.length === 0) return null;
+                  return (
+                    <div key={startIdx} className={`grid gap-0 ${pair.length === 2 ? "grid-cols-2 divide-x divide-[hsl(var(--border))]" : "grid-cols-1"}`}>
+                      {pair.map((l) => (
+                        <a
+                          key={l.label}
+                          href={ensureAbsoluteUrl(l.url)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 px-5 py-4 hover:bg-[hsl(var(--accent))] transition-colors group"
+                        >
+                          <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: "#7c22c918" }}>
+                            <l.icon className="h-4 w-4" style={{ color: "#7c22c9" }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-[hsl(var(--foreground))] group-hover:text-[#7c22c9] transition-colors">{l.label}</p>
+                            <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{l.desc}</p>
+                          </div>
+                          <ExternalLink className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))] shrink-0" />
+                        </a>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
             </Card>
           )}
 
-          {/* Members */}
+          {/* Team members */}
           {app.members?.length > 0 && (
             <Card className="attend-card p-5">
               <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3 flex items-center gap-2">
@@ -619,12 +665,17 @@ function ApplicationDetailPanel({
                 {app.members.map((m) => (
                   <div key={m.id} className="py-2.5 flex items-center gap-3">
                     <div className="h-7 w-7 rounded-full bg-[hsl(var(--muted))] flex items-center justify-center text-xs font-bold shrink-0">
-                      {m.fullName?.slice(0, 2).toUpperCase() || "??"}
+                      {(m.name || m.fullName)?.slice(0, 2).toUpperCase() || "??"}
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{m.fullName}</p>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))]">{m.email}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{m.name || m.fullName}</p>
+                      {m.email && <p className="text-xs text-[hsl(var(--muted-foreground))]">{m.email}</p>}
                     </div>
+                    {(m.role || m.lead) && (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: "#faf5ff", color: "#7c22c9" }}>
+                        {m.lead ? "Lead" : m.role}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -634,7 +685,9 @@ function ApplicationDetailPanel({
           {/* Criteria scores */}
           {app.criteriaScores?.length > 0 && (
             <Card className="attend-card p-5">
-              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">Judging Criteria Scores</h2>
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4 flex items-center gap-2">
+                <Trophy className="h-4 w-4" /> Judging Criteria Scores
+              </h2>
               <div className="flex flex-col gap-3">
                 {app.criteriaScores.map((c) => {
                   const pct = c.weight > 0 ? Math.min(Math.round((c.score / c.weight) * 100), 100) : 0;
@@ -657,9 +710,10 @@ function ApplicationDetailPanel({
           )}
         </div>
 
-        {/* Right sidebar */}
+        {/* ── Right sidebar ── */}
         <div className="flex flex-col gap-5">
-          {/* Status update — only valid transitions */}
+
+          {/* Status update */}
           <Card className="attend-card p-5">
             <h2 className="font-semibold text-[hsl(var(--foreground))] mb-1">Update Status</h2>
             <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3">Current: {statusChip(app.status)}</p>
@@ -678,6 +732,33 @@ function ApplicationDetailPanel({
             ) : (
               <p className="text-xs text-[hsl(var(--muted-foreground))]">No further transitions available.</p>
             )}
+          </Card>
+
+          {/* Details */}
+          <Card className="attend-card p-5">
+            <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3">Details</h2>
+            <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
+              <div className="py-2 flex justify-between gap-2">
+                <span className="text-xs text-[hsl(var(--muted-foreground))]">Track</span>
+                <span className="text-xs font-medium text-[hsl(var(--foreground))] text-right">{app.track || "—"}</span>
+              </div>
+              <div className="py-2 flex justify-between gap-2">
+                <span className="text-xs text-[hsl(var(--muted-foreground))]">Members</span>
+                <span className="text-xs font-medium text-[hsl(var(--foreground))] text-right">{app.members?.length ?? 0}</span>
+              </div>
+              {app.targetAudience && (
+                <div className="py-2 flex justify-between gap-2">
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">Target Audience</span>
+                  <span className="text-xs font-medium text-[hsl(var(--foreground))] text-right">{app.targetAudience}</span>
+                </div>
+              )}
+              <div className="py-2 flex justify-between gap-2">
+                <span className="text-xs text-[hsl(var(--muted-foreground))]">Submitted</span>
+                <span className="text-xs font-medium text-[hsl(var(--foreground))] text-right">
+                  {app.submittedAt ? new Date(app.submittedAt).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                </span>
+              </div>
+            </div>
           </Card>
 
           {/* Status history */}
@@ -701,29 +782,6 @@ function ApplicationDetailPanel({
               </div>
             </Card>
           )}
-
-          {/* Meta */}
-          <Card className="attend-card p-5">
-            <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3">Details</h2>
-            <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
-              <div className="py-2 flex justify-between">
-                <span className="text-xs text-[hsl(var(--muted-foreground))]">Track</span>
-                <span className="text-xs font-medium text-[hsl(var(--foreground))]">{app.track || "—"}</span>
-              </div>
-              {app.targetAudience && (
-                <div className="py-2 flex justify-between">
-                  <span className="text-xs text-[hsl(var(--muted-foreground))]">Target Audience</span>
-                  <span className="text-xs font-medium text-[hsl(var(--foreground))]">{app.targetAudience}</span>
-                </div>
-              )}
-              <div className="py-2 flex justify-between">
-                <span className="text-xs text-[hsl(var(--muted-foreground))]">Submitted</span>
-                <span className="text-xs font-medium text-[hsl(var(--foreground))]">
-                  {app.submittedAt ? new Date(app.submittedAt).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" }) : "—"}
-                </span>
-              </div>
-            </div>
-          </Card>
         </div>
       </div>
     </div>
