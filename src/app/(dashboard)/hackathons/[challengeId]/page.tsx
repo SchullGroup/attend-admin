@@ -365,18 +365,18 @@ function ApplicationsTab({ challengeId }: { challengeId: string }) {
       {isLoading ? (
         <Loader variant="inline" text="Loading applications…" />
       ) : (
-        <Card className="attend-card overflow-hidden">
-          <table className="w-full">
+        <Card className="attend-card" style={{ overflow: "visible" }}>
+          <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
             <thead>
               <tr className="attend-table-header">
-                <th className="px-5 py-3 text-left">Team</th>
+                <th className="px-5 py-3 text-left rounded-tl-xl">Team</th>
                 <th className="px-5 py-3 text-left">Idea</th>
                 <th className="px-5 py-3 text-left">Track</th>
                 <th className="px-5 py-3 text-left">Members</th>
                 <th className="px-5 py-3 text-left">Status</th>
                 <th className="px-5 py-3 text-left">Score</th>
                 <th className="px-5 py-3 text-left">Submitted</th>
-                <th className="px-5 py-3 text-right">Actions</th>
+                <th className="px-5 py-3 text-right rounded-tr-xl">Actions</th>
               </tr>
             </thead>
             <tbody>
