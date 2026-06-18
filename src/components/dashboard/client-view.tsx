@@ -96,9 +96,9 @@ export function ClientView({
                     </span>
                   )}
                 </div>
-                <Link href="/events/live">
+                <Link href="/events">
                   <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-100">
-                    Control Room <ArrowRight className="h-3 w-3" />
+                    See all <ArrowRight className="h-3 w-3" />
                   </Button>
                 </Link>
               </div>

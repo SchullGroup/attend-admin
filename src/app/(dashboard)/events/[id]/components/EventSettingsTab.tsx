@@ -4,46 +4,75 @@ import { Radio, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
 import {
+  useUpdateEvent,
   usePublishEvent,
   useGoLiveEvent,
   useEndEvent,
   useCancelEvent,
-  useUpdateEventInfo,
   useToggleEventFeatured,
 } from "@/api/client-events";
 
-interface Props {
-  eventId:        string;
-  title:          string;
-  organiser:      string;
-  description?:   string;
-  currentStatus:  string;
-  featured?:      boolean;
-  onStatusChange: (status: string) => void;
+// ── Label helper ──────────────────────────────────────────────────────────────
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-1.5">
+      {children}
+    </label>
+  );
 }
+
+// ── Props ─────────────────────────────────────────────────────────────────────
+
+interface Props {
+  eventId:          string;
+  title:            string;
+  organiser:        string;
+  description?:     string;
+  format?:          string;
+  date?:            string;
+  startTime?:       string;
+  venue?:           string;
+  streamUrl?:       string;
+  maximumCapacity?: number | null;
+  currentStatus:    string;
+  featured?:        boolean;
+  onStatusChange:   (status: string) => void;
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export function EventSettingsTab({
   eventId,
-  title: initialTitle,
+  title:            initialTitle,
   organiser,
-  description: initialDescription = "",
+  description:      initialDescription = "",
+  format:           initialFormat       = "",
+  date:             initialDate         = "",
+  startTime:        initialStartTime    = "",
+  venue:            initialVenue        = "",
+  streamUrl:        initialStreamUrl    = "",
+  maximumCapacity:  initialCapacity     = null,
   currentStatus,
-  featured: initialFeatured = false,
+  featured:         initialFeatured     = false,
   onStatusChange,
 }: Props) {
-  const [titleVal, setTitleVal]   = useState(initialTitle ?? "");
-  // Coerce null → "" because the API can return null for description
-  const [descVal,  setDescVal]    = useState(initialDescription ?? "");
-  const [featured, setFeatured]   = useState(initialFeatured);
+  const [titleVal,    setTitleVal]    = useState(initialTitle ?? "");
+  const [descVal,     setDescVal]     = useState(initialDescription ?? "");
+  const [formatVal,   setFormatVal]   = useState(initialFormat ?? "");
+  const [dateVal,     setDateVal]     = useState(initialDate ?? "");
+  const [timeVal,     setTimeVal]     = useState(initialStartTime ?? "");
+  const [venueVal,    setVenueVal]    = useState(initialVenue ?? "");
+  const [streamVal,   setStreamVal]   = useState(initialStreamUrl ?? "");
+  const [capVal,      setCapVal]      = useState(initialCapacity != null ? String(initialCapacity) : "");
+  const [featured,    setFeatured]    = useState(initialFeatured);
 
-  // Lifecycle mutations — all call real API
-  const publishMutation       = usePublishEvent();
-  const goLiveMutation        = useGoLiveEvent();
-  const endMutation           = useEndEvent();
-  const cancelMutation        = useCancelEvent();
-  const updateInfoMutation    = useUpdateEventInfo();
+  const updateMutation         = useUpdateEvent();
+  const publishMutation        = usePublishEvent();
+  const goLiveMutation         = useGoLiveEvent();
+  const endMutation            = useEndEvent();
+  const cancelMutation         = useCancelEvent();
   const toggleFeaturedMutation = useToggleEventFeatured();
 
   const anyLifecyclePending =
@@ -56,31 +85,47 @@ export function EventSettingsTab({
     status: "published" | "live" | "ended" | "cancelled",
     mutation: { mutate: (id: string, opts?: any) => void; isPending: boolean }
   ) {
-    mutation.mutate(eventId, {
-      onSuccess: () => onStatusChange(status),
+    mutation.mutate(eventId, { onSuccess: () => onStatusChange(status) });
+  }
+
+  function handleSave() {
+    const cap = parseInt(capVal, 10);
+    updateMutation.mutate({
+      id: eventId,
+      data: {
+        title:           titleVal.trim()   || undefined,
+        description:     descVal.trim()    || undefined,
+        format:          (formatVal as any) || undefined,
+        date:            dateVal            || undefined,
+        startTime:       timeVal            || undefined,
+        venue:           venueVal.trim()    || undefined,
+        streamUrl:       streamVal.trim()   || undefined,
+        maximumCapacity: !isNaN(cap) && cap > 0 ? cap : undefined,
+      },
     });
   }
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Event information */}
+
+      {/* ── Event Details ── */}
       <Card className="attend-card p-5">
-        <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">Event Information</h2>
+        <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">Event Details</h2>
         <div className="flex flex-col gap-4">
+
+          {/* Title */}
           <div>
-            <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] mb-2">
-              Event Title
-            </label>
+            <FieldLabel>Event Title</FieldLabel>
             <Input
               value={titleVal}
               onChange={(e) => setTitleVal(e.target.value)}
               placeholder="Event title"
             />
           </div>
+
+          {/* Description */}
           <div>
-            <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] mb-2">
-              Description
-            </label>
+            <FieldLabel>Description</FieldLabel>
             <textarea
               value={descVal}
               onChange={(e) => setDescVal(e.target.value)}
@@ -89,29 +134,94 @@ export function EventSettingsTab({
               className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] resize-none"
             />
           </div>
+
+          {/* Format */}
           <div>
-            <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] mb-2">
-              Organiser
-            </label>
+            <FieldLabel>Format</FieldLabel>
+            <select
+              value={formatVal}
+              onChange={(e) => setFormatVal(e.target.value)}
+              className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+            >
+              <option value="">— Select format —</option>
+              <option value="VIRTUAL">Virtual</option>
+              <option value="IN_PERSON">In Person</option>
+              <option value="HYBRID">Hybrid</option>
+            </select>
+          </div>
+
+          {/* Date + Start time */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <FieldLabel>Date</FieldLabel>
+              <Input
+                type="date"
+                value={dateVal}
+                onChange={(e) => setDateVal(e.target.value)}
+              />
+            </div>
+            <div>
+              <FieldLabel>Start Time</FieldLabel>
+              <Input
+                type="time"
+                value={timeVal}
+                onChange={(e) => setTimeVal(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Venue — hidden for virtual-only events */}
+          {formatVal !== "VIRTUAL" && (
+            <div>
+              <FieldLabel>Venue / Location</FieldLabel>
+              <Input
+                value={venueVal}
+                onChange={(e) => setVenueVal(e.target.value)}
+                placeholder="e.g. Lagos Continental Hotel, Hall A"
+              />
+            </div>
+          )}
+
+          {/* Stream URL */}
+          <div>
+            <FieldLabel>Stream URL</FieldLabel>
+            <Input
+              value={streamVal}
+              onChange={(e) => setStreamVal(e.target.value)}
+              placeholder="YouTube or Zoom link (optional)"
+            />
+          </div>
+
+          {/* Capacity */}
+          <div>
+            <FieldLabel>Maximum Capacity</FieldLabel>
+            <Input
+              type="number"
+              min={1}
+              value={capVal}
+              onChange={(e) => setCapVal(e.target.value)}
+              placeholder="Leave blank for unlimited"
+            />
+          </div>
+
+          {/* Organiser — read-only */}
+          <div>
+            <FieldLabel>Organiser</FieldLabel>
             <Input value={organiser} readOnly className="opacity-70 cursor-not-allowed" />
           </div>
+
           <Button
             size="sm"
             className="self-start"
-            disabled={updateInfoMutation.isPending || !titleVal.trim()}
-            onClick={() =>
-              updateInfoMutation.mutate({
-                id:   eventId,
-                data: { title: titleVal.trim(), description: descVal.trim() || undefined },
-              })
-            }
+            disabled={updateMutation.isPending || !titleVal.trim()}
+            onClick={handleSave}
           >
-            {updateInfoMutation.isPending ? "Saving…" : "Save Changes"}
+            {updateMutation.isPending ? "Saving…" : "Save Changes"}
           </Button>
         </div>
       </Card>
 
-      {/* Featured toggle */}
+      {/* ── Featured ── */}
       <Card className="attend-card p-5">
         <div className="flex items-center justify-between">
           <div>
@@ -140,7 +250,7 @@ export function EventSettingsTab({
         </div>
       </Card>
 
-      {/* Status controls */}
+      {/* ── Status Controls ── */}
       <Card className="attend-card p-5">
         <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">Status Controls</h2>
         <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
@@ -151,7 +261,7 @@ export function EventSettingsTab({
               action:   "Publish",
               status:   "published" as const,
               mutation: publishMutation,
-              disabled: ["published", "live", "ended", "cancelled"].includes(currentStatus),
+              disabled: ["PUBLISHED", "published", "LIVE", "live", "ENDED", "ended", "CANCELLED", "cancelled"].includes(currentStatus),
             },
             {
               label:    "Go Live",
@@ -159,7 +269,7 @@ export function EventSettingsTab({
               action:   "Go Live",
               status:   "live" as const,
               mutation: goLiveMutation,
-              disabled: ["draft", "live", "ended", "cancelled"].includes(currentStatus),
+              disabled: ["DRAFT", "draft", "LIVE", "live", "ENDED", "ended", "CANCELLED", "cancelled"].includes(currentStatus),
             },
             {
               label:    "End Event",
@@ -167,7 +277,7 @@ export function EventSettingsTab({
               action:   "End Event",
               status:   "ended" as const,
               mutation: endMutation,
-              disabled: ["draft", "published", "ended", "cancelled"].includes(currentStatus),
+              disabled: !["LIVE", "live"].includes(currentStatus),
             },
           ].map(({ label, desc, action, status, mutation, disabled }) => (
             <div key={label} className="flex items-center justify-between py-3">
@@ -189,7 +299,7 @@ export function EventSettingsTab({
         </div>
       </Card>
 
-      {/* Danger zone */}
+      {/* ── Danger Zone ── */}
       <Card className="attend-card p-5" style={{ borderColor: "#fecaca" }}>
         <h2 className="font-semibold text-red-600 mb-4">Danger Zone</h2>
         <div className="flex items-center justify-between">
@@ -203,7 +313,7 @@ export function EventSettingsTab({
             size="sm"
             variant="destructive"
             disabled={
-              ["cancelled", "ended"].includes(currentStatus) ||
+              ["CANCELLED", "cancelled", "ENDED", "ended"].includes(currentStatus) ||
               anyLifecyclePending
             }
             onClick={() => handleLifecycle("cancelled", cancelMutation)}

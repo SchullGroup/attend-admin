@@ -1,6 +1,5 @@
 "use client";
 import { use, useState, useEffect } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEventDetail, useEventDocuments, useEventAttendees } from "@/api/super-admin";
 import { useClientEventDetail, useClientEventDocuments, useClientEventAttendees, useExpectedAttendees } from "@/api/client-events";
@@ -11,7 +10,7 @@ import { StatusBadge } from "@/components/custom/status-badge";
 import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/ui/Loader";
 import { toast } from "sonner";
-import { ArrowLeft, Radio } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import type { EventModule } from "@/types/mock";
 
 // ── Tab components ────────────────────────────────────────────────────────────
@@ -210,13 +209,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             <h1 className="text-2xl font-bold text-[hsl(var(--foreground))] leading-tight">{event.title}</h1>
             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{event.organiser}</p>
           </div>
-          {currentStatus === "live" && (
-            <Link href="/events/live">
-              <Button className="gap-2 bg-red-600 hover:bg-red-700 text-white">
-                <Radio className="h-4 w-4" /> Control Room
-              </Button>
-            </Link>
-          )}
         </div>
       </div>
 
@@ -252,7 +244,21 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab   rsvpCount={rsvpCount} broadcastMsg={broadcastMsg} setBroadcastMsg={setBroadcastMsg} broadcastChannel={broadcastChannel} setBroadcastChannel={setBroadcastChannel} broadcastHistory={broadcastHistory} setBroadcastHistory={setBroadcastHistory} />}
       {tab === "Vote Results"       && isAGM && <EventVoteResultsTab liveVotes={liveVotes} />}
       {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} liveVotes={liveVotes} participants={participants} />}
-      {tab === "Settings" && !isSuperAdmin && <EventSettingsTab    eventId={id} title={event.title} organiser={event.organiser} description={apiEvent.description} currentStatus={currentStatus} featured={(apiEvent as any).featured ?? false} onStatusChange={handleStatusChange} />}
+      {tab === "Settings" && !isSuperAdmin && <EventSettingsTab
+        eventId={id}
+        title={event.title}
+        organiser={event.organiser}
+        description={apiEvent.description}
+        format={(apiEvent as any).format ?? ""}
+        date={(apiEvent as any).date ?? ""}
+        startTime={(apiEvent as any).startTime ?? ""}
+        venue={(apiEvent as any).venue ?? (apiEvent as any).location ?? ""}
+        streamUrl={(apiEvent as any).streamUrl ?? ""}
+        maximumCapacity={(apiEvent as any).maximumCapacity ?? (apiEvent as any).capacity ?? null}
+        currentStatus={currentStatus}
+        featured={(apiEvent as any).featured ?? false}
+        onStatusChange={handleStatusChange}
+      />}
     </div>
   );
 }
