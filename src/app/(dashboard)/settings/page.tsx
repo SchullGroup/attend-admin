@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useGetMe } from "@/api/auth/hooks";
 import { useChangePassword } from "@/api/auth/auth";
+import { useClientStakeholder } from "@/api/client-organisation";
 import { ClientOrgSettings } from "@/components/dashboard/client-org-settings";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,11 +32,14 @@ function normaliseRole(raw: string | undefined | null): string {
 // ─── Judge Profile view ────────────────────────────────────────────────────
 
 function JudgeSettingsView({ user }: { user: Record<string, any> }) {
+  const { data: stakeholder } = useClientStakeholder();
+  const orgLogoUrl = user?.avatarUrl || user?.logoUrl || stakeholder?.logoUrl || null;
+
   const fields = [
     { label: "Full Name",     value: user?.fullName ?? user?.name ?? "—" },
     { label: "Email",         value: user?.email ?? "—" },
     { label: "Role",          value: "Judge" },
-    { label: "Organisation",  value: user?.organisation ?? user?.organizationName ?? user?.companyName ?? "—" },
+    { label: "Organisation",  value: user?.organisation ?? user?.organizationName ?? user?.companyName ?? stakeholder?.name ?? "—" },
   ];
 
   return (
@@ -53,17 +57,28 @@ function JudgeSettingsView({ user }: { user: Record<string, any> }) {
         </div>
 
         <div className="flex items-center gap-4 mb-6">
-          {/* Avatar */}
-          <div className="h-14 w-14 rounded-full bg-[hsl(var(--primary)/0.12)] flex items-center justify-center shrink-0">
-            <span className="text-lg font-bold text-[hsl(var(--primary))]">
-              {(user?.fullName ?? user?.name ?? "J").charAt(0).toUpperCase()}
-            </span>
-          </div>
+          {/* Avatar / org logo */}
+          {orgLogoUrl ? (
+            <img
+              src={orgLogoUrl}
+              alt="Organisation logo"
+              className="h-14 w-14 rounded-full object-cover shrink-0 ring-2 ring-[hsl(var(--border))]"
+            />
+          ) : (
+            <div className="h-14 w-14 rounded-full bg-[hsl(var(--primary)/0.12)] flex items-center justify-center shrink-0">
+              <span className="text-lg font-bold text-[hsl(var(--primary))]">
+                {(user?.fullName ?? user?.name ?? "J").charAt(0).toUpperCase()}
+              </span>
+            </div>
+          )}
           <div>
             <p className="text-base font-semibold text-[hsl(var(--foreground))]">
               {user?.fullName ?? user?.name ?? "—"}
             </p>
             <p className="text-sm text-[hsl(var(--muted-foreground))]">{user?.email ?? "—"}</p>
+            {stakeholder?.name && (
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{stakeholder.name}</p>
+            )}
           </div>
         </div>
 

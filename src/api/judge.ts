@@ -4,6 +4,7 @@
  *
  * GET  /api/v1/judge/judging                                          — list of challenges assigned to this judge
  * GET  /api/v1/judge/challenges/{challengeId}/scoring                 — shortlisted teams + criteria
+ * GET  /api/v1/judge/challenges/{challengeId}/applications/{appId}    — full application detail for judge
  * POST /api/v1/judge/challenges/{challengeId}/applications/{appId}/score — submit score
  */
 
@@ -66,13 +67,67 @@ export interface SubmitScoreRequest {
   comment?: string;
 }
 
+export interface JudgeMember {
+  id:       string;
+  fullName: string;
+  email:    string;
+  role?:    string;
+}
+
+export interface JudgeCriterionScore {
+  criterion: string;
+  weight:    number;
+  score:     number;
+}
+
+export interface JudgeStatusHistory {
+  status:    string;
+  timestamp: string;
+  by:        string;
+  note:      string;
+}
+
+export interface JudgeApplicationDetail {
+  id:                     string;
+  challengeId:            string;
+  challengeTitle:         string;
+  teamName:               string;
+  teamInitial:            string;
+  teamInitialColor:       string;
+  ideaTitle:              string;
+  ideaDescription?:       string;
+  track:                  string;
+  status:                 string;
+  score:                  number | null;
+  scoreOutOf:             number;
+  hasScore:               boolean;
+  submittedAt:            string;
+  // Submission content
+  projectDescription?:    string;
+  // Media / links
+  ideaVideoUrl?:          string;
+  ideaSupportingDocUrl?:  string;
+  sourceCodeUrl?:         string;
+  liveDemoUrl?:           string;
+  pitchDeckUrl?:          string;
+  pitchVideoUrl?:         string;
+  demoVideoUrl?:          string;
+  additionalDocumentsUrl?: string;
+  // Relations
+  members:         JudgeMember[];
+  criteriaScores:  JudgeCriterionScore[];
+  statusHistory:   JudgeStatusHistory[];
+}
+
 // ---------------------------------------------------------------------------
 // Query keys
 // ---------------------------------------------------------------------------
 export const judgeKeys = {
-  all:     ["judge"] as const,
-  judging: ["judge", "judging"] as const,
-  scoring: (challengeId: string) => ["judge", challengeId, "scoring"] as const,
+  all:         ["judge"] as const,
+  judging:     ["judge", "judging"] as const,
+  scoring:     (challengeId: string) => ["judge", challengeId, "scoring"] as const,
+  application: (challengeId: string, applicationId: string) =>
+                 ["judge", challengeId, "application", applicationId] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -93,6 +148,21 @@ export function useJudgeEvents() {
       return { challenges, totalCount: raw?.totalCount ?? challenges.length } as JudgeChallengeListResponse;
     },
     staleTime: 30_000,
+  });
+}
+
+/** Full application detail for a judge — idea, links, team, scores. */
+export function useJudgeApplication(challengeId: string, applicationId: string) {
+  return useQuery({
+    queryKey: judgeKeys.application(challengeId, applicationId),
+    queryFn:  async () => {
+      const res = await apiClient.get<ApiResponse<JudgeApplicationDetail>>(
+        `/api/v1/judge/challenges/${challengeId}/applications/${applicationId}`
+      );
+      return res.data.data;
+    },
+    enabled:   !!challengeId && !!applicationId,
+    staleTime: 60_000,
   });
 }
 

@@ -1,9 +1,10 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Trophy, ArrowLeft, ChevronRight, Search, Lightbulb,
   Star, UserCheck, Plus, Trash2, CheckCircle2, MessageSquare,
+  ExternalLink, FileText, Video, Code, Globe, Link2, Users, ClipboardList, Eye,
 } from "lucide-react";
 import {
   useClientChallenges,
@@ -18,6 +19,7 @@ import { useOrganisationTeam, type TeamMember } from "@/api/client-organisation"
 import {
   useJudgeEvents,
   useJudgeScoringPanel,
+  useJudgeApplication,
   useSubmitJudgeScore,
 } from "@/api/judge";
 import { useGetMe } from "@/api/auth/hooks";
@@ -410,6 +412,261 @@ function ChallengeJudging({ challengeId }: { challengeId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function ensureAbsoluteUrl(url: string): string {
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `https://${url}`;
+}
+
+// ---------------------------------------------------------------------------
+// Judge application detail panel
+// ---------------------------------------------------------------------------
+
+function JudgeAppDetailPanel({
+  challengeId,
+  applicationId,
+  onBack,
+}: {
+  challengeId:   string;
+  applicationId: string;
+  onBack:        () => void;
+}) {
+  const { data: app, isLoading } = useJudgeApplication(challengeId, applicationId);
+
+  if (isLoading) return <Loader variant="inline" text="Loading application…" />;
+  if (!app) return <p className="text-sm text-[hsl(var(--muted-foreground))]">Not found.</p>;
+
+  const links = [
+    { label: "Pitch Deck",      url: app.pitchDeckUrl,           icon: FileText,     desc: "PDF / PPTX"        },
+    { label: "Pitch Video",     url: app.pitchVideoUrl,          icon: Video,        desc: "YouTube or Loom"   },
+    { label: "Idea Video",      url: app.ideaVideoUrl,           icon: Video,        desc: "Idea walkthrough"  },
+    { label: "Demo Video",      url: app.demoVideoUrl,           icon: Video,        desc: "Product demo"      },
+    { label: "Source Code",     url: app.sourceCodeUrl,          icon: Code,         desc: "GitHub / GitLab"   },
+    { label: "Live Demo",       url: app.liveDemoUrl,            icon: Globe,        desc: "Deployed app"      },
+    { label: "Supporting Doc",  url: app.ideaSupportingDocUrl,   icon: FileText,     desc: "Idea support file" },
+    { label: "Additional Docs", url: app.additionalDocumentsUrl, icon: Link2,        desc: "Extra documents"   },
+  ].filter((l) => !!l.url) as { label: string; url: string; icon: React.ElementType; desc: string }[];
+
+  return (
+    <div className="flex flex-col gap-5">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors self-start"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" /> Back to Scoring
+      </button>
+
+      <div className="grid grid-cols-3 gap-5">
+        {/* ── Left ── */}
+        <div className="col-span-2 flex flex-col gap-5">
+
+          {/* Header */}
+          <Card className="attend-card p-5">
+            <div className="flex items-center gap-4">
+              <div
+                className="h-12 w-12 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0"
+                style={{ backgroundColor: app.teamInitialColor || "#7c22c9" }}
+              >
+                {app.teamInitial || app.teamName?.slice(0, 2).toUpperCase()}
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-bold text-[hsl(var(--foreground))]">{app.teamName}</h2>
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">{app.ideaTitle}</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{app.challengeTitle}</p>
+                {app.track && (
+                  <span className="text-xs px-2 py-0.5 rounded-full mt-1 inline-block font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
+                    {app.track}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                {statusChip(app.status)}
+                {app.hasScore && app.score != null && (
+                  <span className="text-lg font-black text-[hsl(var(--foreground))] tabular-nums">
+                    {app.score}<span className="text-sm font-normal text-[hsl(var(--muted-foreground))]">/{app.scoreOutOf || 100}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          {/* Idea description */}
+          {app.ideaDescription && (
+            <Card className="attend-card p-5">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-2 flex items-center gap-2">
+                <Lightbulb className="h-4 w-4" /> Idea
+              </h2>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] leading-relaxed whitespace-pre-wrap">{app.ideaDescription}</p>
+            </Card>
+          )}
+
+          {/* Project description */}
+          {app.projectDescription && (
+            <Card className="attend-card p-5">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-2 flex items-center gap-2">
+                <ClipboardList className="h-4 w-4" /> Project Description
+              </h2>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] leading-relaxed whitespace-pre-wrap">{app.projectDescription}</p>
+            </Card>
+          )}
+
+          {/* Submission links */}
+          {links.length > 0 && (
+            <Card className="attend-card overflow-hidden">
+              <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+                <ExternalLink className="h-4 w-4" style={{ color: "#7c22c9" }} />
+                <h2 className="font-semibold text-[hsl(var(--foreground))]">Submission Links</h2>
+              </div>
+              <div className="divide-y divide-[hsl(var(--border))]">
+                {[0, 2, 4, 6].map((startIdx) => {
+                  const pair = links.slice(startIdx, startIdx + 2);
+                  if (pair.length === 0) return null;
+                  return (
+                    <div key={startIdx} className={`grid gap-0 ${pair.length === 2 ? "grid-cols-2 divide-x divide-[hsl(var(--border))]" : "grid-cols-1"}`}>
+                      {pair.map((l) => (
+                        <a
+                          key={l.label}
+                          href={ensureAbsoluteUrl(l.url)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 px-5 py-4 hover:bg-[hsl(var(--accent))] transition-colors group"
+                        >
+                          <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: "#7c22c918" }}>
+                            <l.icon className="h-4 w-4" style={{ color: "#7c22c9" }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-[hsl(var(--foreground))] group-hover:text-[#7c22c9] transition-colors">{l.label}</p>
+                            <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{l.desc}</p>
+                          </div>
+                          <ExternalLink className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))] shrink-0" />
+                        </a>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
+          {/* Team members */}
+          {app.members?.length > 0 && (
+            <Card className="attend-card p-5">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3 flex items-center gap-2">
+                <Users className="h-4 w-4" /> Team Members ({app.members.length})
+              </h2>
+              <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
+                {app.members.map((m) => (
+                  <div key={m.id} className="py-2.5 flex items-center gap-3">
+                    <div className="h-7 w-7 rounded-full bg-[hsl(var(--muted))] flex items-center justify-center text-xs font-bold shrink-0">
+                      {m.fullName?.slice(0, 2).toUpperCase() || "??"}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{m.fullName}</p>
+                      {m.email && <p className="text-xs text-[hsl(var(--muted-foreground))]">{m.email}</p>}
+                    </div>
+                    {m.role && (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: "#faf5ff", color: "#7c22c9" }}>
+                        {m.role}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* Criteria scores */}
+          {app.criteriaScores?.length > 0 && (
+            <Card className="attend-card p-5">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4 flex items-center gap-2">
+                <Trophy className="h-4 w-4" /> Scoring Criteria
+              </h2>
+              <div className="flex flex-col gap-3">
+                {app.criteriaScores.map((c) => {
+                  const pct = c.weight > 0 ? Math.min(Math.round((c.score / c.weight) * 100), 100) : 0;
+                  return (
+                    <div key={c.criterion}>
+                      <div className="flex justify-between mb-1">
+                        <span className="text-xs font-medium text-[hsl(var(--foreground))]">{c.criterion}</span>
+                        <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">{c.score}/{c.weight}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: "#7c22c9" }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+        </div>
+
+        {/* ── Right ── */}
+        <div className="flex flex-col gap-5">
+          <Card className="attend-card p-5">
+            <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3">Details</h2>
+            <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
+              <div className="py-2 flex justify-between gap-2">
+                <span className="text-xs text-[hsl(var(--muted-foreground))]">Status</span>
+                <span className="text-xs font-medium">{statusChip(app.status)}</span>
+              </div>
+              <div className="py-2 flex justify-between gap-2">
+                <span className="text-xs text-[hsl(var(--muted-foreground))]">Track</span>
+                <span className="text-xs font-medium text-[hsl(var(--foreground))] text-right">{app.track || "—"}</span>
+              </div>
+              <div className="py-2 flex justify-between gap-2">
+                <span className="text-xs text-[hsl(var(--muted-foreground))]">Submitted</span>
+                <span className="text-xs font-medium text-[hsl(var(--foreground))] text-right">
+                  {app.submittedAt
+                    ? new Date(app.submittedAt).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })
+                    : "—"}
+                </span>
+              </div>
+              <div className="py-2 flex justify-between gap-2">
+                <span className="text-xs text-[hsl(var(--muted-foreground))]">Members</span>
+                <span className="text-xs font-medium text-[hsl(var(--foreground))] text-right">{app.members?.length ?? 0}</span>
+              </div>
+              {app.hasScore && app.score != null && (
+                <div className="py-2 flex justify-between gap-2">
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">Score</span>
+                  <span className="text-xs font-bold text-[hsl(var(--foreground))] text-right tabular-nums">
+                    {app.score}/{app.scoreOutOf || 100}
+                  </span>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {app.statusHistory?.length > 0 && (
+            <Card className="attend-card p-5">
+              <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3">History</h2>
+              <div className="flex flex-col gap-3">
+                {app.statusHistory.map((h, i) => (
+                  <div key={i} className="flex gap-3">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#7c22c9] mt-1.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-[hsl(var(--foreground))]">{h.status}</p>
+                      {h.by   && <p className="text-xs text-[hsl(var(--muted-foreground))]">by {h.by}</p>}
+                      {h.note && <p className="text-xs text-[hsl(var(--muted-foreground))] italic">{h.note}</p>}
+                      <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5">
+                        {new Date(h.timestamp).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Judge scoring panel (JUDGE role)
 // ---------------------------------------------------------------------------
 
@@ -421,9 +678,21 @@ function JudgeScoringPanel({ challengeId, challengeTitle, onBack }: {
   const { data, isLoading } = useJudgeScoringPanel(challengeId);
   const submitScore = useSubmitJudgeScore();
 
-  const [scores,   setScores]   = useState<Record<string, string>>({});
-  const [comments, setComments] = useState<Record<string, string>>({});
-  const [saved,    setSaved]    = useState<Record<string, boolean>>({});
+  const [scores,        setScores]        = useState<Record<string, string>>({});
+  const [comments,      setComments]      = useState<Record<string, string>>({});
+  const [saved,         setSaved]         = useState<Record<string, boolean>>({});
+  const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+
+  // Drill into full application detail
+  if (selectedAppId) {
+    return (
+      <JudgeAppDetailPanel
+        challengeId={challengeId}
+        applicationId={selectedAppId}
+        onBack={() => setSelectedAppId(null)}
+      />
+    );
+  }
 
   if (isLoading) return <Loader variant="page" text="Loading scoring panel…" />;
 
@@ -503,12 +772,20 @@ function JudgeScoringPanel({ challengeId, challengeTitle, onBack }: {
                     )}
                   </div>
                 </div>
-                {alreadyScored && (
-                  <div className="flex items-center gap-1.5 text-green-700 text-xs font-semibold shrink-0">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    {saved[app.applicationId] ? "Saved" : `Scored: ${app.score}`}
-                  </div>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {alreadyScored && (
+                    <div className="flex items-center gap-1.5 text-green-700 text-xs font-semibold">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      {saved[app.applicationId] ? "Saved" : `Scored: ${app.score}`}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setSelectedAppId(app.applicationId)}
+                    className="flex items-center gap-1 text-xs text-[#7c22c9] hover:underline font-medium"
+                  >
+                    <Eye className="h-3.5 w-3.5" /> View
+                  </button>
+                </div>
               </div>
 
               {!saved[app.applicationId] ? (
@@ -740,7 +1017,7 @@ export default function JudgingPage() {
                     </div>
                   </td>
                   <td className="px-5 py-4 text-sm text-[hsl(var(--foreground))]">{formatDate(c.date)}</td>
-                  <td className="px-5 py-4 text-sm font-semibold tabular-nums">{c.shortlistedTeams ?? 0}</td>
+                  <td className="px-5 py-4 text-sm font-semibold tabular-nums">{c.shortlistedCount ?? c.shortlistedTeams ?? 0}</td>
                   <td className="px-5 py-4">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.color }}>
                       {c.status}
