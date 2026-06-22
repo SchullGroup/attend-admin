@@ -138,13 +138,15 @@ function ApplicationDetail({
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col items-end gap-1">
                 {statusChip(app.status)}
                 {app.hasScore && app.score != null && (
-                  <span className="text-lg font-black text-[hsl(var(--foreground))] tabular-nums">
-                    {app.score}
-                    <span className="text-sm font-normal text-[hsl(var(--muted-foreground))]">/{app.scoreOutOf || 100}</span>
-                  </span>
+                  <div className="flex flex-col items-end">
+                    <span className="text-lg font-black text-[hsl(var(--foreground))] tabular-nums">
+                      {app.score}<span className="text-sm font-normal text-[hsl(var(--muted-foreground))]">/{app.scoreOutOf || 100}</span>
+                    </span>
+                    <span className="text-[10px] text-[hsl(var(--muted-foreground))]">avg. score</span>
+                  </div>
                 )}
               </div>
             </div>
@@ -342,6 +344,12 @@ function ApplicationDetail({
                 <span className="text-xs text-[hsl(var(--muted-foreground))]">Members</span>
                 <span className="text-xs font-medium text-[hsl(var(--foreground))] text-right">{app.members?.length ?? 0}</span>
               </div>
+              <div className="py-2 flex justify-between gap-2">
+                <span className="text-xs text-[hsl(var(--muted-foreground))]">Avg. Score</span>
+                <span className="text-xs font-bold text-[hsl(var(--foreground))] text-right tabular-nums">
+                  {app.hasScore && app.score != null ? `${app.score} / ${app.scoreOutOf || 100}` : "—"}
+                </span>
+              </div>
             </div>
           </Card>
 
@@ -455,7 +463,7 @@ function ChallengeApplications({
                 <th className="px-5 py-3 text-left">Track</th>
                 <th className="px-5 py-3 text-left">Members</th>
                 <th className="px-5 py-3 text-left">Status</th>
-                <th className="px-5 py-3 text-left">Score</th>
+                <th className="px-5 py-3 text-left">Avg. Score</th>
                 <th className="px-5 py-3 text-left">Submitted</th>
                 <th className="px-5 py-3 text-right">Actions</th>
               </tr>
@@ -596,12 +604,15 @@ function JudgeAppDetail({ challengeId, applicationId, onBack }: { challengeId: s
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col items-end gap-1">
                 {statusChip(app.status)}
                 {app.hasScore && app.score != null && (
-                  <span className="text-lg font-black text-[hsl(var(--foreground))] tabular-nums">
-                    {app.score}<span className="text-sm font-normal text-[hsl(var(--muted-foreground))]">/{app.scoreOutOf || 100}</span>
-                  </span>
+                  <div className="flex flex-col items-end">
+                    <span className="text-lg font-black text-[hsl(var(--foreground))] tabular-nums">
+                      {app.score}<span className="text-sm font-normal text-[hsl(var(--muted-foreground))]">/{app.scoreOutOf || 100}</span>
+                    </span>
+                    <span className="text-[10px] text-[hsl(var(--muted-foreground))]">avg. score</span>
+                  </div>
                 )}
               </div>
             </div>
@@ -691,9 +702,16 @@ function JudgeAppDetail({ challengeId, applicationId, onBack }: { challengeId: s
           <Card className="attend-card p-5">
             <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-3">Details</p>
             <div className="flex flex-col gap-2 text-sm">
-              <div className="flex justify-between"><span className="text-[hsl(var(--muted-foreground))]">Track</span><span className="font-medium">{app.track}</span></div>
+              <div className="flex justify-between"><span className="text-[hsl(var(--muted-foreground))]">Track</span><span className="font-medium">{app.track || "—"}</span></div>
               <div className="flex justify-between"><span className="text-[hsl(var(--muted-foreground))]">Submitted</span><span className="font-medium">{formatDate(app.submittedAt)}</span></div>
               <div className="flex justify-between gap-2"><span className="text-[hsl(var(--muted-foreground))] shrink-0">Challenge</span><span className="font-medium text-right truncate">{app.challengeTitle}</span></div>
+              <div className="flex justify-between"><span className="text-[hsl(var(--muted-foreground))]">Status</span><span>{statusChip(app.status)}</span></div>
+              {app.hasScore && app.score != null && (
+                <div className="flex justify-between items-center pt-1 border-t border-[hsl(var(--border))]">
+                  <span className="text-[hsl(var(--muted-foreground))]">Avg. Score</span>
+                  <span className="font-bold tabular-nums text-[hsl(var(--foreground))]">{app.score}<span className="font-normal text-[hsl(var(--muted-foreground))]">/{app.scoreOutOf || 100}</span></span>
+                </div>
+              )}
             </div>
           </Card>
 
@@ -845,7 +863,7 @@ function JudgeApplicationsView() {
                         <th className="px-4 py-3 text-left">Team</th>
                         <th className="px-4 py-3 text-left">Track</th>
                         <th className="px-4 py-3 text-left">Status</th>
-                        <th className="px-4 py-3 text-right">Score</th>
+                        <th className="px-4 py-3 text-right">Avg. Score</th>
                         <th className="px-4 py-3"></th>
                       </tr>
                     </thead>

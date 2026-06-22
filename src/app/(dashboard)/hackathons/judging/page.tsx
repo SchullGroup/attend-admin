@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Trophy, ArrowLeft, ChevronRight, Search, Lightbulb,
@@ -11,21 +11,22 @@ import {
   useClientChallengeLeaderboard,
   useClientChallengeDetail,
   useClientChallengeJudges,
-  useAddJudge,
+  useGetJudgePool,
+  useAddJudgeToPool,
+  useAssignJudge,
   useRemoveJudge,
-  type ApplicationTab,
+  useRemoveJudgeFromPool,
   type ApplicationItem,
   type JudgeItem,
 } from "@/api/client-challenges";
-import { useOrganisationTeam, type TeamMember } from "@/api/client-organisation";
 import {
-  useJudgeEvents,
   useJudgeChallenges,
   useJudgeChallengeApplications,
   useJudgeChallengeLeaderboard,
   useJudgeScoringPanel,
   useJudgeApplication,
   useSubmitJudgeScore,
+  type SubmitScoreResponse,
 } from "@/api/judge";
 import { useGetMe } from "@/api/auth/hooks";
 import { Button } from "@/components/ui/button";
@@ -114,7 +115,7 @@ function LeaderboardPanel({ challengeId }: { challengeId: string }) {
               <th className="px-5 py-3 text-left">Idea</th>
               <th className="px-5 py-3 text-left">Track</th>
               <th className="px-5 py-3 text-left">Status</th>
-              <th className="px-5 py-3 text-right">Score</th>
+              <th className="px-5 py-3 text-right">Avg. Score</th>
             </tr>
           </thead>
           <tbody>
@@ -131,7 +132,10 @@ function LeaderboardPanel({ challengeId }: { challengeId: string }) {
                   </span>
                 </td>
                 <td className="px-5 py-3">{statusChip(r.status)}</td>
-                <td className="px-5 py-3 text-right text-sm font-bold tabular-nums">{r.score.toFixed(1)}</td>
+                <td className="px-5 py-3 text-right">
+                  <span className="text-sm font-bold tabular-nums">{r.score.toFixed(1)}</span>
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]"> /100</span>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -149,52 +153,62 @@ function LeaderboardPanel({ challengeId }: { challengeId: string }) {
 // ---------------------------------------------------------------------------
 // Judges panel
 // ---------------------------------------------------------------------------
+type JudgePanelFormTab = "pool" | "new";
+
 function JudgesPanel({ challengeId }: { challengeId: string }) {
-  const { data: challenge, isLoading: challengeLoading } = useClientChallengeDetail(challengeId);
-  const { data: judges = [], isLoading: judgesLoading }  = useClientChallengeJudges(challengeId);
-  const addJudge    = useAddJudge();
-  const removeJudge = useRemoveJudge();
+  const { data: challenge } = useClientChallengeDetail(challengeId);
+  const { data: judges = [], isLoading: judgesLoading } = useClientChallengeJudges(challengeId);
+  const { data: pool  = [], isLoading: poolLoading }    = useGetJudgePool();
+  const addJudgeToPool   = useAddJudgeToPool();
+  const assignJudge      = useAssignJudge();
+  const unassignJudge    = useRemoveJudge();
 
-  const [showForm,       setShowForm]       = useState(false);
-  const [selectedId,     setSelectedId]     = useState("");
-  const [specialtyTrack, setSpecialtyTrack] = useState("");
-  const [manualName,  setManualName]  = useState("");
-  const [manualOrg,   setManualOrg]   = useState("");
-  const [manualTrack, setManualTrack] = useState("");
-  const [useManual,   setUseManual]   = useState(false);
 
-  const { data: teamData, isLoading: teamLoading } = useOrganisationTeam("", "", 0, 100);
-  const allTeamJudges: TeamMember[] = (teamData?.members ?? []).filter((m) => m.role?.toUpperCase() === "JUDGE");
-  const judgeMembers:  TeamMember[] = allTeamJudges.filter(
-    (m) => !judges.some((j) => j.userId === m.id || j.name === m.fullName)
-  );
+  const [showForm,   setShowForm]   = useState(false);
+  const [formTab,    setFormTab]    = useState<JudgePanelFormTab>("pool");
+  const [selectedId, setSelectedId] = useState("");
+  const [track,      setTrack]      = useState("");
+  const [newName,    setNewName]    = useState("");
+  const [newEmail,   setNewEmail]   = useState("");
+  const [newOrg,     setNewOrg]     = useState("");
+  const [newTrack,   setNewTrack]   = useState("");
 
-  if (challengeLoading || judgesLoading) return <Loader variant="inline" text="Loading…" />;
-
-  const selectedMember = judgeMembers.find((m) => m.id === selectedId) ?? null;
+  // Pool judges not yet assigned to this challenge
+  const assignedIds = new Set(judges.map((j) => j.id));
+  const available   = pool.filter((p) => !assignedIds.has(p.id));
 
   function openForm() {
     setShowForm(true);
-    setUseManual(judgeMembers.length === 0);
-    setSelectedId(""); setSpecialtyTrack("");
-    setManualName(""); setManualOrg(""); setManualTrack("");
+    setFormTab(available.length > 0 ? "pool" : "new");
+    setSelectedId(""); setTrack("");
+    setNewName(""); setNewEmail(""); setNewOrg(""); setNewTrack("");
   }
 
-  function handleAdd() {
-    if (useManual) {
-      if (!manualName.trim()) return;
-      addJudge.mutate(
-        { challengeId, data: { name: manualName.trim(), organization: manualOrg.trim() || undefined, specialtyTrack: manualTrack.trim() || undefined } },
-        { onSuccess: () => { setManualName(""); setManualOrg(""); setManualTrack(""); setShowForm(false); setUseManual(false); } }
-      );
-    } else {
-      if (!selectedMember) return;
-      addJudge.mutate(
-        { challengeId, data: { userId: selectedMember.id, name: selectedMember.fullName, specialtyTrack: specialtyTrack.trim() || undefined } },
-        { onSuccess: () => { setSelectedId(""); setSpecialtyTrack(""); setShowForm(false); } }
-      );
-    }
+  function handleAssignFromPool() {
+    if (!selectedId) return;
+    assignJudge.mutate(
+      { challengeId, judgeId: selectedId, data: { specialtyTrack: track.trim() || undefined } },
+      { onSuccess: () => { setSelectedId(""); setTrack(""); setShowForm(false); } }
+    );
   }
+
+  function handleAddNew() {
+    if (!newName.trim()) return;
+    addJudgeToPool.mutate(
+      { name: newName.trim(), email: newEmail.trim() || undefined, organization: newOrg.trim() || undefined },
+      {
+        onSuccess: (newJudge) => {
+          // Chain: add to pool → assign to challenge
+          assignJudge.mutate(
+            { challengeId, judgeId: newJudge.id, data: { specialtyTrack: newTrack.trim() || undefined } },
+            { onSuccess: () => { setNewName(""); setNewEmail(""); setNewOrg(""); setNewTrack(""); setShowForm(false); } }
+          );
+        },
+      }
+    );
+  }
+
+  const isBusy = addJudgeToPool.isPending || assignJudge.isPending;
 
   return (
     <div className="flex flex-col gap-5">
@@ -203,7 +217,9 @@ function JudgesPanel({ challengeId }: { challengeId: string }) {
           <h2 className="font-semibold text-[hsl(var(--foreground))]">
             Judges {judges.length > 0 ? `(${judges.length})` : challenge?.judgeCount != null ? `(${challenge.judgeCount})` : ""}
           </h2>
-          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">Assign enrolled judges from your team to this challenge</p>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+            Scoring is averaged across all assigned judges
+          </p>
         </div>
         <Button size="sm" className="gap-1.5" onClick={openForm}>
           <Plus className="h-3.5 w-3.5" /> Assign Judge
@@ -213,117 +229,125 @@ function JudgesPanel({ challengeId }: { challengeId: string }) {
       {showForm && (
         <Card className="attend-card p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-[hsl(var(--foreground))]">
-              {useManual ? "Add Judge Manually" : "Assign Team Judge"}
-            </h3>
-            {judgeMembers.length > 0 && (
-              <button onClick={() => setUseManual((v) => !v)} className="text-xs text-[hsl(var(--primary))] hover:underline">
-                {useManual ? "← Pick from team" : "Enter manually"}
-              </button>
-            )}
+            <h3 className="font-semibold text-[hsl(var(--foreground))]">Assign Judge to Challenge</h3>
+            <button onClick={() => setShowForm(false)} className="text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">✕</button>
           </div>
 
-          {!useManual ? (
-            teamLoading ? (
-              <Loader variant="inline" text="Loading team…" />
-            ) : judgeMembers.length === 0 ? (
+          {/* Tab selector */}
+          <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 mb-4 self-start">
+            {(["pool", "new"] as JudgePanelFormTab[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => setFormTab(t)}
+                className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${
+                  formTab === t ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                }`}
+              >
+                {t === "pool" ? "From Judge Pool" : "Add New Judge"}
+              </button>
+            ))}
+          </div>
+
+          {formTab === "pool" ? (
+            poolLoading ? (
+              <Loader variant="inline" text="Loading pool…" />
+            ) : available.length === 0 ? (
               <div className="text-center py-6">
-                {allTeamJudges.length > 0 ? (
-                  <>
-                    <p className="text-sm text-[hsl(var(--muted-foreground))]">All team judges are already assigned to this challenge.</p>
-                    <button className="mt-3 text-xs text-[hsl(var(--primary))] hover:underline" onClick={() => setUseManual(true)}>
-                      Add an external judge manually
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm text-[hsl(var(--muted-foreground))]">No JUDGE members in your team yet.</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Go to <strong>Settings → Team</strong> and invite a member with the Judge role.</p>
-                    <button className="mt-3 text-xs text-[hsl(var(--primary))] hover:underline" onClick={() => setUseManual(true)}>
-                      Add judge manually instead
-                    </button>
-                  </>
-                )}
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                  {pool.length === 0
+                    ? "No judges in your pool yet. Add a new judge to get started."
+                    : "All judges in your pool are already assigned to this challenge."}
+                </p>
+                <button className="mt-3 text-xs text-[hsl(var(--primary))] hover:underline" onClick={() => setFormTab("new")}>
+                  Add a new judge
+                </button>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Select Judge *</label>
-                  <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto rounded-lg border border-[hsl(var(--border))] p-1">
-                    {judgeMembers.map((m) => (
-                      <button
-                        key={m.id}
-                        onClick={() => setSelectedId(m.id)}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                          selectedId === m.id ? "bg-[#7c22c9] text-white" : "hover:bg-[hsl(var(--accent))]"
-                        }`}
+                <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto rounded-lg border border-[hsl(var(--border))] p-1">
+                  {available.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => setSelectedId(p.id === selectedId ? "" : p.id)}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                        selectedId === p.id ? "bg-[#7c22c9] text-white" : "hover:bg-[hsl(var(--accent))]"
+                      }`}
+                    >
+                      <div
+                        className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                        style={{
+                          backgroundColor: selectedId === p.id ? "rgba(255,255,255,0.25)" : "#7c22c918",
+                          color: selectedId === p.id ? "#fff" : "#7c22c9",
+                        }}
                       >
-                        <div
-                          className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                          style={{
-                            backgroundColor: selectedId === m.id ? "rgba(255,255,255,0.25)" : "#7c22c918",
-                            color: selectedId === m.id ? "#fff" : "#7c22c9",
-                          }}
-                        >
-                          {m.fullName?.slice(0, 2).toUpperCase() || "??"}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold truncate">{m.fullName}</p>
-                          <p className={`text-xs truncate ${selectedId === m.id ? "text-purple-200" : "text-[hsl(var(--muted-foreground))]"}`}>{m.email}</p>
-                        </div>
-                        {m.status === "ACTIVE" && (
-                          <span className={`ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${selectedId === m.id ? "bg-white/20 text-white" : "bg-green-100 text-green-700"}`}>
-                            Active
-                          </span>
+                        {p.name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold truncate">{p.name}</p>
+                        {(p.email || p.organization) && (
+                          <p className={`text-xs truncate ${selectedId === p.id ? "text-purple-200" : "text-[hsl(var(--muted-foreground))]"}`}>
+                            {[p.email, p.organization].filter(Boolean).join(" · ")}
+                          </p>
                         )}
-                      </button>
-                    ))}
-                  </div>
+                      </div>
+                      {selectedId === p.id && <CheckCircle2 className="h-4 w-4 shrink-0 text-white" />}
+                    </button>
+                  ))}
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Specialty Track (optional)</label>
-                  <Input value={specialtyTrack} onChange={(e) => setSpecialtyTrack(e.target.value)} placeholder="e.g. Fintech, Healthcare…" />
+                  <Input value={track} onChange={(e) => setTrack(e.target.value)} placeholder="e.g. Fintech, Healthcare…" className="h-9" />
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <Button size="sm" disabled={!selectedId || isBusy} onClick={handleAssignFromPool}>
+                    {isBusy ? "Assigning…" : "Assign Selected Judge"}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
                 </div>
               </div>
             )
           ) : (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Name *</label>
-                <Input value={manualName} onChange={(e) => setManualName(e.target.value)} placeholder="Judge full name" />
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Full Name *</label>
+                  <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Judge full name" className="h-9" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Email</label>
+                  <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="judge@example.com" className="h-9" type="email" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Organisation</label>
+                  <Input value={newOrg} onChange={(e) => setNewOrg(e.target.value)} placeholder="Organisation (optional)" className="h-9" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Specialty Track</label>
+                  <Input value={newTrack} onChange={(e) => setNewTrack(e.target.value)} placeholder="e.g. Fintech, Healthcare…" className="h-9" />
+                </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Organisation</label>
-                <Input value={manualOrg} onChange={(e) => setManualOrg(e.target.value)} placeholder="Organisation (optional)" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Specialty Track</label>
-                <Input value={manualTrack} onChange={(e) => setManualTrack(e.target.value)} placeholder="Track (optional)" />
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                This will add the judge to your pool and immediately assign them to this challenge.
+              </p>
+              <div className="flex items-center gap-2">
+                <Button size="sm" disabled={!newName.trim() || isBusy} onClick={handleAddNew}>
+                  {isBusy ? "Adding…" : "Add & Assign Judge"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
               </div>
             </div>
           )}
-
-          <div className="flex items-center gap-2 mt-4">
-            <Button
-              size="sm"
-              disabled={addJudge.isPending || (useManual ? !manualName.trim() : !selectedId)}
-              onClick={handleAdd}
-            >
-              {addJudge.isPending ? "Assigning…" : "Assign Judge"}
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-          </div>
         </Card>
       )}
 
-      {judges.length > 0 ? (
+      {judgesLoading ? (
+        <Loader variant="inline" text="Loading judges…" />
+      ) : judges.length > 0 ? (
         <Card className="attend-card overflow-hidden">
           <table className="w-full">
             <thead>
               <tr className="attend-table-header">
                 <th className="px-5 py-3 text-left">Judge</th>
-                <th className="px-5 py-3 text-left">Organisation</th>
-                <th className="px-5 py-3 text-left">Specialty Track</th>
                 <th className="px-5 py-3 text-left">Assigned</th>
                 <th className="px-5 py-3 text-left">Scored</th>
                 <th className="px-5 py-3 text-left">Progress</th>
@@ -335,17 +359,21 @@ function JudgesPanel({ challengeId }: { challengeId: string }) {
                 <tr key={j.id} className="attend-table-row">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: j.color || "#7c22c9" }}>
+                      <div
+                        className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                        style={{ backgroundColor: j.color || "#7c22c9" }}
+                      >
                         {j.initials || j.name?.slice(0, 2).toUpperCase()}
                       </div>
-                      <span className="text-sm font-semibold text-[hsl(var(--foreground))]">{j.name}</span>
+                      <div>
+                        <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{j.name}</p>
+                        {j.specialtyTrack && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9" }}>
+                            {j.specialtyTrack}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </td>
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{j.organization || "—"}</td>
-                  <td className="px-5 py-3">
-                    {j.specialtyTrack
-                      ? <span className="text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>{j.specialtyTrack}</span>
-                      : <span className="text-xs text-[hsl(var(--muted-foreground))]">All tracks</span>}
                   </td>
                   <td className="px-5 py-3 text-sm font-semibold tabular-nums">{j.assignedCount}</td>
                   <td className="px-5 py-3 text-sm font-semibold tabular-nums">{j.scoredCount}</td>
@@ -360,8 +388,9 @@ function JudgesPanel({ challengeId }: { challengeId: string }) {
                   <td className="px-5 py-3 text-right">
                     <Button
                       size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
-                      disabled={removeJudge.isPending}
-                      onClick={() => removeJudge.mutate({ challengeId, judgeId: j.id })}
+                      disabled={unassignJudge.isPending}
+                      onClick={() => unassignJudge.mutate({ challengeId, judgeId: j.id })}
+                      title="Unassign from challenge"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
@@ -375,7 +404,9 @@ function JudgesPanel({ challengeId }: { challengeId: string }) {
         <Card className="attend-card p-12 text-center">
           <UserCheck className="h-8 w-8 mx-auto text-[hsl(var(--muted-foreground))] mb-3" />
           <p className="text-sm font-medium text-[hsl(var(--foreground))]">No judges assigned yet</p>
-          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Assign a judge from your team using the button above.</p>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+            Assign judges from your pool. Scores will be averaged across all judges.
+          </p>
         </Card>
       )}
     </div>
@@ -487,12 +518,15 @@ function JudgeAppDetailPanel({
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col items-end gap-1">
                 {statusChip(app.status)}
                 {app.hasScore && app.score != null && (
-                  <span className="text-lg font-black text-[hsl(var(--foreground))] tabular-nums">
-                    {app.score}<span className="text-sm font-normal text-[hsl(var(--muted-foreground))]">/{app.scoreOutOf || 100}</span>
-                  </span>
+                  <div className="flex flex-col items-end">
+                    <span className="text-lg font-black text-[hsl(var(--foreground))] tabular-nums">
+                      {app.score}<span className="text-sm font-normal text-[hsl(var(--muted-foreground))]">/{app.scoreOutOf || 100}</span>
+                    </span>
+                    <span className="text-[10px] text-[hsl(var(--muted-foreground))]">avg. score</span>
+                  </div>
                 )}
               </div>
             </div>
@@ -642,7 +676,7 @@ function JudgeAppDetailPanel({
               </div>
               {app.hasScore && app.score != null && (
                 <div className="py-2 flex justify-between gap-2">
-                  <span className="text-xs text-[hsl(var(--muted-foreground))]">Score</span>
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">Avg. Score</span>
                   <span className="text-xs font-bold text-[hsl(var(--foreground))] text-right tabular-nums">
                     {app.score}/{app.scoreOutOf || 100}
                   </span>
@@ -691,8 +725,32 @@ function JudgeScoringPanel({ challengeId, challengeTitle, onBack }: {
 
   const [scores,        setScores]        = useState<Record<string, string>>({});
   const [comments,      setComments]      = useState<Record<string, string>>({});
-  const [saved,         setSaved]         = useState<Record<string, boolean>>({});
+  const [editing,       setEditing]       = useState<Record<string, boolean>>({});
+  const [latestResult,  setLatestResult]  = useState<Record<string, SubmitScoreResponse>>({});
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+  const [initialized,   setInitialized]   = useState(false);
+
+  const applications = data?.applications ?? [];
+  const criteria     = data?.criteria     ?? [];
+
+  // Pre-fill score/comment inputs from API data on first load
+  useEffect(() => {
+    if (!initialized && applications.length > 0) {
+      const initScores:   Record<string, string> = {};
+      const initComments: Record<string, string> = {};
+      applications.forEach((a) => {
+        if (a.score != null)  initScores[a.applicationId]   = String(a.score);
+        if (a.comment)        initComments[a.applicationId] = a.comment;
+      });
+      setScores(initScores);
+      setComments(initComments);
+      setInitialized(true);
+    }
+  }, [applications, initialized]);
+
+  const scoredCount = applications.filter(
+    (a) => a.score != null || latestResult[a.applicationId]
+  ).length;
 
   // Drill into full application detail
   if (selectedAppId) {
@@ -707,16 +765,17 @@ function JudgeScoringPanel({ challengeId, challengeTitle, onBack }: {
 
   if (isLoading) return <Loader variant="page" text="Loading scoring panel…" />;
 
-  const applications = data?.applications ?? [];
-  const criteria     = data?.criteria     ?? [];
-  const scoredCount  = applications.filter((a) => a.score != null || saved[a.applicationId]).length;
-
   function handleSubmit(appId: string) {
     const score = parseFloat(scores[appId] ?? "");
     if (isNaN(score) || score < 0 || score > 100) return;
     submitScore.mutate(
       { challengeId, applicationId: appId, data: { score, comment: comments[appId]?.trim() || undefined } },
-      { onSuccess: () => setSaved((s) => ({ ...s, [appId]: true })) }
+      {
+        onSuccess: (result) => {
+          setLatestResult((r) => ({ ...r, [appId]: result }));
+          setEditing((e) => ({ ...e, [appId]: false }));
+        },
+      }
     );
   }
 
@@ -765,13 +824,28 @@ function JudgeScoringPanel({ challengeId, challengeTitle, onBack }: {
       {/* Application scoring cards */}
       <div className="flex flex-col gap-4">
         {applications.map((app, idx) => {
-          const alreadyScored = app.score != null || saved[app.applicationId];
+          const latest       = latestResult[app.applicationId];
+          const myScore      = latest?.score        ?? app.score;
+          const avgScore     = latest?.averageScore ?? app.averageScore;
+          const judgeCount   = app.judgeCount ?? 0;
+          const hasMyScore   = myScore != null || (app.scored ?? false);
+          const isEditing    = editing[app.applicationId] ?? false;
+          const showForm     = !hasMyScore || isEditing;
+          const rank         = app.rank;
+
           return (
             <Card key={app.applicationId} className="attend-card p-5">
+              {/* Card header */}
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div className="flex items-start gap-3">
-                  <span className="h-6 w-6 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))] text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
-                    {idx + 1}
+                  <span
+                    className="h-6 w-6 rounded-full text-xs font-bold flex items-center justify-center shrink-0 mt-0.5"
+                    style={rank != null
+                      ? { backgroundColor: medalColor(rank) + "22", color: medalColor(rank) }
+                      : { backgroundColor: "hsl(var(--primary)/0.1)", color: "hsl(var(--primary))" }
+                    }
+                  >
+                    {rank != null ? `#${rank}` : idx + 1}
                   </span>
                   <div>
                     <p className="text-sm font-bold text-[hsl(var(--foreground))]">{app.teamName}</p>
@@ -784,10 +858,9 @@ function JudgeScoringPanel({ challengeId, challengeTitle, onBack }: {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {alreadyScored && (
+                  {hasMyScore && (
                     <div className="flex items-center gap-1.5 text-green-700 text-xs font-semibold">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      {saved[app.applicationId] ? "Saved" : `Scored: ${app.score}`}
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Scored
                     </div>
                   )}
                   <button
@@ -799,42 +872,77 @@ function JudgeScoringPanel({ challengeId, challengeTitle, onBack }: {
                 </div>
               </div>
 
-              {!alreadyScored ? (
-                <div className="flex items-end gap-3">
-                  <div className="flex flex-col gap-1.5 w-28">
-                    <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Score (0–100)</label>
-                    <Input
-                      type="number" min={0} max={100}
-                      placeholder="e.g. 85"
-                      value={scores[app.applicationId] ?? ""}
-                      onChange={(e) => setScores((s) => ({ ...s, [app.applicationId]: e.target.value }))}
-                      className="h-9"
-                    />
+              {/* Average badge (shown whenever other judges have also scored) */}
+              {avgScore != null && judgeCount > 1 && (
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full font-medium" style={{ backgroundColor: "#7c22c918", color: "#7c22c9" }}>
+                    <Star className="h-3 w-3" />
+                    Avg across {judgeCount} judges: <strong className="tabular-nums">{avgScore.toFixed(1)}</strong>
                   </div>
-                  <div className="flex flex-col gap-1.5 flex-1">
-                    <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] flex items-center gap-1">
-                      <MessageSquare className="h-3 w-3" /> Comment (optional)
-                    </label>
-                    <Input
-                      placeholder="Add a comment…"
-                      value={comments[app.applicationId] ?? ""}
-                      onChange={(e) => setComments((s) => ({ ...s, [app.applicationId]: e.target.value }))}
-                      className="h-9"
-                    />
+                </div>
+              )}
+
+              {showForm ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-end gap-3">
+                    <div className="flex flex-col gap-1.5 w-28">
+                      <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Score (0–100)</label>
+                      <Input
+                        type="number" min={0} max={100}
+                        placeholder="e.g. 85"
+                        value={scores[app.applicationId] ?? ""}
+                        onChange={(e) => setScores((s) => ({ ...s, [app.applicationId]: e.target.value }))}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5 flex-1">
+                      <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] flex items-center gap-1">
+                        <MessageSquare className="h-3 w-3" /> Comment (optional)
+                      </label>
+                      <Input
+                        placeholder="Add a comment…"
+                        value={comments[app.applicationId] ?? ""}
+                        onChange={(e) => setComments((s) => ({ ...s, [app.applicationId]: e.target.value }))}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button
+                        size="sm" className="h-9"
+                        disabled={!scores[app.applicationId] || submitScore.isPending}
+                        onClick={() => handleSubmit(app.applicationId)}
+                      >
+                        {hasMyScore ? "Update" : "Submit"}
+                      </Button>
+                      {hasMyScore && isEditing && (
+                        <Button
+                          size="sm" variant="outline" className="h-9"
+                          onClick={() => setEditing((e) => ({ ...e, [app.applicationId]: false }))}
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <Button
-                    size="sm" className="h-9 shrink-0"
-                    disabled={!scores[app.applicationId] || submitScore.isPending}
-                    onClick={() => handleSubmit(app.applicationId)}
-                  >
-                    Submit
-                  </Button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                  <span>Score submitted: <strong className="text-[hsl(var(--foreground))]">{app.score}</strong></span>
-                  {app.comment && <span>· "{app.comment}"</span>}
+                /* Scored summary — edit button allows re-scoring */
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))]">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                      <span>Your score: <strong className="text-[hsl(var(--foreground))] tabular-nums">{myScore}</strong></span>
+                    </div>
+                    {app.comment && (
+                      <span className="text-xs italic text-[hsl(var(--muted-foreground))] truncate max-w-[200px]">"{app.comment}"</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setEditing((e) => ({ ...e, [app.applicationId]: true }))}
+                    className="text-xs text-[#7c22c9] hover:underline font-medium shrink-0"
+                  >
+                    Edit Score
+                  </button>
                 </div>
               )}
             </Card>
@@ -932,7 +1040,7 @@ function JudgeApplicationsList({
               <th className="px-5 py-3 text-left">Track</th>
               <th className="px-5 py-3 text-left">Members</th>
               <th className="px-5 py-3 text-left">Status</th>
-              <th className="px-5 py-3 text-left">Score</th>
+              <th className="px-5 py-3 text-left">Avg. Score</th>
               <th className="px-5 py-3 text-left">Submitted</th>
               <th className="px-5 py-3 text-right"></th>
             </tr>
@@ -1030,7 +1138,7 @@ function JudgeLeaderboardPanel({ challengeId }: { challengeId: string }) {
               <th className="px-5 py-3 text-left">Idea</th>
               <th className="px-5 py-3 text-left">Track</th>
               <th className="px-5 py-3 text-left">Status</th>
-              <th className="px-5 py-3 text-right">Score</th>
+              <th className="px-5 py-3 text-right">Avg. Score</th>
             </tr>
           </thead>
           <tbody>
@@ -1047,7 +1155,10 @@ function JudgeLeaderboardPanel({ challengeId }: { challengeId: string }) {
                   </span>
                 </td>
                 <td className="px-5 py-3">{statusChip(r.status)}</td>
-                <td className="px-5 py-3 text-right text-sm font-bold tabular-nums">{r.score.toFixed(1)}</td>
+                <td className="px-5 py-3 text-right">
+                  <span className="text-sm font-bold tabular-nums">{r.score.toFixed(1)}</span>
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]"> /100</span>
+                </td>
               </tr>
             ))}
           </tbody>

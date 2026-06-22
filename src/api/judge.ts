@@ -54,7 +54,11 @@ export interface ScoringApplication {
   ideaTitle?:    string;
   track?:        string;
   memberCount?:  number;
-  score?:        number | null;
+  rank?:         number;
+  score?:        number | null;        // THIS judge's score (null = not scored yet)
+  averageScore?: number | null;        // average across ALL judges
+  judgeCount?:   number;              // how many judges have scored this team
+  scored?:       boolean;
   comment?:      string | null;
   scoredAt?:     string | null;
 }
@@ -70,6 +74,14 @@ export interface ScoringPanelResponse {
 export interface SubmitScoreRequest {
   score:    number;
   comment?: string;
+}
+
+export interface SubmitScoreResponse {
+  applicationId: string;
+  teamName:      string;
+  score:         number;        // this judge's updated score
+  averageScore:  number;        // recomputed average
+  comment?:      string;
 }
 
 export interface JudgeMember {
@@ -268,7 +280,7 @@ export function useJudgeScoringPanel(challengeId: string) {
 // Mutations
 // ---------------------------------------------------------------------------
 
-/** Submit a score + comment for a single application. */
+/** Submit or update a score + comment for a single application (POST acts as upsert). */
 export function useSubmitJudgeScore() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -281,11 +293,11 @@ export function useSubmitJudgeScore() {
       applicationId: string;
       data:          SubmitScoreRequest;
     }) => {
-      const res = await apiClient.post<ApiResponse<any>>(
+      const res = await apiClient.post<ApiResponse<SubmitScoreResponse>>(
         `/api/v1/judge/challenges/${challengeId}/applications/${applicationId}/score`,
         data
       );
-      return res.data.data;
+      return (res.data.data ?? res.data) as SubmitScoreResponse;
     },
     onSuccess: (_, { challengeId }) => {
       queryClient.invalidateQueries({ queryKey: judgeKeys.scoring(challengeId) });

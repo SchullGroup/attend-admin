@@ -206,21 +206,38 @@ export interface LeaderboardResponse {
 
 export interface JudgeItem {
   id:              string;
-  userId?:         string;   // team member id, if assigned from org team
-  initials:        string;
-  color:           string;
+  userId?:         string;
+  initials?:       string;
+  color?:          string;
   name:            string;
-  organization:    string;
-  specialtyTrack:  string;
+  organization?:   string;
+  specialtyTrack?: string;
   assignedCount:   number;
   scoredCount:     number;
   progressPercent: number;
 }
 
+export interface JudgePoolItem {
+  id:            string;
+  name:          string;
+  email?:        string;
+  organization?: string;
+}
+
+export interface JudgePoolResponse {
+  judges:      JudgePoolItem[];
+  totalCount?: number;
+}
+
 export interface AddJudgeRequest {
-  userId?:         string;   // team member id when adding from org team
+  userId?:         string;
   name:            string;
+  email?:          string;
   organization?:   string;
+  specialtyTrack?: string;
+}
+
+export interface AssignJudgeRequest {
   specialtyTrack?: string;
 }
 
@@ -238,6 +255,11 @@ export const clientChallengeKeys = {
                  ["clientChallenges", cId, "applications", aId] as const,
   leaderboard: (id: string) => ["clientChallenges", id, "leaderboard"] as const,
   judges:      (id: string) => ["clientChallenges", id, "judges"] as const,
+};
+
+export const judgePoolKeys = {
+  all:  ["clientJudgePool"] as const,
+  list: () => ["clientJudgePool", "list"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -445,6 +467,81 @@ export function useRemoveJudge() {
       popup.success("Judge Removed", "Judge has been unassigned.", 2000);
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to remove judge."),
+  });
+}
+
+/** Full judge pool for this registrar — GET /api/v1/client/judges */
+export function useGetJudgePool() {
+  return useQuery({
+    queryKey: judgePoolKeys.list(),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<JudgePoolResponse>>(
+        "/api/v1/client/judges"
+      );
+      const raw = res.data.data ?? (res.data as any);
+      return (Array.isArray(raw) ? raw : (raw as any)?.judges ?? []) as JudgePoolItem[];
+    },
+    staleTime: 30_000,
+  });
+}
+
+/** Add a judge to the registrar's pool — POST /api/v1/client/judges */
+export function useAddJudgeToPool() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: AddJudgeRequest) => {
+      const res = await apiClient.post<ApiResponse<JudgePoolItem>>(
+        "/api/v1/client/judges",
+        data
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: judgePoolKeys.all });
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to add judge to pool."),
+  });
+}
+
+/** Assign a pool judge to a challenge — POST /api/v1/client/challenges/{id}/judges/{judgeId}/assign */
+export function useAssignJudge() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      challengeId,
+      judgeId,
+      data = {},
+    }: {
+      challengeId: string;
+      judgeId:     string;
+      data?:       AssignJudgeRequest;
+    }) => {
+      const res = await apiClient.post<ApiResponse<any>>(
+        `/api/v1/client/challenges/${challengeId}/judges/${judgeId}/assign`,
+        data
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, { challengeId }) => {
+      queryClient.invalidateQueries({ queryKey: clientChallengeKeys.judges(challengeId) });
+      queryClient.invalidateQueries({ queryKey: clientChallengeKeys.detail(challengeId) });
+      popup.success("Judge Assigned", "Judge has been assigned to this challenge.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to assign judge."),
+  });
+}
+
+/** Remove a judge from the registrar's pool — DELETE /api/v1/client/judges/{judgeId} */
+export function useRemoveJudgeFromPool() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (judgeId: string) => {
+      await apiClient.delete(`/api/v1/client/judges/${judgeId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: judgePoolKeys.all });
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to remove judge from pool."),
   });
 }
 
