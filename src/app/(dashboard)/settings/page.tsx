@@ -33,7 +33,8 @@ function normaliseRole(raw: string | undefined | null): string {
 
 function JudgeSettingsView({ user }: { user: Record<string, any> }) {
   const { data: stakeholder } = useClientStakeholder();
-  const orgLogoUrl = user?.avatarUrl || user?.logoUrl || stakeholder?.logoUrl || null;
+  const storedLogoUrl = typeof window !== "undefined" ? (localStorage.getItem("userLogoUrl") ?? null) : null;
+  const orgLogoUrl = user?.avatarUrl || user?.logoUrl || storedLogoUrl || stakeholder?.logoUrl || null;
 
   const fields = [
     { label: "Full Name",     value: user?.fullName ?? user?.name ?? "—" },

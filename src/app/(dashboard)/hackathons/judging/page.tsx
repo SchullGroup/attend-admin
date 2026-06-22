@@ -563,13 +563,18 @@ function JudgeAppDetailPanel({
                 <Users className="h-4 w-4" /> Team Members ({app.members.length})
               </h2>
               <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
-                {app.members.map((m) => (
+                {app.members.map((m) => {
+                  const raw = m as any;
+                  const memberName = m.fullName || raw.name || raw.memberName ||
+                    [raw.firstName, raw.lastName].filter(Boolean).join(" ") ||
+                    m.email?.split("@")[0] || "Unknown";
+                  return (
                   <div key={m.id} className="py-2.5 flex items-center gap-3">
                     <div className="h-7 w-7 rounded-full bg-[hsl(var(--muted))] flex items-center justify-center text-xs font-bold shrink-0">
-                      {m.fullName?.slice(0, 2).toUpperCase() || "??"}
+                      {memberName.slice(0, 2).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{m.fullName}</p>
+                      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{memberName}</p>
                       {m.email && <p className="text-xs text-[hsl(var(--muted-foreground))]">{m.email}</p>}
                     </div>
                     {m.role && (
@@ -578,7 +583,8 @@ function JudgeAppDetailPanel({
                       </span>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </Card>
           )}
@@ -793,13 +799,13 @@ function JudgeScoringPanel({ challengeId, challengeTitle, onBack }: {
                 </div>
               </div>
 
-              {!saved[app.applicationId] ? (
+              {!alreadyScored ? (
                 <div className="flex items-end gap-3">
                   <div className="flex flex-col gap-1.5 w-28">
                     <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Score (0–100)</label>
                     <Input
                       type="number" min={0} max={100}
-                      placeholder={app.score != null ? String(app.score) : "e.g. 85"}
+                      placeholder="e.g. 85"
                       value={scores[app.applicationId] ?? ""}
                       onChange={(e) => setScores((s) => ({ ...s, [app.applicationId]: e.target.value }))}
                       className="h-9"
@@ -810,7 +816,7 @@ function JudgeScoringPanel({ challengeId, challengeTitle, onBack }: {
                       <MessageSquare className="h-3 w-3" /> Comment (optional)
                     </label>
                     <Input
-                      placeholder={app.comment ?? "Add a comment…"}
+                      placeholder="Add a comment…"
                       value={comments[app.applicationId] ?? ""}
                       onChange={(e) => setComments((s) => ({ ...s, [app.applicationId]: e.target.value }))}
                       className="h-9"
@@ -825,10 +831,11 @@ function JudgeScoringPanel({ challengeId, challengeTitle, onBack }: {
                   </Button>
                 </div>
               ) : (
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                  Score: <strong>{scores[app.applicationId] ?? app.score}</strong>
-                  {(comments[app.applicationId] || app.comment) && ` · "${comments[app.applicationId] || app.comment}"`}
-                </p>
+                <div className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                  <span>Score submitted: <strong className="text-[hsl(var(--foreground))]">{app.score}</strong></span>
+                  {app.comment && <span>· "{app.comment}"</span>}
+                </div>
               )}
             </Card>
           );

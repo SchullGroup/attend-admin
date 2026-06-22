@@ -23,6 +23,15 @@ export const useLogin = () => {
           sameSite: "strict",
         });
       }
+      // Persist logoUrl from login response — /me endpoint may not return it
+      if (typeof window !== "undefined") {
+        const logoUrl = response.data.logoUrl;
+        if (logoUrl) {
+          localStorage.setItem("userLogoUrl", logoUrl);
+        } else {
+          localStorage.removeItem("userLogoUrl");
+        }
+      }
       queryClient.invalidateQueries({ queryKey: authKeys.me() });
     },
   });
@@ -35,6 +44,7 @@ export const useLogout = () => {
     mutationFn: authClient.logout,
     onSuccess: () => {
       Cookies.remove("accessToken");
+      if (typeof window !== "undefined") localStorage.removeItem("userLogoUrl");
       queryClient.clear();
       if (typeof window !== "undefined") {
         window.location.href = "/login";

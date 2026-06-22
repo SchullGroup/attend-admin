@@ -245,13 +245,18 @@ function ApplicationDetail({
                 <Users className="h-4 w-4" /> Team Members ({app.members.length})
               </h2>
               <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
-                {app.members.map((m) => (
+                {app.members.map((m) => {
+                  const raw = m as any;
+                  const memberName = m.name || m.fullName || raw.memberName ||
+                    [raw.firstName, raw.lastName].filter(Boolean).join(" ") ||
+                    m.email?.split("@")[0] || "Unknown";
+                  return (
                   <div key={m.id} className="py-2.5 flex items-center gap-3">
                     <div className="h-7 w-7 rounded-full bg-[hsl(var(--muted))] flex items-center justify-center text-xs font-bold shrink-0">
-                      {(m.name || m.fullName)?.slice(0, 2).toUpperCase() || "??"}
+                      {memberName.slice(0, 2).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{m.name || m.fullName}</p>
+                      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{memberName}</p>
                       {m.email && <p className="text-xs text-[hsl(var(--muted-foreground))]">{m.email}</p>}
                     </div>
                     {(m.role || m.lead) && (
@@ -260,7 +265,8 @@ function ApplicationDetail({
                       </span>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </Card>
           )}
@@ -699,14 +705,17 @@ function JudgeAppDetail({ challengeId, applicationId, onBack }: { challengeId: s
               </h2>
               <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
                 {app.members.map((m) => {
-                  const displayName = m.fullName || (m as any).name || (m as any).firstName || "Unknown";
+                  const raw = m as any;
+                  const memberName = m.fullName || raw.name || raw.memberName ||
+                    [raw.firstName, raw.lastName].filter(Boolean).join(" ") ||
+                    m.email?.split("@")[0] || "Unknown";
                   return (
                     <div key={m.id} className="py-2.5 flex items-center gap-3">
                       <div className="h-7 w-7 rounded-full bg-[hsl(var(--muted))] flex items-center justify-center text-xs font-bold shrink-0">
-                        {displayName.slice(0, 2).toUpperCase()}
+                        {memberName.slice(0, 2).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-[hsl(var(--foreground))]">{displayName}</p>
+                        <p className="text-sm font-medium text-[hsl(var(--foreground))]">{memberName}</p>
                         {m.email && <p className="text-xs text-[hsl(var(--muted-foreground))]">{m.email}</p>}
                       </div>
                       {m.role && (

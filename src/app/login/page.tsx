@@ -2,7 +2,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -197,7 +196,7 @@ export default function LoginPage() {
       >
         {/* Top logo bar */}
         <div className="flex items-center gap-2 px-10 pt-10 pb-0">
-          <Image src="/attend-logo.png" alt="Attend" width={120} height={40} style={{ height: 40, width: "auto" }} priority />
+          <img src="/attend-logo.png" alt="Attend" style={{ height: 40, width: "auto" }} />
           <span
             className="text-xs font-semibold px-2 py-0.5 rounded-md"
             style={{ backgroundColor: "rgba(17,24,39,0.07)", color: "#6b7280" }}
@@ -332,13 +331,10 @@ export default function LoginPage() {
         <div className="relative z-10 px-14 max-w-md w-full">
           {/* Logo lockup */}
           <div className="mb-10">
-            <Image
+            <img
               src="/attend-logo.png"
               alt="Attend"
-              width={110}
-              height={36}
               style={{ height: 36, width: "auto", filter: "brightness(0) invert(1)", opacity: 0.9 }}
-              priority
             />
           </div>
 

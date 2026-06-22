@@ -158,7 +158,7 @@ const SECTIONS: NavSection[] = [
       { title: "Notifications",  icon: Bell,       href: "/notifications",  judgeHidden: true },
       { title: "Audit Log",      icon: ScrollText, href: "/audit",          judgeHidden: true },
       { title: "Settings",       icon: Settings,   href: "/settings" },
-      { title: "Team Members",   icon: Users2,     href: "/settings/team",  clientOnly: true },
+      { title: "Team Members",   icon: Users2,     href: "/settings/team",  clientOnly: true, judgeHidden: true },
     ],
   },
 ];
@@ -220,6 +220,8 @@ export function Sidebar() {
   const isJudge        = JUDGE_ROLES.has(normalizedRole);
 
   const hasToken      = typeof window !== "undefined" && !!Cookies.get("accessToken");
+  // logoUrl persisted at login time (me endpoint may not return it)
+  const storedLogoUrl = typeof window !== "undefined" ? (localStorage.getItem("userLogoUrl") ?? null) : null;
   // For client users show the registrar/organisation name; for admins/judges use personal name
   const isClientUser  = !isSuperAdmin && !isJudge;
   const displayName   = isClientUser
@@ -350,9 +352,9 @@ export function Sidebar() {
       {hasToken && (
         <div className="p-3 shrink-0" style={{ borderTop: "1px solid #e2e8f0" }}>
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
-            {(currentUser?.avatarUrl || currentUser?.logoUrl || stakeholder?.logoUrl) ? (
+            {(currentUser?.avatarUrl || currentUser?.logoUrl || storedLogoUrl || stakeholder?.logoUrl) ? (
               <img
-                src={(currentUser?.avatarUrl || currentUser?.logoUrl || stakeholder?.logoUrl)!}
+                src={(currentUser?.avatarUrl || currentUser?.logoUrl || storedLogoUrl || stakeholder?.logoUrl)!}
                 alt={displayName}
                 className="h-8 w-8 rounded-full object-cover shrink-0 ring-2 ring-[hsl(var(--border))]"
               />
