@@ -9,6 +9,7 @@ import {
   ChevronRight,
   BarChart2,
   UserCheck,
+  Download,
 } from "lucide-react";
 import {
   useAnalyticsStats,
@@ -18,9 +19,12 @@ import {
   useAnalyticsEventPerformance,
   useAnalyticsCheckInOverview,
   useAnalyticsMonthlyTrend,
+  useExportRegistrations,
   extractStat,
 } from "@/api/client-analytics";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
 
@@ -94,6 +98,90 @@ function StatCard({
 // Page
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Export Registrations inline panel
+// ---------------------------------------------------------------------------
+function ExportRegistrationsPanel({ events }: { events: { id: string; eventId?: string; title: string; eventTitle?: string }[] }) {
+  const [selectedId, setSelectedId] = useState("");
+  const [from,       setFrom]       = useState("");
+  const [to,         setTo]         = useState("");
+  const [exporting,  setExporting]  = useState(false);
+
+  const { refetch } = useExportRegistrations(selectedId, from || undefined, to || undefined);
+
+  function downloadCsv(filename: string, rows: string[][]) {
+    const csv  = rows.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleExport() {
+    if (!selectedId) return;
+    setExporting(true);
+    try {
+      const result = await refetch();
+      const exp    = result.data;
+      if (!exp) return;
+      const header = ["Full Name", "Email", "Phone", "Registered At", "Checked In", "Checked In At"];
+      const rows   = exp.registrations.map((r) => [
+        r.fullName, r.email, r.phone ?? "", r.registeredAt,
+        r.checkedIn ? "Yes" : "No", r.checkedInAt ?? "",
+      ]);
+      downloadCsv(`${exp.eventTitle ?? selectedId}-registrations.csv`, [header, ...rows]);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  return (
+    <Card className="attend-card p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Download className="h-4 w-4 text-[hsl(var(--primary))]" />
+        <span className="attend-section-title">Export Registrations</span>
+      </div>
+      <div className="flex items-end gap-3 flex-wrap">
+        <div className="flex-1 min-w-[200px]">
+          <label className="block text-xs text-[hsl(var(--muted-foreground))] mb-1">Event</label>
+          <select
+            value={selectedId}
+            onChange={(e) => setSelectedId(e.target.value)}
+            className="w-full h-9 rounded-md border border-[hsl(var(--border))] bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
+          >
+            <option value="">Select an event…</option>
+            {events.map((ev) => (
+              <option key={ev.id ?? ev.eventId} value={ev.id ?? ev.eventId ?? ""}>
+                {ev.title ?? ev.eventTitle}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-[hsl(var(--muted-foreground))] mb-1">From</label>
+          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-36 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-[hsl(var(--muted-foreground))] mb-1">To</label>
+          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-36 text-sm" />
+        </div>
+        <Button size="sm" disabled={!selectedId || exporting} onClick={handleExport}>
+          <Download className="h-3.5 w-3.5 mr-1.5" />
+          {exporting ? "Exporting…" : "Export CSV"}
+        </Button>
+      </div>
+      <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2">
+        Includes name, email, phone, registration time, and check-in status. Leave date fields blank for all time.
+      </p>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
 export default function AnalyticsPage() {
   const [perfPage, setPerfPage] = useState(0);
   const perfSize = 10;
@@ -106,24 +194,29 @@ export default function AnalyticsPage() {
   const { data: checkInData,  isLoading: checkInLoading  } = useAnalyticsCheckInOverview();
   const { data: trendData,    isLoading: trendLoading    } = useAnalyticsMonthlyTrend();
 
-  const loading = statsLoading || byTypeLoading || rsvpsLoading || fillLoading || perfLoading || checkInLoading || trendLoading;
+  const loading = statsLoading || byTypeLoading || rsvpsLoading || fillLoading || perfLoading || trendLoading;
   if (loading) return <Loader variant="page" text="Loading Analytics…" />;
 
-  const byTypeItems  = byType?.items ?? [];
-  const rsvpEvents   = rsvps?.events ?? [];
-  const perfEvents   = performance?.events ?? [];
-  const totalPerf    = performance?.totalCount ?? 0;
-  const totalPages   = Math.ceil(totalPerf / perfSize);
+  // --- By Type ---
+  const byTypeItems = byType?.byType ?? [];
 
-  // Fill rate — prefer per-event array, fall back to aggregate buckets
-  const fillEvents   = fillRate?.events ?? [];
+  // --- RSVPs by event ---
+  const rsvpEvents  = rsvps?.rsvpsByEvent ?? [];
 
-  // Safely extract stat values — server may return { color, count } objects
+  // --- Event Performance ---
+  const perfEvents  = performance?.events ?? [];
+  const totalPerf   = performance?.totalCount ?? 0;
+  const totalPages  = Math.ceil(totalPerf / perfSize);
+
+  // --- Fill rate — per-event array from API ---
+  const fillEvents  = fillRate?.fillRateOverview ?? [];
+
+  // --- Stats ---
   const evStat  = extractStat(stats?.totalEvents);
   const attStat = extractStat(stats?.totalAttendees);
   const frRaw   = extractStat(stats?.avgFillRate);
-  const docStat = extractStat(stats?.documentsPublished ?? stats?.totalDocuments);
-  const avgFillRate = frRaw.value ?? fillRate?.averageFillRate ?? 0;
+  const docStat = extractStat(stats?.documentsPublished);
+  const avgFillRate = frRaw.value ?? 0;
 
   const statCards = [
     {
@@ -201,10 +294,9 @@ export default function AnalyticsPage() {
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {byTypeItems.map((item) => {
-                const label = item.eventType ?? item.type ?? "Unknown";
-                const count = item.count ?? item.eventCount ?? 0;
-                const pct   = item.percentage ?? 0;
-                const color = typeColor(item);
+                const label = item.type ?? "Unknown";
+                const count = item.eventCount ?? 0;
+                const color = item.color ?? typeColor({ type: item.type });
                 const bg    = typeBg(color);
                 return (
                   <div
@@ -222,7 +314,7 @@ export default function AnalyticsPage() {
                       {count}
                     </div>
                     <div className="text-xs mt-0.5" style={{ color: color + "aa" }}>
-                      Events · {Math.round(pct)}%
+                      Events
                     </div>
                     {item.totalRsvps != null && (
                       <>
@@ -253,7 +345,7 @@ export default function AnalyticsPage() {
             <div className="flex flex-col gap-3 overflow-y-auto max-h-[320px] pr-1">
               {rsvpEvents.map((ev) => {
                 const barPct  = maxRsvp > 0 ? Math.round((ev.rsvpCount / maxRsvp) * 100) : 0;
-                const barColor = ev.barColor ?? rsvps?.barColor ?? "#2563eb";
+                const barColor = ev.barColor ?? "#2563eb";
                 return (
                   <div key={ev.eventId}>
                     <div className="flex items-center justify-between mb-1">
@@ -298,15 +390,15 @@ export default function AnalyticsPage() {
           <div className="flex flex-col gap-3 overflow-y-auto max-h-[280px]">
             {fillEvents.map((ev) => {
               const pct   = Math.min(Math.round(ev.fillRate ?? 0), 100);
-              const color = ev.barColor ?? fillRate?.barColor ?? fillRateColor(pct);
+              const color = ev.barColor ?? fillRateColor(pct);
               return (
                 <div key={ev.eventId}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-[hsl(var(--foreground))] truncate max-w-[60%]">
+                    <span className="text-xs font-medium text-[hsl(var(--foreground))] truncate max-w-[65%]">
                       {ev.eventTitle}
                     </span>
-                    <span className="text-xs tabular-nums text-[hsl(var(--muted-foreground))]">
-                      {pct}% · {ev.rsvpCount}/{ev.capacity}
+                    <span className="text-xs tabular-nums font-semibold" style={{ color }}>
+                      {pct}%
                     </span>
                   </div>
                   <div className="h-2.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
@@ -320,24 +412,8 @@ export default function AnalyticsPage() {
             })}
           </div>
         ) : (
-          /* Aggregate bucket breakdown */
-          <div className="grid grid-cols-4 gap-4">
-            {[
-              { label: "Fully Booked",   value: fillRate?.fullyBooked   ?? 0, color: "#16a34a" },
-              { label: "Over Half Full", value: fillRate?.overHalfFull  ?? 0, color: "#3b82f6" },
-              { label: "Under Half Full",value: fillRate?.underHalfFull ?? 0, color: "#f59e0b" },
-              { label: "Empty",          value: fillRate?.empty         ?? 0, color: "#9ca3af" },
-            ].map((bucket) => (
-              <div key={bucket.label} className="rounded-xl p-4 border border-[hsl(var(--border))] text-center">
-                <div className="text-2xl font-bold tabular-nums" style={{ color: bucket.color }}>
-                  {bucket.value}
-                </div>
-                <div className="text-xs text-[hsl(var(--muted-foreground))] mt-1">{bucket.label}</div>
-                <div className="mt-3 h-1.5 rounded-full" style={{ backgroundColor: bucket.color + "33" }}>
-                  <div className="h-full rounded-full" style={{ width: "100%", backgroundColor: bucket.color }} />
-                </div>
-              </div>
-            ))}
+          <div className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            No fill rate data available.
           </div>
         )}
       </Card>
@@ -456,17 +532,15 @@ export default function AnalyticsPage() {
           <tbody>
             {perfEvents.map((ev) => {
               const title  = ev.eventTitle ?? ev.title ?? "—";
-              const rate   = Math.round(ev.fillRate ?? 0);
+              const evId   = ev.eventId   ?? ev.id;
+              const rate   = Math.round((ev.fillRate ?? 0) * (ev.fillRate != null && ev.fillRate <= 1 ? 100 : 1));
               const bs     = statusBadge(ev.status, ev.dotColor);
               return (
-                <tr key={ev.eventId} className="attend-table-row">
+                <tr key={evId} className="attend-table-row">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
-                      <span
-                        className="h-2 w-2 rounded-full shrink-0"
-                        style={{ backgroundColor: bs.dot }}
-                      />
-                      <span className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[240px] truncate">
+                      <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: bs.dot }} />
+                      <span className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[200px] truncate">
                         {title}
                       </span>
                     </div>
@@ -488,10 +562,7 @@ export default function AnalyticsPage() {
                           style={{ width: `${Math.min(rate, 100)}%`, backgroundColor: fillRateColor(rate) }}
                         />
                       </div>
-                      <span
-                        className="text-xs font-semibold tabular-nums w-9 text-right"
-                        style={{ color: fillRateColor(rate) }}
-                      >
+                      <span className="text-xs font-semibold tabular-nums w-9 text-right" style={{ color: fillRateColor(rate) }}>
                         {rate}%
                       </span>
                     </div>
@@ -555,6 +626,8 @@ export default function AnalyticsPage() {
           </div>
         )}
       </Card>
+      {/* Export Registrations */}
+      <ExportRegistrationsPanel events={perfEvents} />
     </div>
   );
 }
