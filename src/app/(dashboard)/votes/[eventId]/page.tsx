@@ -2,14 +2,17 @@
 import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, CheckCircle2, XCircle, Clock, Radio,
+  ArrowLeft, CheckCircle2, XCircle, Radio,
   Users, Share2, ChevronDown, ChevronUp, Timer,
+  Download, PlusCircle, X,
 } from "lucide-react";
 import {
   useVoteResults,
   useRecordOfflineVotes,
   useOpenResolutionVoting,
   useCloseResolutionVoting,
+  useAddResolution,
+  useExportResolutions,
   ResolutionResult,
 } from "@/api/client-votes";
 import { Card } from "@/components/ui/card";
@@ -356,12 +359,154 @@ function ResolutionCard({
 }
 
 // ---------------------------------------------------------------------------
+// Add Resolution inline form
+// ---------------------------------------------------------------------------
+function AddResolutionForm({ eventId, onDone }: { eventId: string; onDone: () => void }) {
+  const [form, setForm] = useState({
+    title:            "",
+    description:      "",
+    specialResolution: false,
+    votingDeadline:   "",
+  });
+  const { mutate, isPending } = useAddResolution();
+
+  function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
+    setForm((f) => ({ ...f, [k]: v }));
+  }
+
+  return (
+    <Card className="attend-card p-5">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Add Resolution</p>
+        <button onClick={onDone} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="flex flex-col gap-3">
+        <div>
+          <label className="block text-xs text-[hsl(var(--muted-foreground))] mb-1">Title *</label>
+          <Input
+            value={form.title}
+            onChange={(e) => set("title", e.target.value)}
+            placeholder="Resolution title"
+            className="h-9 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-[hsl(var(--muted-foreground))] mb-1">Description</label>
+          <textarea
+            value={form.description}
+            onChange={(e) => set("description", e.target.value)}
+            placeholder="Optional description or context"
+            rows={2}
+            className="w-full rounded-md border border-[hsl(var(--border))] bg-transparent px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-[hsl(var(--muted-foreground))] mb-1">Voting Deadline</label>
+            <Input
+              type="datetime-local"
+              value={form.votingDeadline}
+              onChange={(e) => set("votingDeadline", e.target.value)}
+              className="h-9 text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2 mt-5">
+            <input
+              id="special-resolution"
+              type="checkbox"
+              checked={form.specialResolution}
+              onChange={(e) => set("specialResolution", e.target.checked)}
+              className="h-4 w-4 rounded"
+            />
+            <label htmlFor="special-resolution" className="text-sm text-[hsl(var(--foreground))]">
+              Special Resolution
+            </label>
+          </div>
+        </div>
+        <div className="flex gap-2 pt-1">
+          <Button
+            size="sm"
+            disabled={isPending || !form.title.trim()}
+            onClick={() =>
+              mutate(
+                {
+                  eventId,
+                  data: {
+                    title:            form.title.trim(),
+                    description:      form.description.trim() || undefined,
+                    specialResolution: form.specialResolution,
+                    votingDeadline:   form.votingDeadline || undefined,
+                  },
+                },
+                { onSuccess: onDone }
+              )
+            }
+          >
+            {isPending ? "Adding…" : "Add Resolution"}
+          </Button>
+          <Button size="sm" variant="outline" onClick={onDone}>Cancel</Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// CSV export helper
+// ---------------------------------------------------------------------------
+function downloadCsv(filename: string, rows: string[][]) {
+  const csv = rows
+    .map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 export default function VoteDetailPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = use(params);
   const router      = useRouter();
-  const { data, isLoading } = useVoteResults(eventId);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [exporting,   setExporting]   = useState(false);
+
+  const { data, isLoading }         = useVoteResults(eventId);
+  const { refetch: fetchExport }    = useExportResolutions(eventId);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const result = await fetchExport();
+      const exp    = result.data;
+      if (!exp) return;
+      const header = ["Order", "Title", "Special", "Status", "For (count)", "Against (count)", "Abstain (count)", "For (shares)", "Against (shares)", "Abstain (shares)", "Total Votes", "Result"];
+      const rows   = exp.resolutions.map((r) => [
+        String(r.order),
+        r.title,
+        r.specialResolution ? "Yes" : "No",
+        r.status,
+        String(r.forCount),
+        String(r.againstCount),
+        String(r.abstainCount),
+        String(r.forShares),
+        String(r.againstShares),
+        String(r.abstainShares),
+        String(r.totalVotes),
+        r.result,
+      ]);
+      downloadCsv(`${exp.eventTitle ?? eventId}-resolutions.csv`, [header, ...rows]);
+    } finally {
+      setExporting(false);
+    }
+  }
 
   if (isLoading) return <Loader variant="page" text="Loading results…" />;
   if (!data)     return (
@@ -391,11 +536,17 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
               {data.stakeholderName} · {formatDate(data.date)}
             </p>
           </div>
-          {isLive && (
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" /> LIVE
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {isLive && (
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" /> LIVE
+              </span>
+            )}
+            <Button size="sm" variant="outline" disabled={exporting} onClick={handleExport}>
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+              {exporting ? "Exporting…" : "Export CSV"}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -421,9 +572,23 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
 
       {/* Resolutions */}
       <div>
-        <h2 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-3">
-          Resolutions ({resolutions.length})
-        </h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-[hsl(var(--foreground))]">
+            Resolutions ({resolutions.length})
+          </h2>
+          {!showAddForm && (
+            <Button size="sm" variant="outline" onClick={() => setShowAddForm(true)}>
+              <PlusCircle className="h-3.5 w-3.5 mr-1.5" /> Add Resolution
+            </Button>
+          )}
+        </div>
+
+        {showAddForm && (
+          <div className="mb-3">
+            <AddResolutionForm eventId={eventId} onDone={() => setShowAddForm(false)} />
+          </div>
+        )}
+
         <div className="flex flex-col gap-3">
           {resolutions.length === 0 ? (
             <div className="py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">

@@ -3,6 +3,7 @@ import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useEventDetail, useEventDocuments, useEventAttendees } from "@/api/super-admin";
 import { useClientEventDetail, useClientEventDocuments, useClientEventAttendees, useExpectedAttendees } from "@/api/client-events";
+import { useVoteResults } from "@/api/client-votes";
 import { useGetMe } from "@/api/auth/hooks";
 import { useSuspendUserAccount } from "@/api/users";
 import { ModuleBadge } from "@/components/custom/module-badge";
@@ -89,6 +90,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const attendeesResponse = isAdmin ? adminAttendees : clientAttendees;
   const eventLoading      = !userReady || (isAdmin ? adminLoading : clientLoading);
 
+  // Vote results — fetched for AGM events. The hook is always called (rules of hooks);
+  // passing "" as eventId makes useVoteResults a no-op (enabled: !!eventId → false).
+  const agmEventType      = toModule((apiEvent as any)?.eventType);
+  const { data: voteResultsData } = useVoteResults(agmEventType === "AGM" ? id : "");
+
   // ── UI state ──────────────────────────────────────────────────────────────
   const [tab,              setTab]             = useState("Overview");
   const [localStatus,      setLocalStatus]     = useState<string | null>(null);
@@ -145,8 +151,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     Array.isArray(_docsRaw?.documents)     ? _docsRaw.documents :
     Array.isArray(_docsRaw?.content)       ? _docsRaw.content :
     [];
-
-  const liveVotes: any[] = [];   // live-votes API not yet wired
 
   // ── Derived flags ─────────────────────────────────────────────────────────
   const fill   = capacity && capacity > 0 ? Math.min(Math.round((rsvpCount / capacity) * 100), 100) : null;
@@ -250,8 +254,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin} />}
       {tab === "Stakeholders" && !isSuperAdmin && (isAGM || isLAUNCH) && <EventExpectedAttendeesTab  eventId={id} />}
       {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab   rsvpCount={rsvpCount} broadcastMsg={broadcastMsg} setBroadcastMsg={setBroadcastMsg} broadcastChannel={broadcastChannel} setBroadcastChannel={setBroadcastChannel} broadcastHistory={broadcastHistory} setBroadcastHistory={setBroadcastHistory} />}
-      {tab === "Vote Results"       && isAGM && <EventVoteResultsTab liveVotes={liveVotes} />}
-      {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} liveVotes={liveVotes} participants={participants} />}
+      {tab === "Vote Results"       && isAGM && <EventVoteResultsTab voteResults={voteResultsData} />}
+      {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} voteResults={voteResultsData} participants={participants} eventId={id} />}
       {tab === "Settings" && !isSuperAdmin && <EventSettingsTab
         eventId={id}
         title={event.title}

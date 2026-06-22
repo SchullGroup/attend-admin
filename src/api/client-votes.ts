@@ -124,7 +124,32 @@ export interface CreateResolutionRequest {
   title:              string;
   description?:       string;
   specialResolution?: boolean;
+  votingDeadline?:    string;   // ISO datetime e.g. "2026-06-22T18:00:00"
   order?:             number;
+}
+
+export interface ExportResolutionItem {
+  order:             number;
+  title:             string;
+  specialResolution: boolean;
+  status:            string;
+  forCount:          number;
+  againstCount:      number;
+  abstainCount:      number;
+  forShares:         number;
+  againstShares:     number;
+  abstainShares:     number;
+  totalVotes:        number;
+  result:            string;
+}
+
+export interface ExportResolutionsResponse {
+  eventId:     string;
+  eventTitle:  string;
+  eventDate:   string;
+  exportedAt:  string;
+  total:       number;
+  resolutions: ExportResolutionItem[];
 }
 
 export interface ResolutionItem {
@@ -146,6 +171,7 @@ export const clientVoteKeys = {
              ["clientVotes", "list", { search, status, page, size }] as const,
   stats:   ["clientVotes", "stats"] as const,
   results: (eventId: string) => ["clientVotes", "results", eventId] as const,
+  export:  (eventId: string) => ["clientVotes", "export", eventId] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -208,6 +234,21 @@ export function useVoteResults(eventId: string) {
     enabled: !!eventId,
     staleTime: 15_000,
     refetchInterval: 15_000, // live refresh every 15 s during voting
+  });
+}
+
+/** Export all resolutions for an event as structured data (for CSV download). */
+export function useExportResolutions(eventId: string) {
+  return useQuery({
+    queryKey: clientVoteKeys.export(eventId),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<ExportResolutionsResponse>>(
+        `/api/v1/client/votes/${eventId}/export/resolutions`
+      );
+      return res.data.data;
+    },
+    enabled: false, // only fetch on demand
+    staleTime: 0,
   });
 }
 
