@@ -101,7 +101,8 @@ function CreateEventInner() {
       return true;
     }
     if (module === "HACKATHON") {
-      if (s === 0) return !!hack.title.trim() && !!hack.startDate;
+      if (s === 0) return !!hack.title.trim() && !!hack.startDate && hack.description.length >= 30;
+      if (s === 1) return hack.problemStatement.length >= 30;
       return true;
     }
     if (module === "GENERAL") {
@@ -484,7 +485,7 @@ function CreateEventInner() {
     }
     if (selectedModule === "HACKATHON") {
       if (step === 0) return <HackStep0     s={hack} organiserName={organiserName} showErrors={showStepErrors} />;
-      if (step === 1) return <HackBriefStep s={hack} />;
+      if (step === 1) return <HackBriefStep s={hack} showErrors={showStepErrors} />;
       if (step === 2) return <HackTeamsStep s={hack} />;
       if (step === 3) return <HackPrizesStep s={hack} />;
       return           <HackReview    s={hack} organiserName={organiserName} />;

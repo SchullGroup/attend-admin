@@ -197,8 +197,10 @@ export default function AnalyticsPage() {
   const loading = statsLoading || byTypeLoading || rsvpsLoading || fillLoading || perfLoading || trendLoading;
   if (loading) return <Loader variant="page" text="Loading Analytics…" />;
 
-  // --- By Type ---
-  const byTypeItems = byType?.byType ?? [];
+  // --- By Type --- exclude HACKATHON (covered by Innovation Challenges)
+  const byTypeItems = (byType?.byType ?? []).filter(
+    (item) => (item.type ?? "").toUpperCase() !== "HACKATHON"
+  );
 
   // --- RSVPs by event ---
   const rsvpEvents  = rsvps?.rsvpsByEvent ?? [];
@@ -344,7 +346,18 @@ export default function AnalyticsPage() {
           ) : (
             <div className="flex flex-col gap-3 overflow-y-auto max-h-[320px] pr-1">
               {rsvpEvents.map((ev) => {
-                const barPct  = maxRsvp > 0 ? Math.round((ev.rsvpCount / maxRsvp) * 100) : 0;
+                const count    = ev.rsvpCount ?? 0;
+                const cap      = ev.capacity  ?? 0;
+                // Fill %: prefer rsvpCount/capacity when capacity > 0,
+                // fall back to fillRate (which may be 0–1 or 0–100), else scale to max.
+                let barPct: number;
+                if (cap > 0) {
+                  barPct = Math.min(Math.round((count / cap) * 100), 100);
+                } else if (ev.fillRate != null) {
+                  barPct = Math.min(Math.round(ev.fillRate > 1 ? ev.fillRate : ev.fillRate * 100), 100);
+                } else {
+                  barPct = maxRsvp > 0 ? Math.min(Math.round((count / maxRsvp) * 100), 100) : 0;
+                }
                 const barColor = ev.barColor ?? "#2563eb";
                 return (
                   <div key={ev.eventId}>
@@ -356,7 +369,7 @@ export default function AnalyticsPage() {
                         {ev.eventTitle}
                       </span>
                       <span className="text-xs tabular-nums text-[hsl(var(--muted-foreground))]">
-                        {ev.rsvpCount.toLocaleString()} / {ev.capacity.toLocaleString()}
+                        {count.toLocaleString()}{cap > 0 ? ` / ${cap.toLocaleString()}` : ""} · {barPct}%
                       </span>
                     </div>
                     <div className="h-2.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">

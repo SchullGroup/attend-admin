@@ -280,7 +280,7 @@ export function useJudgeScoringPanel(challengeId: string) {
 // Mutations
 // ---------------------------------------------------------------------------
 
-/** Submit or update a score + comment for a single application (POST acts as upsert). */
+/** POST — submit a score for the first time (upsert). */
 export function useSubmitJudgeScore() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -304,5 +304,35 @@ export function useSubmitJudgeScore() {
       popup.success("Score Submitted", "Your score has been recorded.", 2500);
     },
     onError: (error: any) => parseAndToastApiError(error, "Score submission failed."),
+  });
+}
+
+/**
+ * PATCH — update an existing score and recompute rankings.
+ * Returns 409 if scoring is closed.
+ */
+export function useUpdateJudgeScore() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      challengeId,
+      applicationId,
+      data,
+    }: {
+      challengeId:   string;
+      applicationId: string;
+      data:          SubmitScoreRequest;
+    }) => {
+      const res = await apiClient.patch<ApiResponse<SubmitScoreResponse>>(
+        `/api/v1/judge/challenges/${challengeId}/applications/${applicationId}/score`,
+        data
+      );
+      return (res.data.data ?? res.data) as SubmitScoreResponse;
+    },
+    onSuccess: (_, { challengeId }) => {
+      queryClient.invalidateQueries({ queryKey: judgeKeys.scoring(challengeId) });
+      popup.success("Score Updated", "Your score has been updated.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Score update failed."),
   });
 }

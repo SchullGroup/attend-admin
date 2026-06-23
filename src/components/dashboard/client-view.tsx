@@ -91,7 +91,7 @@ export function ClientView({
                   <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
                   <h2 className="font-semibold text-red-700 text-sm">Live Now</h2>
                   {liveEvents.length > 0 && (
-                    <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white">
+                    <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none shrink-0">
                       {liveEvents.length}
                     </span>
                   )}

@@ -157,7 +157,8 @@ type JudgePanelFormTab = "pool" | "new";
 
 function JudgesPanel({ challengeId }: { challengeId: string }) {
   const { data: challenge } = useClientChallengeDetail(challengeId);
-  const { data: judges = [], isLoading: judgesLoading } = useClientChallengeJudges(challengeId);
+  const { data: panel,  isLoading: judgesLoading } = useClientChallengeJudges(challengeId);
+  const judges = panel?.judges ?? [];
   const { data: pool  = [], isLoading: poolLoading }    = useGetJudgePool();
   const addJudgeToPool   = useAddJudgeToPool();
   const assignJudge      = useAssignJudge();

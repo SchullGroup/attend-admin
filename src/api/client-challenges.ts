@@ -194,7 +194,9 @@ export interface LeaderboardEntry {
   teamName:      string;
   track:         string;
   ideaTitle:     string;
-  score:         number;
+  score:         number;   // average across all judges who scored this entry
+  averageScore?: number;   // alias returned by some API versions
+  judgeCount?:   number;   // number of judges who have scored this entry
   status:        string;
 }
 
@@ -229,6 +231,15 @@ export interface JudgePoolResponse {
   totalCount?: number;
 }
 
+/** Full judge panel for a challenge — GET /challenges/{id}/judges */
+export interface JudgePanelResponse {
+  challengeId:    string;
+  challengeTitle?: string;
+  tracks?:        string[];
+  topPrizePool?:  string;
+  judges:         JudgeItem[];
+}
+
 export interface AddJudgeRequest {
   userId?:         string;
   name:            string;
@@ -239,6 +250,45 @@ export interface AddJudgeRequest {
 
 export interface AssignJudgeRequest {
   specialtyTrack?: string;
+}
+
+/** Export response for GET /challenges/{id}/export/applications */
+export interface ExportApplicationMember {
+  fullName: string;
+  email:    string;
+  role?:    string;
+  lead?:    boolean;
+}
+
+export interface ExportApplicationItem {
+  teamName:              string;
+  track?:                string;
+  ideaTitle?:            string;
+  ideaDescription?:      string;
+  leadName?:             string;
+  leadEmail?:            string;
+  memberCount?:          number;
+  members?:              ExportApplicationMember[];
+  status:                string;
+  score?:                number | null;
+  submittedAt?:          string;
+  ideaVideoUrl?:         string;
+  ideaSupportingDocUrl?: string;
+  sourceCodeUrl?:        string;
+  liveDemoUrl?:          string;
+  projectDescription?:   string;
+  pitchDeckUrl?:         string;
+  pitchVideoUrl?:        string;
+  demoVideoUrl?:         string;
+  additionalDocumentsUrl?: string;
+}
+
+export interface ExportApplicationsResponse {
+  challengeId:    string;
+  challengeTitle: string;
+  exportedAt:     string;
+  total:          number;
+  applications:   ExportApplicationItem[];
 }
 
 // ---------------------------------------------------------------------------
@@ -255,6 +305,8 @@ export const clientChallengeKeys = {
                  ["clientChallenges", cId, "applications", aId] as const,
   leaderboard: (id: string) => ["clientChallenges", id, "leaderboard"] as const,
   judges:      (id: string) => ["clientChallenges", id, "judges"] as const,
+  exportApps:  (id: string, from?: string, to?: string) =>
+                 ["clientChallenges", id, "export", "applications", { from, to }] as const,
 };
 
 export const judgePoolKeys = {
@@ -358,16 +410,24 @@ export function useClientChallengeLeaderboard(challengeId: string) {
   });
 }
 
+/** GET /challenges/{id}/judges — full judge panel with progress per track */
 export function useClientChallengeJudges(challengeId: string) {
   return useQuery({
     queryKey: clientChallengeKeys.judges(challengeId),
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<JudgeItem[]>>(
+      const res = await apiClient.get<ApiResponse<any>>(
         `/api/v1/client/challenges/${challengeId}/judges`
       );
-      // API may return array directly or wrapped; handle both
-      const raw = res.data.data ?? (res.data as any);
-      return (Array.isArray(raw) ? raw : (raw as any)?.judges ?? []) as JudgeItem[];
+      const raw: any = res.data.data ?? res.data;
+      const judges: JudgeItem[] =
+        Array.isArray(raw) ? raw : (raw?.judges ?? []);
+      return {
+        challengeId:    raw?.challengeId    ?? challengeId,
+        challengeTitle: raw?.challengeTitle ?? "",
+        tracks:         raw?.tracks         ?? [],
+        topPrizePool:   raw?.topPrizePool   ?? "",
+        judges,
+      } as JudgePanelResponse;
     },
     enabled: !!challengeId,
     staleTime: 30_000,
@@ -499,8 +559,20 @@ export function useAddJudgeToPool() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: judgePoolKeys.all });
     },
-    onError: (error: any) => parseAndToastApiError(error, "Failed to add judge to pool."),
+    // 409 = already exists — caller handles it; other errors get toasted
+    onError: (error: any) => {
+      if (error?.response?.status !== 409) {
+        parseAndToastApiError(error, "Failed to add judge to pool.");
+      }
+    },
   });
+}
+
+/** Fetch pool directly (used for 409 recovery) */
+export async function fetchJudgePool(): Promise<JudgePoolItem[]> {
+  const res = await apiClient.get<ApiResponse<JudgePoolResponse>>("/api/v1/client/judges");
+  const raw = res.data.data ?? (res.data as any);
+  return (Array.isArray(raw) ? raw : (raw as any)?.judges ?? []) as JudgePoolItem[];
 }
 
 /** Assign a pool judge to a challenge — POST /api/v1/client/challenges/{id}/judges/{judgeId}/assign */
@@ -542,6 +614,58 @@ export function useRemoveJudgeFromPool() {
       queryClient.invalidateQueries({ queryKey: judgePoolKeys.all });
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to remove judge from pool."),
+  });
+}
+
+/**
+ * PATCH /challenges/{id}/scoring/open
+ * Pass { open: true } to allow judges to score, { open: false } to stop scoring.
+ */
+export function useToggleScoring() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ challengeId, open }: { challengeId: string; open: boolean }) => {
+      const res = await apiClient.patch<ApiResponse<any>>(
+        `/api/v1/client/challenges/${challengeId}/scoring/open`,
+        { open }
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, { challengeId, open }) => {
+      queryClient.invalidateQueries({ queryKey: clientChallengeKeys.detail(challengeId) });
+      popup.success(
+        open ? "Scoring Opened" : "Scoring Closed",
+        open ? "Judges can now submit scores." : "No new scores will be accepted.",
+        2500
+      );
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to update scoring status."),
+  });
+}
+
+/**
+ * GET /challenges/{id}/export/applications?from=&to=
+ * Returns all applications with full detail. enabled:false — caller calls refetch().
+ */
+export function useExportChallengeApplications(
+  challengeId: string,
+  from?: string,
+  to?: string
+) {
+  return useQuery({
+    queryKey: clientChallengeKeys.exportApps(challengeId, from, to),
+    queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (from) params.from = from;
+      if (to)   params.to   = to;
+      const res = await apiClient.get<ApiResponse<ExportApplicationsResponse>>(
+        `/api/v1/client/challenges/${challengeId}/export/applications`,
+        { params }
+      );
+      return res.data.data;
+    },
+    enabled: false,
+    staleTime: 0,
   });
 }
 

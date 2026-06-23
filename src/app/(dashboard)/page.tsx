@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import {
-  Trophy, Lightbulb, CalendarDays,
+  Lightbulb, CalendarDays,
   Star, UserCheck, CheckCircle2, ChevronRight, Search,
 } from "lucide-react";
 import { useState } from "react";
@@ -29,8 +29,8 @@ const JUDGE_ROLES = new Set(["judge"]);
 function typeLabel(type?: string) {
   const t = (type ?? "").toUpperCase();
   if (t.includes("HACKATHON") || t.includes("EVENT"))
-    return { label: "Hackathon", bg: "#0891b218", color: "#0891b2", Icon: Trophy };
-  return { label: "Innovation", bg: "#7c22c918", color: "#7c22c9", Icon: Lightbulb };
+    return { label: "Innovation Challenge", bg: "#7c22c918", color: "#7c22c9", Icon: Lightbulb };
+  return { label: "Innovation Challenge", bg: "#7c22c918", color: "#7c22c9", Icon: Lightbulb };
 }
 
 function JudgeDashboard({ name }: { name?: string }) {
@@ -51,10 +51,6 @@ function JudgeDashboard({ name }: { name?: string }) {
   const totalPending  = challenges.reduce((s, c) =>
     s + (c.pendingCount ?? Math.max(0, (c.shortlistedCount ?? 0) - (c.scoredCount ?? 0))), 0
   );
-
-  const allSameType = challenges.every((c) => !c.type);
-  const innovations = filtered.filter((c) => !["HACKATHON", "EVENT"].some((t) => (c.type ?? "").toUpperCase().includes(t)));
-  const hackathons  = filtered.filter((c) =>  ["HACKATHON", "EVENT"].some((t) => (c.type ?? "").toUpperCase().includes(t)));
 
   function ChallengeRow({ c }: { c: JudgeChallengeItem }) {
     const { bg, color, Icon } = typeLabel(c.type);
@@ -182,24 +178,14 @@ function JudgeDashboard({ name }: { name?: string }) {
 
       {isLoading ? (
         <Loader variant="inline" text="Loading your assignments…" />
-      ) : allSameType ? (
-        <ChallengeTable items={filtered} title="Assigned Challenges & Events" icon={Lightbulb} color="#7c22c9" />
+      ) : filtered.length === 0 ? (
+        <Card className="attend-card p-12 text-center">
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            {search ? "No results match your search." : "No challenges assigned to you yet."}
+          </p>
+        </Card>
       ) : (
-        <>
-          {innovations.length > 0 && (
-            <ChallengeTable items={innovations} title="Innovation Challenges" icon={Lightbulb} color="#7c22c9" />
-          )}
-          {hackathons.length > 0 && (
-            <ChallengeTable items={hackathons} title="Hackathon Events" icon={Trophy} color="#0891b2" />
-          )}
-          {filtered.length === 0 && (
-            <Card className="attend-card p-12 text-center">
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                {search ? "No results match your search." : "No challenges assigned to you yet."}
-              </p>
-            </Card>
-          )}
-        </>
+        <ChallengeTable items={filtered} title="Innovation Challenges" icon={Lightbulb} color="#7c22c9" />
       )}
     </div>
   );

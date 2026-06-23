@@ -14,13 +14,16 @@ import {
   useClientChallengeApplication,
   useUpdateClientApplicationStatus,
   useToggleApplicationsOpen,
-  useAddJudge,
   useRemoveJudge,
   useClientChallengeJudges,
+  useAssignJudge,
+  useToggleScoring,
+  useExportChallengeApplications,
   useUpdateSubmissionRequirements,
   type ApplicationStatus,
   type ApplicationItem,
   type JudgeItem,
+  type ExportApplicationItem,
   type SubmissionRequirements,
 } from "@/api/client-challenges";
 import { useOrganisationTeam, type TeamMember } from "@/api/client-organisation";
@@ -39,6 +42,28 @@ function ensureAbsoluteUrl(url: string): string {
   if (!url) return url;
   if (/^https?:\/\//i.test(url)) return url;
   return `https://${url}`;
+}
+
+/** Build an Excel-compatible XML workbook (no external dependency). */
+function buildExcelXml(
+  headers: string[],
+  rows: (string | number | null | undefined)[][]
+): string {
+  const esc = (v: unknown) =>
+    String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  const cell = (v: unknown) => `<Cell><Data ss:Type="String">${esc(v)}</Data></Cell>`;
+  const xmlRow = (cells: (string | number | null | undefined)[]) =>
+    `<Row>${cells.map(cell).join("")}</Row>`;
+  return `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+<Worksheet ss:Name="Applications"><Table>
+${xmlRow(headers)}
+${rows.map(xmlRow).join("\n")}
+</Table></Worksheet></Workbook>`;
 }
 
 function statusChip(status: string) {
@@ -829,9 +854,11 @@ function LeaderboardTab({ challengeId }: { challengeId: string }) {
                 <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 truncate">{r.ideaTitle}</p>
                 <p className="text-xs mt-1" style={{ color }}>{r.track}</p>
                 <p className="text-2xl font-black tabular-nums mt-2" style={{ color }}>
-                  {r.score.toFixed(1)}
+                  {(r.averageScore ?? r.score).toFixed(1)}
                 </p>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">score</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  avg score{r.judgeCount ? ` · ${r.judgeCount} judge${r.judgeCount !== 1 ? "s" : ""}` : ""}
+                </p>
               </Card>
             );
           })}
@@ -853,7 +880,8 @@ function LeaderboardTab({ challengeId }: { challengeId: string }) {
               <th className="px-5 py-3 text-left">Idea</th>
               <th className="px-5 py-3 text-left">Track</th>
               <th className="px-5 py-3 text-left">Status</th>
-              <th className="px-5 py-3 text-right">Score</th>
+              <th className="px-5 py-3 text-right">Avg Score</th>
+              <th className="px-5 py-3 text-right">Judges</th>
             </tr>
           </thead>
           <tbody>
@@ -880,7 +908,12 @@ function LeaderboardTab({ challengeId }: { challengeId: string }) {
                 </td>
                 <td className="px-5 py-3">{statusChip(r.status)}</td>
                 <td className="px-5 py-3 text-right text-sm font-bold tabular-nums">
-                  {r.score.toFixed(1)}
+                  {(r.averageScore ?? r.score).toFixed(1)}
+                </td>
+                <td className="px-5 py-3 text-right">
+                  {r.judgeCount != null
+                    ? <span className="text-xs text-[hsl(var(--muted-foreground))]">{r.judgeCount} judge{r.judgeCount !== 1 ? "s" : ""}</span>
+                    : <span className="text-xs text-[hsl(var(--muted-foreground))]">—</span>}
                 </td>
               </tr>
             ))}
@@ -1012,212 +1045,202 @@ function SettingsTab({ challengeId }: { challengeId: string }) {
 // ---------------------------------------------------------------------------
 function JudgesTab({ challengeId }: { challengeId: string }) {
   const { data: challenge, isLoading: challengeLoading } = useClientChallengeDetail(challengeId);
-  const { data: judges = [], isLoading: judgesLoading }  = useClientChallengeJudges(challengeId);
-  const addJudge    = useAddJudge();
-  const removeJudge = useRemoveJudge();
+  const { data: panel,    isLoading: judgesLoading }     = useClientChallengeJudges(challengeId);
+  const { data: teamData, isLoading: teamLoading }       = useOrganisationTeam("", "", 0, 100);
 
-  const [showForm,       setShowForm]       = useState(false);
-  const [selectedId,     setSelectedId]     = useState("");
-  const [specialtyTrack, setSpecialtyTrack] = useState("");
-  // Manual fallback state (when no team judges exist)
-  const [manualName,  setManualName]  = useState("");
-  const [manualOrg,   setManualOrg]   = useState("");
-  const [manualTrack, setManualTrack] = useState("");
-  const [useManual,   setUseManual]   = useState(false);
+  const assignJudge = useAssignJudge();
+  const removeJudge   = useRemoveJudge();
+  const toggleScoring = useToggleScoring();
+  const { refetch: fetchExport, isFetching: exporting } = useExportChallengeApplications(challengeId);
 
-  // Fetch all team members, filter to JUDGE role, exclude already-assigned
-  const { data: teamData, isLoading: teamLoading } = useOrganisationTeam("", "", 0, 100);
-  const allTeamJudges: TeamMember[] = (teamData?.members ?? []).filter((m) => m.role?.toUpperCase() === "JUDGE");
-  const judgeMembers:  TeamMember[] = allTeamJudges.filter(
-    (m) => !judges.some((j) => j.userId === m.id || j.name === m.fullName)
+  const judges: JudgeItem[] = panel?.judges ?? [];
+  const scoringOpen         = (challenge as any)?.scoringOpen ?? false;
+
+  // Org JUDGE members not yet on this challenge (match by email or name)
+  const assignedEmails = new Set(judges.map((j) => (j as any).email).filter(Boolean));
+  const assignedNames  = new Set(judges.map((j) => j.name));
+  const available: TeamMember[] = (teamData?.members ?? []).filter(
+    (m) => m.role?.toUpperCase() === "JUDGE"
+      && !assignedEmails.has(m.email)
+      && !assignedNames.has(m.fullName)
   );
+
+  const [showAssign, setShowAssign] = useState(false);
+  const [selectedId, setSelectedId] = useState("");
+  const [specialty,  setSpecialty]  = useState("");
 
   if (challengeLoading || judgesLoading) return <Loader variant="inline" text="Loading…" />;
 
-  const selectedMember = judgeMembers.find((m) => m.id === selectedId) ?? null;
+  const selectedMember = available.find((m) => m.id === selectedId) ?? null;
 
-  function handleAdd() {
-    if (useManual) {
-      if (!manualName.trim()) return;
-      addJudge.mutate(
-        { challengeId, data: { name: manualName.trim(), organization: manualOrg.trim() || undefined, specialtyTrack: manualTrack.trim() || undefined } },
-        { onSuccess: () => { setManualName(""); setManualOrg(""); setManualTrack(""); setShowForm(false); setUseManual(false); } }
-      );
-    } else {
-      if (!selectedMember) return;
-      addJudge.mutate(
-        {
-          challengeId,
-          data: {
-            userId:         selectedMember.id,
-            name:           selectedMember.fullName,
-            specialtyTrack: specialtyTrack.trim() || undefined,
-          },
-        },
-        { onSuccess: () => { setSelectedId(""); setSpecialtyTrack(""); setShowForm(false); } }
-      );
-    }
+  async function handleExport() {
+    const result = await fetchExport();
+    const d = result.data;
+    if (!d) return;
+    const headers = ["Team", "Track", "Idea", "Lead", "Lead Email", "Members", "Status", "Score", "Submitted"];
+    const rows = d.applications.map((a: ExportApplicationItem) => [
+      a.teamName, a.track ?? "", a.ideaTitle ?? "", a.leadName ?? "", a.leadEmail ?? "",
+      String(a.memberCount ?? ""), a.status, String(a.score ?? ""), a.submittedAt ?? "",
+    ]);
+    const xml  = buildExcelXml(headers, rows);
+    const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
+    const url  = URL.createObjectURL(blob);
+    const el   = document.createElement("a");
+    el.href = url; el.download = `${d.challengeTitle ?? challengeId}-applications.xls`; el.click();
+    URL.revokeObjectURL(url);
   }
 
-  function openForm() {
-    setShowForm(true);
-    setUseManual(judgeMembers.length === 0);
-    setSelectedId(""); setSpecialtyTrack("");
-    setManualName(""); setManualOrg(""); setManualTrack("");
+  function handleAssign() {
+    if (!selectedMember) return;
+    // Org members invited with role JUDGE are automatically in the judge pool.
+    // Their TeamMember.id IS their judgeId — no separate pool-creation step needed.
+    assignJudge.mutate(
+      { challengeId, judgeId: selectedMember.id, data: { specialtyTrack: specialty || undefined } },
+      { onSuccess: () => { setSelectedId(""); setSpecialty(""); setShowAssign(false); } }
+    );
   }
+
+  const isBusy = assignJudge.isPending;
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="font-semibold text-[hsl(var(--foreground))]">
-            Judges {challenge?.judgeCount != null ? `(${challenge.judgeCount})` : ""}
+            Judge Panel {judges.length > 0 ? `(${judges.length})` : ""}
           </h2>
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-            Assign enrolled judges from your team to this challenge
+            Assign judges from your organisation, manage scoring, and export applications
           </p>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={openForm}>
-          <Plus className="h-3.5 w-3.5" /> Assign Judge
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            size="sm" variant="outline" className="gap-1.5"
+            disabled={toggleScoring.isPending}
+            onClick={() => toggleScoring.mutate({ challengeId, open: !scoringOpen })}
+          >
+            {scoringOpen ? <ToggleRight className="h-4 w-4 text-green-600" /> : <ToggleLeft className="h-4 w-4" />}
+            Scoring {scoringOpen ? "Open" : "Closed"}
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1.5" disabled={exporting} onClick={handleExport}>
+            <FileText className="h-3.5 w-3.5" />
+            {exporting ? "Exporting…" : "Export Applications"}
+          </Button>
+          <Button size="sm" className="gap-1.5" onClick={() => setShowAssign(true)}>
+            <Plus className="h-3.5 w-3.5" /> Assign Judge
+          </Button>
+        </div>
       </div>
 
-      {/* Assign judge panel */}
-      {showForm && (
+      {/* Assign panel */}
+      {showAssign && (
         <Card className="attend-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-[hsl(var(--foreground))]">
-              {useManual ? "Add Judge Manually" : "Assign Team Judge"}
-            </h3>
-            {judgeMembers.length > 0 && (
-              <button
-                onClick={() => setUseManual((v) => !v)}
-                className="text-xs text-[hsl(var(--primary))] hover:underline"
-              >
-                {useManual ? "← Pick from team" : "Enter manually"}
-              </button>
-            )}
-          </div>
+          <h3 className="font-semibold text-[hsl(var(--foreground))] mb-4">Assign Judge from Organisation</h3>
 
-          {!useManual ? (
-            /* Team picker */
-            teamLoading ? (
-              <Loader variant="inline" text="Loading team…" />
-            ) : judgeMembers.length === 0 ? (
-              <div className="text-center py-6">
-                {allTeamJudges.length > 0 ? (
-                  <>
-                    <p className="text-sm text-[hsl(var(--muted-foreground))]">All team judges are already assigned to this challenge.</p>
-                    <button className="mt-3 text-xs text-[hsl(var(--primary))] hover:underline" onClick={() => setUseManual(true)}>
-                      Add an external judge manually
+          {teamLoading ? (
+            <Loader variant="inline" text="Loading team…" />
+          ) : available.length === 0 ? (
+            <div className="py-4 text-center">
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                {(teamData?.members ?? []).filter((m) => m.role?.toUpperCase() === "JUDGE").length === 0
+                  ? "No members with the Judge role in your organisation."
+                  : "All organisation judges are already assigned to this challenge."}
+              </p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                Go to <strong>Settings → Team</strong> to invite members with the Judge role.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Select Judge *</label>
+                <div className="flex flex-col gap-1 max-h-52 overflow-y-auto rounded-lg border border-[hsl(var(--border))] p-1">
+                  {available.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => setSelectedId(m.id)}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                        selectedId === m.id ? "bg-[#7c22c9] text-white" : "hover:bg-[hsl(var(--accent))]"
+                      }`}
+                    >
+                      <div
+                        className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                        style={{
+                          backgroundColor: selectedId === m.id ? "rgba(255,255,255,0.25)" : "#7c22c918",
+                          color:           selectedId === m.id ? "#fff" : "#7c22c9",
+                        }}
+                      >
+                        {m.fullName?.slice(0, 2).toUpperCase() || "??"}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold truncate">{m.fullName}</p>
+                        <p className={`text-xs truncate ${selectedId === m.id ? "text-purple-200" : "text-[hsl(var(--muted-foreground))]"}`}>
+                          {m.email}
+                        </p>
+                      </div>
+                      <span className={`ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
+                        selectedId === m.id ? "bg-white/20 text-white"
+                          : m.status === "ACTIVE" ? "bg-green-100 text-green-700"
+                          : "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"
+                      }`}>
+                        {m.status}
+                      </span>
                     </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm text-[hsl(var(--muted-foreground))]">No JUDGE members in your team yet.</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                      Go to <strong>Settings → Team</strong> and invite a member with the Judge role.
-                    </p>
-                    <button className="mt-3 text-xs text-[hsl(var(--primary))] hover:underline" onClick={() => setUseManual(true)}>
-                      Add judge manually instead
-                    </button>
-                  </>
-                )}
+                  ))}
+                </div>
               </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {/* Member list picker */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">
-                    Select Judge *
-                  </label>
-                  <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto rounded-lg border border-[hsl(var(--border))] p-1">
-                    {judgeMembers.map((m) => (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">
+                  Track Access <span className="font-normal text-[hsl(var(--muted-foreground))]">— which track can this judge view & score?</span>
+                </label>
+                {(challenge?.tracks ?? []).length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {(challenge!.tracks).map((t) => (
                       <button
-                        key={m.id}
-                        onClick={() => setSelectedId(m.id)}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                          selectedId === m.id
-                            ? "bg-[#7c22c9] text-white"
-                            : "hover:bg-[hsl(var(--accent))]"
+                        key={t}
+                        type="button"
+                        onClick={() => setSpecialty(specialty === t ? "" : t)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                          specialty === t
+                            ? "bg-[#7c22c9] text-white border-[#7c22c9]"
+                            : "bg-[hsl(var(--muted)/0.4)] text-[hsl(var(--foreground))] border-[hsl(var(--border))] hover:border-[#7c22c9] hover:text-[#7c22c9]"
                         }`}
                       >
-                        <div
-                          className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                          style={{
-                            backgroundColor: selectedId === m.id ? "rgba(255,255,255,0.25)" : "#7c22c918",
-                            color:           selectedId === m.id ? "#fff" : "#7c22c9",
-                          }}
-                        >
-                          {m.fullName?.slice(0, 2).toUpperCase() || "??"}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold truncate">{m.fullName}</p>
-                          <p className={`text-xs truncate ${selectedId === m.id ? "text-purple-200" : "text-[hsl(var(--muted-foreground))]"}`}>
-                            {m.email}
-                          </p>
-                        </div>
-                        {m.status === "ACTIVE" && (
-                          <span className={`ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
-                            selectedId === m.id ? "bg-white/20 text-white" : "bg-green-100 text-green-700"
-                          }`}>
-                            Active
-                          </span>
-                        )}
+                        {t}
                       </button>
                     ))}
+                    {specialty && (
+                      <button
+                        type="button"
+                        onClick={() => setSpecialty("")}
+                        className="px-3 py-1.5 rounded-full text-xs font-semibold border border-dashed border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-red-500 hover:border-red-300 transition-all"
+                      >
+                        ✕ Clear
+                      </button>
+                    )}
                   </div>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">
-                    Specialty Track (optional)
-                  </label>
-                  <Input
-                    value={specialtyTrack}
-                    onChange={(e) => setSpecialtyTrack(e.target.value)}
-                    placeholder="e.g. Fintech, Healthcare…"
-                  />
-                </div>
+                ) : (
+                  <Input value={specialty} onChange={(e) => setSpecialty(e.target.value)} placeholder="e.g. Fintech, Healthcare…" />
+                )}
+                {!specialty && (
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">No track selected — judge will see all submissions.</p>
+                )}
               </div>
-            )
-          ) : (
-            /* Manual entry fallback */
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Name *</label>
-                <Input value={manualName} onChange={(e) => setManualName(e.target.value)} placeholder="Judge full name" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Organisation</label>
-                <Input value={manualOrg} onChange={(e) => setManualOrg(e.target.value)} placeholder="Organisation (optional)" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Specialty Track</label>
-                <Input value={manualTrack} onChange={(e) => setManualTrack(e.target.value)} placeholder="Track (optional)" />
+              <div className="flex items-center gap-2">
+                <Button size="sm" disabled={!selectedId || isBusy} onClick={handleAssign}>
+                  {isBusy ? "Assigning…" : "Assign to Challenge"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => { setShowAssign(false); setSelectedId(""); setSpecialty(""); }}>
+                  Cancel
+                </Button>
               </div>
             </div>
           )}
-
-          <div className="flex items-center gap-2 mt-4">
-            <Button
-              size="sm"
-              disabled={
-                addJudge.isPending ||
-                (useManual ? !manualName.trim() : !selectedId)
-              }
-              onClick={handleAdd}
-            >
-              {addJudge.isPending ? "Assigning…" : "Assign Judge"}
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>
-              Cancel
-            </Button>
-          </div>
         </Card>
       )}
 
-      {/* Judges list */}
+      {/* Assigned judges table */}
       {judges.length > 0 ? (
         <Card className="attend-card overflow-hidden">
           <table className="w-full">
@@ -1288,7 +1311,7 @@ function JudgesTab({ challengeId }: { challengeId: string }) {
           <UserCheck className="h-8 w-8 mx-auto text-[hsl(var(--muted-foreground))] mb-3" />
           <p className="text-sm font-medium text-[hsl(var(--foreground))]">No judges assigned yet</p>
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-            Assign a judge from your team using the button above.
+            Use the "Assign Judge" button above to add judges from your pool.
           </p>
         </Card>
       )}

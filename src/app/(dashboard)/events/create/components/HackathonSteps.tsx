@@ -6,6 +6,19 @@ import { cn } from "@/lib/utils";
 import { Toggle, FormatPicker, ReviewRow, OrgChip } from "./shared";
 import type { HackState } from "./state-hooks";
 
+const MIN_CHARS = 30;
+function WordCounter({ text, label }: { text: string; label: string }) {
+  const count = text.length;
+  const ok    = count >= MIN_CHARS;
+  return (
+    <p className={cn("text-xs mt-1", ok ? "text-green-600" : "text-[hsl(var(--muted-foreground))]")}>
+      {ok
+        ? `✓ ${count} characters — looks good`
+        : `${count} / ${MIN_CHARS} characters minimum for ${label}`}
+    </p>
+  );
+}
+
 // ─── Step 0 — Challenge Basics ────────────────────────────────────────────────
 
 export function HackStep0({ s, organiserName, showErrors = false }: { s: HackState; organiserName: string; showErrors?: boolean }) {
@@ -20,10 +33,19 @@ export function HackStep0({ s, organiserName, showErrors = false }: { s: HackSta
       </div>
 
       <div>
-        <Label className="mb-2 block">Description</Label>
+        <Label className="mb-2 block">Description <span className="text-red-500">*</span></Label>
         <textarea rows={3} placeholder="Overview of the challenge — purpose, expected impact, who should apply…"
           value={s.description} onChange={(e) => s.setDescription(e.target.value)}
-          className="flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none" />
+          className={cn(
+            "flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none",
+            showErrors && s.description.length < MIN_CHARS && "border-red-400 focus:ring-red-200"
+          )} />
+        {s.description.trim()
+          ? <WordCounter text={s.description} label="description" />
+          : showErrors && <p className="text-xs text-red-500 mt-1">Description is required (min {MIN_CHARS} characters).</p>}
+        {s.description.trim() && showErrors && s.description.length < MIN_CHARS && (
+          <p className="text-xs text-red-500 mt-0.5">Please add at least {MIN_CHARS - s.description.length} more character{MIN_CHARS - s.description.length !== 1 ? "s" : ""}.</p>
+        )}
       </div>
 
       <OrgChip name={organiserName} />
@@ -78,14 +100,23 @@ export function HackStep0({ s, organiserName, showErrors = false }: { s: HackSta
 
 // ─── Step 1 — Brief & Rules ───────────────────────────────────────────────────
 
-export function HackBriefStep({ s }: { s: HackState }) {
+export function HackBriefStep({ s, showErrors = false }: { s: HackState; showErrors?: boolean }) {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Label className="mb-2 block">Problem Statement</Label>
+        <Label className="mb-2 block">Problem Statement <span className="text-red-500">*</span></Label>
         <textarea rows={4} placeholder="Describe the core problem participants should solve…"
           value={s.problemStatement} onChange={(e) => s.setProblemStatement(e.target.value)}
-          className="flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none" />
+          className={cn(
+            "flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none",
+            showErrors && s.problemStatement.length < MIN_CHARS && "border-red-400 focus:ring-red-200"
+          )} />
+        {s.problemStatement.trim()
+          ? <WordCounter text={s.problemStatement} label="problem statement" />
+          : showErrors && <p className="text-xs text-red-500 mt-1">Problem statement is required (min {MIN_CHARS} characters).</p>}
+        {s.problemStatement.trim() && showErrors && s.problemStatement.length < MIN_CHARS && (
+          <p className="text-xs text-red-500 mt-0.5">Please add at least {MIN_CHARS - s.problemStatement.length} more character{MIN_CHARS - s.problemStatement.length !== 1 ? "s" : ""}.</p>
+        )}
       </div>
       <div>
         <Label className="mb-2 block">Expected Deliverable</Label>
