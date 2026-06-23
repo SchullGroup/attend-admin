@@ -17,6 +17,7 @@ import {
   useRemoveJudge,
   useClientChallengeJudges,
   useAssignJudge,
+  fetchJudgePool,
   useToggleScoring,
   useExportChallengeApplications,
   useUpdateSubmissionRequirements,
@@ -1090,17 +1091,34 @@ function JudgesTab({ challengeId }: { challengeId: string }) {
     URL.revokeObjectURL(url);
   }
 
-  function handleAssign() {
+  async function handleAssign() {
     if (!selectedMember) return;
-    // Org members invited with role JUDGE are automatically in the judge pool.
-    // Their TeamMember.id IS their judgeId — no separate pool-creation step needed.
-    assignJudge.mutate(
-      { challengeId, judgeId: selectedMember.id, data: { specialtyTrack: specialty || undefined } },
-      { onSuccess: () => { setSelectedId(""); setSpecialty(""); setShowAssign(false); } }
-    );
+    setIsBusy(true);
+    try {
+      // Org members invited with JUDGE role are auto-added to the pool,
+      // but the assign endpoint needs the pool judge UUID — not the user ID.
+      // Fetch pool and match by email to get the correct pool ID.
+      const pool = await fetchJudgePool();
+      const poolJudge = pool.find(
+        (p) => p.email && selectedMember.email && p.email === selectedMember.email
+      ) ?? pool.find((p) => p.name === selectedMember.fullName);
+
+      if (!poolJudge?.id) {
+        // Not in pool yet — shouldn't happen if invited correctly, but handle gracefully
+        console.error("Judge not found in pool", selectedMember.email);
+        return;
+      }
+
+      assignJudge.mutate(
+        { challengeId, judgeId: poolJudge.id, data: { specialtyTrack: specialty || undefined } },
+        { onSuccess: () => { setSelectedId(""); setSpecialty(""); setShowAssign(false); } }
+      );
+    } finally {
+      setIsBusy(false);
+    }
   }
 
-  const isBusy = assignJudge.isPending;
+  const [isBusy, setIsBusy] = useState(false);
 
   return (
     <div className="flex flex-col gap-5">
