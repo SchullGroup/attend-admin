@@ -1069,6 +1069,7 @@ function JudgesTab({ challengeId }: { challengeId: string }) {
   const [showAssign, setShowAssign] = useState(false);
   const [selectedId, setSelectedId] = useState("");
   const [specialty,  setSpecialty]  = useState("");
+  const [isBusy,     setIsBusy]     = useState(false);
 
   if (challengeLoading || judgesLoading) return <Loader variant="inline" text="Loading…" />;
 
@@ -1117,8 +1118,6 @@ function JudgesTab({ challengeId }: { challengeId: string }) {
       setIsBusy(false);
     }
   }
-
-  const [isBusy, setIsBusy] = useState(false);
 
   return (
     <div className="flex flex-col gap-5">

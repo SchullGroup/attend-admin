@@ -489,12 +489,17 @@ function JudgeAppDetailPanel({
 
   return (
     <div className="flex flex-col gap-5">
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors self-start"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" /> Back to Scoring
-      </button>
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to Scoring
+        </button>
+        <Button size="sm" className="gap-1.5" onClick={onBack}>
+          <Star className="h-3.5 w-3.5" /> Score this Team
+        </Button>
+      </div>
 
       <div className="grid grid-cols-3 gap-5">
         {/* ── Left ── */}
@@ -597,27 +602,27 @@ function JudgeAppDetailPanel({
               <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3 flex items-center gap-2">
                 <Users className="h-4 w-4" /> Team Members ({app.members.length})
               </h2>
-              <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {app.members.map((m) => {
                   const raw = m as any;
                   const memberName = m.fullName || raw.name || raw.memberName ||
                     [raw.firstName, raw.lastName].filter(Boolean).join(" ") ||
                     m.email?.split("@")[0] || "Unknown";
                   return (
-                  <div key={m.id} className="py-2.5 flex items-center gap-3">
-                    <div className="h-7 w-7 rounded-full bg-[hsl(var(--muted))] flex items-center justify-center text-xs font-bold shrink-0">
-                      {memberName.slice(0, 2).toUpperCase()}
+                    <div key={m.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-[hsl(var(--muted)/0.3)]">
+                      <div className="h-8 w-8 rounded-full bg-[#7c22c918] flex items-center justify-center text-xs font-bold shrink-0 text-[#7c22c9]">
+                        {memberName.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{memberName}</p>
+                        {m.email && <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{m.email}</p>}
+                        {m.role && (
+                          <span className="mt-1 inline-block text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ backgroundColor: "#faf5ff", color: "#7c22c9" }}>
+                            {m.role}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{memberName}</p>
-                      {m.email && <p className="text-xs text-[hsl(var(--muted-foreground))]">{m.email}</p>}
-                    </div>
-                    {m.role && (
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: "#faf5ff", color: "#7c22c9" }}>
-                        {m.role}
-                      </span>
-                    )}
-                  </div>
                   );
                 })}
               </div>
@@ -716,10 +721,11 @@ function JudgeAppDetailPanel({
 // Judge scoring panel (JUDGE role)
 // ---------------------------------------------------------------------------
 
-function JudgeScoringPanel({ challengeId, challengeTitle, onBack }: {
+function JudgeScoringPanel({ challengeId, challengeTitle, onBack, hideHeader }: {
   challengeId:    string;
   challengeTitle: string;
   onBack:         () => void;
+  hideHeader?:    boolean;
 }) {
   const { data, isLoading } = useJudgeScoringPanel(challengeId);
   const submitScore = useSubmitJudgeScore();
@@ -782,17 +788,19 @@ function JudgeScoringPanel({ challengeId, challengeTitle, onBack }: {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Header */}
-      <div>
-        <button onClick={onBack}
-          className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-4 transition-colors">
-          <ArrowLeft className="h-3.5 w-3.5" /> My Dashboard
-        </button>
-        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{data?.challengeTitle || challengeTitle}</h1>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
-          Score each shortlisted team · {scoredCount}/{applications.length} scored
-        </p>
-      </div>
+      {/* Header — hidden when embedded inside a tab view */}
+      {!hideHeader && (
+        <div>
+          <button onClick={onBack}
+            className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-4 transition-colors">
+            <ArrowLeft className="h-3.5 w-3.5" /> My Dashboard
+          </button>
+          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{data?.challengeTitle || challengeTitle}</h1>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
+            Score each shortlisted team · {scoredCount}/{applications.length} scored
+          </p>
+        </div>
+      )}
 
       {/* Progress bar */}
       {applications.length > 0 && (
@@ -1175,10 +1183,10 @@ function JudgeLeaderboardPanel({ challengeId }: { challengeId: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Judge challenge view — Applications | Leaderboard | Score tabs
+// Judge challenge view — Score (default) | Leaderboard tabs
 // ---------------------------------------------------------------------------
 
-type JudgeChallengeTab = "Applications" | "Leaderboard" | "Score";
+type JudgeChallengeTab = "Score" | "Leaderboard";
 
 function JudgeChallengeView({
   challengeId,
@@ -1193,36 +1201,16 @@ function JudgeChallengeView({
   challengeDate?: string;
   onBack:         () => void;
 }) {
-  const [tab,           setTab]           = useState<JudgeChallengeTab>("Applications");
-  const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+  const [tab, setTab] = useState<JudgeChallengeTab>("Score");
 
-  const TABS: JudgeChallengeTab[] = ["Applications", "Leaderboard", "Score"];
-
-  // Application detail drill-down
-  if (selectedAppId) {
-    return (
-      <div className="flex flex-col gap-5">
-        <div>
-          <button
-            onClick={() => setSelectedAppId(null)}
-            className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-4 transition-colors"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to Applications
-          </button>
-          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Application Detail</h1>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">{challengeTitle}</p>
-        </div>
-        <JudgeAppDetailPanel
-          challengeId={challengeId}
-          applicationId={selectedAppId}
-          onBack={() => setSelectedAppId(null)}
-        />
-      </div>
-    );
-  }
+  const TABS: { key: JudgeChallengeTab; icon: React.ElementType; label: string }[] = [
+    { key: "Score",       icon: Star,    label: "Score Teams"  },
+    { key: "Leaderboard", icon: Trophy,  label: "Leaderboard"  },
+  ];
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Page header */}
       <div>
         <button
           onClick={onBack}
@@ -1240,37 +1228,30 @@ function JudgeChallengeView({
 
       {/* Tab bar */}
       <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 self-start">
-        {TABS.map((t) => (
+        {TABS.map(({ key, icon: Icon, label }) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-              tab === t
+            key={key}
+            onClick={() => setTab(key)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${
+              tab === key
                 ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
             }`}
           >
-            {t === "Applications" && <span className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Applications</span>}
-            {t === "Leaderboard"  && <span className="flex items-center gap-1.5"><Trophy   className="h-3.5 w-3.5" /> Leaderboard</span>}
-            {t === "Score"        && <span className="flex items-center gap-1.5"><Star     className="h-3.5 w-3.5" /> Score</span>}
+            <Icon className="h-3.5 w-3.5" /> {label}
           </button>
         ))}
       </div>
 
-      {tab === "Applications" && (
-        <JudgeApplicationsList
-          challengeId={challengeId}
-          onViewDetail={(appId) => setSelectedAppId(appId)}
-        />
-      )}
-      {tab === "Leaderboard" && <JudgeLeaderboardPanel challengeId={challengeId} />}
       {tab === "Score" && (
         <JudgeScoringPanel
           challengeId={challengeId}
           challengeTitle={challengeTitle}
           onBack={onBack}
+          hideHeader
         />
       )}
+      {tab === "Leaderboard" && <JudgeLeaderboardPanel challengeId={challengeId} />}
     </div>
   );
 }
