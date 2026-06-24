@@ -6,6 +6,22 @@ import { cn } from "@/lib/utils";
 import { Toggle, FormatPicker, ReviewRow, OrgChip } from "./shared";
 import type { GeneralState } from "./state-hooks";
 
+// ─── Shared validation helpers ───────────────────────────────────────────────
+
+const MIN_CHARS = 30;
+
+function WordCounter({ text, label }: { text: string; label: string }) {
+  const count = text.length;
+  const ok = count >= MIN_CHARS;
+  return (
+    <p className={cn("text-xs mt-1", ok ? "text-green-600" : "text-[hsl(var(--muted-foreground))]")}>
+      {ok
+        ? `✓ ${count} characters — looks good`
+        : `${count} / ${MIN_CHARS} characters minimum for ${label}`}
+    </p>
+  );
+}
+
 // ─── Step 0 — Event Basics ────────────────────────────────────────────────────
 
 export function GeneralStep0({ s, organiserName, showErrors = false }: { s: GeneralState; organiserName: string; showErrors?: boolean }) {
@@ -20,10 +36,12 @@ export function GeneralStep0({ s, organiserName, showErrors = false }: { s: Gene
       </div>
 
       <div>
-        <Label className="mb-2 block">Description</Label>
+        <Label className="mb-2 block">Description <span className="text-red-500">*</span></Label>
         <textarea rows={3} placeholder="Describe the event — agenda, speakers, what attendees should expect…"
           value={s.description} onChange={(e) => s.setDescription(e.target.value)}
-          className="flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none" />
+          className={cn("flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none",
+            showErrors && s.description.length < MIN_CHARS && "border-red-500")} />
+        <WordCounter text={s.description} label="description" />
       </div>
 
       <OrgChip name={organiserName} />

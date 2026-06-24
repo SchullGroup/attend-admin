@@ -121,6 +121,7 @@ function JudgeChallengesView() {
               <th className="px-5 py-3 text-left">Challenge</th>
               <th className="px-5 py-3 text-left">Date</th>
               <th className="px-5 py-3 text-left">Format</th>
+              <th className="px-5 py-3 text-left">Applications</th>
               <th className="px-5 py-3 text-left">Shortlisted</th>
               <th className="px-5 py-3 text-left">Status</th>
               <th className="px-5 py-3 text-left"></th>
@@ -144,6 +145,7 @@ function JudgeChallengesView() {
                   </td>
                   <td className="px-5 py-4 text-sm text-[hsl(var(--foreground))]">{formatDate(c.date ?? "")}</td>
                   <td className="px-5 py-4 text-xs capitalize text-[hsl(var(--muted-foreground))]">{(c.format ?? "—").toLowerCase()}</td>
+                  <td className="px-5 py-4 text-sm font-semibold tabular-nums">{c.applicationCount ?? 0}</td>
                   <td className="px-5 py-4 text-sm font-semibold tabular-nums">{c.shortlistedCount ?? 0}</td>
                   <td className="px-5 py-4">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ backgroundColor: ss.bg, color: ss.color }}>
@@ -200,7 +202,7 @@ export default function HackathonsPage() {
   if (isLoading) return <Loader variant="page" text="Loading Challenges…" />;
 
   const summary    = data?.summary;
-  const allChallenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; shortlistedTeams?: number; shortlistedCount?: number; status?: string }>;
+  const allChallenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; applicationCount?: number; shortlistedTeams?: number; shortlistedCount?: number; status?: string }>;
   const challenges = statusTab
     ? allChallenges.filter((c) => c.status?.toUpperCase() === statusTab.toUpperCase())
     : allChallenges;
@@ -305,6 +307,7 @@ export default function HackathonsPage() {
               <th className="px-5 py-3 text-left">Challenge</th>
               <th className="px-5 py-3 text-left">Date</th>
               <th className="px-5 py-3 text-left">Format</th>
+              <th className="px-5 py-3 text-left">Applications</th>
               <th className="px-5 py-3 text-left">Shortlisted</th>
               <th className="px-5 py-3 text-left">Status</th>
               <th className="px-5 py-3 text-left"></th>
@@ -330,6 +333,7 @@ export default function HackathonsPage() {
                   <td className="px-5 py-4">
                     <span className="text-xs capitalize text-[hsl(var(--muted-foreground))]">{(c.format ?? "—").toLowerCase()}</span>
                   </td>
+                  <td className="px-5 py-4 text-sm font-semibold tabular-nums">{c.applicationCount ?? 0}</td>
                   <td className="px-5 py-4 text-sm font-semibold tabular-nums">{c.shortlistedCount ?? c.shortlistedTeams ?? 0}</td>
                   <td className="px-5 py-4">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ backgroundColor: ss.bg, color: ss.color }}>

@@ -35,14 +35,15 @@ export interface ChallengeSummary {
 }
 
 export interface ChallengeListItem {
-  id:                string;
-  title:             string;
-  organiserName:     string;
-  date:              string;
-  format:            string;
-  shortlistedTeams?: number;   // legacy
-  shortlistedCount?: number;   // API field
-  status:            string;
+  id:                 string;
+  title:              string;
+  organiserName:      string;
+  date:               string;
+  format:             string;
+  applicationCount?:  number;   // total submissions
+  shortlistedTeams?:  number;   // legacy
+  shortlistedCount?:  number;   // API field
+  status:             string;
 }
 
 export interface ChallengeListResponse {

@@ -89,14 +89,14 @@ function CreateEventInner() {
 
   function getStepValid(module: ModuleId, s: number): boolean {
     if (module === "AGM") {
-      if (s === 0) return !!agm.title.trim() && !!agm.date;
+      if (s === 0) return !!agm.title.trim() && !!agm.date && agm.description.length >= 30;
       if (s === 1) return true; // agenda optional
       if (s === 2) return true; // notice optional
       if (s === 3) return agm.resolutions.some((r) => r.title.trim());
       return true;
     }
     if (module === "LAUNCH") {
-      if (s === 0) return !!launch.title.trim() && !!launch.date;
+      if (s === 0) return !!launch.title.trim() && !!launch.date && launch.description.length >= 30;
       if (s === 1) return !!launch.productName.trim();
       return true;
     }
@@ -106,7 +106,7 @@ function CreateEventInner() {
       return true;
     }
     if (module === "GENERAL") {
-      if (s === 0) return !!general.title.trim() && !!general.date;
+      if (s === 0) return !!general.title.trim() && !!general.date && general.description.length >= 30;
       return true;
     }
     return true;
