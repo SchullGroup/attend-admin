@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,8 +15,9 @@ import {
   useApproveQuestion,
   useRejectQuestion,
   type LiveResolution,
+  type LivePendingQuestion,
 } from "@/api/client-live";
-import { useClientEvents } from "@/api/client-events";
+import { useClientEvents, useUpdateEvent, useClientEventDetail } from "@/api/client-events";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -217,11 +218,27 @@ function parseStreamUrl(url: string): string {
 function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => void }) {
   const [streamInput, setStreamInput] = useState("");
   const [streamUrl,   setStreamUrl]   = useState("");
+  const [streamSaved, setStreamSaved] = useState(false);
+  // Keep approved questions visible after approval (they leave the pending list on refetch)
+  const [approvedQuestions, setApprovedQuestions] = useState<LivePendingQuestion[]>([]);
 
   const { data: room, isLoading } = useLiveRoomDetail(eventId);
+  const { data: eventDetail      } = useClientEventDetail(eventId ?? "", { enabled: !!eventId });
   const { data: attendance = []  } = useLiveAttendance(eventId);
   const approveMutation            = useApproveQuestion();
   const rejectMutation             = useRejectQuestion();
+  const updateEventMutation        = useUpdateEvent();
+
+  // Initialise stream URL — prefer live room data, fall back to event detail
+  const rawStreamUrl = room?.streamUrl ?? (eventDetail as any)?.streamUrl ?? "";
+  useEffect(() => {
+    if (rawStreamUrl && !streamUrl) {
+      const parsed = parseStreamUrl(rawStreamUrl);
+      setStreamUrl(parsed);
+      setStreamInput(rawStreamUrl);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawStreamUrl]);
 
   if (isLoading) return <Loader variant="page" text="Loading live room…" />;
 
@@ -235,12 +252,25 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
     );
   }
 
-  const color     = eventColor(room.eventType);
-  const pending   = room.pendingQuestions ?? [];
-  const recentAtt = attendance.length > 0 ? attendance : (room.recentAttendance ?? []);
+  const color       = eventColor(room.eventType);
+  const pending     = room.pendingQuestions ?? [];
+  const recentAtt   = attendance.length > 0 ? attendance : (room.recentAttendance ?? []);
+  const isStreaming = room.format?.toLowerCase() !== "in_person";
 
   function applyStream() {
-    setStreamUrl(parseStreamUrl(streamInput));
+    if (!room) return;
+    const parsed = parseStreamUrl(streamInput);
+    setStreamUrl(parsed);
+    setStreamSaved(false);
+    // Persist new URL to backend so all viewers see it
+    if (streamInput.trim()) {
+      updateEventMutation.mutate(
+        { id: room.eventId, data: { streamUrl: streamInput.trim() } },
+        {
+          onSuccess: () => setStreamSaved(true),
+        }
+      );
+    }
   }
 
   return (
@@ -366,8 +396,8 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
         )}
       </div>
 
-      {/* Stream preview */}
-      <Card className="attend-card overflow-hidden">
+      {/* Stream preview — only for virtual / hybrid events */}
+      {isStreaming && <Card className="attend-card overflow-hidden">
         <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
           <Tv2 className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
           <h2 className="font-semibold text-[hsl(var(--foreground))]">Stream Preview</h2>
@@ -432,10 +462,20 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
                 onKeyDown={(e) => e.key === "Enter" && applyStream()}
               />
             </div>
-            <Button size="sm" onClick={applyStream} className="px-4 shrink-0">Apply</Button>
+            <Button
+              size="sm"
+              onClick={applyStream}
+              disabled={updateEventMutation.isPending}
+              className="px-4 shrink-0"
+            >
+              {updateEventMutation.isPending ? "Saving…" : streamSaved ? "Saved ✓" : "Apply"}
+            </Button>
           </div>
+          {streamSaved && (
+            <p className="text-xs text-green-600 mt-1.5">Stream URL saved — all viewers will see this link.</p>
+          )}
         </div>
-      </Card>
+      </Card>}
 
       {/* Content grid */}
       <div className="grid grid-cols-3 gap-5">
@@ -479,7 +519,12 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
                       size="sm"
                       className="h-7 text-xs flex-1 gap-1"
                       disabled={approveMutation.isPending || rejectMutation.isPending}
-                      onClick={() => approveMutation.mutate({ eventId, questionId: q.id })}
+                      onClick={() =>
+                        approveMutation.mutate(
+                          { eventId, questionId: q.id },
+                          { onSuccess: () => setApprovedQuestions((prev) => [...prev, q]) }
+                        )
+                      }
                     >
                       <Check className="h-3 w-3" /> Approve
                     </Button>
@@ -496,6 +541,29 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
                 </div>
               ))}
             </div>
+
+            {/* Approved questions — stay visible after approval */}
+            {approvedQuestions.length > 0 && (
+              <>
+                <div className="px-5 py-2.5 bg-green-50 border-t border-green-100 flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5 text-green-600" />
+                  <span className="text-xs font-semibold text-green-700">Approved ({approvedQuestions.length})</span>
+                </div>
+                <div className="divide-y divide-[hsl(var(--border))]">
+                  {approvedQuestions.map((q) => (
+                    <div key={q.id} className="px-5 py-3 bg-green-50/40">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-[hsl(var(--foreground))]">
+                          {q.anonymous ? "Anonymous" : q.askerName}
+                        </span>
+                        <span className="text-xs text-[hsl(var(--muted-foreground))]">{formatTime(q.submittedAt)}</span>
+                      </div>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">{q.content}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </Card>
 
           {/* Attendance log */}

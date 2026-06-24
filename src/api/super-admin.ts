@@ -32,6 +32,8 @@ import { ApiResponse } from "@/types/api";
 
 export const superAdminKeys = {
   all: ["super-admin"] as const,
+  auditLogs: (search: string, category: string, severity: string, page: number, size: number) =>
+    ["super-admin", "audit-logs", { search, category, severity, page, size }] as const,
   dashboardStats: () => [...superAdminKeys.all, "dashboard-stats"] as const,
   platformStats: () => [...superAdminKeys.all, "platform-stats"] as const,
   stakeholders: (page: number, limit: number) => [...superAdminKeys.all, "stakeholders", page, limit] as const,
@@ -289,6 +291,64 @@ export function useGlobalSearch({ q, page = 0, limit = 10 }: SearchParams) {
     enabled: q.trim().length > 0,
     staleTime: 30_000,
     gcTime: 60_000,
+    placeholderData: (prev) => prev,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Super Admin Audit Log — GET /api/v1/admin/audit-logs
+// ---------------------------------------------------------------------------
+
+export interface AdminAuditLogEntry {
+  id:           string;
+  timestamp:    string;
+  actorEmail:   string;
+  actorIp:      string;
+  action:       string;
+  category:     string;
+  resourceName: string;
+  resourceId:   string;
+  details:      string;
+  severity:     string;
+}
+
+export interface AdminAuditLogsResponse {
+  totalCount:   number;
+  totalEvents?: number;
+  today:        number;
+  warnings:     number;
+  critical:     number;
+  page:         number;
+  size:         number;
+  logs:         AdminAuditLogEntry[];
+}
+
+export function useAdminAuditLogs(params: {
+  search?:   string;
+  category?: string;
+  severity?: string;
+  page?:     number;
+  size?:     number;
+} = {}) {
+  const { search = "", category = "", severity = "", page = 0, size = 20 } = params;
+  return useQuery({
+    queryKey: superAdminKeys.auditLogs(search, category, severity, page, size),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<AdminAuditLogsResponse>>(
+        "/api/v1/admin/audit-logs",
+        {
+          params: {
+            page,
+            size,
+            ...(search.trim()  ? { search:   search.trim()  } : {}),
+            ...(category       ? { category                 } : {}),
+            ...(severity       ? { severity                 } : {}),
+          },
+        }
+      );
+      return res.data.data;
+    },
+    staleTime: 30_000,
     placeholderData: (prev) => prev,
   });
 }

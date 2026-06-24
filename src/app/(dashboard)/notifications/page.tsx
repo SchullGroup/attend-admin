@@ -9,12 +9,17 @@ import {
   useMarkClientNotificationRead,
   ClientNotificationItem,
 } from "@/api/notifications";
+import {
+  useJudgeNotifications,
+  useMarkJudgeNotificationRead,
+} from "@/api/judge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/ui/Loader";
 import { timeAgo } from "@/lib/utils";
 
 const ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
+const JUDGE_ROLES = new Set(["judge"]);
 
 // Notification type → accent color
 const TYPE_COLORS: Record<string, string> = {
@@ -116,7 +121,9 @@ function DetailPanel({
 export default function NotificationsPage() {
   const { data: userResponse, isLoading: userLoading } = useGetMe();
   const currentUser = userResponse?.data;
-  const isAdmin = !userLoading && ADMIN_ROLES.has(currentUser?.role?.toLowerCase() ?? "");
+  const role        = currentUser?.role?.toLowerCase() ?? "";
+  const isAdmin     = !userLoading && ADMIN_ROLES.has(role);
+  const isJudge     = !userLoading && JUDGE_ROLES.has(role);
 
   const [filter,   setFilter]   = useState<"all" | "unread">("all");
   const [page,     setPage]     = useState(0);
@@ -124,7 +131,7 @@ export default function NotificationsPage() {
   const limit = 20;
 
   // Admin hooks
-  const { data: adminData, isLoading: adminLoading } = useAdminNotifications(
+  const { data: adminData,  isLoading: adminLoading  } = useAdminNotifications(
     page, limit, filter === "unread" ? false : undefined
   );
   const { mutate: markAdmin } = useMarkNotificationRead();
@@ -135,28 +142,43 @@ export default function NotificationsPage() {
   );
   const { mutate: markClient } = useMarkClientNotificationRead();
 
-  const isLoading = userLoading || (isAdmin ? adminLoading : clientLoading);
+  // Judge hooks
+  const { data: judgeData,  isLoading: judgeLoading  } = useJudgeNotifications(
+    page, limit, filter === "unread" ? false : undefined
+  );
+  const { mutate: markJudge } = useMarkJudgeNotificationRead();
 
-  // Unified list
+  const isLoading = userLoading || (
+    isAdmin ? adminLoading : isJudge ? judgeLoading : clientLoading
+  );
+
+  // Unified list — route by role
   const notifications: any[] = isAdmin
     ? (adminData?.data?.content ?? [])
-    : (clientData?.notifications ?? []);
+    : isJudge
+      ? (judgeData?.notifications ?? [])
+      : (clientData?.notifications ?? []);
 
   const unreadCount = isAdmin
-    ? (adminData?.data?.totalElements ?? 0) // rough proxy
-    : (clientData?.unreadCount ?? 0);
+    ? (adminData?.data?.totalElements ?? 0)
+    : isJudge
+      ? (judgeData?.unreadCount ?? 0)
+      : (clientData?.unreadCount ?? 0);
 
   const totalCount = isAdmin
     ? (adminData?.data?.totalElements ?? 0)
-    : (clientData?.totalCount ?? 0);
+    : isJudge
+      ? (judgeData?.totalCount ?? 0)
+      : (clientData?.totalCount ?? 0);
 
   const totalPages = Math.ceil(totalCount / limit);
 
   function handleClick(n: any) {
     setSelected(n);
     if (!n.read) {
-      if (isAdmin) markAdmin(n.id);
-      else         markClient(n.id);
+      if (isAdmin)     markAdmin(n.id);
+      else if (isJudge) markJudge(n.id);
+      else             markClient(n.id);
     }
   }
 

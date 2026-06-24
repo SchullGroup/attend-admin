@@ -59,6 +59,7 @@ export interface LiveRoomDetail {
   format:            string;
   eventType:         string;
   status:            string;
+  streamUrl?:        string;
   attendeeCount:     number;
   checkedInCount:    number;
   capacity?:         number;

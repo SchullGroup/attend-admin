@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { PlusCircle, Trash2, Loader2, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { PlusCircle, Trash2, Loader2, ShieldCheck, CheckCircle2, Play, Square, BarChart2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,12 @@ import {
   useUpdateAgendaItem,
   useDeleteAgendaItem,
 } from "@/api/client-events";
-import { useAddResolution } from "@/api/client-votes";
+import {
+  useAddResolution,
+  useVoteResults,
+  useOpenResolutionVoting,
+  useCloseResolutionVoting,
+} from "@/api/client-votes";
 import type { LocalAgendaItem } from "./types";
 
 let _uid = 0;
@@ -57,11 +62,31 @@ function Label({ children, className = "" }: { children: React.ReactNode; classN
   );
 }
 
+function VoteBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-xs text-[hsl(var(--muted-foreground))] w-14 shrink-0">{label}</span>
+      <div className="flex-1 h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+      <span className="text-xs font-semibold tabular-nums w-8 text-right">{pct}%</span>
+      <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums w-16 text-right">{value.toLocaleString()}</span>
+    </div>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function EventResolutionsTab({
   eventId, isAGM, agmResolutions = [], agendaItems, setAgendaItems, isSuperAdmin = false,
 }: Props) {
+
+  // ── Live resolution data ──────────────────────────────────────────────────
+  const { data: voteResults, isLoading: voteLoading } = useVoteResults(eventId);
+  const openVotingMutation  = useOpenResolutionVoting();
+  const closeVotingMutation = useCloseResolutionVoting();
+  const [duration, setDuration] = useState("60"); // seconds for vote timer
 
   // ── AGM resolution state (POST /api/v1/client/votes/{eventId}/resolutions) ──
   const [agmNewRows, setAgmNewRows] = useState<AgmNewRow[]>([]);
@@ -136,48 +161,129 @@ export function EventResolutionsTab({
     );
   }
 
-  // ── Sort agmConfig resolutions ────────────────────────────────────────────
-  const sortedResolutions = [...agmResolutions].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
   // ──────────────────────────────────────────────────────────────────────────
   // AGM view
   // ──────────────────────────────────────────────────────────────────────────
   if (isAGM) {
-    const isEmpty = sortedResolutions.length === 0 && agmNewRows.length === 0;
+    // Build a description lookup from the static agmResolutions prop
+    const descMap = new Map(agmResolutions.map((r) => [r.id, r.description]));
+
+    // Prefer live vote data (has status + counts), fall back to static agmResolutions
+    const liveResolutions = voteResults?.resolutions ?? [];
+    const displayList = liveResolutions.length > 0
+      ? liveResolutions.map((r) => ({
+          id:                r.id,
+          order:             r.order,
+          title:             r.title,
+          description:       descMap.get(r.id),
+          isSpecialResolution: r.specialResolution,
+          status:            r.status as "PENDING" | "OPEN" | "CLOSED",
+          forCount:          r.votesFor,
+          againstCount:      r.votesAgainst,
+          abstainCount:      r.abstentions,
+          totalShares:       r.totalShares,
+        }))
+      : agmResolutions
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+          .map((r, i) => ({
+            id:                r.id,
+            order:             r.order ?? i + 1,
+            title:             r.title,
+            description:       r.description,
+            isSpecialResolution: r.isSpecialResolution ?? r.specialResolution ?? false,
+            status:            "PENDING" as const,
+            forCount:          0,
+            againstCount:      0,
+            abstainCount:      0,
+            totalShares:       0,
+          }));
+
+    const isEmpty = displayList.length === 0 && agmNewRows.length === 0;
 
     return (
       <Card className="attend-card p-5">
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-start justify-between mb-5 gap-4">
           <div>
             <h2 className="font-semibold text-[hsl(var(--foreground))]">Resolutions</h2>
             <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-              Each resolution will be voted on individually. Voting is initiated from the Live Control Room.
+              Manage voting on each resolution. Use Open Vote / Close Vote to control when shareholders can vote.
             </p>
           </div>
-          {!isSuperAdmin && (
-            <Button size="sm" variant="outline" onClick={addAgmRow} className="gap-1.5">
-              <PlusCircle className="h-3.5 w-3.5" />
-              Add Resolution
-            </Button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Duration selector for opening votes */}
+            {!isSuperAdmin && (
+              <div className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+                <select
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  className="text-xs border border-[hsl(var(--border))] rounded-lg px-2 py-1.5 bg-[hsl(var(--background))] text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
+                >
+                  <option value="60">1 min</option>
+                  <option value="120">2 min</option>
+                  <option value="300">5 min</option>
+                  <option value="600">10 min</option>
+                  <option value="0">No timer</option>
+                </select>
+              </div>
+            )}
+            {!isSuperAdmin && (
+              <Button size="sm" variant="outline" onClick={addAgmRow} className="gap-1.5">
+                <PlusCircle className="h-3.5 w-3.5" />
+                Add Resolution
+              </Button>
+            )}
+          </div>
         </div>
+
+        {voteLoading && liveResolutions.length === 0 && (
+          <div className="mb-4">
+            <Loader variant="inline" text="Loading live resolution status…" />
+          </div>
+        )}
 
         <div className="flex flex-col gap-3">
 
-          {/* Persisted resolutions from agmConfig */}
-          {sortedResolutions.map((res, idx) => {
-            const isSpecial = res.isSpecialResolution ?? res.specialResolution ?? false;
+          {/* Live / static resolution list */}
+          {displayList.map((res, idx) => {
+            const isPending = res.status === "PENDING";
+            const isOpen    = res.status === "OPEN";
+            const isClosed  = res.status === "CLOSED";
+            const total     = res.forCount + res.againstCount + res.abstainCount;
+
             return (
               <div
                 key={res.id}
                 className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-4"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 min-w-0">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
                     <span className="h-6 w-6 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))] text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
                       {res.order ?? idx + 1}
                     </span>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                        {isPending && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Pending</span>
+                        )}
+                        {isOpen && (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" /> Open
+                          </span>
+                        )}
+                        {isClosed && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">Closed</span>
+                        )}
+                        {res.isSpecialResolution ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                            <ShieldCheck className="h-3 w-3" /> Special
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 rounded-full px-2 py-0.5">
+                            <CheckCircle2 className="h-3 w-3" /> Ordinary
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm font-semibold text-[hsl(var(--foreground))] leading-snug">
                         {res.title}
                       </p>
@@ -188,16 +294,73 @@ export function EventResolutionsTab({
                       )}
                     </div>
                   </div>
-                  {isSpecial ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 shrink-0 whitespace-nowrap">
-                      <ShieldCheck className="h-3 w-3" /> Special
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-50 rounded-full px-2 py-0.5 shrink-0 whitespace-nowrap">
-                      <CheckCircle2 className="h-3 w-3" /> Ordinary
-                    </span>
+
+                  {/* Open / Close vote buttons */}
+                  {!isSuperAdmin && (
+                    <div className="shrink-0">
+                      {isPending && (
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs gap-1.5 bg-green-600 hover:bg-green-700"
+                          disabled={openVotingMutation.isPending}
+                          onClick={() => openVotingMutation.mutate({
+                            eventId,
+                            resolutionId: res.id,
+                            durationSeconds: duration !== "0" ? parseInt(duration, 10) : undefined,
+                          })}
+                        >
+                          {openVotingMutation.isPending
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <Play className="h-3 w-3" />}
+                          Open Vote
+                        </Button>
+                      )}
+                      {isOpen && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
+                          disabled={closeVotingMutation.isPending}
+                          onClick={() => closeVotingMutation.mutate({ eventId, resolutionId: res.id })}
+                        >
+                          {closeVotingMutation.isPending
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <Square className="h-3 w-3" />}
+                          Close Vote
+                        </Button>
+                      )}
+                      {isClosed && (
+                        <span className="inline-flex items-center gap-1 text-xs text-[hsl(var(--muted-foreground))]">
+                          <BarChart2 className="h-3.5 w-3.5" /> Final
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
+
+                {/* Vote results bar (open or closed) */}
+                {(isOpen || isClosed) && (
+                  <div className="mt-3 bg-[hsl(var(--background))] rounded-xl border border-[hsl(var(--border))] p-3 flex flex-col gap-2">
+                    <VoteBar label="For"     value={res.forCount}     total={total} color="#16a34a" />
+                    <VoteBar label="Against" value={res.againstCount} total={total} color="#dc2626" />
+                    <VoteBar label="Abstain" value={res.abstainCount} total={total} color="#9ca3af" />
+                    <div className="pt-1.5 mt-0.5 border-t border-[hsl(var(--border))] flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
+                      <span>Total votes: <span className="font-semibold text-[hsl(var(--foreground))]">{total.toLocaleString()}</span></span>
+                      {(isClosed) && (
+                        <span className={`font-semibold ${total > 0 && res.forCount > res.againstCount ? "text-green-600" : "text-red-600"}`}>
+                          {total > 0 ? (res.forCount > res.againstCount ? "✓ Passed" : "✗ Failed") : "No votes cast"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {isPending && (
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2 italic">
+                    Voting has not started for this resolution.
+                    {!isSuperAdmin && ' Click "Open Vote" to begin.'}
+                  </p>
+                )}
               </div>
             );
           })}
@@ -210,7 +373,7 @@ export function EventResolutionsTab({
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-[hsl(var(--primary))]">
-                  NEW RES. {sortedResolutions.length + idx + 1}
+                  NEW RES. {displayList.length + idx + 1}
                 </span>
                 <button
                   type="button"

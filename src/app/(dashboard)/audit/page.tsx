@@ -5,12 +5,16 @@ import { Search, ShieldAlert, AlertTriangle, Info, Activity } from "lucide-react
 import { Card } from "@/components/ui/card";
 import { CustomSelect } from "@/components/custom/custom-select";
 import { Button } from "@/components/ui/button";
+import { useGetMe } from "@/api/auth/hooks";
 import {
   useClientAuditLogs,
   type AuditLogEntry,
   type AuditCategory,
   type AuditSeverity,
 } from "@/api/client-audit";
+import { useAdminAuditLogs } from "@/api/super-admin";
+
+const SUPER_ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
 
 // ─── Display config ───────────────────────────────────────────────────────────
 
@@ -168,6 +172,9 @@ function LogRow({ entry }: { entry: AuditLogEntry }) {
 const PAGE_SIZE = 20;
 
 export default function AuditLogPage() {
+  const { data: userResponse } = useGetMe();
+  const isSuperAdmin = SUPER_ADMIN_ROLES.has(userResponse?.data?.role?.toLowerCase() ?? "");
+
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [category,    setCategory]    = useState("");
@@ -183,9 +190,17 @@ export default function AuditLogPage() {
   const applyCategory = useCallback((v: string) => { setCategory(v); setPage(0); }, []);
   const applySeverity = useCallback((v: string) => { setSeverity(v); setPage(0); }, []);
 
-  const { data, isLoading, isFetching } = useClientAuditLogs({
-    search: searchQuery, category, severity, page, size: PAGE_SIZE,
-  });
+  // Super admin uses the platform-wide audit log; client admin uses their org's log
+  const { data: adminData,  isLoading: adminLoading,  isFetching: adminFetching  } = useAdminAuditLogs(
+    isSuperAdmin ? { search: searchQuery, category, severity, page, size: PAGE_SIZE } : {}
+  );
+  const { data: clientData, isLoading: clientLoading, isFetching: clientFetching } = useClientAuditLogs(
+    !isSuperAdmin ? { search: searchQuery, category, severity, page, size: PAGE_SIZE } : {}
+  );
+
+  const data       = isSuperAdmin ? adminData  : clientData;
+  const isLoading  = isSuperAdmin ? adminLoading  : clientLoading;
+  const isFetching = isSuperAdmin ? adminFetching : clientFetching;
 
   const logs       = data?.logs       ?? [];
   const totalCount = data?.totalCount ?? 0;

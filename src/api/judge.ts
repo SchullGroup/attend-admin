@@ -6,6 +6,8 @@
  * GET  /api/v1/judge/challenges/{challengeId}/scoring                 — shortlisted teams + criteria
  * GET  /api/v1/judge/challenges/{challengeId}/applications/{appId}    — full application detail for judge
  * POST /api/v1/judge/challenges/{challengeId}/applications/{appId}/score — submit score
+ * GET  /api/v1/judge/notifications                                    — judge notification feed
+ * PATCH /api/v1/judge/notifications/{id}/read                         — mark notification read
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -140,8 +142,9 @@ export interface JudgeApplicationDetail {
 // Query keys
 // ---------------------------------------------------------------------------
 export const judgeKeys = {
-  all:          ["judge"] as const,
-  judging:      ["judge", "judging"] as const,
+  all:           ["judge"] as const,
+  notifications: ["judge", "notifications"] as const,
+  judging:       ["judge", "judging"] as const,
   challenges:   (search: string, status: string, page: number, size: number) =>
                   ["judge", "challenges", { search, status, page, size }] as const,
   applications: (challengeId: string, status: string, track: string, page: number, size: number) =>
@@ -334,5 +337,72 @@ export function useUpdateJudgeScore() {
       popup.success("Score Updated", "Your score has been updated.", 2500);
     },
     onError: (error: any) => parseAndToastApiError(error, "Score update failed."),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Judge Notifications — GET /api/v1/judge/notifications
+// ---------------------------------------------------------------------------
+
+export interface JudgeNotificationItem {
+  id:          string;
+  title:       string;
+  message:     string;
+  read:        boolean;
+  type:        string;
+  referenceId?: string;
+  createdAt:   string;
+}
+
+export interface JudgeNotificationListResponse {
+  unreadCount:   number;
+  page:          number;
+  limit:         number;
+  totalCount:    number;
+  notifications: JudgeNotificationItem[];
+}
+
+export const judgeNotificationKeys = {
+  all:  ["judge", "notifications"] as const,
+  list: (page: number, limit: number, read?: boolean) =>
+          ["judge", "notifications", "list", page, limit, read] as const,
+};
+
+/** GET /api/v1/judge/notifications */
+export function useJudgeNotifications(page = 0, limit = 10, read?: boolean) {
+  return useQuery({
+    queryKey: judgeNotificationKeys.list(page, limit, read),
+    queryFn: async () => {
+      const params: Record<string, string> = {
+        page:  page.toString(),
+        limit: limit.toString(),
+      };
+      if (read !== undefined) params.read = read.toString();
+      const res = await apiClient.get<ApiResponse<JudgeNotificationListResponse>>(
+        "/api/v1/judge/notifications",
+        { params }
+      );
+      return res.data.data;
+    },
+    refetchInterval:             30_000,
+    refetchIntervalInBackground: false,
+    staleTime:                   20_000,
+  });
+}
+
+/** PATCH /api/v1/judge/notifications/{id}/read */
+export function useMarkJudgeNotificationRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiClient.patch<ApiResponse<string>>(
+        `/api/v1/judge/notifications/${id}/read`
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: judgeNotificationKeys.all });
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to mark notification as read."),
   });
 }
