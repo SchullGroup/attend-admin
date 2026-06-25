@@ -353,6 +353,174 @@ export function useAdminAuditLogs(params: {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Super Admin Analytics — GET /api/v1/admin/analytics/*
+// ---------------------------------------------------------------------------
+
+export interface AdminAnalyticsStatItem { count: number; color: string; }
+export interface AdminAnalyticsStats {
+  totalStakeholders: AdminAnalyticsStatItem;
+  totalEvents:       AdminAnalyticsStatItem;
+  totalParticipants: AdminAnalyticsStatItem;
+  totalDocuments:    AdminAnalyticsStatItem;
+  avgFillRate:       { percentage: number; color: string };
+  [key: string]: any;
+}
+
+export interface AdminAnalyticsByTypeItem {
+  type:        string;
+  eventCount:  number;
+  totalRsvps:  number;
+  color:       string;
+}
+
+export interface AdminAnalyticsTrendItem {
+  month:         string;
+  registrations: number;
+  events:        number;
+}
+
+export interface AdminAnalyticsGrowthItem {
+  month:       string;
+  newCount:    number;
+  cumulative:  number;
+  [key: string]: any;
+}
+
+export interface AdminAnalyticsEventItem {
+  id:             string;
+  title:          string;
+  eventType:      string;
+  stakeholderName:string;
+  date:           string;
+  status:         string;
+  rsvpCount:      number;
+  capacity:       number;
+  fillRate:       number;
+  checkedInCount: number;
+  checkInRate:    number;
+}
+
+export interface AdminAnalyticsEventPerformanceResponse {
+  totalCount: number;
+  page:       number;
+  size:       number;
+  events:     AdminAnalyticsEventItem[];
+}
+
+export interface AdminRecentRegistrationItem {
+  id:             string;
+  participantName:string;
+  email:          string;
+  initials:       string;
+  avatarColor:    string;
+  kycStatus:      string;
+  registeredAgo:  string;
+  registeredAt:   string;
+}
+
+export interface AdminRecentRegistrationsResponse {
+  content:       AdminRecentRegistrationItem[];
+  page:          number;
+  size:          number;
+  totalElements: number;
+  totalPages:    number;
+  last:          boolean;
+}
+
+/** GET /api/v1/admin/analytics/stats */
+export function useAdminAnalyticsStats() {
+  return useQuery({
+    queryKey: [...superAdminKeys.all, "analytics", "stats"],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<AdminAnalyticsStats>>("/api/v1/admin/analytics/stats");
+      return (res.data.data ?? res.data) as AdminAnalyticsStats;
+    },
+    staleTime: 60_000,
+  });
+}
+
+/** GET /api/v1/admin/analytics/by-type */
+export function useAdminAnalyticsByType() {
+  return useQuery({
+    queryKey: [...superAdminKeys.all, "analytics", "by-type"],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ byType: AdminAnalyticsByTypeItem[] }>>("/api/v1/admin/analytics/by-type");
+      const raw = (res.data.data ?? res.data) as any;
+      return (raw?.byType ?? Object.values(raw ?? {})) as AdminAnalyticsByTypeItem[];
+    },
+    staleTime: 60_000,
+  });
+}
+
+/** GET /api/v1/admin/analytics/monthly-trend */
+export function useAdminAnalyticsMonthlyTrend(months = 6) {
+  return useQuery({
+    queryKey: [...superAdminKeys.all, "analytics", "monthly-trend", months],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ trend: AdminAnalyticsTrendItem[] }>>(
+        "/api/v1/admin/analytics/monthly-trend", { params: { months } }
+      );
+      const raw = (res.data.data ?? res.data) as any;
+      return (raw?.trend ?? Object.values(raw ?? {})) as AdminAnalyticsTrendItem[];
+    },
+    staleTime: 60_000,
+  });
+}
+
+/** GET /api/v1/admin/analytics/stakeholder-growth */
+export function useAdminAnalyticsStakeholderGrowth(months = 6) {
+  return useQuery({
+    queryKey: [...superAdminKeys.all, "analytics", "stakeholder-growth", months],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ growth: AdminAnalyticsGrowthItem[] }>>(
+        "/api/v1/admin/analytics/stakeholder-growth", { params: { months } }
+      );
+      const raw = (res.data.data ?? res.data) as any;
+      return (raw?.growth ?? Object.values(raw ?? {})) as AdminAnalyticsGrowthItem[];
+    },
+    staleTime: 60_000,
+  });
+}
+
+/** GET /api/v1/admin/analytics/event-performance */
+export function useAdminAnalyticsEventPerformance(
+  stakeholderId = "", eventType = "", page = 0, size = 20
+) {
+  return useQuery({
+    queryKey: [...superAdminKeys.all, "analytics", "event-performance", { stakeholderId, eventType, page, size }],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<AdminAnalyticsEventPerformanceResponse>>(
+        "/api/v1/admin/analytics/event-performance",
+        { params: { ...(stakeholderId ? { stakeholderId } : {}), ...(eventType ? { eventType } : {}), page, size } }
+      );
+      const raw = (res.data.data ?? res.data) as any;
+      return {
+        totalCount: raw?.totalCount ?? raw?.totalElements ?? 0,
+        page:       raw?.page       ?? page,
+        size:       raw?.size       ?? size,
+        events:     raw?.events     ?? raw?.content ?? [],
+      } as AdminAnalyticsEventPerformanceResponse;
+    },
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+  });
+}
+
+/** GET /api/v1/admin/registrations */
+export function useAdminRecentRegistrations(page = 0, limit = 10) {
+  return useQuery({
+    queryKey: [...superAdminKeys.all, "recent-registrations", page, limit],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<AdminRecentRegistrationsResponse>>(
+        "/api/v1/admin/registrations", { params: { page, limit } }
+      );
+      return (res.data.data ?? res.data) as AdminRecentRegistrationsResponse;
+    },
+    staleTime: 30_000,
+  });
+}
+
 // --- Mutations ---
 
 export function useEnrollStakeholder() {

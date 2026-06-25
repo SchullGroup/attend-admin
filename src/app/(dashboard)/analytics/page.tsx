@@ -22,11 +22,15 @@ import {
   useExportRegistrations,
   extractStat,
 } from "@/api/client-analytics";
+import { useGetMe } from "@/api/auth/hooks";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
+import { SuperAdminAnalytics } from "./SuperAdminAnalytics";
+
+const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -179,10 +183,10 @@ function ExportRegistrationsPanel({ events }: { events: { id: string; eventId?: 
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// Client Admin Analytics (extracted so hooks are never called after early return)
 // ---------------------------------------------------------------------------
 
-export default function AnalyticsPage() {
+function ClientAnalytics() {
   const [perfPage, setPerfPage] = useState(0);
   const perfSize = 10;
 
@@ -266,14 +270,6 @@ export default function AnalyticsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Analytics</h1>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-          Platform performance overview
-        </p>
-      </div>
-
       {/* Stat cards */}
       <div className="grid grid-cols-4 gap-4">
         {statCards.map((s) => (
@@ -641,6 +637,28 @@ export default function AnalyticsPage() {
       </Card>
       {/* Export Registrations */}
       <ExportRegistrationsPanel events={perfEvents} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page — role gate
+// ---------------------------------------------------------------------------
+
+export default function AnalyticsPage() {
+  const { data: userResponse } = useGetMe();
+  const role = userResponse?.data?.role?.toLowerCase() ?? "";
+  const isSuperAdmin = SUPER_ADMIN_ROLES.has(role);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Analytics</h1>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+          {isSuperAdmin ? "Platform-wide performance overview" : "Platform performance overview"}
+        </p>
+      </div>
+      {isSuperAdmin ? <SuperAdminAnalytics /> : <ClientAnalytics />}
     </div>
   );
 }

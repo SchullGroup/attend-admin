@@ -99,9 +99,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [tab,              setTab]             = useState("Overview");
   const [localStatus,      setLocalStatus]     = useState<string | null>(null);
   const [agendaItems,      setAgendaItems]     = useState<LocalAgendaItem[]>([]);
-  const [broadcastMsg,     setBroadcastMsg]    = useState("");
-  const [broadcastChannel, setBroadcastChannel] = useState<"push"|"sms"|"email"|"all">("push");
-  const [broadcastHistory, setBroadcastHistory] = useState<Array<{ text: string; channel: string; sentAt: string }>>([]);
 
   // ── Loading / error ───────────────────────────────────────────────────────
   if (eventLoading) return <Loader variant="page" text="Loading Event…" />;
@@ -253,7 +250,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} isAdmin={isAdmin} />}
       {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin} />}
       {tab === "Stakeholders" && !isSuperAdmin && (isAGM || isLAUNCH) && <EventExpectedAttendeesTab  eventId={id} />}
-      {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab   rsvpCount={rsvpCount} broadcastMsg={broadcastMsg} setBroadcastMsg={setBroadcastMsg} broadcastChannel={broadcastChannel} setBroadcastChannel={setBroadcastChannel} broadcastHistory={broadcastHistory} setBroadcastHistory={setBroadcastHistory} />}
+      {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab eventId={id} />}
       {tab === "Vote Results"       && isAGM && <EventVoteResultsTab voteResults={voteResultsData} />}
       {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} voteResults={voteResultsData} participants={participants} eventId={id} />}
       {tab === "Settings" && !isSuperAdmin && <EventSettingsTab

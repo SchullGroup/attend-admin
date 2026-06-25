@@ -129,17 +129,18 @@ export function Header() {
 
   const searching = isAdmin ? adminSearching : clientSearching;
 
-  // Admin result groups: events / participants / stakeholders
+  // Admin result groups: events / users / clientAdmins / stakeholders
   const resultEvents: SearchEvent[] = isAdmin ? (adminSearchResults?.events as SearchEvent[] || []) : (clientSearchResults?.events || []);
-  const resultParticipants = isAdmin ? (adminSearchResults?.participants  || []) : [];
-  const resultStakeholders = isAdmin ? (adminSearchResults?.stakeholders  || []) : [];
+  const resultParticipants = isAdmin ? (adminSearchResults?.users ?? adminSearchResults?.participants ?? []) : [];
+  const resultClientAdmins = isAdmin ? (adminSearchResults?.clientAdmins ?? []) : [];
+  const resultStakeholders = isAdmin ? (adminSearchResults?.stakeholders ?? []) : [];
   // Client-only groups
   const resultTeamMembers: SearchTeamMember[] = isAdmin ? [] : (clientSearchResults?.teamMembers || []);
   const resultDocuments:   SearchDocument[]    = isAdmin ? [] : (clientSearchResults?.documents    || []);
 
-  const hasResults = resultEvents.length + resultParticipants.length + resultStakeholders.length + resultTeamMembers.length + resultDocuments.length > 0;
+  const hasResults = resultEvents.length + resultParticipants.length + resultClientAdmins.length + resultStakeholders.length + resultTeamMembers.length + resultDocuments.length > 0;
   const totalResults = hasResults
-    ? resultEvents.length + resultParticipants.length + resultStakeholders.length + resultTeamMembers.length + resultDocuments.length
+    ? resultEvents.length + resultParticipants.length + resultClientAdmins.length + resultStakeholders.length + resultTeamMembers.length + resultDocuments.length
     : 0;
 
   // Close dropdown when clicking outside
@@ -174,11 +175,11 @@ export function Header() {
 
   // ── Unified values ─────────────────────────────────────────────────────────
   const unreadCount = isAdmin
-    ? (adminUnreadData?.data?.totalElements ?? 0)
+    ? (adminUnreadData?.data?.unreadCount ?? adminUnreadData?.data?.totalElements ?? 0)
     : (clientNotifData?.unreadCount ?? 0);
 
   const notifications: any[] = isAdmin
-    ? (adminNotifData?.data?.content ?? [])
+    ? (adminNotifData?.data?.notifications ?? adminNotifData?.data?.content ?? [])
     : (clientNotifData?.notifications ?? []);
 
   function markAsRead(id: string) {
@@ -316,8 +317,33 @@ export function Header() {
                       <Building2 className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{s.name}</p>
+                      <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{s.companyName ?? s.name}</p>
                       {s.industry && <p className="text-xs text-[hsl(var(--muted-foreground))]">{s.industry}</p>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Client Admins group (super admin only) */}
+            {resultClientAdmins.length > 0 && (
+              <div>
+                <div className="px-4 pt-3 pb-1 flex items-center gap-1.5 border-t border-[hsl(var(--border)/0.5)]">
+                  <Users className="h-3 w-3 text-[hsl(var(--muted-foreground))]" />
+                  <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Client Admins</span>
+                </div>
+                {resultClientAdmins.map((a) => (
+                  <button
+                    key={a.id}
+                    onClick={() => handleSearchNav(`/registers`)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.5)] transition-colors text-left"
+                  >
+                    <div className="h-7 w-7 rounded-full bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-xs font-bold text-[hsl(var(--primary))] shrink-0">
+                      {a.fullName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{a.fullName}</p>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{a.organisationName}</p>
                     </div>
                   </button>
                 ))}

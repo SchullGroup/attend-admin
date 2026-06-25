@@ -723,6 +723,110 @@ export function useDownloadShareholderList() {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Broadcast
+// ---------------------------------------------------------------------------
+
+export interface BroadcastHistoryItem {
+  id:               string;
+  channel:          string;
+  subject?:         string;
+  message:          string;
+  totalRecipients:  number;
+  emailSent:        number;
+  smsSent:          number;
+  skipped:          number;
+  sentAt:           string;
+  timeAgo:          string;
+}
+
+export interface BroadcastHistoryResponse {
+  content:       BroadcastHistoryItem[];
+  page:          number;
+  size:          number;
+  totalElements: number;
+  totalPages:    number;
+  last:          boolean;
+}
+
+export interface SendBroadcastRequest {
+  subject?: string;
+  message:  string;
+  channel:  "EMAIL" | "SMS" | "ALL";
+}
+
+export interface BulkNoticeRequest {
+  eventIds: string[];
+  subject:  string;
+  message:  string;
+}
+
+/** GET /api/v1/client/events/{id}/broadcast/recipients */
+export function useBroadcastRecipients(eventId: string) {
+  return useQuery({
+    queryKey: ["broadcast", "recipients", eventId],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<Record<string, string>>>(
+        `/api/v1/client/events/${eventId}/broadcast/recipients`
+      );
+      const raw = res.data.data as any;
+      return (raw?.count ?? raw?.recipientCount ?? raw?.totalRecipients ?? 0) as number;
+    },
+    enabled:   !!eventId,
+    staleTime: 60_000,
+  });
+}
+
+/** GET /api/v1/client/events/{id}/broadcast/history */
+export function useBroadcastHistory(eventId: string, page = 0, size = 20) {
+  return useQuery({
+    queryKey: ["broadcast", "history", eventId, page, size],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<BroadcastHistoryResponse>>(
+        `/api/v1/client/events/${eventId}/broadcast/history`,
+        { params: { page, size } }
+      );
+      return res.data.data;
+    },
+    enabled:   !!eventId,
+    staleTime: 30_000,
+  });
+}
+
+/** POST /api/v1/client/events/{id}/broadcast */
+export function useSendBroadcast() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, data }: { eventId: string; data: SendBroadcastRequest }) => {
+      const res = await apiClient.post<ApiResponse<any>>(
+        `/api/v1/client/events/${eventId}/broadcast`,
+        data
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, { eventId }) => {
+      qc.invalidateQueries({ queryKey: ["broadcast", "history", eventId] });
+      popup.success("Broadcast Sent", "Your message has been delivered to attendees.", 3000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Broadcast failed."),
+  });
+}
+
+/** POST /api/v1/client/events/notify-bulk */
+export function useSendBulkNotice() {
+  return useMutation({
+    mutationFn: async (data: BulkNoticeRequest) => {
+      const res = await apiClient.post<ApiResponse<any>>(
+        "/api/v1/client/events/notify-bulk",
+        data
+      );
+      return res.data.data;
+    },
+    onSuccess: () => popup.success("Bulk Notice Sent", "Notice delivered across all selected events.", 3000),
+    onError:   (error: any) => parseAndToastApiError(error, "Bulk notice failed."),
+  });
+}
+
 /** POST /api/v1/client/events/{id}/retain-data */
 export function useRetainEventData() {
   return useMutation({

@@ -121,8 +121,8 @@ export const clientOrgKeys = {
   all:         ["clientOrg"] as const,
   stakeholder: ["clientOrg", "stakeholder"] as const,
   profile:     ["clientOrg", "profile"] as const,
-  team:        (role: string, status: string, page: number, size: number) =>
-                 ["clientOrg", "team", { role, status, page, size }] as const,
+  team:        (role: string, status: string, page: number, size: number, search?: string) =>
+                 ["clientOrg", "team", { role, status, page, size, search }] as const,
   roles:       ["clientOrg", "roles"] as const,
   permissions: ["clientOrg", "permissions"] as const,
 };
@@ -164,14 +164,22 @@ export function useOrganisationProfile() {
   });
 }
 
-/** Paginated team member list with optional role/status filter. */
-export function useOrganisationTeam(role = "", status = "", page = 0, size = 20) {
+/** Paginated team member list with optional role/status/search filter. */
+export function useOrganisationTeam(role = "", status = "", page = 0, size = 20, search = "") {
   return useQuery({
-    queryKey: clientOrgKeys.team(role, status, page, size),
+    queryKey: clientOrgKeys.team(role, status, page, size, search),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<TeamMembersResponse>>(
         "/api/v1/client/organisation/team",
-        { params: { ...(role ? { role } : {}), ...(status ? { status } : {}), page, size } }
+        {
+          params: {
+            ...(role   ? { role }   : {}),
+            ...(status ? { status } : {}),
+            ...(search.trim().length >= 2 ? { search: search.trim() } : {}),
+            page,
+            size,
+          },
+        }
       );
       return res.data.data;
     },

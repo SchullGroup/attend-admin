@@ -379,42 +379,67 @@ export interface NotificationResponse {
 }
 
 export interface NotificationListResponse {
-  content: NotificationResponse[];
-  totalElements: number;
-  totalPages: number;
-  size: number;
-  number: number;
+  notifications:   NotificationResponse[];
+  unreadCount:     number;
+  totalCount:      number;
+  page:            number;
+  limit:           number;
+  // Legacy Spring pagination fields — kept for backward-compat
+  content?:        NotificationResponse[];
+  totalElements?:  number;
+  totalPages?:     number;
 }
 
 // ---------------------------------------------------------------------------
 // Global Search  — GET /api/v1/admin/search
 // ---------------------------------------------------------------------------
 export interface SearchEventResult {
-  id: string;
-  title: string;
-  status: string;
-  date: string;
+  id:           string;
+  title:        string;
+  eventType?:   string;
+  status:       string;
+  date:         string;
+  organiserName?: string;
 }
 
-export interface SearchParticipantResult {
-  id: string;
-  fullName: string;
-  email: string;
+export interface SearchUserResult {
+  id:        string;
+  fullName:  string;
+  email:     string;
   kycStatus: string;
+  role:      string;
+}
+
+export interface SearchClientAdminResult {
+  id:               string;
+  fullName:         string;
+  email:            string;
+  organisationName: string;
+  status:           string;
 }
 
 export interface SearchStakeholderResult {
-  id: string;
-  name: string;
-  industry: string;
+  id:          string;
+  companyName: string;
+  industry:    string;
+  status:      string;
+  email:       string;
+  // legacy
+  name?: string;
 }
 
+// Legacy alias
+export type SearchParticipantResult = SearchUserResult;
+
 export interface SearchResponse {
-  query: string;
+  query:        string;
   totalResults: number;
-  events: SearchEventResult[];
-  participants: SearchParticipantResult[];
+  events:       SearchEventResult[];
+  users:        SearchUserResult[];
+  clientAdmins: SearchClientAdminResult[];
   stakeholders: SearchStakeholderResult[];
+  // legacy
+  participants?: SearchUserResult[];
 }
 
 export interface SearchParams {
