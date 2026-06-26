@@ -36,10 +36,11 @@ export interface AgmResolution {
 
 /** Unsaved row being composed in the AGM resolution form */
 interface AgmNewRow {
-  id:                string;
-  title:             string;
-  description:       string;
-  specialResolution: boolean;
+  id:                      string;
+  title:                   string;
+  description:             string;
+  specialResolution:       boolean;
+  defaultDurationSeconds?: number;
 }
 
 interface Props {
@@ -93,7 +94,7 @@ export function EventResolutionsTab({
   const addResolutionMutation = useAddResolution();
 
   function addAgmRow() {
-    setAgmNewRows((prev) => [...prev, { id: uid(), title: "", description: "", specialResolution: false }]);
+    setAgmNewRows((prev) => [...prev, { id: uid(), title: "", description: "", specialResolution: false, defaultDurationSeconds: undefined }]);
   }
   function removeAgmRow(id: string) {
     setAgmNewRows((prev) => prev.filter((r) => r.id !== id));
@@ -110,9 +111,10 @@ export function EventResolutionsTab({
       {
         eventId,
         data: {
-          title:             row.title.trim(),
-          description:       row.description.trim() || undefined,
-          specialResolution: row.specialResolution,
+          title:                   row.title.trim(),
+          description:             row.description.trim() || undefined,
+          specialResolution:       row.specialResolution,
+          defaultDurationSeconds:  row.defaultDurationSeconds,
         },
       },
       { onSuccess: () => setAgmNewRows((prev) => prev.filter((r) => r.id !== row.id)) }
@@ -133,7 +135,7 @@ export function EventResolutionsTab({
       return;
     }
     addMutation.mutate(
-      { eventId, item: { time: item.time ?? "", title: item.title, speaker: item.speaker ?? undefined } },
+      { eventId, item: { time: item.time ?? "", title: item.title, speaker: item.speaker ?? undefined, durationMinutes: item.durationMinutes } },
       {
         onSuccess: () => {
           setAgendaItems((a) => a.filter((x) => x.id !== item.id));
@@ -417,6 +419,25 @@ export function EventResolutionsTab({
                 </span>
               </label>
 
+              <div>
+                <Label className="mb-1.5">Default vote duration (seconds) <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span></Label>
+                <Input
+                  type="number"
+                  min={10}
+                  placeholder="e.g. 120"
+                  value={row.defaultDurationSeconds ?? ""}
+                  onChange={(e) =>
+                    setAgmNewRows((prev) =>
+                      prev.map((r) =>
+                        r.id === row.id
+                          ? { ...r, defaultDurationSeconds: e.target.value ? parseInt(e.target.value, 10) : undefined }
+                          : r
+                      )
+                    )
+                  }
+                />
+              </div>
+
               <div className="flex justify-end pt-1">
                 <Button
                   size="sm"
@@ -463,7 +484,7 @@ export function EventResolutionsTab({
       <div className="flex flex-col gap-3">
 
         {/* Persisted agenda items */}
-        {serverItems.map((item, idx) => (
+        {serverItems.map((item) => (
           <div key={item.id} className="grid grid-cols-12 gap-2 items-end">
             <div className="col-span-2">
               <Label className="mb-1.5">Time</Label>
@@ -478,7 +499,7 @@ export function EventResolutionsTab({
                 }
               />
             </div>
-            <div className={isSuperAdmin ? "col-span-5" : "col-span-5"}>
+            <div className="col-span-4">
               <Label className="mb-1.5">Title</Label>
               <Input
                 placeholder="Agenda item title"
@@ -491,7 +512,7 @@ export function EventResolutionsTab({
                 }
               />
             </div>
-            <div className={isSuperAdmin ? "col-span-5" : "col-span-4"}>
+            <div className="col-span-3">
               <Label className="mb-1.5">Speaker (optional)</Label>
               <Input
                 placeholder="Speaker name"
@@ -501,6 +522,25 @@ export function EventResolutionsTab({
                 onBlur={(e) =>
                   !isSuperAdmin && item.id &&
                   updateMutation.mutate({ eventId, itemId: item.id, data: { speaker: e.target.value } })
+                }
+              />
+            </div>
+            <div className={isSuperAdmin ? "col-span-3" : "col-span-2"}>
+              <Label className="mb-1.5">Duration (min)</Label>
+              <Input
+                type="number"
+                min={1}
+                placeholder="—"
+                defaultValue={item.durationMinutes ?? ""}
+                readOnly={isSuperAdmin}
+                className={isSuperAdmin ? "opacity-70 cursor-default" : ""}
+                onBlur={(e) =>
+                  !isSuperAdmin && item.id &&
+                  updateMutation.mutate({
+                    eventId,
+                    itemId: item.id,
+                    data: { durationMinutes: e.target.value ? parseInt(e.target.value, 10) : undefined },
+                  })
                 }
               />
             </div>
@@ -522,7 +562,7 @@ export function EventResolutionsTab({
         ))}
 
         {/* Unsaved new agenda rows */}
-        {!isSuperAdmin && newUserRows.map((item, idx) => (
+        {!isSuperAdmin && newUserRows.map((item) => (
           <div
             key={item.id}
             className="grid grid-cols-12 gap-2 items-end border border-[hsl(var(--primary)/0.2)] rounded-lg p-2 bg-[hsl(var(--primary)/0.02)]"
@@ -535,7 +575,7 @@ export function EventResolutionsTab({
                 onChange={(e) => updateLocalRow(item.id, "time", e.target.value)}
               />
             </div>
-            <div className="col-span-5">
+            <div className="col-span-4">
               <Label className="mb-1.5">Title</Label>
               <Input
                 placeholder="Agenda item title"
@@ -549,6 +589,24 @@ export function EventResolutionsTab({
                 placeholder="Speaker name"
                 value={item.speaker ?? ""}
                 onChange={(e) => updateLocalRow(item.id, "speaker", e.target.value)}
+              />
+            </div>
+            <div className="col-span-2">
+              <Label className="mb-1.5">Duration (min)</Label>
+              <Input
+                type="number"
+                min={1}
+                placeholder="—"
+                value={item.durationMinutes ?? ""}
+                onChange={(e) =>
+                  setAgendaItems((a) =>
+                    a.map((x) =>
+                      x.id === item.id
+                        ? { ...x, durationMinutes: e.target.value ? parseInt(e.target.value, 10) : undefined }
+                        : x
+                    )
+                  )
+                }
               />
             </div>
             <div className="col-span-1 flex flex-col gap-1 pb-1 items-center">

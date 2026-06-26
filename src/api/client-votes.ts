@@ -121,11 +121,12 @@ export interface OpenResolutionRequest {
 }
 
 export interface CreateResolutionRequest {
-  title:              string;
-  description?:       string;
-  specialResolution?: boolean;
-  votingDeadline?:    string;   // ISO datetime e.g. "2026-06-22T18:00:00"
-  order?:             number;
+  title:                   string;
+  description?:            string;
+  specialResolution?:      boolean;
+  votingDeadline?:         string;   // ISO datetime e.g. "2026-06-22T18:00:00"
+  order?:                  number;
+  defaultDurationSeconds?: number;
 }
 
 export interface ExportResolutionItem {

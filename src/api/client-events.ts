@@ -60,23 +60,26 @@ export interface StatusTransitionResponse {
 
 // Agenda
 export interface AgendaItemDto {
-  id?:     string;
-  order?:  number;
-  time:    string;
-  title:   string;
-  speaker?: string;
+  id?:              string;
+  order?:           number;
+  time:             string;
+  title:            string;
+  speaker?:         string;
+  durationMinutes?: number;
 }
 
 export interface AddAgendaItemRequest {
-  time:     string;
-  title:    string;
-  speaker?: string;
+  time:             string;
+  title:            string;
+  speaker?:         string;
+  durationMinutes?: number;
 }
 
 export interface UpdateAgendaItemRequest {
-  time?:    string;
-  title?:   string;
-  speaker?: string;
+  time?:            string;
+  title?:           string;
+  speaker?:         string;
+  durationMinutes?: number;
 }
 
 export interface AgendaListResponse {
