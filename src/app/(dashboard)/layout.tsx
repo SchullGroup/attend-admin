@@ -28,7 +28,8 @@ export default function DashboardLayout({
     axios
       .post("/api/auth/refresh")
       .then(({ data }) => {
-        const token = data?.data?.token;
+        const tokenData = data?.data ?? data;
+        const token = tokenData?.token ?? tokenData?.accessToken;
         if (token) {
           Cookies.set("accessToken", token, {
             expires:  1,

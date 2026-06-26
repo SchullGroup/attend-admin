@@ -19,16 +19,17 @@ export type AuditCategory = "AUTH" | "EVENTS" | "DOCUMENTS" | "TEAM" | "APPLICAT
 export type AuditSeverity = "INFO" | "WARNING" | "CRITICAL";
 
 export interface AuditLogEntry {
-  id:           string;
-  timestamp:    string;
-  actorEmail:   string;
-  actorIp:      string;
-  action:       string;
-  category:     string;   // AuditCategory — kept as string for forward-compat
-  resourceName: string;
-  resourceId:   string;
-  details:      string;
-  severity:     string;   // AuditSeverity — kept as string for forward-compat
+  id:               string;
+  timestamp:        string;
+  stakeholderName?: string; // present in super-admin audit logs
+  actorEmail:       string;
+  actorIp:          string;
+  action:           string;
+  category:         string;   // AuditCategory — kept as string for forward-compat
+  resourceName:     string;
+  resourceId:       string;
+  details:          string;
+  severity:         string;   // AuditSeverity — kept as string for forward-compat
 }
 
 export interface AuditLogsResponse {

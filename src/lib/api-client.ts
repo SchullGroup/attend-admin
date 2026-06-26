@@ -84,7 +84,8 @@ apiClient.interceptors.response.use(
         // Call the local Next.js proxy route which automatically sends the HttpOnly refresh token cookie
         const { data } = await axios.post("/api/auth/refresh");
 
-        const newAccessToken = data.data.token;
+        const tokenData = data.data ?? data;
+        const newAccessToken = tokenData.token ?? tokenData.accessToken;
         if (!newAccessToken) throw new Error("No token in refresh response");
         Cookies.set("accessToken", newAccessToken, {
           expires:  1, // 1 day — keep consistent with login

@@ -31,18 +31,22 @@ export async function POST(request: Request) {
       return NextResponse.json(data, { status: response.status || 401 });
     }
 
-    const { refreshToken: newRefreshToken, ...restData } = data.data;
+    // Support both wrapped ({ data: { token, refreshToken } }) and flat ({ token, refreshToken }) shapes
+    const tokenData = data.data ?? data;
+    const { refreshToken: newRefreshToken, ...restData } = tokenData;
 
-    // Set new HttpOnly cookie
-    cookieStore.set("refreshToken", newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
-    });
+    // Only rotate the refresh token cookie if the backend returned a new one
+    if (newRefreshToken) {
+      cookieStore.set("refreshToken", newRefreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+        maxAge: 7 * 24 * 60 * 60, // 7 days
+      });
+    }
 
-    // Return the response without the new refreshToken in the body
+    // Return without the refreshToken in the body
     return NextResponse.json({ ...data, data: restData }, { status: 200 });
   } catch (error) {
     console.error("Refresh Proxy Error:", error);

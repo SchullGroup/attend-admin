@@ -69,7 +69,7 @@ export function useAdminNotifications(page = 0, limit = 10, read?: boolean) {
       const res = await apiClient.get<ApiResponse<NotificationListResponse>>(
         `/api/v1/admin/notifications?${params.toString()}`
       );
-      return res.data; // returns ApiResponse<NotificationListResponse> — unwrap .data for list
+      return res.data.data; // NotificationListResponse
     },
     // Poll every 30 s while the window is focused
     refetchInterval:        30_000,

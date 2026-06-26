@@ -154,19 +154,19 @@ export default function NotificationsPage() {
 
   // Unified list — route by role
   const notifications: any[] = isAdmin
-    ? (adminData?.data?.notifications ?? adminData?.data?.content ?? [])
+    ? (adminData?.notifications ?? [])
     : isJudge
       ? (judgeData?.notifications ?? [])
       : (clientData?.notifications ?? []);
 
   const unreadCount = isAdmin
-    ? (adminData?.data?.unreadCount ?? adminData?.data?.totalElements ?? 0)
+    ? (adminData?.unreadCount ?? 0)
     : isJudge
       ? (judgeData?.unreadCount ?? 0)
       : (clientData?.unreadCount ?? 0);
 
   const totalCount = isAdmin
-    ? (adminData?.data?.totalCount ?? adminData?.data?.totalElements ?? 0)
+    ? (adminData?.totalCount ?? 0)
     : isJudge
       ? (judgeData?.totalCount ?? 0)
       : (clientData?.totalCount ?? 0);

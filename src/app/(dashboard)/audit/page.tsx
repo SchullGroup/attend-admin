@@ -97,8 +97,13 @@ function LogRow({ entry }: { entry: AuditLogEntry }) {
           {formatTimestamp(entry.timestamp)}
         </td>
 
-        {/* Actor — email + IP */}
-        <td className="px-5 py-3 max-w-[180px]">
+        {/* Actor — org / email / IP */}
+        <td className="px-5 py-3 max-w-[200px]">
+          {entry.stakeholderName && (
+            <p className="text-xs font-semibold text-[hsl(var(--primary))] truncate mb-0.5" title={entry.stakeholderName}>
+              {entry.stakeholderName}
+            </p>
+          )}
           <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate" title={entry.actorEmail}>
             {entry.actorEmail || "—"}
           </p>
@@ -155,6 +160,9 @@ function LogRow({ entry }: { entry: AuditLogEntry }) {
               {entry.details || "No additional details."}
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-1 text-xs text-[hsl(var(--muted-foreground))]">
+              {entry.stakeholderName && (
+                <div><span className="font-semibold text-[hsl(var(--foreground))]">Organisation: </span>{entry.stakeholderName}</div>
+              )}
               <div><span className="font-semibold text-[hsl(var(--foreground))]">Actor: </span>{entry.actorEmail}</div>
               <div><span className="font-semibold text-[hsl(var(--foreground))]">IP: </span><span className="font-mono">{entry.actorIp || "—"}</span></div>
               <div><span className="font-semibold text-[hsl(var(--foreground))]">Resource: </span>{entry.resourceName || "—"}</div>

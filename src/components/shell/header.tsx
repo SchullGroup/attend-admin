@@ -175,11 +175,11 @@ export function Header() {
 
   // ── Unified values ─────────────────────────────────────────────────────────
   const unreadCount = isAdmin
-    ? (adminUnreadData?.data?.unreadCount ?? adminUnreadData?.data?.totalElements ?? 0)
+    ? (adminUnreadData?.unreadCount ?? 0)
     : (clientNotifData?.unreadCount ?? 0);
 
   const notifications: any[] = isAdmin
-    ? (adminNotifData?.data?.notifications ?? adminNotifData?.data?.content ?? [])
+    ? (adminNotifData?.notifications ?? [])
     : (clientNotifData?.notifications ?? []);
 
   function markAsRead(id: string) {

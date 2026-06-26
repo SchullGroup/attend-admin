@@ -300,16 +300,17 @@ export function useGlobalSearch({ q, page = 0, limit = 10 }: SearchParams) {
 // ---------------------------------------------------------------------------
 
 export interface AdminAuditLogEntry {
-  id:           string;
-  timestamp:    string;
-  actorEmail:   string;
-  actorIp:      string;
-  action:       string;
-  category:     string;
-  resourceName: string;
-  resourceId:   string;
-  details:      string;
-  severity:     string;
+  id:              string;
+  timestamp:       string;
+  stakeholderName: string;
+  actorEmail:      string;
+  actorIp:         string;
+  action:          string;
+  category:        string;
+  resourceName:    string;
+  resourceId:      string;
+  details:         string;
+  severity:        string;
 }
 
 export interface AdminAuditLogsResponse {
