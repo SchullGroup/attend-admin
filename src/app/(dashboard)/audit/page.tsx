@@ -13,6 +13,7 @@ import {
   type AuditSeverity,
 } from "@/api/client-audit";
 import { useAdminAuditLogs } from "@/api/super-admin";
+import { resolveRole } from "@/lib/utils";
 
 const SUPER_ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
 
@@ -180,8 +181,8 @@ function LogRow({ entry }: { entry: AuditLogEntry }) {
 const PAGE_SIZE = 20;
 
 export default function AuditLogPage() {
-  const { data: userResponse } = useGetMe();
-  const isSuperAdmin = SUPER_ADMIN_ROLES.has(userResponse?.data?.role?.toLowerCase() ?? "");
+  const { data: userResponse, isLoading: userLoading } = useGetMe();
+  const isSuperAdmin = SUPER_ADMIN_ROLES.has(resolveRole(userResponse?.data));
 
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -198,16 +199,19 @@ export default function AuditLogPage() {
   const applyCategory = useCallback((v: string) => { setCategory(v); setPage(0); }, []);
   const applySeverity = useCallback((v: string) => { setSeverity(v); setPage(0); }, []);
 
-  // Super admin uses the platform-wide audit log; client admin uses their org's log
+  // Super admin uses the platform-wide audit log; client admin uses their org's log.
+  // Hooks are always called (Rules of Hooks) but only enabled for the applicable role.
   const { data: adminData,  isLoading: adminLoading,  isFetching: adminFetching  } = useAdminAuditLogs(
-    isSuperAdmin ? { search: searchQuery, category, severity, page, size: PAGE_SIZE } : {}
+    { search: searchQuery, category, severity, page, size: PAGE_SIZE },
+    !userLoading && isSuperAdmin,
   );
   const { data: clientData, isLoading: clientLoading, isFetching: clientFetching } = useClientAuditLogs(
     !isSuperAdmin ? { search: searchQuery, category, severity, page, size: PAGE_SIZE } : {}
   );
 
   const data       = isSuperAdmin ? adminData  : clientData;
-  const isLoading  = isSuperAdmin ? adminLoading  : clientLoading;
+  // Include userLoading so we never briefly show the wrong role's data
+  const isLoading  = userLoading || (isSuperAdmin ? adminLoading  : clientLoading);
   const isFetching = isSuperAdmin ? adminFetching : clientFetching;
 
   const logs       = data?.logs       ?? [];

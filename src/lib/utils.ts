@@ -5,6 +5,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Resolve a user's primary role string from a /me API response data object.
+ * Handles both `role: "SUPER_ADMIN"` (single string) and `roles: ["SUPER_ADMIN"]`
+ * (array) shapes, normalises to lowercase_snake_case.
+ */
+export function resolveRole(userData: { role?: string; roles?: string[] } | null | undefined): string {
+  const raw = userData?.role ?? userData?.roles?.[0] ?? "";
+  return raw.toLowerCase().replace(/[-\s]+/g, "_");
+}
+
 export function formatCurrency(n: number) {
   if (n >= 1_000_000_000) return `₦${(n / 1_000_000_000).toFixed(1)}B`;
   if (n >= 1_000_000) return `₦${(n / 1_000_000).toFixed(1)}M`;

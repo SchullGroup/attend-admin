@@ -18,6 +18,8 @@ export interface MeResponse {
   fullName: string;
   initials: string;
   role: string;
+  /** Some backends return an array instead of/alongside the single role string. */
+  roles?: string[];
   email: string;
   avatarUrl: string | null;
   logoUrl?: string | null;

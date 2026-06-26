@@ -19,7 +19,7 @@ import {
 } from "@/api/notifications";
 import { useGlobalSearch } from "@/api/super-admin";
 import { useClientSearch, type SearchEvent, type SearchTeamMember, type SearchDocument } from "@/api/client-search";
-import { timeAgo } from "@/lib/utils";
+import { timeAgo, resolveRole } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Admin roles set (mirrors events/[id]/page.tsx logic)
@@ -108,7 +108,7 @@ export function Header() {
   const breadcrumbs = getBreadcrumbs(pathname);
 
   // ── Role detection — must come before hooks that depend on it ─────────────
-  const isAdmin = ADMIN_ROLES.has(currentUser?.role?.toLowerCase() ?? "");
+  const isAdmin = ADMIN_ROLES.has(resolveRole(currentUser));
 
   // ── Search state ───────────────────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState("");
@@ -164,9 +164,9 @@ export function Header() {
   const { data: stakeholder } = useClientStakeholder({ enabled: !!currentUser && !isAdmin });
   const avatarSrc = currentUser?.avatarUrl || (currentUser as any)?.logoUrl || stakeholder?.logoUrl || null;
 
-  // ── Admin notifications ────────────────────────────────────────────────────
-  const { data: adminUnreadData } = useAdminNotifications(0, 1, false);
-  const { data: adminNotifData  } = useAdminNotifications(0, 5);
+  // ── Admin notifications — only fetch when role is confirmed ───────────────
+  const { data: adminUnreadData } = useAdminNotifications(0, 1, false, isAdmin);
+  const { data: adminNotifData  } = useAdminNotifications(0, 5, undefined, isAdmin);
   const { mutate: markAdminRead } = useMarkNotificationRead();
 
   // ── Client notifications ───────────────────────────────────────────────────
@@ -175,12 +175,12 @@ export function Header() {
 
   // ── Unified values ─────────────────────────────────────────────────────────
   const unreadCount = isAdmin
-    ? (adminUnreadData?.unreadCount ?? 0)
+    ? (adminUnreadData?.unreadCount ?? (adminUnreadData as any)?.totalUnread ?? 0)
     : (clientNotifData?.unreadCount ?? 0);
 
   const notifications: any[] = isAdmin
-    ? (adminNotifData?.notifications ?? [])
-    : (clientNotifData?.notifications ?? []);
+    ? (adminNotifData?.notifications ?? (adminNotifData as any)?.content ?? [])
+    : (clientNotifData?.notifications ?? (clientNotifData as any)?.content ?? []);
 
   function markAsRead(id: string) {
     if (isAdmin) markAdminRead(id);

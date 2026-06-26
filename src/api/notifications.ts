@@ -57,9 +57,10 @@ export const notificationKeys = {
  * @param limit Items per page. Pass 1 when you only need the unread count badge.
  * @param read  Pass `false` to filter to unread only; omit for all notifications.
  */
-export function useAdminNotifications(page = 0, limit = 10, read?: boolean) {
+export function useAdminNotifications(page = 0, limit = 10, read?: boolean, enabled = true) {
   return useQuery({
     queryKey: notificationKeys.list(page, limit, read),
+    enabled,
     queryFn: async () => {
       const params = new URLSearchParams({
         page:  page.toString(),
@@ -69,7 +70,14 @@ export function useAdminNotifications(page = 0, limit = 10, read?: boolean) {
       const res = await apiClient.get<ApiResponse<NotificationListResponse>>(
         `/api/v1/admin/notifications?${params.toString()}`
       );
-      return res.data.data; // NotificationListResponse
+      // Handle both wrapped { data: { notifications: [] } } and direct shapes
+      const raw = (res.data.data ?? res.data) as any;
+      return {
+        ...raw,
+        notifications: raw?.notifications ?? raw?.content ?? [],
+        totalCount:    raw?.totalCount    ?? raw?.totalElements ?? 0,
+        unreadCount:   raw?.unreadCount   ?? raw?.totalUnread   ?? 0,
+      } as NotificationListResponse;
     },
     // Poll every 30 s while the window is focused
     refetchInterval:        30_000,

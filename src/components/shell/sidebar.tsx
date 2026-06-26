@@ -24,7 +24,7 @@ import {
   Users2,
   Bell,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, resolveRole } from "@/lib/utils";
 import { useGetMe, useLogout } from "@/api/auth/hooks";
 import { useClientStakeholder } from "@/api/client-organisation";
 import { usePendingEnrollments } from "@/api/super-admin";
@@ -68,12 +68,11 @@ function hasAccess(normalizedRole: string, action: PermAction): boolean {
 
 // ─── Normalisation helper ────────────────────────────────────────────────────
 
-function normaliseRole(raw?: string | null): string {
-  return (raw ?? "").toLowerCase().replace(/[-\s]+/g, "_");
-}
+// Full set of super-admin role strings (after normalisation)
+const SUPER_ADMIN_ROLE_SET = new Set(["super_admin", "admin", "superadmin"]);
 
 function isSuperAdminRole(normalizedRole: string): boolean {
-  return normalizedRole === "super_admin";
+  return SUPER_ADMIN_ROLE_SET.has(normalizedRole);
 }
 
 // ─── Nav config ──────────────────────────────────────────────────────────────
@@ -211,11 +210,11 @@ export function Sidebar() {
   const { data: pendingEnrollmentsData } = usePendingEnrollments(0, 1);
 
   // Stakeholder logo — for client users whose avatarUrl is null
-  const { data: stakeholder } = useClientStakeholder({ enabled: !!currentUser && !ADMIN_ROLES.has(normaliseRole(currentUser?.role)) });
+  const { data: stakeholder } = useClientStakeholder({ enabled: !!currentUser && !ADMIN_ROLES.has(resolveRole(currentUser)) });
   const pendingCount = pendingEnrollmentsData?.data?.totalCount ?? 0;
 
   // Normalise once — used for both section filters and per-item action gates.
-  const normalizedRole = normaliseRole(currentUser?.role);
+  const normalizedRole = resolveRole(currentUser);
   const isSuperAdmin   = isSuperAdminRole(normalizedRole);
   const isJudge        = JUDGE_ROLES.has(normalizedRole);
 

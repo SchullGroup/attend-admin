@@ -16,7 +16,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/ui/Loader";
-import { timeAgo } from "@/lib/utils";
+import { timeAgo, resolveRole } from "@/lib/utils";
 
 const ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
 const JUDGE_ROLES = new Set(["judge"]);
@@ -120,19 +120,18 @@ function DetailPanel({
 // ---------------------------------------------------------------------------
 export default function NotificationsPage() {
   const { data: userResponse, isLoading: userLoading } = useGetMe();
-  const currentUser = userResponse?.data;
-  const role        = currentUser?.role?.toLowerCase() ?? "";
-  const isAdmin     = !userLoading && ADMIN_ROLES.has(role);
-  const isJudge     = !userLoading && JUDGE_ROLES.has(role);
+  const role    = resolveRole(userResponse?.data);
+  const isAdmin = !userLoading && ADMIN_ROLES.has(role);
+  const isJudge = !userLoading && JUDGE_ROLES.has(role);
 
   const [filter,   setFilter]   = useState<"all" | "unread">("all");
   const [page,     setPage]     = useState(0);
   const [selected, setSelected] = useState<any | null>(null);
   const limit = 20;
 
-  // Admin hooks
+  // Admin hooks — only enabled once we know the user is an admin
   const { data: adminData,  isLoading: adminLoading  } = useAdminNotifications(
-    page, limit, filter === "unread" ? false : undefined
+    page, limit, filter === "unread" ? false : undefined, !userLoading && isAdmin
   );
   const { mutate: markAdmin } = useMarkNotificationRead();
 
@@ -152,12 +151,12 @@ export default function NotificationsPage() {
     isAdmin ? adminLoading : isJudge ? judgeLoading : clientLoading
   );
 
-  // Unified list — route by role
+  // Unified list — route by role; fall back to `content` if backend uses Spring Page shape
   const notifications: any[] = isAdmin
-    ? (adminData?.notifications ?? [])
+    ? (adminData?.notifications ?? (adminData as any)?.content ?? [])
     : isJudge
-      ? (judgeData?.notifications ?? [])
-      : (clientData?.notifications ?? []);
+      ? (judgeData?.notifications ?? (judgeData as any)?.content ?? [])
+      : (clientData?.notifications ?? (clientData as any)?.content ?? []);
 
   const unreadCount = isAdmin
     ? (adminData?.unreadCount ?? 0)
@@ -166,10 +165,10 @@ export default function NotificationsPage() {
       : (clientData?.unreadCount ?? 0);
 
   const totalCount = isAdmin
-    ? (adminData?.totalCount ?? 0)
+    ? (adminData?.totalCount ?? (adminData as any)?.totalElements ?? 0)
     : isJudge
-      ? (judgeData?.totalCount ?? 0)
-      : (clientData?.totalCount ?? 0);
+      ? (judgeData?.totalCount ?? (judgeData as any)?.totalElements ?? 0)
+      : (clientData?.totalCount ?? (clientData as any)?.totalElements ?? 0);
 
   const totalPages = Math.ceil(totalCount / limit);
 

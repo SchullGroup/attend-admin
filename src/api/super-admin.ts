@@ -324,16 +324,20 @@ export interface AdminAuditLogsResponse {
   logs:         AdminAuditLogEntry[];
 }
 
-export function useAdminAuditLogs(params: {
-  search?:   string;
-  category?: string;
-  severity?: string;
-  page?:     number;
-  size?:     number;
-} = {}) {
+export function useAdminAuditLogs(
+  params: {
+    search?:   string;
+    category?: string;
+    severity?: string;
+    page?:     number;
+    size?:     number;
+  } = {},
+  enabled = true,
+) {
   const { search = "", category = "", severity = "", page = 0, size = 20 } = params;
   return useQuery({
     queryKey: superAdminKeys.auditLogs(search, category, severity, page, size),
+    enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<AdminAuditLogsResponse>>(
         "/api/v1/admin/audit-logs",
@@ -347,7 +351,20 @@ export function useAdminAuditLogs(params: {
           },
         }
       );
-      return res.data.data;
+      const raw = (res.data.data ?? res.data) as any;
+      // Normalise field aliases (totalEvents vs totalCount, logs vs entries)
+      const logs = raw?.logs ?? raw?.entries ?? raw?.auditLogs ?? raw?.content ?? [];
+      return {
+        ...raw,
+        logs,
+        totalCount:   raw?.totalCount   ?? raw?.totalElements ?? logs.length,
+        totalEvents:  raw?.totalEvents  ?? raw?.totalCount    ?? raw?.totalElements ?? 0,
+        today:        raw?.today        ?? 0,
+        warnings:     raw?.warnings     ?? 0,
+        critical:     raw?.critical     ?? 0,
+        page:         raw?.page         ?? 0,
+        size:         raw?.size         ?? 20,
+      } as AdminAuditLogsResponse;
     },
     staleTime: 30_000,
     placeholderData: (prev) => prev,
@@ -429,13 +446,48 @@ export interface AdminRecentRegistrationsResponse {
   last:          boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Helpers for normalising the various shapes the analytics API may return
+// ---------------------------------------------------------------------------
+
+/** Accepts { count, color } or a plain number — always returns { count, color }. */
+function toStatItem(v: any, fallbackColor = "#374151"): { count: number; color: string } {
+  if (typeof v === "number") return { count: v,        color: fallbackColor };
+  return                             { count: v?.count ?? 0, color: v?.color ?? fallbackColor };
+}
+
+/** Returns the first value in `raw` that is a plain array, or []. */
+function firstArray(raw: any): any[] {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object") {
+    for (const val of Object.values(raw)) {
+      if (Array.isArray(val)) return val as any[];
+    }
+  }
+  return [];
+}
+
 /** GET /api/v1/admin/analytics/stats */
 export function useAdminAnalyticsStats() {
   return useQuery({
     queryKey: [...superAdminKeys.all, "analytics", "stats"],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<AdminAnalyticsStats>>("/api/v1/admin/analytics/stats");
-      return (res.data.data ?? res.data) as AdminAnalyticsStats;
+      const d = (res.data.data ?? res.data) as any;
+      // Normalise: backend may return flat numbers or { count, color } objects
+      return {
+        ...d,
+        totalStakeholders: toStatItem(d?.totalStakeholders ?? d?.enrolledStakeholders, "#7c22c9"),
+        totalEvents:       toStatItem(d?.totalEvents,       "#0891b2"),
+        totalParticipants: toStatItem(d?.totalParticipants ?? d?.totalUsers ?? d?.totalRegistrations, "#16a34a"),
+        totalDocuments:    toStatItem(d?.totalDocuments,    "#d97706"),
+        avgFillRate: {
+          percentage: typeof d?.avgFillRate === "number"
+            ? d.avgFillRate
+            : (d?.avgFillRate?.percentage ?? d?.averageFillRate ?? 0),
+          color: d?.avgFillRate?.color ?? "#7c22c9",
+        },
+      } as AdminAnalyticsStats;
     },
     staleTime: 60_000,
   });
@@ -448,7 +500,17 @@ export function useAdminAnalyticsByType() {
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<{ byType: AdminAnalyticsByTypeItem[] }>>("/api/v1/admin/analytics/by-type");
       const raw = (res.data.data ?? res.data) as any;
-      return (raw?.byType ?? Object.values(raw ?? {})) as AdminAnalyticsByTypeItem[];
+      // Try named fields first, fall back to first array found in the object
+      const arr: any[] = Array.isArray(raw)
+        ? raw
+        : (raw?.byType ?? raw?.eventsByType ?? raw?.types ?? firstArray(raw));
+      // Normalise field aliases
+      return arr.map((item: any) => ({
+        type:       item.type       ?? item.eventType ?? item.category ?? "UNKNOWN",
+        eventCount: item.eventCount ?? item.count     ?? item.total    ?? 0,
+        totalRsvps: item.totalRsvps ?? item.rsvpCount ?? item.rsvps   ?? 0,
+        color:      item.color      ?? "#374151",
+      })) as AdminAnalyticsByTypeItem[];
     },
     staleTime: 60_000,
   });
@@ -463,7 +525,14 @@ export function useAdminAnalyticsMonthlyTrend(months = 6) {
         "/api/v1/admin/analytics/monthly-trend", { params: { months } }
       );
       const raw = (res.data.data ?? res.data) as any;
-      return (raw?.trend ?? Object.values(raw ?? {})) as AdminAnalyticsTrendItem[];
+      const arr: any[] = Array.isArray(raw)
+        ? raw
+        : (raw?.trend ?? raw?.monthlyTrend ?? raw?.months ?? firstArray(raw));
+      return arr.map((item: any) => ({
+        month:         item.month         ?? item.period    ?? item.label ?? "",
+        registrations: item.registrations ?? item.rsvps     ?? item.count ?? 0,
+        events:        item.events        ?? item.eventCount ?? item.total ?? 0,
+      })) as AdminAnalyticsTrendItem[];
     },
     staleTime: 60_000,
   });
@@ -478,7 +547,16 @@ export function useAdminAnalyticsStakeholderGrowth(months = 6) {
         "/api/v1/admin/analytics/stakeholder-growth", { params: { months } }
       );
       const raw = (res.data.data ?? res.data) as any;
-      return (raw?.growth ?? Object.values(raw ?? {})) as AdminAnalyticsGrowthItem[];
+      const arr = Array.isArray(raw)
+        ? raw
+        : (raw?.growth ?? raw?.stakeholderGrowth ?? raw?.data ?? firstArray(raw));
+      // Normalise field aliases so consumers can use newCount / cumulative
+      return (arr as any[]).map((item: any) => ({
+        month:      item.month,
+        newCount:   item.newCount   ?? item.new       ?? item.added    ?? 0,
+        cumulative: item.cumulative ?? item.total      ?? item.cumulativeCount ?? 0,
+        ...item,
+      })) as AdminAnalyticsGrowthItem[];
     },
     staleTime: 60_000,
   });
@@ -496,11 +574,14 @@ export function useAdminAnalyticsEventPerformance(
         { params: { ...(stakeholderId ? { stakeholderId } : {}), ...(eventType ? { eventType } : {}), page, size } }
       );
       const raw = (res.data.data ?? res.data) as any;
+      const events = Array.isArray(raw)
+        ? raw
+        : (raw?.events ?? raw?.content ?? raw?.data ?? firstArray(raw));
       return {
-        totalCount: raw?.totalCount ?? raw?.totalElements ?? 0,
+        totalCount: raw?.totalCount ?? raw?.totalElements ?? events.length,
         page:       raw?.page       ?? page,
         size:       raw?.size       ?? size,
-        events:     raw?.events     ?? raw?.content ?? [],
+        events,
       } as AdminAnalyticsEventPerformanceResponse;
     },
     staleTime: 30_000,
@@ -516,7 +597,19 @@ export function useAdminRecentRegistrations(page = 0, limit = 10) {
       const res = await apiClient.get<ApiResponse<AdminRecentRegistrationsResponse>>(
         "/api/v1/admin/registrations", { params: { page, limit } }
       );
-      return (res.data.data ?? res.data) as AdminRecentRegistrationsResponse;
+      const raw = (res.data.data ?? res.data) as any;
+      // API might return Spring Page (content/totalElements) or custom (registrations/totalCount)
+      const content: AdminRecentRegistrationItem[] = Array.isArray(raw)
+        ? raw
+        : (raw?.content ?? raw?.registrations ?? raw?.items ?? raw?.data ?? firstArray(raw));
+      return {
+        content,
+        page:          raw?.page          ?? page,
+        size:          raw?.size          ?? limit,
+        totalElements: raw?.totalElements ?? raw?.totalCount ?? content.length,
+        totalPages:    raw?.totalPages    ?? Math.ceil((raw?.totalCount ?? content.length) / Math.max(limit, 1)),
+        last:          raw?.last          ?? false,
+      } as AdminRecentRegistrationsResponse;
     },
     staleTime: 30_000,
   });

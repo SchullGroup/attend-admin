@@ -27,10 +27,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
-import { formatDate } from "@/lib/utils";
+import { formatDate, resolveRole } from "@/lib/utils";
 import { SuperAdminAnalytics } from "./SuperAdminAnalytics";
 
-const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
+const SUPER_ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -646,9 +646,13 @@ function ClientAnalytics() {
 // ---------------------------------------------------------------------------
 
 export default function AnalyticsPage() {
-  const { data: userResponse } = useGetMe();
-  const role = userResponse?.data?.role?.toLowerCase() ?? "";
-  const isSuperAdmin = SUPER_ADMIN_ROLES.has(role);
+  const { data: userResponse, isLoading: userLoading } = useGetMe();
+  const isSuperAdmin = SUPER_ADMIN_ROLES.has(resolveRole(userResponse?.data));
+
+  // Wait for role before mounting either analytics component to avoid
+  // briefly rendering <ClientAnalytics /> (which fires client API calls
+  // that 403 for super-admin users) while useGetMe is in-flight.
+  if (userLoading) return <Loader variant="page" text="Loading Analytics…" />;
 
   return (
     <div className="flex flex-col gap-6">

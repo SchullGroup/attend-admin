@@ -73,20 +73,32 @@ export function SuperAdminAnalytics() {
   const perfEvents  = perfData?.events  ?? [];
   const perfTotal   = perfData?.totalCount ?? 0;
   const perfPages   = Math.ceil(perfTotal / 20);
-  const recentItems = recentData?.content ?? [];
-  const recentTotal = recentData?.totalElements ?? 0;
+  // recent registrations — handle both Spring Page (content) and custom (registrations) shapes
+  const recentItems = (recentData?.content ?? (recentData as any)?.registrations ?? []) as typeof recentData extends { content: infer C } ? C : any[];
+  const recentTotal = recentData?.totalElements ?? (recentData as any)?.totalCount ?? 0;
   const recentPages = Math.ceil(recentTotal / 10);
 
   if (statsLoading) return <Loader variant="page" text="Loading analytics…" />;
+
+  // Normalise stat values — hook already normalises, but guard here too
+  function sv(field: any): number {
+    if (!field) return 0;
+    if (typeof field === "number") return field;
+    return field.count ?? 0;
+  }
+  function sc(field: any, fallback: string): string {
+    if (!field || typeof field === "number") return fallback;
+    return field.color ?? fallback;
+  }
 
   return (
     <div className="flex flex-col gap-6">
       {/* ── Stat cards ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <StatCard title="Stakeholders"  value={stats?.totalStakeholders?.count  ?? 0} subtitle="Registered orgs"    icon={Building2}    accent={stats?.totalStakeholders?.color  ?? "#7c22c9"} />
-        <StatCard title="Events"        value={stats?.totalEvents?.count        ?? 0} subtitle="Across platform"    icon={CalendarDays} accent={stats?.totalEvents?.color        ?? "#0891b2"} />
-        <StatCard title="Participants"  value={stats?.totalParticipants?.count  ?? 0} subtitle="Total registrations" icon={Users}        accent={stats?.totalParticipants?.color  ?? "#16a34a"} />
-        <StatCard title="Documents"     value={stats?.totalDocuments?.count     ?? 0} subtitle="Uploaded files"     icon={FileText}     accent={stats?.totalDocuments?.color     ?? "#d97706"} />
+        <StatCard title="Stakeholders"  value={sv(stats?.totalStakeholders)} subtitle="Registered orgs"      icon={Building2}    accent={sc(stats?.totalStakeholders, "#7c22c9")} />
+        <StatCard title="Events"        value={sv(stats?.totalEvents)}       subtitle="Across platform"      icon={CalendarDays} accent={sc(stats?.totalEvents,       "#0891b2")} />
+        <StatCard title="Participants"  value={sv(stats?.totalParticipants)} subtitle="Total registrations"  icon={Users}        accent={sc(stats?.totalParticipants, "#16a34a")} />
+        <StatCard title="Documents"     value={sv(stats?.totalDocuments)}    subtitle="Uploaded files"       icon={FileText}     accent={sc(stats?.totalDocuments,    "#d97706")} />
         <StatCard title="Avg Fill Rate" value={`${stats?.avgFillRate?.percentage ?? 0}%`} subtitle="Capacity utilisation" icon={BarChart2} accent={stats?.avgFillRate?.color ?? "#7c22c9"} />
       </div>
 
