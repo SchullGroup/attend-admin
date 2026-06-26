@@ -26,6 +26,8 @@ import { EventPostAgmTab }      from "./components/EventPostAgmTab";
 import { EventSettingsTab }     from "./components/EventSettingsTab";
 import { EventStakeholderTab }          from "./components/EventStakeholderTab";
 import { EventExpectedAttendeesTab }   from "./components/EventExpectedAttendeesTab";
+import { EventLaunchAudienceTab }      from "./components/EventLaunchAudienceTab";
+import { EventLaunchWaitlistTab }      from "./components/EventLaunchWaitlistTab";
 import type { LocalAgendaItem, EventShim } from "./components/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -177,7 +179,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     ...(isSuperAdmin ? ["Registrar"] : []),
     "Documents",
     ...(isAGM && !isSuperAdmin ? ["Resolutions", "Stakeholders"] : isAGM ? ["Resolutions"] : []),
-    ...(!isSuperAdmin && isLAUNCH ? ["Stakeholders"] : []),
+    ...(!isSuperAdmin && isLAUNCH ? ["Audience Tiers", "Waitlist"] : []),
     // Broadcast is a write operation — hidden for super admin (read-only)
     ...(!isSuperAdmin ? ["Broadcast"] : []),
     ...(isAGM ? ["Vote Results", "Post-AGM"] : []),
@@ -249,7 +251,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       )}
       {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} isAdmin={isAdmin} />}
       {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin} />}
-      {tab === "Stakeholders" && !isSuperAdmin && (isAGM || isLAUNCH) && <EventExpectedAttendeesTab  eventId={id} />}
+      {tab === "Stakeholders"   && !isSuperAdmin && isAGM   && <EventExpectedAttendeesTab eventId={id} />}
+      {tab === "Audience Tiers" && !isSuperAdmin && isLAUNCH && <EventLaunchAudienceTab    eventId={id} />}
+      {tab === "Waitlist"       && !isSuperAdmin && isLAUNCH && <EventLaunchWaitlistTab    eventId={id} />}
       {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab eventId={id} />}
       {tab === "Vote Results"       && isAGM && <EventVoteResultsTab voteResults={voteResultsData} />}
       {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} voteResults={voteResultsData} participants={participants} eventId={id} />}

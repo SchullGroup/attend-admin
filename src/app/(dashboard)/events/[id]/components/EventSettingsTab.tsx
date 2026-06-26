@@ -182,15 +182,17 @@ export function EventSettingsTab({
             </div>
           )}
 
-          {/* Stream URL */}
-          <div>
-            <FieldLabel>Stream URL</FieldLabel>
-            <Input
-              value={streamVal}
-              onChange={(e) => setStreamVal(e.target.value)}
-              placeholder="YouTube or Zoom link (optional)"
-            />
-          </div>
+          {/* Stream URL — only relevant for virtual / hybrid events */}
+          {(formatVal === "VIRTUAL" || formatVal === "HYBRID") && (
+            <div>
+              <FieldLabel>Stream URL</FieldLabel>
+              <Input
+                value={streamVal}
+                onChange={(e) => setStreamVal(e.target.value)}
+                placeholder="YouTube, Zoom or any stream link"
+              />
+            </div>
+          )}
 
           {/* Capacity */}
           <div>

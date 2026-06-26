@@ -962,6 +962,244 @@ export function useDeleteExpectedAttendee() {
 }
 
 // ---------------------------------------------------------------------------
+// Stream URL  — PUT /api/v1/client/events/{id}/settings/stream-url
+// ---------------------------------------------------------------------------
+
+export function useUpdateStreamUrl() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, streamUrl }: { eventId: string; streamUrl: string }) => {
+      const res = await apiClient.put<ApiResponse<unknown>>(
+        `/api/v1/client/events/${eventId}/settings/stream-url`,
+        { streamUrl }
+      );
+      return (res.data as any).data ?? res.data;
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "detail", eventId] });
+      popup.success("Stream URL Updated", "The stream URL has been saved.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to update stream URL."),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Audience Tiers  — /api/v1/client/events/{id}/tiers
+// ---------------------------------------------------------------------------
+
+export interface AudienceTier {
+  id:            string;
+  name:          string;
+  description?:  string;
+  tierType:      string;
+  displayOrder:  number;
+  invitedCount?: number;
+}
+
+export interface CreateTierRequest {
+  name:         string;
+  description?: string;
+  tierType:     string;
+  displayOrder: number;
+}
+
+export function useListTiers(eventId: string) {
+  return useQuery({
+    queryKey: ["clientEvents", "tiers", eventId],
+    enabled:  !!eventId,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ tiers: AudienceTier[] }>>(
+        `/api/v1/client/events/${eventId}/tiers`
+      );
+      const raw = (res.data as any).data ?? res.data;
+      return (raw?.tiers ?? raw?.content ?? raw ?? []) as AudienceTier[];
+    },
+  });
+}
+
+export function useCreateTier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, body }: { eventId: string; body: CreateTierRequest }) => {
+      const res = await apiClient.post<ApiResponse<AudienceTier>>(
+        `/api/v1/client/events/${eventId}/tiers`,
+        body
+      );
+      return (res.data as any).data ?? res.data;
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "tiers", eventId] });
+      popup.success("Tier Created", "Audience tier has been created.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to create tier."),
+  });
+}
+
+export function useUpdateTier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, tierId, body }: { eventId: string; tierId: string; body: Partial<CreateTierRequest> }) => {
+      const res = await apiClient.put<ApiResponse<AudienceTier>>(
+        `/api/v1/client/events/${eventId}/tiers/${tierId}`,
+        body
+      );
+      return (res.data as any).data ?? res.data;
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "tiers", eventId] });
+      popup.success("Tier Updated", "Audience tier has been updated.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to update tier."),
+  });
+}
+
+export function useDeleteTier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, tierId }: { eventId: string; tierId: string }) => {
+      await apiClient.delete(`/api/v1/client/events/${eventId}/tiers/${tierId}`);
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "tiers", eventId] });
+      popup.success("Tier Deleted", "Audience tier removed.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to delete tier."),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Invites  — /api/v1/client/events/{id}/tiers/invite
+// ---------------------------------------------------------------------------
+
+export function useSendInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, email, tierId }: { eventId: string; email: string; tierId: string }) => {
+      const res = await apiClient.post<ApiResponse<unknown>>(
+        `/api/v1/client/events/${eventId}/tiers/invite`,
+        { email, tierId }
+      );
+      return (res.data as any).data ?? res.data;
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "tiers", eventId] });
+      popup.success("Invite Sent", "The invitation has been delivered.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to send invite."),
+  });
+}
+
+export function useBulkInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, invites }: { eventId: string; invites: { email: string; tierId: string }[] }) => {
+      const res = await apiClient.post<ApiResponse<unknown>>(
+        `/api/v1/client/events/${eventId}/tiers/invite/bulk`,
+        { invites }
+      );
+      return (res.data as any).data ?? res.data;
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "tiers", eventId] });
+      popup.success("Bulk Invites Sent", "All invitations have been delivered.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to send bulk invites."),
+  });
+}
+
+export function useExportInvites(eventId: string) {
+  return useQuery({
+    queryKey: ["clientEvents", "tiers", "export", eventId],
+    enabled:  false, // triggered manually
+    queryFn: async () => {
+      const res = await apiClient.get<string>(
+        `/api/v1/client/events/${eventId}/tiers/invites/export`
+      );
+      return (res.data as any) as string;
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Waitlist  — /api/v1/client/events/{id}/waitlist
+// ---------------------------------------------------------------------------
+
+export interface WaitlistEntry {
+  id:        string;
+  userId?:   string;
+  firstName: string;
+  lastName:  string;
+  email:     string;
+  status:    string;
+  position:  number;
+  joinedAt:  string;
+}
+
+export interface WaitlistResponse {
+  entries:        WaitlistEntry[];
+  totalWaiting:   number;
+  totalApproved:  number;
+  page:           number;
+  size:           number;
+  totalElements:  number;
+  totalPages:     number;
+}
+
+export function useListWaitlist(eventId: string, page = 0, size = 20) {
+  return useQuery({
+    queryKey: ["clientEvents", "waitlist", eventId, page, size],
+    enabled:  !!eventId,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<WaitlistResponse>>(
+        `/api/v1/client/events/${eventId}/waitlist`,
+        { params: { page, size } }
+      );
+      const raw = (res.data as any).data ?? res.data;
+      return {
+        entries:       raw?.entries       ?? raw?.content ?? [],
+        totalWaiting:  raw?.totalWaiting  ?? 0,
+        totalApproved: raw?.totalApproved ?? 0,
+        totalElements: raw?.totalElements ?? 0,
+        totalPages:    raw?.totalPages    ?? 1,
+        page:          raw?.page          ?? 0,
+        size:          raw?.size          ?? size,
+      } as WaitlistResponse;
+    },
+  });
+}
+
+export function useApproveWaitlist() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, waitlistId }: { eventId: string; waitlistId: string }) => {
+      const res = await apiClient.post<ApiResponse<unknown>>(
+        `/api/v1/client/events/${eventId}/waitlist/${waitlistId}/approve`
+      );
+      return (res.data as any).data ?? res.data;
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "waitlist", eventId] });
+      popup.success("Entry Approved", "Waitlist entry has been approved.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to approve entry."),
+  });
+}
+
+export function useRemoveWaitlist() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, waitlistId }: { eventId: string; waitlistId: string }) => {
+      await apiClient.delete(`/api/v1/client/events/${eventId}/waitlist/${waitlistId}`);
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "waitlist", eventId] });
+      popup.success("Entry Removed", "Waitlist entry has been removed.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to remove entry."),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // QR Check-In Scan  — POST /api/v1/client/events/{eventId}/scan-qr
 // ---------------------------------------------------------------------------
 
