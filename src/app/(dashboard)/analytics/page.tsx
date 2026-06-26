@@ -654,15 +654,16 @@ export default function AnalyticsPage() {
   // that 403 for super-admin users) while useGetMe is in-flight.
   if (userLoading) return <Loader variant="page" text="Loading Analytics…" />;
 
+  // SuperAdminAnalytics renders its own header; ClientAnalytics needs the page header
+  if (isSuperAdmin) return <SuperAdminAnalytics />;
+
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Analytics</h1>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-          {isSuperAdmin ? "Platform-wide performance overview" : "Platform performance overview"}
-        </p>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">Platform performance overview</p>
       </div>
-      {isSuperAdmin ? <SuperAdminAnalytics /> : <ClientAnalytics />}
+      <ClientAnalytics />
     </div>
   );
 }

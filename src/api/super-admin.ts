@@ -406,17 +406,20 @@ export interface AdminAnalyticsGrowthItem {
 }
 
 export interface AdminAnalyticsEventItem {
-  id:             string;
-  title:          string;
-  eventType:      string;
-  stakeholderName:string;
-  date:           string;
-  status:         string;
-  rsvpCount:      number;
-  capacity:       number;
-  fillRate:       number;
-  checkedInCount: number;
-  checkInRate:    number;
+  id:              string;
+  title:           string;
+  eventType:       string;
+  stakeholderName: string;
+  date:            string;
+  status:          string;
+  rsvpCount:       number;
+  capacity:        number;
+  fillRate:        number;
+  checkedInCount:  number;
+  checkInRate:     number;
+  avgWatchMinutes?: number;  // optional — returned by some backends
+  pollResponses?:  number;   // optional
+  dotColor?:       string;
 }
 
 export interface AdminAnalyticsEventPerformanceResponse {
@@ -612,6 +615,172 @@ export function useAdminRecentRegistrations(page = 0, limit = 10) {
       } as AdminRecentRegistrationsResponse;
     },
     staleTime: 30_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// New analytics types & hooks — added to match expected dashboard design
+// ---------------------------------------------------------------------------
+
+export interface AdminSummaryStats {
+  totalRegistrations:  number;
+  registrationsChange?: number;   // % vs prior period (positive = up)
+  eventsHosted:        number;
+  docsDistributed:     number;
+  docsChange?:         number;
+  votesCast:           number;
+  [key: string]: any;
+}
+
+export interface TopOrganiserItem {
+  stakeholderName: string;
+  name?:           string;
+  eventCount:      number;
+  color?:          string;
+}
+
+export interface KycBreakdownItem {
+  label:      string;
+  type?:      string;
+  count:      number;
+  percentage: number;
+  color?:     string;
+}
+
+export interface EventFormatItem {
+  format: string;
+  count:  number;
+  color?: string;
+}
+
+export interface AdminEngagementMetrics {
+  avgWatchTimeMinutes:  number;
+  pollResponseRate:     number;
+  qaParticipationRate:  number;
+  documentDownloads:    number;
+  [key: string]: any;
+}
+
+/**
+ * GET /api/v1/admin/analytics/summary
+ * Summary stat cards at the top of the analytics page.
+ */
+export function useAdminSummaryStats() {
+  return useQuery({
+    queryKey: [...superAdminKeys.all, "analytics", "summary"],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<AdminSummaryStats>>("/api/v1/admin/analytics/summary");
+      const d = (res.data.data ?? res.data) as any;
+      return {
+        totalRegistrations:  d?.totalRegistrations  ?? d?.registrations       ?? d?.totalParticipants ?? 0,
+        registrationsChange: d?.registrationsChange ?? d?.registrationChange  ?? d?.changePercent     ?? undefined,
+        eventsHosted:        d?.eventsHosted        ?? d?.totalEvents          ?? d?.eventCount        ?? 0,
+        docsDistributed:     d?.docsDistributed     ?? d?.totalDocuments       ?? d?.documentCount     ?? 0,
+        docsChange:          d?.docsChange          ?? d?.documentsChange      ?? undefined,
+        votesCast:           d?.votesCast           ?? d?.totalVotes           ?? d?.votes             ?? 0,
+      } as AdminSummaryStats;
+    },
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * GET /api/v1/admin/analytics/top-organisers?limit=5
+ * Top organisers ranked by number of events hosted.
+ */
+export function useAdminTopOrganisers(limit = 5) {
+  return useQuery({
+    queryKey: [...superAdminKeys.all, "analytics", "top-organisers", limit],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ organisers: TopOrganiserItem[] }>>(
+        "/api/v1/admin/analytics/top-organisers", { params: { limit } }
+      );
+      const raw = (res.data.data ?? res.data) as any;
+      const arr: any[] = Array.isArray(raw)
+        ? raw
+        : (raw?.organisers ?? raw?.topOrganisers ?? raw?.stakeholders ?? firstArray(raw));
+      return arr.map((item: any) => ({
+        stakeholderName: item.stakeholderName ?? item.name ?? item.companyName ?? "Unknown",
+        eventCount:      item.eventCount      ?? item.count ?? item.events     ?? 0,
+        color:           item.color           ?? "#374151",
+      })) as TopOrganiserItem[];
+    },
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * GET /api/v1/admin/analytics/kyc-breakdown
+ * KYC verification status breakdown across all registered stakeholders.
+ */
+export function useAdminKycBreakdown() {
+  return useQuery({
+    queryKey: [...superAdminKeys.all, "analytics", "kyc-breakdown"],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ breakdown: KycBreakdownItem[] }>>(
+        "/api/v1/admin/analytics/kyc-breakdown"
+      );
+      const raw = (res.data.data ?? res.data) as any;
+      const arr: any[] = Array.isArray(raw)
+        ? raw
+        : (raw?.breakdown ?? raw?.kycBreakdown ?? raw?.items ?? firstArray(raw));
+      return arr.map((item: any) => ({
+        label:      item.label      ?? item.type       ?? item.status     ?? "Unknown",
+        type:       item.type       ?? item.status,
+        count:      item.count      ?? item.total       ?? 0,
+        percentage: item.percentage ?? item.percent     ?? item.ratio     ?? 0,
+        color:      item.color      ?? "#374151",
+      })) as KycBreakdownItem[];
+    },
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * GET /api/v1/admin/analytics/event-format
+ * Distribution of events by format (virtual / hybrid / in-person).
+ */
+export function useAdminEventFormat() {
+  return useQuery({
+    queryKey: [...superAdminKeys.all, "analytics", "event-format"],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<{ formats: EventFormatItem[] }>>(
+        "/api/v1/admin/analytics/event-format"
+      );
+      const raw = (res.data.data ?? res.data) as any;
+      const arr: any[] = Array.isArray(raw)
+        ? raw
+        : (raw?.formats ?? raw?.eventFormats ?? raw?.distribution ?? firstArray(raw));
+      return arr.map((item: any) => ({
+        format: item.format ?? item.type ?? item.name ?? "Unknown",
+        count:  item.count  ?? item.total ?? 0,
+        color:  item.color  ?? "#374151",
+      })) as EventFormatItem[];
+    },
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * GET /api/v1/admin/analytics/engagement
+ * Platform-wide engagement metrics (watch time, poll rates, downloads).
+ */
+export function useAdminEngagement() {
+  return useQuery({
+    queryKey: [...superAdminKeys.all, "analytics", "engagement"],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<AdminEngagementMetrics>>(
+        "/api/v1/admin/analytics/engagement"
+      );
+      const d = (res.data.data ?? res.data) as any;
+      return {
+        avgWatchTimeMinutes: d?.avgWatchTimeMinutes ?? d?.avgWatchTime    ?? d?.averageWatchTime ?? 0,
+        pollResponseRate:    d?.pollResponseRate    ?? d?.pollRate         ?? d?.pollResponsePct ?? 0,
+        qaParticipationRate: d?.qaParticipationRate ?? d?.qaRate           ?? d?.qaParticipation ?? 0,
+        documentDownloads:   d?.documentDownloads   ?? d?.totalDownloads   ?? d?.downloads       ?? 0,
+      } as AdminEngagementMetrics;
+    },
+    staleTime: 60_000,
   });
 }
 
