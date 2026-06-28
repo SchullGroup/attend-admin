@@ -99,11 +99,21 @@ apiClient.interceptors.response.use(
 
         processQueue(null, newAccessToken);
         return apiClient(originalRequest);
-      } catch (refreshError) {
+      } catch (refreshError: any) {
         processQueue(refreshError, null);
-        Cookies.remove("accessToken");
-        if (typeof window !== "undefined") {
-          window.location.href = "/login";
+        // Only redirect to login on a definitive auth failure (401/403 from the proxy,
+        // or an error thrown because the response contained no token).
+        // Transient network errors should NOT log the user out.
+        const httpStatus = refreshError?.response?.status;
+        const isAuthFailure =
+          httpStatus === 401 ||
+          httpStatus === 403 ||
+          refreshError?.message === "No token in refresh response";
+        if (isAuthFailure) {
+          Cookies.remove("accessToken");
+          if (typeof window !== "undefined") {
+            window.location.href = "/login";
+          }
         }
         return Promise.reject(refreshError);
       } finally {

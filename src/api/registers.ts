@@ -153,7 +153,8 @@ export function useRegisterEvents(registerId: string) {
 /**
  * Compliance document vault for this register.
  *
- * GET /api/v1/admin/registers/{id}/documents
+ * GET /api/v1/client/documents/filters/registers
+ * Params: registerId
  * Column contract:
  *   doc.title         — filename string
  *   doc.eventTitle    — meeting scope (default "Global Space Notice" when null)
@@ -166,7 +167,8 @@ export function useRegisterDocuments(registerId: string) {
     queryKey: registerKeys.documents(registerId),
     queryFn:  async () => {
       const res = await apiClient.get<ApiResponse<any>>(
-        `/api/v1/admin/registers/${registerId}/documents`
+        `/api/v1/client/documents/filters/registers`,
+        { params: { registerId } }
       );
       const raw = res.data.data;
       return (raw?.documents ?? raw?.content ?? raw?.data ?? []) as RegisterDocumentItem[];
@@ -315,3 +317,119 @@ export function useActivateRegister() {
 // existing detail page. Delegates to the corrected useRegisterEvents hook.
 // ---------------------------------------------------------------------------
 export const useStakeholderEvents = useRegisterEvents;
+
+// ---------------------------------------------------------------------------
+// Shareholders
+// GET    /api/v1/client/registers/{id}/shareholders
+// POST   /api/v1/client/registers/{id}/shareholders           (single)
+// POST   /api/v1/client/registers/{id}/shareholders/bulk      (CSV batch)
+// DELETE /api/v1/client/registers/{id}/shareholders/{sid}
+// ---------------------------------------------------------------------------
+
+export interface Shareholder {
+  id:        string;
+  firstName: string;
+  lastName:  string;
+  fullName?: string;
+  email:     string;
+  phone?:    string;
+  chn?:      string;   // Central Securities Clearing System Holder Number
+  units?:    number;   // Share units owned
+}
+
+export interface ShareholderListResponse {
+  shareholders:  Shareholder[];
+  totalCount:    number;
+  page:          number;
+  size:          number;
+  totalPages:    number;
+}
+
+export const shareholderKeys = {
+  list: (registerId: string) => ["register", registerId, "shareholders"] as const,
+};
+
+export function useRegisterShareholders(registerId: string, page = 0, size = 100) {
+  return useQuery({
+    queryKey: shareholderKeys.list(registerId),
+    queryFn:  async () => {
+      const res = await apiClient.get<ApiResponse<ShareholderListResponse>>(
+        `/api/v1/client/registers/${registerId}/shareholders`,
+        { params: { page, size } }
+      );
+      const raw = (res.data.data ?? (res.data as any)) as any;
+      return {
+        shareholders: raw?.shareholders ?? raw?.content ?? raw?.data ?? [],
+        totalCount:   raw?.totalCount   ?? raw?.totalElements ?? 0,
+        page:         raw?.page         ?? page,
+        size:         raw?.size         ?? size,
+        totalPages:   raw?.totalPages   ?? 1,
+      } as ShareholderListResponse;
+    },
+    enabled:   !!registerId,
+    staleTime: 30_000,
+  });
+}
+
+export function useAddShareholder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      registerId,
+      shareholder,
+    }: {
+      registerId: string;
+      shareholder: Omit<Shareholder, "id">;
+    }) => {
+      const res = await apiClient.post<ApiResponse<Shareholder>>(
+        `/api/v1/client/registers/${registerId}/shareholders`,
+        shareholder
+      );
+      return (res.data.data ?? (res.data as any)) as Shareholder;
+    },
+    onSuccess: (_, { registerId }) => {
+      queryClient.invalidateQueries({ queryKey: shareholderKeys.list(registerId) });
+      popup.success("Shareholder Added", "The shareholder has been enrolled.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to add shareholder."),
+  });
+}
+
+export function useBulkAddShareholders() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      registerId,
+      shareholders,
+    }: {
+      registerId: string;
+      shareholders: Omit<Shareholder, "id">[];
+    }) => {
+      const res = await apiClient.post<ApiResponse<{ count: number }>>(
+        `/api/v1/client/registers/${registerId}/shareholders/bulk`,
+        { shareholders }
+      );
+      return (res.data.data ?? (res.data as any)) as { count: number };
+    },
+    onSuccess: (data, { registerId }) => {
+      queryClient.invalidateQueries({ queryKey: shareholderKeys.list(registerId) });
+      const count = (data as any)?.count ?? "?";
+      popup.success("Shareholders Imported", `${count} shareholders added successfully.`, 3000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Bulk import failed."),
+  });
+}
+
+export function useDeleteShareholder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ registerId, shareholderId }: { registerId: string; shareholderId: string }) => {
+      await apiClient.delete(`/api/v1/client/registers/${registerId}/shareholders/${shareholderId}`);
+    },
+    onSuccess: (_, { registerId }) => {
+      queryClient.invalidateQueries({ queryKey: shareholderKeys.list(registerId) });
+      popup.success("Shareholder Removed", "Shareholder has been removed from the register.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to remove shareholder."),
+  });
+}

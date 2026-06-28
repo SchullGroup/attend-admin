@@ -8,7 +8,7 @@ import {
   useCreateInnovationEvent,
   useCreateProductLaunchEvent,
 } from "@/api/events";
-import { useCreateEvent, type CreateEventRequest } from "@/api/client-events";
+import { useCreateEvent, useImportShareholdersToEvent, type CreateEventRequest } from "@/api/client-events";
 import { useGetMe } from "@/api/auth/hooks";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -72,11 +72,12 @@ function CreateEventInner() {
   const ADMIN_ROLES = new Set(["super_admin", "event_manager", "kyc_officer", "judge"]);
   const isAdmin = !currentUser || ADMIN_ROLES.has(currentUser.role?.toLowerCase() ?? "");
 
-  const createAgm         = useCreateAgmEvent();
-  const createGeneral     = useCreateGeneralEvent();
-  const createHack        = useCreateInnovationEvent();
-  const createLaunch      = useCreateProductLaunchEvent();
-  const createClientEvent = useCreateEvent();
+  const createAgm              = useCreateAgmEvent();
+  const createGeneral          = useCreateGeneralEvent();
+  const createHack             = useCreateInnovationEvent();
+  const createLaunch           = useCreateProductLaunchEvent();
+  const createClientEvent      = useCreateEvent();
+  const importShareholders     = useImportShareholdersToEvent();
 
   const selectedOrganiser = activeOrganisers.find((o) => o.id === organiserId) ?? null;
   const organiserName     = selectedOrganiser?.name ?? "";
@@ -274,7 +275,19 @@ function CreateEventInner() {
           innovationChallengeConfig,
           generalEventConfig,
         },
-        { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+        {
+          onSuccess: (createdEvent) => {
+            // Auto-import register shareholders as expected attendees for AGM events
+            if (selectedModule === "AGM" && organiserId) {
+              const eventId = (createdEvent as any)?.id ?? (createdEvent as any)?.eventId;
+              if (eventId) {
+                importShareholders.mutate({ eventId, registerId: organiserId });
+              }
+            }
+            onDone();
+          },
+          onSettled: () => setSubmitting(false),
+        }
       );
       return;
     }

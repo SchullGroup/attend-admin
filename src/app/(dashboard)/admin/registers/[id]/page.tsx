@@ -13,8 +13,10 @@ import { StatusBadge } from "@/components/custom/status-badge";
 import { ModuleBadge } from "@/components/custom/module-badge";
 import { DateCell } from "@/components/ui/date-cell";
 import { Loader } from "@/components/ui/Loader";
-import { useRegisterDetail } from "@/api/registers";
+import { useRegisterDetail, useRegisterDocuments } from "@/api/registers";
 import { useClientEvents, type EventListItem } from "@/api/client-events";
+import { RegisterShareholdersSection } from "./components/RegisterShareholdersSection";
+import { RegisterDocumentsSection }    from "./components/RegisterDocumentsSection";
 import { useGetMe } from "@/api/auth/hooks";
 import { getEventModule, MODULE_COLORS } from "@/lib/event-module";
 import { formatDate } from "@/lib/utils";
@@ -201,6 +203,8 @@ export default function RegisterDetailPage() {
     isLoading: eventsLoading,
   } = useClientEvents("ALL", 0, 200);
 
+  const { data: docsData = [] } = useRegisterDocuments(id);
+
   // Client-side filter — only events belonging to this register
   const events: EventListItem[] = (eventsData?.events ?? []).filter(
     (e) => e.registerId === id
@@ -329,10 +333,15 @@ export default function RegisterDetailPage() {
             <span className="text-2xl font-bold tabular-nums text-[hsl(var(--foreground))]">{totalRsvps.toLocaleString()}</span>
             <span className="text-sm text-[hsl(var(--muted-foreground))] ml-1.5">Total RSVPs</span>
           </div>
+          <div>
+            <span className="text-2xl font-bold tabular-nums text-[hsl(var(--foreground))]">{docsData.length}</span>
+            <span className="text-sm text-[hsl(var(--muted-foreground))] ml-1.5">Documents</span>
+          </div>
         </div>
       </Card>
 
       {/* ── Events table ── */}
+      <div id="events-registry">
       <Card className="attend-card overflow-hidden">
         <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
           <div>
@@ -399,6 +408,14 @@ export default function RegisterDetailPage() {
           </table>
         )}
       </Card>
+      </div>
+
+      {/* ── Shareholders ── */}
+      <RegisterShareholdersSection registerId={id} />
+
+      {/* ── Documents ── */}
+      <RegisterDocumentsSection registerId={id} />
+
     </div>
   );
 }

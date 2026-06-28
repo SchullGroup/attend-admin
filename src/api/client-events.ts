@@ -896,6 +896,30 @@ export interface UploadAttendeesRequest {
   }>;
 }
 
+/**
+ * Import shareholders from a register into an event's expected-attendees list.
+ * POST /api/v1/client/events/{eventId}/expected-attendees/import
+ * Body: { registerId }
+ */
+export function useImportShareholdersToEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, registerId }: { eventId: string; registerId: string }) => {
+      const res = await apiClient.post<ApiResponse<{ imported: number }>>(
+        `/api/v1/client/events/${eventId}/expected-attendees/import`,
+        { registerId }
+      );
+      return (res.data.data ?? (res.data as any)) as { imported: number };
+    },
+    onSuccess: (data, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "expectedAttendees", eventId] });
+      const count = (data as any)?.imported ?? "some";
+      popup.success("Shareholders Imported", `${count} shareholders added as expected attendees.`, 3000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Could not import shareholders."),
+  });
+}
+
 /** List expected attendees for an event. */
 export function useExpectedAttendees(eventId: string) {
   return useQuery({
