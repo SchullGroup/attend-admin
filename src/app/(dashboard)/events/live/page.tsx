@@ -17,6 +17,7 @@ import {
   type LiveResolution,
   type LivePendingQuestion,
 } from "@/api/client-live";
+import { useOpenResolutionVoting, useCloseResolutionVoting } from "@/api/client-votes";
 import { useClientEvents, useUpdateEvent, useClientEventDetail } from "@/api/client-events";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -79,7 +80,21 @@ function VoteBar({
 
 // ── Resolutions panel ─────────────────────────────────────────────────────────
 
-function ResolutionsPanel({ resolutions, color }: { resolutions: LiveResolution[]; color: string }) {
+function ResolutionsPanel({
+  resolutions,
+  color,
+  eventId,
+}: {
+  resolutions: LiveResolution[];
+  color: string;
+  eventId: string;
+}) {
+  const openVote  = useOpenResolutionVoting();
+  const closeVote = useCloseResolutionVoting();
+  // Track which resolution has the duration picker open
+  const [durationFor, setDurationFor] = useState<string | null>(null);
+  const [duration,    setDuration]    = useState("120");
+
   if (resolutions.length === 0) {
     return (
       <Card className="attend-card overflow-hidden">
@@ -115,6 +130,7 @@ function ResolutionsPanel({ resolutions, color }: { resolutions: LiveResolution[
           const isPending = res.status === "PENDING";
           const isOpen    = res.status === "OPEN";
           const isClosed  = res.status === "CLOSED";
+          const busy      = openVote.isPending || closeVote.isPending;
 
           return (
             <div key={res.id} className="px-5 py-4">
@@ -155,6 +171,8 @@ function ResolutionsPanel({ resolutions, color }: { resolutions: LiveResolution[
                     <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{res.description}</p>
                   )}
                 </div>
+
+                {/* Timer countdown */}
                 {isOpen && res.secondsRemaining != null && res.secondsRemaining > 0 && (
                   <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border shrink-0 ${
                     res.secondsRemaining <= 10
@@ -169,6 +187,7 @@ function ResolutionsPanel({ resolutions, color }: { resolutions: LiveResolution[
                 )}
               </div>
 
+              {/* Vote bars */}
               {(isOpen || isClosed) && total > 0 && (
                 <div className="flex flex-col gap-2 mt-3 bg-[hsl(var(--muted)/0.4)] rounded-xl p-3">
                   <VoteBar label="For"     value={res.forCount}     total={total} color="#16a34a" />
@@ -188,10 +207,64 @@ function ResolutionsPanel({ resolutions, color }: { resolutions: LiveResolution[
                 </div>
               )}
 
+              {/* ── Voting controls ── */}
               {isPending && (
-                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2 italic">
-                  Voting has not started for this resolution.
-                </p>
+                <div className="mt-3">
+                  {durationFor === res.id ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-[hsl(var(--muted-foreground))]">Duration (seconds):</span>
+                      <input
+                        type="number"
+                        min={30}
+                        max={3600}
+                        value={duration}
+                        onChange={(e) => setDuration(e.target.value)}
+                        className="h-8 w-24 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+                      />
+                      <Button
+                        size="sm"
+                        className="h-8 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                        disabled={busy}
+                        onClick={() => {
+                          openVote.mutate(
+                            { eventId, resolutionId: res.id, durationSeconds: Number(duration) },
+                            { onSuccess: () => setDurationFor(null) }
+                          );
+                        }}
+                      >
+                        <Vote className="h-3.5 w-3.5" />
+                        {openVote.isPending ? "Opening…" : "Open Voting"}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8" onClick={() => setDurationFor(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="h-8 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                      disabled={busy}
+                      onClick={() => setDurationFor(res.id)}
+                    >
+                      <Vote className="h-3.5 w-3.5" /> Open Voting
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {isOpen && (
+                <div className="mt-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5 border-red-200 text-red-600 hover:bg-red-50"
+                    disabled={busy}
+                    onClick={() => closeVote.mutate({ eventId, resolutionId: res.id })}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    {closeVote.isPending ? "Closing…" : "Close Voting"}
+                  </Button>
+                </div>
               )}
             </div>
           );
@@ -481,7 +554,7 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
       <div className="grid grid-cols-3 gap-5">
         {/* Left: Resolutions */}
         <div className="col-span-2">
-          <ResolutionsPanel resolutions={room.resolutions} color={color} />
+          <ResolutionsPanel resolutions={room.resolutions} color={color} eventId={eventId} />
         </div>
 
         {/* Right: Q&A + Attendance */}
@@ -608,7 +681,7 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
 
 function SessionList({ onSelect }: { onSelect: (eventId: string) => void }) {
   const { data, isLoading } = useClientEvents("ALL", 0, 100);
-  const sessions = (data?.events ?? []).filter((e) => e.status === "LIVE");
+  const sessions = (data?.events ?? []).filter((e) => e.status?.toLowerCase() === "live");
 
   if (isLoading) return <Loader variant="page" text="Loading live sessions…" />;
 

@@ -17,6 +17,7 @@ import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
 import { clientEventKeys } from "@/api/client-events";
+import { liveKeys } from "@/api/client-live";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -307,6 +308,7 @@ export function useOpenResolutionVoting() {
     },
     onSuccess: (_, { eventId }) => {
       queryClient.invalidateQueries({ queryKey: clientVoteKeys.results(eventId) });
+      queryClient.invalidateQueries({ queryKey: liveKeys.detail(eventId) });
       popup.success("Voting Opened", "Participants can now vote on this resolution.", 2500);
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to open voting."),
@@ -331,6 +333,7 @@ export function useCloseResolutionVoting() {
     },
     onSuccess: (_, { eventId }) => {
       queryClient.invalidateQueries({ queryKey: clientVoteKeys.results(eventId) });
+      queryClient.invalidateQueries({ queryKey: liveKeys.detail(eventId) });
       popup.success("Voting Closed", "This resolution's voting period has ended.", 2500);
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to close voting."),
