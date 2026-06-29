@@ -178,14 +178,17 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     "Attendees",
     // Registrar tab only for super admin (overview already shows it for others)
     ...(isSuperAdmin ? ["Registrar"] : []),
-    "Documents",
-    ...(isAGM && !isSuperAdmin ? ["Resolutions", "Stakeholders"] : isAGM ? ["Resolutions"] : []),
-    ...(!isSuperAdmin && isLAUNCH ? ["Audience Tiers", "Waitlist"] : []),
-    // Broadcast is a write operation — hidden for super admin (read-only)
-    ...(!isSuperAdmin ? ["Broadcast"] : []),
-    ...(isAGM ? ["Vote Results", "Post-AGM"] : []),
-    // Super admin is read-only for events — no settings/mutations
-    ...(!isSuperAdmin ? ["Settings"] : []),
+    // For AGM + super admin: stop here — Documents and everything after is hidden
+    ...(isSuperAdmin && isAGM ? [] : [
+      "Documents",
+      ...(isAGM && !isSuperAdmin ? ["Resolutions", "Stakeholders"] : isAGM ? ["Resolutions"] : []),
+      ...(!isSuperAdmin && isLAUNCH ? ["Audience Tiers", "Waitlist"] : []),
+      // Broadcast is a write operation — hidden for super admin (read-only)
+      ...(!isSuperAdmin ? ["Broadcast"] : []),
+      ...(isAGM ? ["Vote Results", "Post-AGM"] : []),
+      // Super admin is read-only for events — no settings/mutations
+      ...(!isSuperAdmin ? ["Settings"] : []),
+    ]),
   ];
 
   // ── Render ────────────────────────────────────────────────────────────────

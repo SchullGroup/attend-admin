@@ -148,7 +148,7 @@ function FilterDropdown({
 // Event table row
 // ---------------------------------------------------------------------------
 
-function EventTableRow({ event }: { event: EventSummaryResponse }) {
+function EventTableRow({ event, isSuperAdmin }: { event: EventSummaryResponse; isSuperAdmin: boolean }) {
   const isLive      = event.status?.toUpperCase() === "LIVE" || event.live;
   const mod         = getEventModule(event);
   const isAGM       = mod === "AGM";
@@ -211,7 +211,7 @@ function EventTableRow({ event }: { event: EventSummaryResponse }) {
               <Eye className="h-3 w-3" /> View
             </Button>
           </Link>
-          {(event.status?.toUpperCase() === "LIVE") && (
+          {(event.status?.toUpperCase() === "LIVE") && !isSuperAdmin && (
             <Link href="/events/live">
               <Button size="sm" className="h-7 text-xs gap-1 bg-red-600 hover:bg-red-700 text-white">
                 <Radio className="h-3 w-3" /> Live
@@ -417,7 +417,7 @@ export default function EventsPage() {
           </thead>
           <tbody>
             {filtered.map((event) => (
-              <EventTableRow key={event.id} event={event} />
+              <EventTableRow key={event.id} event={event} isSuperAdmin={isSuperAdmin} />
             ))}
           </tbody>
         </table>

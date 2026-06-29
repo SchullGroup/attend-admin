@@ -27,6 +27,12 @@ import {
   type ExportApplicationItem,
   type SubmissionRequirements,
 } from "@/api/client-challenges";
+import {
+  useAdminChallengeDetail,
+  useAdminChallengeJudges,
+  useAdminChallengeLeaderboard,
+} from "@/api/admin-challenges";
+import { useGetMe } from "@/api/auth/hooks";
 import { useOrganisationTeam, type TeamMember } from "@/api/client-organisation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -1337,10 +1343,184 @@ function JudgesTab({ challengeId }: { challengeId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Super admin read-only Judges tab
+// ---------------------------------------------------------------------------
+function AdminJudgesTab({ challengeId }: { challengeId: string }) {
+  const { data: panel, isLoading } = useAdminChallengeJudges(challengeId);
+
+  if (isLoading) return <Loader variant="inline" text="Loading judges…" />;
+
+  const judges = panel?.judges ?? [];
+
+  if (judges.length === 0) {
+    return (
+      <Card className="attend-card p-12 text-center">
+        <UserCheck className="h-8 w-8 mx-auto text-[hsl(var(--muted-foreground))] mb-3" />
+        <p className="text-sm font-medium text-[hsl(var(--foreground))]">No judges assigned yet</p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="attend-card overflow-hidden">
+      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+        <UserCheck className="h-4 w-4 text-[#7c22c9]" />
+        <h2 className="font-semibold text-[hsl(var(--foreground))]">
+          Judge Panel ({judges.length})
+        </h2>
+        {panel?.tracks && panel.tracks.length > 0 && (
+          <div className="ml-auto flex gap-1.5">
+            {panel.tracks.map((t) => (
+              <span key={t} className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <table className="w-full">
+        <thead>
+          <tr className="attend-table-header">
+            <th className="px-5 py-3 text-left">Judge</th>
+            <th className="px-5 py-3 text-left">Email</th>
+            <th className="px-5 py-3 text-left">Organisation</th>
+            <th className="px-5 py-3 text-left">Specialty Track</th>
+            <th className="px-5 py-3 text-left">Assigned</th>
+            <th className="px-5 py-3 text-left">Scored</th>
+            <th className="px-5 py-3 text-left">Progress</th>
+          </tr>
+        </thead>
+        <tbody>
+          {judges.map((j) => (
+            <tr key={j.id} className="attend-table-row">
+              <td className="px-5 py-3">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                    style={{ backgroundColor: j.color || "#7c22c9" }}
+                  >
+                    {j.initials || j.name?.slice(0, 2).toUpperCase()}
+                  </div>
+                  <span className="text-sm font-semibold text-[hsl(var(--foreground))]">{j.name}</span>
+                </div>
+              </td>
+              <td className="px-5 py-3 text-xs text-[hsl(var(--muted-foreground))]">{j.email}</td>
+              <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{j.organization || "—"}</td>
+              <td className="px-5 py-3">
+                {j.specialtyTrack
+                  ? <span className="text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>{j.specialtyTrack}</span>
+                  : <span className="text-xs text-[hsl(var(--muted-foreground))]">All tracks</span>}
+              </td>
+              <td className="px-5 py-3 text-sm font-semibold tabular-nums">{j.assignedCount}</td>
+              <td className="px-5 py-3 text-sm font-semibold tabular-nums">{j.scoredCount}</td>
+              <td className="px-5 py-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden min-w-[60px]">
+                    <div className="h-full rounded-full bg-[#7c22c9]" style={{ width: `${j.progressPercent ?? 0}%` }} />
+                  </div>
+                  <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums w-8 text-right">
+                    {j.progressPercent ?? 0}%
+                  </span>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Super admin read-only Leaderboard tab (uses admin endpoint)
+// ---------------------------------------------------------------------------
+function AdminLeaderboardTab({ challengeId }: { challengeId: string }) {
+  const { data, isLoading } = useAdminChallengeLeaderboard(challengeId);
+
+  if (isLoading) return <Loader variant="inline" text="Loading leaderboard…" />;
+
+  const results = data?.results ?? [];
+
+  const medalColor = (rank: number) => {
+    if (rank === 1) return "#f59e0b";
+    if (rank === 2) return "#94a3b8";
+    if (rank === 3) return "#d97706";
+    return "#6b7280";
+  };
+
+  return (
+    <div className="flex flex-col gap-5">
+      {results.length >= 1 && (
+        <div className="grid grid-cols-3 gap-4">
+          {[results[1], results[0], results[2]].map((r, i) => {
+            if (!r) return <div key={i} />;
+            const color = medalColor(r.rank);
+            return (
+              <Card key={r.applicationId} className={`attend-card p-5 text-center ${r.rank === 1 ? "ring-2 ring-amber-400" : ""}`}>
+                <div className="h-10 w-10 rounded-full mx-auto flex items-center justify-center text-white text-lg font-black mb-2" style={{ backgroundColor: color }}>
+                  {r.rank === 1 ? "🥇" : r.rank === 2 ? "🥈" : "🥉"}
+                </div>
+                <p className="text-sm font-bold text-[hsl(var(--foreground))]">{r.teamName}</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 truncate">{r.ideaTitle}</p>
+                <p className="text-xs mt-1" style={{ color }}>{r.track}</p>
+                <p className="text-2xl font-black tabular-nums mt-2" style={{ color }}>{r.score.toFixed(1)}</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">score</p>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+      <Card className="attend-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
+          <h2 className="font-semibold text-[hsl(var(--foreground))]">
+            {data?.challengeTitle ? `${data.challengeTitle} — Leaderboard` : "Full Leaderboard"}
+          </h2>
+        </div>
+        <table className="w-full">
+          <thead>
+            <tr className="attend-table-header">
+              <th className="px-5 py-3 text-left w-12">Rank</th>
+              <th className="px-5 py-3 text-left">Team</th>
+              <th className="px-5 py-3 text-left">Idea</th>
+              <th className="px-5 py-3 text-left">Track</th>
+              <th className="px-5 py-3 text-left">Status</th>
+              <th className="px-5 py-3 text-right">Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            {results.map((r) => (
+              <tr key={r.applicationId} className="attend-table-row">
+                <td className="px-5 py-3">
+                  <span className="text-sm font-black tabular-nums" style={{ color: medalColor(r.rank) }}>#{r.rank}</span>
+                </td>
+                <td className="px-5 py-3 text-sm font-semibold text-[hsl(var(--foreground))]">{r.teamName}</td>
+                <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[200px] truncate">{r.ideaTitle}</td>
+                <td className="px-5 py-3">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>{r.track}</span>
+                </td>
+                <td className="px-5 py-3">{statusChip(r.status)}</td>
+                <td className="px-5 py-3 text-right text-sm font-bold tabular-nums">{r.score.toFixed(1)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {results.length === 0 && (
+          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">No scored entries yet.</div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page — orchestrator
 // ---------------------------------------------------------------------------
-const TABS = ["Overview", "Applications", "Leaderboard", "Judges", "Settings"] as const;
-type Tab = typeof TABS[number];
+const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
+
+const CLIENT_TABS  = ["Overview", "Applications", "Leaderboard", "Judges", "Settings"] as const;
+const ADMIN_TABS   = ["Overview", "Leaderboard", "Judges"] as const;
+type ClientTab = typeof CLIENT_TABS[number];
+type AdminTab  = typeof ADMIN_TABS[number];
 
 export default function ChallengeDetailPage({
   params,
@@ -1349,9 +1529,20 @@ export default function ChallengeDetailPage({
 }) {
   const { challengeId } = use(params);
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("Overview");
 
-  const { data: challenge, isLoading } = useClientChallengeDetail(challengeId);
+  const { data: userResponse } = useGetMe();
+  const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
+  const isSuperAdmin   = SUPER_ADMIN_ROLES.has(normalizedRole);
+
+  const [clientTab, setClientTab] = useState<ClientTab>("Overview");
+  const [adminTab,  setAdminTab]  = useState<AdminTab>("Overview");
+
+  // Always call both hooks (rules of hooks); enable based on role
+  const { data: clientChallenge, isLoading: clientLoading } = useClientChallengeDetail(challengeId);
+  const { data: adminChallenge,  isLoading: adminLoading  } = useAdminChallengeDetail(challengeId);
+
+  const challenge = isSuperAdmin ? adminChallenge  : clientChallenge;
+  const isLoading = isSuperAdmin ? adminLoading    : clientLoading;
 
   if (isLoading) return <Loader variant="page" text="Loading Challenge…" />;
   if (!challenge) {
@@ -1365,6 +1556,12 @@ export default function ChallengeDetailPage({
     );
   }
 
+  const tabs    = isSuperAdmin ? ADMIN_TABS  : CLIENT_TABS;
+  const tab     = isSuperAdmin ? adminTab    : clientTab;
+  const setTab  = isSuperAdmin
+    ? (t: string) => setAdminTab(t as AdminTab)
+    : (t: string) => setClientTab(t as ClientTab);
+
   return (
     <div className="flex flex-col gap-5">
       {/* Page header */}
@@ -1377,16 +1574,11 @@ export default function ChallengeDetailPage({
         </button>
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <div
-              className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
-              style={{ backgroundColor: "#7c22c918" }}
-            >
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: "#7c22c918" }}>
               <Lightbulb className="h-5 w-5" style={{ color: "#7c22c9" }} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))] leading-tight">
-                {challenge.title}
-              </h1>
+              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))] leading-tight">{challenge.title}</h1>
               <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
                 {formatDate(challenge.date)}
                 {challenge.topPrizePool ? ` · Top prize: ${challenge.topPrizePool}` : ""}
@@ -1419,7 +1611,7 @@ export default function ChallengeDetailPage({
 
       {/* Tab bar */}
       <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -1434,21 +1626,26 @@ export default function ChallengeDetailPage({
                 <Settings className="h-3.5 w-3.5" /> Settings
               </span>
             ) : t}
-            {t === "Applications" && challenge.applicationCount > 0 && (
+            {t === "Applications" && (challenge as any).applicationCount > 0 && (
               <span className="ml-1.5 text-[10px] font-bold bg-[#7c22c918] text-[#7c22c9] rounded-full px-1.5 py-0.5">
-                {challenge.applicationCount}
+                {(challenge as any).applicationCount}
               </span>
             )}
           </button>
         ))}
       </div>
 
-      {/* Tab panels */}
-      {tab === "Overview"     && <OverviewTab     challengeId={challengeId} />}
-      {tab === "Applications" && <ApplicationsTab challengeId={challengeId} />}
-      {tab === "Leaderboard"  && <LeaderboardTab  challengeId={challengeId} />}
-      {tab === "Judges"       && <JudgesTab        challengeId={challengeId} />}
-      {tab === "Settings"     && <SettingsTab      challengeId={challengeId} />}
+      {/* Tab panels — super admin */}
+      {isSuperAdmin && tab === "Overview"    && <OverviewTab          challengeId={challengeId} />}
+      {isSuperAdmin && tab === "Leaderboard" && <AdminLeaderboardTab  challengeId={challengeId} />}
+      {isSuperAdmin && tab === "Judges"      && <AdminJudgesTab       challengeId={challengeId} />}
+
+      {/* Tab panels — client admin */}
+      {!isSuperAdmin && tab === "Overview"     && <OverviewTab     challengeId={challengeId} />}
+      {!isSuperAdmin && tab === "Applications" && <ApplicationsTab challengeId={challengeId} />}
+      {!isSuperAdmin && tab === "Leaderboard"  && <LeaderboardTab  challengeId={challengeId} />}
+      {!isSuperAdmin && tab === "Judges"       && <JudgesTab       challengeId={challengeId} />}
+      {!isSuperAdmin && tab === "Settings"     && <SettingsTab     challengeId={challengeId} />}
     </div>
   );
 }

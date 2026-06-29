@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -271,6 +271,10 @@ function isZoomUrl(url: string) {
   return /zoom\.us\/j\/|zoomus\.cn\/j\//.test(url);
 }
 
+function isGoogleMeetUrl(url: string) {
+  return /meet\.google\.com\//.test(url);
+}
+
 function parseStreamUrl(url: string): string {
   const yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|live\/))([A-Za-z0-9_-]{11})/);
   if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=0&controls=1&rel=0&modestbranding=1`;
@@ -279,12 +283,36 @@ function parseStreamUrl(url: string): string {
 
 // ── Session detail ─────────────────────────────────────────────────────────────
 
+// ── Chime helper (Web Audio API — no audio file required) ────────────────────
+function playChime() {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+    osc.onended = () => ctx.close();
+  } catch {
+    // AudioContext blocked (e.g. no user gesture yet) — fail silently
+  }
+}
+
 function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => void }) {
   const [streamInput, setStreamInput] = useState("");
   const [streamUrl,   setStreamUrl]   = useState("");
   const [streamSaved, setStreamSaved] = useState(false);
   // Keep approved questions visible after approval (they leave the pending list on refetch)
   const [approvedQuestions, setApprovedQuestions] = useState<LivePendingQuestion[]>([]);
+  // Flash the Q&A badge when new questions arrive
+  const [qaBadgeFlash, setQaBadgeFlash] = useState(false);
+  const prevPendingCount = useRef<number | null>(null);
 
   const { data: room, isLoading } = useLiveRoomDetail(eventId);
   const { data: eventDetail      } = useClientEventDetail(eventId ?? "", { enabled: !!eventId });
@@ -303,6 +331,18 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawStreamUrl]);
+
+  // Detect new questions → chime + flash badge
+  const currentPending = room?.pendingQuestions?.length ?? 0;
+  useEffect(() => {
+    if (prevPendingCount.current !== null && currentPending > prevPendingCount.current) {
+      playChime();
+      setQaBadgeFlash(true);
+      const t = setTimeout(() => setQaBadgeFlash(false), 2000);
+      return () => clearTimeout(t);
+    }
+    prevPendingCount.current = currentPending;
+  }, [currentPending]);
 
   if (isLoading) return <Loader variant="page" text="Loading live room…" />;
 
@@ -483,7 +523,7 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-white">Zoom Meeting</p>
-                  <p className="text-xs text-gray-400 mt-1">Cannot be previewed inline.</p>
+                  <p className="text-xs text-gray-400 mt-1">Cannot be previewed inline. Use the Q&amp;A panel to manage attendee questions.</p>
                 </div>
                 <a
                   href={streamUrl}
@@ -492,6 +532,29 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
                   className="inline-flex items-center gap-2 rounded-xl bg-[#0B5CFF] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0B5CFF]/90"
                 >
                   <ExternalLink className="h-4 w-4" /> Join Zoom Meeting
+                </a>
+              </div>
+            ) : isGoogleMeetUrl(streamUrl) ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+                <div className="rounded-2xl bg-[#1A73E8]/15 p-4">
+                  {/* Google Meet icon */}
+                  <svg viewBox="0 0 40 40" className="h-10 w-10" fill="none">
+                    <rect width="40" height="40" rx="8" fill="#1A73E8"/>
+                    <path d="M23 20c0 1.657-1.343 3-3 3s-3-1.343-3-3 1.343-3 3-3 3 1.343 3 3z" fill="white"/>
+                    <path d="M28 15l-5 3.5V15h-9a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h9v-3.5l5 3.5V15z" fill="white"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">Google Meet</p>
+                  <p className="text-xs text-gray-400 mt-1">Cannot be previewed inline. Use the Q&amp;A panel to manage attendee questions.</p>
+                </div>
+                <a
+                  href={streamUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#1A73E8] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1A73E8]/90"
+                >
+                  <ExternalLink className="h-4 w-4" /> Join Google Meet
                 </a>
               </div>
             ) : (
@@ -521,7 +584,7 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
                 type="text"
                 value={streamInput}
                 onChange={(e) => setStreamInput(e.target.value)}
-                placeholder="Paste YouTube or Zoom URL…"
+                placeholder="Paste YouTube, Zoom, or Google Meet URL…"
                 className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
                 onKeyDown={(e) => e.key === "Enter" && applyStream()}
               />
@@ -554,9 +617,13 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
           {/* Q&A Queue */}
           <Card className="attend-card overflow-hidden">
             <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+              <MessageSquare className={`h-4 w-4 transition-colors ${qaBadgeFlash ? "text-red-500" : "text-[hsl(var(--muted-foreground))]"}`} />
               <h2 className="font-semibold text-[hsl(var(--foreground))]">Q&amp;A Queue</h2>
-              <span className="ml-auto text-xs bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))] rounded-full px-2 py-0.5 font-semibold">
+              <span className={`ml-auto text-xs rounded-full px-2 py-0.5 font-semibold transition-all duration-300 ${
+                qaBadgeFlash
+                  ? "bg-red-500 text-white animate-pulse"
+                  : "bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]"
+              }`}>
                 {pending.length} pending
               </span>
             </div>

@@ -104,6 +104,66 @@ export interface SubmitJudgingScoresRequest {
 // ---------------------------------------------------------------------------
 // Query keys
 // ---------------------------------------------------------------------------
+export interface AdminChallengeDetail {
+  id:                     string;
+  title:                  string;
+  description?:           string;
+  status:                 string;
+  applicationsOpen:       boolean;
+  scoringOpen:            boolean;
+  date:                   string;
+  applicationCount:       number;
+  shortlistedCount:       number;
+  judgeCount:             number;
+  topPrizePool?:          string;
+  applicationDeadline?:   string;
+  minTeamSize?:           number;
+  maxTeamSize?:           number;
+  tracks:                 string[];
+  prizeTiers:             Array<{ position: string; reward: string }>;
+  problemStatement?:      string;
+  expectedDeliverable?:   string;
+  eligibilityCriteria?:   string;
+  submissionRequirements?: Record<string, boolean>;
+}
+
+export interface AdminJudge {
+  id:              string;
+  initials?:       string;
+  color?:          string;
+  name:            string;
+  email:           string;
+  organization?:   string;
+  specialtyTrack?: string;
+  assignedCount:   number;
+  scoredCount:     number;
+  progressPercent: number;
+}
+
+export interface AdminJudgePanelResponse {
+  challengeId:    string;
+  challengeTitle: string;
+  tracks:         string[];
+  topPrizePool?:  string;
+  judges:         AdminJudge[];
+}
+
+export interface AdminLeaderboardEntry {
+  rank:          number;
+  applicationId: string;
+  teamName:      string;
+  track:         string;
+  ideaTitle:     string;
+  score:         number;
+  status:        string;
+}
+
+export interface AdminLeaderboardResponse {
+  challengeId:    string;
+  challengeTitle: string;
+  results:        AdminLeaderboardEntry[];
+}
+
 export const challengeKeys = {
   all:          ["adminChallenges"] as const,
   list:         (page: number, size: number) =>
@@ -111,6 +171,12 @@ export const challengeKeys = {
   overview:     ["adminChallenges", "overview"] as const,
   judging:      ["adminChallenges", "judging"] as const,
   organisers:   ["adminChallenges", "organisers"] as const,
+  detail:       (id: string) =>
+                  ["adminChallenges", id, "detail"] as const,
+  judges:       (id: string) =>
+                  ["adminChallenges", id, "judges"] as const,
+  leaderboard:  (id: string) =>
+                  ["adminChallenges", id, "leaderboard"] as const,
   applications: (id: string, status: string, page: number, size: number) =>
                   ["adminChallenges", id, "applications", { status, page, size }] as const,
   application:  (cId: string, aId: string) =>
@@ -187,6 +253,51 @@ export function useAdminChallengeOrganisers() {
       return (Array.isArray(raw) ? raw : raw?.organisers ?? raw?.content ?? []) as string[];
     },
     staleTime: 300_000,
+  });
+}
+
+/** Full detail for a single challenge (super admin). */
+export function useAdminChallengeDetail(challengeId: string) {
+  return useQuery({
+    queryKey: challengeKeys.detail(challengeId),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<AdminChallengeDetail>>(
+        `/api/v1/admin/challenges/${challengeId}`
+      );
+      return (res.data.data ?? (res.data as any)) as AdminChallengeDetail;
+    },
+    enabled: !!challengeId,
+    staleTime: 30_000,
+  });
+}
+
+/** Judge panel for a challenge (super admin, read-only). */
+export function useAdminChallengeJudges(challengeId: string) {
+  return useQuery({
+    queryKey: challengeKeys.judges(challengeId),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<AdminJudgePanelResponse>>(
+        `/api/v1/admin/challenges/${challengeId}/judges`
+      );
+      return (res.data.data ?? (res.data as any)) as AdminJudgePanelResponse;
+    },
+    enabled: !!challengeId,
+    staleTime: 30_000,
+  });
+}
+
+/** Leaderboard for a challenge (super admin). */
+export function useAdminChallengeLeaderboard(challengeId: string) {
+  return useQuery({
+    queryKey: challengeKeys.leaderboard(challengeId),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<AdminLeaderboardResponse>>(
+        `/api/v1/admin/challenges/${challengeId}/judging/leaderboard`
+      );
+      return (res.data.data ?? (res.data as any)) as AdminLeaderboardResponse;
+    },
+    enabled: !!challengeId,
+    staleTime: 30_000,
   });
 }
 

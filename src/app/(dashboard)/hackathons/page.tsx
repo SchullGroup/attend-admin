@@ -242,7 +242,7 @@ export default function HackathonsPage() {
                   <p className="text-purple-200 text-sm mb-4">Create your first innovation challenge from Events.</p>
                 </>
               )}
-              {featured && (
+              {featured && !isSuperAdmin && (
                 <Button
                   className="h-9 text-sm bg-white text-purple-700 hover:bg-white/90 gap-2"
                   onClick={() => router.push(`/hackathons/${featured.id}`)}
@@ -341,9 +341,11 @@ export default function HackathonsPage() {
                     </span>
                   </td>
                   <td className="px-5 py-4">
-                    <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/hackathons/${c.id}`)}>
-                      Open <ChevronRight className="h-3.5 w-3.5" />
-                    </Button>
+                    {!isSuperAdmin && (
+                      <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/hackathons/${c.id}`)}>
+                        Open <ChevronRight className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </td>
                 </tr>
               );

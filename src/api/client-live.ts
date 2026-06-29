@@ -99,8 +99,8 @@ export function useLiveRoomDetail(eventId: string | null | undefined) {
       return raw;
     },
     enabled:        !!eventId,
-    refetchInterval: 15_000,
-    staleTime:       10_000,
+    refetchInterval: 4_000,
+    staleTime:       3_000,
   });
 }
 

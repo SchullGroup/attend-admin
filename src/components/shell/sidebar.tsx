@@ -112,7 +112,7 @@ const SECTIONS: NavSection[] = [
       { title: "Create Event",      icon: PlusCircle,   href: "/events/create", clientOnly: true, action: "create_event" },
       { title: "All Events",        icon: CalendarDays, href: "/events" },
       { title: "Live Control Room", icon: Radio,        href: "/events/live",   clientOnly: true, action: "live_control_room" },
-      { title: "QR Check-In",       icon: QrCode,       href: "/events/qr-checkin" },
+      { title: "QR Check-In",       icon: QrCode,       href: "/events/qr-checkin", clientOnly: true },
       { title: "Vote Records",      icon: Vote,         href: "/votes",         clientOnly: true },
     ],
   },
@@ -120,8 +120,8 @@ const SECTIONS: NavSection[] = [
     label: "Innovation Challenges",
     items: [
       { title: "Challenges",   icon: Lightbulb, href: "/hackathons" },
-      { title: "Applications", icon: FileApp,   href: "/hackathons/applications" },
-      { title: "Judging",      icon: Star,      href: "/hackathons/judging" },
+      { title: "Applications", icon: FileApp,   href: "/hackathons/applications", clientOnly: true },
+      { title: "Judging",      icon: Star,      href: "/hackathons/judging",      clientOnly: true },
     ],
   },
   {
@@ -152,7 +152,7 @@ const SECTIONS: NavSection[] = [
   {
     label: "System",
     items: [
-      { title: "Documents",      icon: FolderOpen, href: "/documents",     judgeHidden: true },
+      { title: "Documents",      icon: FolderOpen, href: "/documents",     judgeHidden: true, clientOnly: true },
       { title: "Analytics",      icon: BarChart3,  href: "/analytics",     judgeHidden: true },
       { title: "Notifications",  icon: Bell,       href: "/notifications",  judgeHidden: true },
       { title: "Audit Log",      icon: ScrollText, href: "/audit",          judgeHidden: true },

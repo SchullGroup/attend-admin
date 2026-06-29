@@ -324,8 +324,8 @@ export function EventOverviewTab({
           </Card>
         )}
 
-        {/* Agenda — shown for all event types */}
-        <Card className="attend-card p-5">
+        {/* Agenda — hidden for super admin on AGM */}
+        {!(isSuperAdmin && isAGM) && <Card className="attend-card p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-[hsl(var(--foreground))]">
               Agenda
@@ -503,7 +503,7 @@ export function EventOverviewTab({
               })}
             </div>
           )}
-        </Card>
+        </Card>}
       </div>
 
       {/* ── Right column ── */}
@@ -565,8 +565,8 @@ export function EventOverviewTab({
           </Card>
         )}
 
-        {/* Live Stream */}
-        {event.streamUrl && (event.format === "virtual" || event.format === "hybrid") && (() => {
+        {/* Live Stream — hidden for super admin on AGM */}
+        {!(isSuperAdmin && isAGM) && event.streamUrl && (event.format === "virtual" || event.format === "hybrid") && (() => {
           const url = sanitiseStreamUrl(event.streamUrl!);
           return (
             <div className="bg-[hsl(var(--primary)/0.04)] border border-[hsl(var(--primary)/0.1)] rounded-xl p-3">
@@ -590,8 +590,8 @@ export function EventOverviewTab({
           );
         })()}
 
-        {/* Documents mini-list */}
-        <Card className="attend-card p-5">
+        {/* Documents mini-list — hidden for super admin on AGM */}
+        {!(isSuperAdmin && isAGM) && <Card className="attend-card p-5">
           <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3">Documents</h2>
           {eventDocs.length === 0 ? (
             <p className="text-xs text-[hsl(var(--muted-foreground))]">No documents uploaded yet.</p>
@@ -608,7 +608,7 @@ export function EventOverviewTab({
           <button onClick={() => onNavigate("Documents")} className="mt-3 text-xs text-[hsl(var(--primary))] hover:underline">
             View all →
           </button>
-        </Card>
+        </Card>}
 
         {/* Event timestamps */}
         {(event.createdAt || event.updatedAt) && (
