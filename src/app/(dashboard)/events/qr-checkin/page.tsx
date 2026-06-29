@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useClientScanQr, useClientEvents, useClientEventAttendees } from "@/api/client-events";
 import { useLiveAttendance } from "@/api/client-live";
+import { toEventModule, MODULE_COLORS } from "@/lib/event-module";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -23,16 +24,9 @@ const KYC_COLORS: Record<string, { bg: string; text: string }> = {
   "Unknown":   { bg: "#9ca3af18", text: "#6b7280" },
 };
 
-const MODULE_COLORS: Record<string, string> = {
-  AGM:                  "#7c22c9",
-  AGM_EGM:              "#7c22c9",
-  LAUNCH:               "#ea6c00",
-  PRODUCT_LAUNCH:       "#ea6c00",
-  HACKATHON:            "#7c22c9",
-  INNOVATION_CHALLENGE: "#7c22c9",
-  GENERAL:              "#7c22c9",
-  GENERAL_EVENT:        "#7c22c9",
-};
+function eventColor(eventType?: string | null): string {
+  return MODULE_COLORS[toEventModule(eventType)];
+}
 
 export interface CheckIn {
   name:      string;
@@ -448,7 +442,7 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
 export default function QRCheckInPage() {
   const { data: eventsData, isLoading } = useClientEvents("ALL", 0, 100);
   const allEvents  = eventsData?.events ?? [];
-  const liveEvents = allEvents.filter((e) => e.status === "LIVE" || e.status === "PUBLISHED");
+  const liveEvents = allEvents.filter((e) => e.status?.toUpperCase() === "LIVE");
 
   const [selectedEventId, setSelectedEventId]         = useState<string | null>(null);
   // Keyed by eventId so checkins survive navigating back and forth
@@ -464,7 +458,7 @@ export default function QRCheckInPage() {
   }
 
   if (selectedEvent) {
-    const color = MODULE_COLORS[selectedEvent.eventType] ?? "#7c22c9";
+    const color = eventColor(selectedEvent.eventType);
     return (
       <ScannerView
         event={{ ...selectedEvent, organiser: selectedEvent.registerName ?? "" }}
@@ -487,9 +481,9 @@ export default function QRCheckInPage() {
 
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Available Events", value: liveEvents.length,                                         icon: QrCode,      accent: "#7c22c9" },
-          { label: "Live Now",          value: allEvents.filter((e) => e.status === "LIVE").length,      icon: Users,       accent: "#7c22c9" },
-          { label: "Published",         value: allEvents.filter((e) => e.status === "PUBLISHED").length, icon: ShieldCheck, accent: "#16a34a" },
+          { label: "Live Events",   value: liveEvents.length,                                                     icon: QrCode,      accent: "#dc2626" },
+          { label: "Total RSVPs",   value: liveEvents.reduce((n, e) => n + (e.rsvpCount ?? 0), 0),               icon: Users,       accent: "#7c22c9" },
+          { label: "Checked In",    value: Object.values(checkinsByEvent).reduce((n, arr) => n + arr.length, 0),  icon: ShieldCheck, accent: "#16a34a" },
         ].map((s) => (
           <Card key={s.label} className="attend-card p-4 flex items-center gap-3">
             <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: s.accent + "18" }}>
@@ -522,7 +516,7 @@ export default function QRCheckInPage() {
             </thead>
             <tbody>
               {liveEvents.map((evt) => {
-                const modColor = MODULE_COLORS[evt.eventType] ?? "#7c22c9";
+                const modColor = eventColor(evt.eventType);
                 const isLive   = evt.status === "LIVE";
                 const sessionCount = (checkinsByEvent[evt.id] ?? []).length;
                 return (
@@ -574,7 +568,7 @@ export default function QRCheckInPage() {
           </table>
           {liveEvents.length === 0 && (
             <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
-              No live or published events available for check-in.
+              No live events available for check-in.
             </div>
           )}
         </div>

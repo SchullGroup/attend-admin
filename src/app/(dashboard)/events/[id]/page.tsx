@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/ui/Loader";
 import { toast } from "sonner";
 import Link from "next/link";
-import { ArrowLeft, Radio } from "lucide-react";
+import { ArrowLeft, Radio, FileText } from "lucide-react";
 import type { EventModule } from "@/types/mock";
 
 // ── Tab components ────────────────────────────────────────────────────────────
@@ -152,10 +152,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     [];
 
   // ── Derived flags ─────────────────────────────────────────────────────────
-  const fill   = capacity && capacity > 0 ? Math.min(Math.round((rsvpCount / capacity) * 100), 100) : null;
-  const isAGM  = event.module === "AGM";
-  const isLAUNCH  = event.module === "LAUNCH";
-  const isGENERAL = event.module === "GENERAL";
+  const fill        = capacity && capacity > 0 ? Math.min(Math.round((rsvpCount / capacity) * 100), 100) : null;
+  const isAGM       = event.module === "AGM";
+  const isLAUNCH    = event.module === "LAUNCH";
+  const isGENERAL   = event.module === "GENERAL";
+  const isHACKATHON = event.module === "HACKATHON";
   const currentStatus = localStatus ?? event.status?.toLowerCase();
 
   function handleStatusChange(status: string) {
@@ -213,13 +214,22 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             <h1 className="text-2xl font-bold text-[hsl(var(--foreground))] leading-tight">{event.title}</h1>
             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{event.organiser}</p>
           </div>
-          {currentStatus === "live" && !isSuperAdmin && (
-            <Link href="/events/live">
-              <Button className="gap-2 bg-red-600 hover:bg-red-700 text-white">
-                <Radio className="h-4 w-4" /> Control Room
-              </Button>
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            {isHACKATHON && !isSuperAdmin && (
+              <Link href={`/hackathons/${id}`}>
+                <Button variant="outline" className="gap-2">
+                  <FileText className="h-4 w-4" /> View Applications
+                </Button>
+              </Link>
+            )}
+            {currentStatus === "live" && !isSuperAdmin && (
+              <Link href="/events/live">
+                <Button className="gap-2 bg-red-600 hover:bg-red-700 text-white">
+                  <Radio className="h-4 w-4" /> Control Room
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 

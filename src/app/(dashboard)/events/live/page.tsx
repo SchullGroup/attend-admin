@@ -19,6 +19,7 @@ import {
 } from "@/api/client-live";
 import { useOpenResolutionVoting, useCloseResolutionVoting } from "@/api/client-votes";
 import { useClientEvents, useUpdateEvent, useClientEventDetail } from "@/api/client-events";
+import { toEventModule, MODULE_COLORS } from "@/lib/event-module";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,19 +37,8 @@ function formatTime(iso: string) {
   }
 }
 
-const MODULE_COLORS: Record<string, string> = {
-  AGM:                  "#7c22c9",
-  AGM_EGM:              "#7c22c9",
-  LAUNCH:               "#ea6c00",
-  PRODUCT_LAUNCH:       "#ea6c00",
-  HACKATHON:            "#7c22c9",
-  INNOVATION_CHALLENGE: "#7c22c9",
-  GENERAL:              "#0891b2",
-  GENERAL_EVENT:        "#0891b2",
-};
-
-function eventColor(eventType: string) {
-  return MODULE_COLORS[eventType] ?? "#7c22c9";
+function eventColor(eventType?: string | null): string {
+  return MODULE_COLORS[toEventModule(eventType)];
 }
 
 function initials(name: string) {
@@ -114,7 +104,7 @@ function ResolutionsPanel({
     );
   }
 
-  const closed = resolutions.filter((r) => r.status === "CLOSED").length;
+  const closed = resolutions.filter((r) => r.status?.toUpperCase() === "CLOSED").length;
 
   return (
     <Card className="attend-card overflow-hidden">
@@ -127,9 +117,10 @@ function ResolutionsPanel({
       <div className="divide-y divide-[hsl(var(--border))]">
         {resolutions.map((res, i) => {
           const total     = res.forCount + res.againstCount + res.abstainCount;
-          const isPending = res.status === "PENDING";
-          const isOpen    = res.status === "OPEN";
-          const isClosed  = res.status === "CLOSED";
+          const statusUp  = res.status?.toUpperCase();
+          const isPending = statusUp === "PENDING";
+          const isOpen    = statusUp === "OPEN";
+          const isClosed  = statusUp === "CLOSED";
           const busy      = openVote.isPending || closeVote.isPending;
 
           return (

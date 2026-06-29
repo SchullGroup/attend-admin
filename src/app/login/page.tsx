@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useLogin } from "@/api/auth/hooks";
 import { toast } from "sonner";
+import Cookies from "js-cookie";
 
 const FEATURES = [
   {
@@ -121,7 +122,17 @@ export default function LoginPage() {
     loginMutation(
       { email, password },
       {
-        onSuccess: () => {
+        onSuccess: (response) => {
+          // Block attendee role — this portal is admin-only
+          const roleRaw = (response.data as any)?.role ?? "";
+          const rolesRaw: string[] = (response.data as any)?.roles ?? [];
+          const allRoles = [roleRaw, ...rolesRaw].map((r) => String(r).toLowerCase().replace(/[-\s]+/g, "_"));
+          const isAttendeeOnly = allRoles.length > 0 && allRoles.every((r) => r === "attendee" || r === "");
+          if (isAttendeeOnly) {
+            Cookies.remove("accessToken");
+            toast.error("Access denied. This portal is for administrators only.");
+            return;
+          }
           toast.success("Login successful");
           router.push("/");
         },

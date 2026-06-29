@@ -248,9 +248,10 @@ export function EventResolutionsTab({
 
           {/* Live / static resolution list */}
           {displayList.map((res, idx) => {
-            const isPending = res.status === "PENDING";
-            const isOpen    = res.status === "OPEN";
-            const isClosed  = res.status === "CLOSED";
+            const statusUp  = res.status?.toUpperCase();
+            const isPending = statusUp === "PENDING";
+            const isOpen    = statusUp === "OPEN";
+            const isClosed  = statusUp === "CLOSED";
             const total     = res.forCount + res.againstCount + res.abstainCount;
 
             return (
