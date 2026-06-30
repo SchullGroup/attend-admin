@@ -21,6 +21,21 @@ export async function POST(request: Request) {
     }
 
     const tokenData = data.data ?? data;
+
+    // Block attendee-only accounts at the proxy level — token never reaches the browser.
+    const rolesRaw: string[] = [
+      ...(Array.isArray(tokenData.roles) ? tokenData.roles : []),
+      ...(tokenData.role ? [tokenData.role] : []),
+    ];
+    const normalized = rolesRaw.map((r: string) => String(r ?? "").toLowerCase().replace(/[-\s]+/g, "_")).filter(Boolean);
+    const isAttendeeOnly = normalized.length > 0 && normalized.every((r: string) => r === "attendee");
+    if (isAttendeeOnly) {
+      return NextResponse.json(
+        { status: false, message: "Access denied. This portal is for administrators only." },
+        { status: 403 },
+      );
+    }
+
     const { refreshToken, ...restData } = tokenData;
 
     // Build response first, then set the HttpOnly cookie directly on it.

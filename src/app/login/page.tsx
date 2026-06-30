@@ -123,11 +123,17 @@ export default function LoginPage() {
       { email, password },
       {
         onSuccess: (response) => {
-          // Block attendee role — this portal is admin-only
-          const roleRaw = (response.data as any)?.role ?? "";
-          const rolesRaw: string[] = (response.data as any)?.roles ?? [];
-          const allRoles = [roleRaw, ...rolesRaw].map((r) => String(r).toLowerCase().replace(/[-\s]+/g, "_"));
-          const isAttendeeOnly = allRoles.length > 0 && allRoles.every((r) => r === "attendee" || r === "");
+          // Block attendee-only accounts — this portal is admin-only.
+          // AuthResponse nests the payload in response.data; roles come as string[] (e.g. ["ATTENDEE"])
+          const inner = (response as any)?.data ?? response;
+          const rolesRaw: string[] = [
+            ...(Array.isArray(inner?.roles) ? inner.roles : []),
+            ...(inner?.role ? [inner.role] : []),
+          ];
+          const normalized = rolesRaw
+            .map((r) => String(r ?? "").toLowerCase().replace(/[-\s]+/g, "_"))
+            .filter(Boolean);
+          const isAttendeeOnly = normalized.length > 0 && normalized.every((r) => r === "attendee");
           if (isAttendeeOnly) {
             Cookies.remove("accessToken");
             toast.error("Access denied. This portal is for administrators only.");
