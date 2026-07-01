@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import ZoomEmbed from "@/components/zoom-embed";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
@@ -18,8 +19,9 @@ import {
   type LivePendingQuestion,
 } from "@/api/client-live";
 import { useOpenResolutionVoting, useCloseResolutionVoting } from "@/api/client-votes";
-import { useClientEvents, useUpdateEvent, useClientEventDetail } from "@/api/client-events";
+import { useClientEvents, useUpdateStreamUrl, useClientEventDetail, type ZoomMeetingDto } from "@/api/client-events";
 import { toEventModule, MODULE_COLORS } from "@/lib/event-module";
+import { useGetMe } from "@/api/auth/hooks";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -316,10 +318,13 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
 
   const { data: room, isLoading } = useLiveRoomDetail(eventId);
   const { data: eventDetail      } = useClientEventDetail(eventId ?? "", { enabled: !!eventId });
+  const zoomMeeting: ZoomMeetingDto | null = (eventDetail as any)?.zoomMeeting ?? null;
   const { data: attendance = []  } = useLiveAttendance(eventId);
   const approveMutation            = useApproveQuestion();
   const rejectMutation             = useRejectQuestion();
-  const updateEventMutation        = useUpdateEvent();
+  const updateStreamUrlMutation    = useUpdateStreamUrl();
+  const { data: meData           } = useGetMe();
+  const hostName = meData?.data?.fullName ?? meData?.data?.firstName ?? "Host";
 
   // Initialise stream URL — prefer live room data, fall back to event detail
   const rawStreamUrl = room?.streamUrl ?? (eventDetail as any)?.streamUrl ?? "";
@@ -356,23 +361,25 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
     );
   }
 
-  const color       = eventColor(room.eventType);
-  const pending     = room.pendingQuestions ?? [];
-  const recentAtt   = attendance.length > 0 ? attendance : (room.recentAttendance ?? []);
-  const isStreaming = room.format?.toLowerCase() !== "in_person";
+  const color           = eventColor(room.eventType);
+  const pending         = room.pendingQuestions ?? [];
+  const recentAtt       = attendance.length > 0 ? attendance : (room.recentAttendance ?? []);
+  const isStreaming     = room.format?.toLowerCase() !== "in_person";
+  const hasZoomMeeting  = !!zoomMeeting?.meetingId;
+  const zak             = zoomMeeting?.startUrl ? (() => {
+    try { return new URL(zoomMeeting.startUrl).searchParams.get("zak") ?? ""; } catch { return ""; }
+  })() : "";
 
   function applyStream() {
     if (!room) return;
     const parsed = parseStreamUrl(streamInput);
     setStreamUrl(parsed);
     setStreamSaved(false);
-    // Persist new URL to backend so all viewers see it
+    // Use the dedicated stream-url endpoint — works even while the event is LIVE
     if (streamInput.trim()) {
-      updateEventMutation.mutate(
-        { id: room.eventId, data: { streamUrl: streamInput.trim() } },
-        {
-          onSuccess: () => setStreamSaved(true),
-        }
+      updateStreamUrlMutation.mutate(
+        { eventId: room.eventId, streamUrl: streamInput.trim() },
+        { onSuccess: () => setStreamSaved(true) }
       );
     }
   }
@@ -500,8 +507,40 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
         )}
       </div>
 
-      {/* Stream preview — only for virtual / hybrid events */}
-      {isStreaming && <Card className="attend-card overflow-hidden">
+      {/* Zoom Meeting — shown when backend created a Zoom meeting for this event */}
+      {hasZoomMeeting && (
+        <Card className="attend-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+            {/* Zoom logo */}
+            <svg viewBox="0 0 40 40" className="h-4 w-4 shrink-0" fill="none">
+              <rect width="40" height="40" rx="8" fill="#0B5CFF"/>
+              <path d="M7 14a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v5.5l6-4v9l-6-4V26a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3V14z" fill="white"/>
+            </svg>
+            <h2 className="font-semibold text-[hsl(var(--foreground))]">Zoom Meeting</h2>
+            <span className="text-xs text-[hsl(var(--muted-foreground))] ml-1">#{zoomMeeting!.meetingId}</span>
+            <div className="ml-auto flex items-center gap-2">
+              <a
+                href={zoomMeeting!.joinUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-[hsl(var(--primary))] hover:underline"
+              >
+                <ExternalLink className="h-3 w-3" /> Open in Zoom
+              </a>
+            </div>
+          </div>
+          <ZoomEmbed
+            meetingNumber={zoomMeeting!.meetingId}
+            password={zoomMeeting!.password}
+            zak={zak}
+            userName={hostName}
+            height={480}
+          />
+        </Card>
+      )}
+
+      {/* Stream preview — only for virtual / hybrid events without a native Zoom meeting */}
+      {isStreaming && !hasZoomMeeting && <Card className="attend-card overflow-hidden">
         <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
           <Tv2 className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
           <h2 className="font-semibold text-[hsl(var(--foreground))]">Stream Preview</h2>
@@ -515,25 +554,7 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
         <div className="relative bg-black" style={{ aspectRatio: "16/9" }}>
           {streamUrl ? (
             isZoomUrl(streamUrl) ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
-                <div className="rounded-2xl bg-[#0B5CFF]/15 p-4">
-                  <svg viewBox="0 0 40 40" className="h-10 w-10 fill-[#0B5CFF]">
-                    <path d="M20 0C8.954 0 0 8.954 0 20s8.954 20 20 20 20-8.954 20-20S31.046 0 20 0zm9.714 25.714a1.429 1.429 0 0 1-1.428 1.429H9.286a1.429 1.429 0 0 1-1.429-1.429V16.43a1.429 1.429 0 0 1 1.429-1.429h2.857v5.714l5-3.571v7.142l-5-3.571v2.857h11.428v-8.571h2.143v8.714zm-2.857-12.857a2.857 2.857 0 1 1-5.714 0 2.857 2.857 0 0 1 5.714 0z"/>
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-white">Zoom Meeting</p>
-                  <p className="text-xs text-gray-400 mt-1">Cannot be previewed inline. Use the Q&amp;A panel to manage attendee questions.</p>
-                </div>
-                <a
-                  href={streamUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#0B5CFF] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0B5CFF]/90"
-                >
-                  <ExternalLink className="h-4 w-4" /> Join Zoom Meeting
-                </a>
-              </div>
+              <ZoomEmbed streamUrl={streamUrl} userName={hostName} height={480} />
             ) : isGoogleMeetUrl(streamUrl) ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
                 <div className="rounded-2xl bg-[#1A73E8]/15 p-4">
@@ -592,10 +613,10 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
             <Button
               size="sm"
               onClick={applyStream}
-              disabled={updateEventMutation.isPending}
+              disabled={updateStreamUrlMutation.isPending}
               className="px-4 shrink-0"
             >
-              {updateEventMutation.isPending ? "Saving…" : streamSaved ? "Saved ✓" : "Apply"}
+              {updateStreamUrlMutation.isPending ? "Saving…" : streamSaved ? "Saved ✓" : "Apply"}
             </Button>
           </div>
           {streamSaved && (

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Radio, Star } from "lucide-react";
+import { Radio, Star, Video, ExternalLink, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,9 @@ import {
   useEndEvent,
   useCancelEvent,
   useToggleEventFeatured,
+  useCreateEventZoomMeeting,
+  useUpdateStreamUrl,
+  type ZoomMeetingDto,
 } from "@/api/client-events";
 
 // ── Label helper ──────────────────────────────────────────────────────────────
@@ -38,6 +41,7 @@ interface Props {
   maximumCapacity?: number | null;
   currentStatus:    string;
   featured?:        boolean;
+  zoomMeeting?:     ZoomMeetingDto | null;
   onStatusChange:   (status: string) => void;
 }
 
@@ -56,17 +60,23 @@ export function EventSettingsTab({
   maximumCapacity:  initialCapacity     = null,
   currentStatus,
   featured:         initialFeatured     = false,
+  zoomMeeting:      initialZoomMeeting  = null,
   onStatusChange,
 }: Props) {
-  const [titleVal,    setTitleVal]    = useState(initialTitle ?? "");
-  const [descVal,     setDescVal]     = useState(initialDescription ?? "");
-  const [formatVal,   setFormatVal]   = useState(initialFormat ?? "");
-  const [dateVal,     setDateVal]     = useState(initialDate ?? "");
-  const [timeVal,     setTimeVal]     = useState(initialStartTime ?? "");
-  const [venueVal,    setVenueVal]    = useState(initialVenue ?? "");
-  const [streamVal,   setStreamVal]   = useState(initialStreamUrl ?? "");
-  const [capVal,      setCapVal]      = useState(initialCapacity != null ? String(initialCapacity) : "");
-  const [featured,    setFeatured]    = useState(initialFeatured);
+  const [titleVal,         setTitleVal]         = useState(initialTitle ?? "");
+  const [descVal,          setDescVal]          = useState(initialDescription ?? "");
+  const [formatVal,        setFormatVal]        = useState(initialFormat ?? "");
+  const [dateVal,          setDateVal]          = useState(initialDate ?? "");
+  const [timeVal,          setTimeVal]          = useState(initialStartTime ?? "");
+  const [venueVal,         setVenueVal]         = useState(initialVenue ?? "");
+  // If a Zoom meeting exists, its joinUrl IS the stream URL — prefer it
+  const effectiveStreamUrl = initialZoomMeeting?.joinUrl || initialStreamUrl || "";
+  const [streamVal,    setStreamVal]    = useState(effectiveStreamUrl);
+  const [capVal,       setCapVal]       = useState(initialCapacity != null ? String(initialCapacity) : "");
+  const [featured,     setFeatured]     = useState(initialFeatured);
+  const [zoomMeeting,  setZoomMeeting]  = useState<ZoomMeetingDto | null>(initialZoomMeeting ?? null);
+  const [zoomDuration, setZoomDuration] = useState("120");
+  const [copiedJoin,   setCopiedJoin]   = useState(false);
 
   const updateMutation         = useUpdateEvent();
   const publishMutation        = usePublishEvent();
@@ -74,6 +84,32 @@ export function EventSettingsTab({
   const endMutation            = useEndEvent();
   const cancelMutation         = useCancelEvent();
   const toggleFeaturedMutation = useToggleEventFeatured();
+  const zoomMutation           = useCreateEventZoomMeeting();
+  const updateStreamMutation   = useUpdateStreamUrl();
+
+  function copyJoinUrl() {
+    if (!zoomMeeting?.joinUrl) return;
+    navigator.clipboard.writeText(zoomMeeting.joinUrl).then(() => {
+      setCopiedJoin(true);
+      setTimeout(() => setCopiedJoin(false), 2000);
+    });
+  }
+
+  function handleCreateZoom() {
+    zoomMutation.mutate(
+      { eventId, durationMinutes: parseInt(zoomDuration, 10) || 120 },
+      {
+        onSuccess: (data) => {
+          setZoomMeeting(data);
+          // Automatically set the stream URL to the Zoom join URL
+          if (data.joinUrl) {
+            setStreamVal(data.joinUrl);
+            updateStreamMutation.mutate({ eventId, streamUrl: data.joinUrl });
+          }
+        },
+      }
+    );
+  }
 
   const anyLifecyclePending =
     publishMutation.isPending ||
@@ -250,6 +286,81 @@ export function EventSettingsTab({
             {toggleFeaturedMutation.isPending ? "…" : featured ? "Unfeature" : "Set Featured"}
           </Button>
         </div>
+      </Card>
+
+      {/* ── Zoom Meeting ── */}
+      <Card className="attend-card p-5">
+        <h2 className="font-semibold text-[hsl(var(--foreground))] flex items-center gap-2 mb-4">
+          <Video className="h-4 w-4 text-[#0B5CFF]" />
+          Zoom Meeting
+        </h2>
+
+        {zoomMeeting ? (
+          <div className="flex flex-col gap-3">
+            {/* Info rows */}
+            <div className="rounded-xl border border-[hsl(var(--border))] divide-y divide-[hsl(var(--border))]">
+              {[
+                { label: "Meeting ID", value: String(zoomMeeting.meetingId) },
+                { label: "Password",   value: zoomMeeting.password },
+                { label: "Duration",   value: `${zoomMeeting.durationMinutes} min` },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex items-center justify-between px-4 py-2.5">
+                  <span className="text-xs text-[hsl(var(--muted-foreground))] font-medium">{label}</span>
+                  <span className="text-xs font-mono text-[hsl(var(--foreground))]">{value}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={zoomMeeting.joinUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-[#0B5CFF] hover:underline"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> Open Join URL
+              </a>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-xs ml-auto"
+                onClick={copyJoinUrl}
+              >
+                {copiedJoin ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                {copiedJoin ? "Copied!" : "Copy Join URL"}
+              </Button>
+            </div>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              Join URL is automatically set as the stream URL for this event.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+              No Zoom meeting yet. Create one below — the join URL will automatically become the stream URL.
+            </p>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={30}
+                max={480}
+                value={zoomDuration}
+                onChange={(e) => setZoomDuration(e.target.value)}
+                placeholder="120"
+                className="h-8 w-24 text-sm"
+              />
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">min</span>
+              <Button
+                size="sm"
+                className="h-8 gap-1.5 text-xs bg-[#0B5CFF] hover:bg-[#0B5CFF]/90 text-white ml-auto"
+                disabled={zoomMutation.isPending}
+                onClick={handleCreateZoom}
+              >
+                <Video className={`h-3.5 w-3.5 ${zoomMutation.isPending ? "animate-spin" : ""}`} />
+                {zoomMutation.isPending ? "Creating…" : "Create Zoom Meeting"}
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* ── Status Controls ── */}

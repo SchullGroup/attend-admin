@@ -28,8 +28,10 @@ export function useAgmState() {
   const [quorum,              setQuorum]              = useState("25");
   const [cutoff,              setCutoff]              = useState("");
   const [resolutions,         setResolutions]         = useState<Resolution[]>([{ id: genId(), title: "", description: "", isSpecial: false }]);
-  const [proxyEnabled,        setProxyEnabled]        = useState(true);
+  const [proxyEnabled,         setProxyEnabled]         = useState(true);
   const [shareholderTargeting, setShareholderTargeting] = useState<"all" | "custom">("all");
+  const [enableZoomMeeting,    setEnableZoomMeeting]    = useState(false);
+  const [zoomDurationMinutes,  setZoomDurationMinutes]  = useState("120");
   // Agenda
   const [agendaItems, setAgendaItems] = useState<AgendaRow[]>([{ id: genId(), time: "10:00", title: "", speaker: "" }]);
   const addAgendaItem    = () => setAgendaItems((a) => [...a, { id: genId(), time: "", title: "", speaker: "" }]);
@@ -53,6 +55,8 @@ export function useAgmState() {
     proxyEnabled, setProxyEnabled,
     shareholderTargeting, setShareholderTargeting,
     agendaItems, addAgendaItem, removeAgendaItem, updateAgendaItem,
+    enableZoomMeeting, setEnableZoomMeeting,
+    zoomDurationMinutes, setZoomDurationMinutes,
   };
 }
 
@@ -152,22 +156,26 @@ export function useHackState() {
 // ─── General ─────────────────────────────────────────────────────────────────
 
 export function useGeneralState() {
-  const [title,        setTitle]        = useState("");
-  const [description,  setDescription]  = useState("");
-  const [date,         setDate]         = useState("");
-  const [time,         setTime]         = useState("10:00");
-  const [endTime,      setEndTime]      = useState("");
-  const [format,       setFormat]       = useState<Format>("virtual");
-  const [venue,        setVenue]        = useState("");
-  const [streamUrl,    setStreamUrl]    = useState("");
-  const [capacity,     setCapacity]     = useState("");
-  const [audienceMode, setAudienceMode] = useState<"open" | "invite">("open");
-  const [featured,     setFeatured]     = useState(false);
+  const [title,               setTitle]               = useState("");
+  const [description,         setDescription]         = useState("");
+  const [date,                setDate]                = useState("");
+  const [time,                setTime]                = useState("10:00");
+  const [endTime,             setEndTime]             = useState("");
+  const [format,              setFormat]              = useState<Format>("virtual");
+  const [venue,               setVenue]               = useState("");
+  const [streamUrl,           setStreamUrl]           = useState("");
+  const [capacity,            setCapacity]            = useState("");
+  const [audienceMode,        setAudienceMode]        = useState<"open" | "invite">("open");
+  const [featured,            setFeatured]            = useState(false);
+  const [enableZoomMeeting,   setEnableZoomMeeting]   = useState(false);
+  const [zoomDurationMinutes, setZoomDurationMinutes] = useState("120");
   return {
     title, setTitle, description, setDescription,
     date, setDate, time, setTime, endTime, setEndTime,
     format, setFormat, venue, setVenue, streamUrl, setStreamUrl,
     capacity, setCapacity, audienceMode, setAudienceMode, featured, setFeatured,
+    enableZoomMeeting, setEnableZoomMeeting,
+    zoomDurationMinutes, setZoomDurationMinutes,
   };
 }
 

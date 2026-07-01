@@ -58,6 +58,15 @@ export interface StatusTransitionResponse {
   updatedAt: string;
 }
 
+// Zoom Meeting (returned on event detail when enableZoomMeeting was set)
+export interface ZoomMeetingDto {
+  meetingId:       number;
+  password:        string;
+  joinUrl:         string;
+  startUrl:        string;
+  durationMinutes: number;
+}
+
 // Agenda
 export interface AgendaItemDto {
   id?:              string;
@@ -641,6 +650,10 @@ export interface CreateEventRequest {
   productLaunchConfig?:        ProductLaunchConfigRequest;
   innovationChallengeConfig?:  InnovationChallengeConfigRequest;
   generalEventConfig?:         GeneralEventConfigRequest;
+  /** Auto-create a Zoom meeting for this event */
+  enableZoomMeeting?:          boolean;
+  /** Duration in minutes for the auto-created Zoom meeting (default 120) */
+  zoomDurationMinutes?:        number;
 }
 
 /** Create a new event (client/event-manager). DRAFT status on creation. */
@@ -1004,6 +1017,34 @@ export function useUpdateStreamUrl() {
       popup.success("Stream URL Updated", "The stream URL has been saved.", 2500);
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to update stream URL."),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Zoom Meeting  — POST /api/v1/client/events/{id}/zoom
+// ---------------------------------------------------------------------------
+
+/**
+ * Create or refresh a Zoom meeting for an existing event.
+ * Requires Zoom Server-to-Server OAuth configured on the backend.
+ * Only works for VIRTUAL or HYBRID events.
+ */
+export function useCreateEventZoomMeeting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, durationMinutes = 120 }: { eventId: string; durationMinutes?: number }) => {
+      const res = await apiClient.post<ApiResponse<ZoomMeetingDto>>(
+        `/api/v1/client/events/${eventId}/zoom`,
+        null,
+        { params: { durationMinutes } }
+      );
+      return (res.data as any).data as ZoomMeetingDto;
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: clientEventKeys.detail(eventId) });
+      popup.success("Zoom Meeting Created", "Zoom meeting has been created for this event.", 3000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to create Zoom meeting. Check that Zoom OAuth is configured on the server."),
   });
 }
 

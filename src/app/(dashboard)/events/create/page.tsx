@@ -244,6 +244,15 @@ function CreateEventInner() {
                             : selectedModule === "HACKATHON" ? (parseInt(hack.capacity,    10) || 0)
                             : (parseInt(general.capacity, 10) || 0);
 
+      const enableZoom = selectedModule === "AGM"   ? agm.enableZoomMeeting
+                      : selectedModule === "GENERAL" ? general.enableZoomMeeting
+                      : false;
+
+      const zoomDuration = enableZoom
+        ? (selectedModule === "AGM"   ? parseInt(agm.zoomDurationMinutes, 10)
+                                      : parseInt(general.zoomDurationMinutes, 10)) || 120
+        : undefined;
+
       const featuredValue = selectedModule === "AGM"      ? agm.featured
                           : selectedModule === "LAUNCH"    ? launch.featured
                           : selectedModule === "HACKATHON" ? hack.featured
@@ -274,6 +283,8 @@ function CreateEventInner() {
           productLaunchConfig,
           innovationChallengeConfig,
           generalEventConfig,
+          enableZoomMeeting:    enableZoom || undefined,
+          zoomDurationMinutes:  zoomDuration,
         },
         {
           onSuccess: (createdEvent) => {

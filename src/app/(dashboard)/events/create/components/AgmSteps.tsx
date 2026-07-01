@@ -1,6 +1,6 @@
 "use client";
 import { toast } from "sonner";
-import { Upload, ShieldCheck, Plus, Trash2, Check, Monitor, MapPin, Clock } from "lucide-react";
+import { Upload, ShieldCheck, Plus, Trash2, Check, Monitor, MapPin, Clock, Video } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -62,10 +62,18 @@ export function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState
 
       <FormatPicker value={s.format} onChange={s.setFormat} />
 
-      {(s.format === "virtual" || s.format === "hybrid") && (
+      {(s.format === "virtual" || s.format === "hybrid") && !s.enableZoomMeeting && (
         <div>
           <Label className="mb-2 block"><Monitor className="h-3.5 w-3.5 inline mr-1" />Stream URL</Label>
           <Input placeholder="https://agm.company.ng/live" value={s.streamUrl} onChange={(e) => s.setStreamUrl(e.target.value)} />
+        </div>
+      )}
+      {(s.format === "virtual" || s.format === "hybrid") && s.enableZoomMeeting && (
+        <div className="rounded-lg border border-[#0B5CFF]/30 bg-[#0B5CFF]/05 px-4 py-3 flex items-center gap-2">
+          <Video className="h-4 w-4 text-[#0B5CFF] shrink-0" />
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            Stream URL will be set automatically from the Zoom meeting join link after creation.
+          </p>
         </div>
       )}
       {(s.format === "in_person" || s.format === "hybrid") && (
@@ -96,6 +104,31 @@ export function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState
         </div>
         <Toggle checked={s.featured} onChange={s.setFeatured} color="#374151" />
       </div>
+
+      <div className="flex items-center justify-between rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] px-4 py-3">
+        <div>
+          <p className="text-sm font-semibold text-[hsl(var(--foreground))] flex items-center gap-1.5">
+            <Video className="h-3.5 w-3.5 text-[#0B5CFF]" /> Auto-Create Zoom Meeting
+          </p>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">Backend creates a Zoom meeting and provides a join link automatically</p>
+        </div>
+        <Toggle checked={s.enableZoomMeeting} onChange={s.setEnableZoomMeeting} color="#0B5CFF" />
+      </div>
+
+      {s.enableZoomMeeting && (
+        <div>
+          <Label className="mb-2 block">Zoom Meeting Duration (minutes)</Label>
+          <Input
+            type="number"
+            min={30}
+            max={480}
+            placeholder="120"
+            value={s.zoomDurationMinutes}
+            onChange={(e) => s.setZoomDurationMinutes(e.target.value)}
+          />
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Default is 120 minutes (2 hours).</p>
+        </div>
+      )}
     </div>
   );
 }

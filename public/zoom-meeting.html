@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zoom Meeting</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #111; }
+    #meetingSDKElement { width: 100%; height: 100%; }
+    #loading {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100vh; color: #9ca3af;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; gap: 14px;
+    }
+    #loading-spinner {
+      width: 32px; height: 32px; border: 3px solid #333;
+      border-top-color: #0B5CFF; border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    #error {
+      display: none; color: #f87171; text-align: center; padding: 32px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div id="loading">
+    <div id="loading-spinner"></div>
+    <p style="font-size:13px">Loading Zoom…</p>
+  </div>
+
+  <div id="meetingSDKElement" style="display:none; width:100%; height:100%"></div>
+  <div id="error"></div>
+
+  <!--
+    Zoom vendor dependencies loaded from Zoom's CDN.
+    These are isolated inside this iframe and do NOT conflict with the host app's React 18.
+  -->
+  <script src="https://source.zoom.us/6.1.0/lib/vendor/react.min.js"></script>
+  <script src="https://source.zoom.us/6.1.0/lib/vendor/react-dom.min.js"></script>
+  <script src="https://source.zoom.us/6.1.0/lib/vendor/redux.min.js"></script>
+  <script src="https://source.zoom.us/6.1.0/lib/vendor/redux-thunk.min.js"></script>
+  <script src="https://source.zoom.us/6.1.0/lib/vendor/lodash.min.js"></script>
+  <!-- Zoom Meeting SDK — Component View -->
+  <script src="https://source.zoom.us/zoom-meeting-embedded-6.1.0.min.js"></script>
+
+  <script>
+    var sdkClient = null;
+
+    /** Extract a human-readable string from whatever the Zoom SDK throws. */
+    function extractError(e) {
+      if (!e) return 'Unknown error';
+      if (typeof e === 'string') return e;
+      // Zoom SDK error objects: { type, reason, errorCode }
+      if (e.reason)        return e.reason + (e.errorCode ? ' (code ' + e.errorCode + ')' : '');
+      if (e.errorMessage)  return e.errorMessage + (e.errorCode ? ' (code ' + e.errorCode + ')' : '');
+      if (typeof e.message === 'string' && e.message) return e.message;
+      try { return JSON.stringify(e); } catch(_) { return 'Unknown error'; }
+    }
+
+    function showError(e) {
+      var msg = extractError(e);
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('meetingSDKElement').style.display = 'none';
+      var el = document.getElementById('error');
+      el.style.display = 'block';
+      el.textContent = 'Error: ' + msg;
+      // Notify parent of failure
+      window.parent.postMessage({ type: 'ZOOM_ERROR', message: msg }, '*');
+    }
+
+    // Listen for control messages from the host page
+    window.addEventListener('message', async function (event) {
+      var data = event.data;
+      if (!data) return;
+
+      // ── Join ──────────────────────────────────────────────────────────────
+      if (data.type === 'ZOOM_JOIN') {
+        try {
+          var el = document.getElementById('meetingSDKElement');
+          el.style.display = 'block';
+          document.getElementById('loading').style.display = 'none';
+
+          sdkClient = ZoomMtgEmbedded.createClient();
+
+          await sdkClient.init({
+            zoomAppRoot: el,
+            language: 'en-US',
+            patchJsMedia: true,
+            customize: {
+              video: {
+                isResizable: false,
+                viewSizes: {
+                  default: {
+                    width:  Math.floor(window.innerWidth),
+                    height: Math.floor(window.innerHeight),
+                  },
+                },
+              },
+            },
+          });
+
+          var joinOpts = {
+            sdkKey:        data.sdkKey,
+            signature:     data.signature,
+            meetingNumber: data.meetingNumber,
+            password:      data.password || '',
+            userName:      data.userName || 'Host',
+          };
+          // Include host ZAK token if provided (allows joining as host)
+          if (data.zak) joinOpts.zak = data.zak;
+
+          await sdkClient.join(joinOpts);
+
+          // Signal parent: joined successfully
+          window.parent.postMessage({ type: 'ZOOM_JOINED' }, '*');
+        } catch (e) {
+          showError(e);
+        }
+      }
+
+      // ── Leave ─────────────────────────────────────────────────────────────
+      if (data.type === 'ZOOM_LEAVE') {
+        try {
+          if (sdkClient) sdkClient.leaveMeeting();
+        } catch (_) { /* ignore */ }
+      }
+    });
+
+    // Signal parent: SDK scripts finished loading, ready to receive ZOOM_JOIN
+    window.addEventListener('load', function () {
+      window.parent.postMessage({ type: 'ZOOM_READY' }, '*');
+    });
+  </script>
+</body>
+</html>
