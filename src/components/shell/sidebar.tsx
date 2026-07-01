@@ -207,16 +207,17 @@ export function Sidebar() {
   const currentUser = userResponse?.data;
   const { mutate: logout } = useLogout();
 
-  const { data: pendingEnrollmentsData } = usePendingEnrollments(0, 1);
-
-  // Stakeholder logo — for client users whose avatarUrl is null
-  const { data: stakeholder } = useClientStakeholder({ enabled: !!currentUser && !ADMIN_ROLES.has(resolveRole(currentUser)) });
-  const pendingCount = pendingEnrollmentsData?.data?.totalCount ?? 0;
-
   // Normalise once — used for both section filters and per-item action gates.
   const normalizedRole = resolveRole(currentUser);
   const isSuperAdmin   = isSuperAdminRole(normalizedRole);
   const isJudge        = JUDGE_ROLES.has(normalizedRole);
+
+  // Only fire super_admin-only endpoint when we know the user has that role
+  const { data: pendingEnrollmentsData } = usePendingEnrollments(0, 1, isSuperAdmin);
+
+  // Stakeholder logo — for client users whose avatarUrl is null
+  const { data: stakeholder } = useClientStakeholder({ enabled: !!currentUser && !ADMIN_ROLES.has(resolveRole(currentUser)) });
+  const pendingCount = pendingEnrollmentsData?.data?.totalCount ?? 0;
 
   const hasToken      = typeof window !== "undefined" && !!Cookies.get("accessToken");
   // logoUrl persisted at login time (me endpoint may not return it)

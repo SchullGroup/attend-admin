@@ -8,7 +8,7 @@ import {
   useCreateInnovationEvent,
   useCreateProductLaunchEvent,
 } from "@/api/events";
-import { useCreateEvent, useImportShareholdersToEvent, type CreateEventRequest } from "@/api/client-events";
+import { useCreateEvent, useImportShareholdersToEvent, useCreateEventZoomMeeting, type CreateEventRequest } from "@/api/client-events";
 import { useGetMe } from "@/api/auth/hooks";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -70,7 +70,7 @@ function CreateEventInner() {
   const { data: userResponse } = useGetMe();
   const currentUser = userResponse?.data;
   const ADMIN_ROLES = new Set(["super_admin", "event_manager", "kyc_officer", "judge"]);
-  const isAdmin = !currentUser || ADMIN_ROLES.has(currentUser.role?.toLowerCase() ?? "");
+  const isAdmin = !!currentUser && ADMIN_ROLES.has(currentUser.role?.toLowerCase() ?? "");
 
   const createAgm              = useCreateAgmEvent();
   const createGeneral          = useCreateGeneralEvent();
@@ -78,6 +78,7 @@ function CreateEventInner() {
   const createLaunch           = useCreateProductLaunchEvent();
   const createClientEvent      = useCreateEvent();
   const importShareholders     = useImportShareholdersToEvent();
+  const createEventZoomMeeting = useCreateEventZoomMeeting();
 
   const selectedOrganiser = activeOrganisers.find((o) => o.id === organiserId) ?? null;
   const organiserName     = selectedOrganiser?.name ?? "";
@@ -268,14 +269,15 @@ function CreateEventInner() {
           eventType:  eventTypeMap[selectedModule],
           title, description, date, endDate, startTime, endTime,
           format:          fmt(eventFormat),
-          streamUrl,
-          location:        venueValue,
-          venue:           venueValue,
+          // When Zoom is enabled the backend creates the meeting and sets streamUrl itself;
+          // sending enableZoomMeeting:true is enough — no streamUrl needed.
+          streamUrl:           enableZoom ? undefined : streamUrl,
+          location:            venueValue,
+          venue:               venueValue,
           maximumCapacity,
-          featured:        featuredValue || undefined,
-          rsvpEnabled:     selectedModule === "AGM" ? agm.rsvpEnabled : undefined,
+          featured:            featuredValue || undefined,
+          rsvpEnabled:         selectedModule === "AGM" ? agm.rsvpEnabled : undefined,
           speakers,
-          // AGM agenda items — only sent when the AGM module is active and items exist
           agenda: selectedModule === "AGM" && agm.agendaItems.some((a) => a.title.trim())
             ? agm.agendaItems.filter((a) => a.title.trim()).map((a) => ({ time: a.time, title: a.title, speaker: a.speaker || undefined }))
             : undefined,
@@ -283,21 +285,25 @@ function CreateEventInner() {
           productLaunchConfig,
           innovationChallengeConfig,
           generalEventConfig,
-          enableZoomMeeting:    enableZoom || undefined,
-          zoomDurationMinutes:  zoomDuration,
+          enableZoomMeeting:   enableZoom || undefined,
+          zoomDurationMinutes: zoomDuration,
         },
         {
           onSuccess: (createdEvent) => {
-            // Auto-import register shareholders as expected attendees for AGM events
-            if (selectedModule === "AGM" && organiserId) {
-              const eventId = (createdEvent as any)?.id ?? (createdEvent as any)?.eventId;
-              if (eventId) {
-                importShareholders.mutate({ eventId, registerId: organiserId });
-              }
+            const eventId = (createdEvent as any)?.id ?? (createdEvent as any)?.eventId;
+
+            // Auto-import shareholders for AGM (best-effort — failure doesn't block navigation)
+            if (selectedModule === "AGM" && organiserId && eventId) {
+              importShareholders.mutate(
+                { eventId, registerId: organiserId },
+                { onError: () => {} } // suppress error toast — event was created successfully
+              );
             }
+
+            setSubmitting(false);
             onDone();
           },
-          onSettled: () => setSubmitting(false),
+          onError: () => setSubmitting(false),
         }
       );
       return;
@@ -306,6 +312,12 @@ function CreateEventInner() {
     // ── Admin path ───────────────────────────────────────────────────────────
     if (selectedModule === "AGM") {
       setSubmitting(true);
+      const agmIsVirtual = agm.format === "virtual" || agm.format === "hybrid";
+      // Send placeholder streamUrl when Zoom is enabled + virtual/hybrid + no URL entered.
+      // The backend's /zoom endpoint (called in onSuccess) will replace it with the real link.
+      const agmStreamUrl = agm.enableZoomMeeting && agmIsVirtual && !agm.streamUrl
+        ? "https://zoom.us"
+        : (agm.streamUrl || undefined);
       createAgm.mutate(
         {
           registerId:            organiserId,
@@ -313,7 +325,7 @@ function CreateEventInner() {
           date:                  agm.date,
           startTime:             agm.time,
           format:                fmt(agm.format),
-          streamUrl:             agm.streamUrl            || undefined,
+          streamUrl:             agmStreamUrl,
           venue:                 agm.venue                || undefined,
           quorumPercentage:      parseInt(agm.quorum, 10) || undefined,
           eligibilityCutOffDate: agm.cutoff               || undefined,
@@ -323,7 +335,30 @@ function CreateEventInner() {
             .filter((r) => r.title.trim())
             .map((r) => ({ title: r.title, description: r.description || undefined, specialResolution: r.isSpecial })),
         },
-        { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+        {
+          onSuccess: (createdEvent) => {
+            const eventId = (createdEvent as any)?.id ?? (createdEvent as any)?.eventId;
+            if (agm.enableZoomMeeting && eventId) {
+              // Admin AGM endpoint doesn't accept enableZoomMeeting — create Zoom separately.
+              // If it fails (e.g. endpoint restriction), navigate anyway and let user add Zoom from Settings.
+              createEventZoomMeeting.mutate(
+                { eventId, durationMinutes: parseInt(agm.zoomDurationMinutes, 10) || 120 },
+                {
+                  onSuccess:  () => { setSubmitting(false); onDone(); },
+                  onError:    () => {
+                    setSubmitting(false);
+                    toast.info("AGM created. Open the event → Settings to add the Zoom meeting.");
+                    onDone();
+                  },
+                }
+              );
+            } else {
+              setSubmitting(false);
+              onDone();
+            }
+          },
+          onError: () => setSubmitting(false),
+        }
       );
       return;
     }

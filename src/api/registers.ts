@@ -327,14 +327,24 @@ export const useStakeholderEvents = useRegisterEvents;
 // ---------------------------------------------------------------------------
 
 export interface Shareholder {
-  id:        string;
-  firstName: string;
-  lastName:  string;
-  fullName?: string;
+  id:         string;
+  fullName?:  string;
+  firstName?: string;  // legacy compat — some responses still split the name
+  lastName?:  string;
+  email:      string;
+  phone?:     string;
+  chn?:       string;   // Central Securities Clearing System Holder Number
+  units?:     number;   // Share units owned
+  status?:    "ACTIVE" | "INACTIVE";
+}
+
+/** Shape expected by POST /api/v1/client/registers/{id}/shareholders */
+export interface ShareholderUploadItem {
+  fullName:  string;
   email:     string;
-  phone?:    string;
-  chn?:      string;   // Central Securities Clearing System Holder Number
-  units?:    number;   // Share units owned
+  chn?:      string;
+  units?:    number;
+  status?:   "ACTIVE" | "INACTIVE";
 }
 
 export interface ShareholderListResponse {
@@ -378,14 +388,14 @@ export function useAddShareholder() {
       registerId,
       shareholder,
     }: {
-      registerId: string;
-      shareholder: Omit<Shareholder, "id">;
+      registerId:  string;
+      shareholder: ShareholderUploadItem;
     }) => {
-      const res = await apiClient.post<ApiResponse<Shareholder>>(
+      const res = await apiClient.post<ApiResponse<any>>(
         `/api/v1/client/registers/${registerId}/shareholders`,
-        shareholder
+        { shareholders: [shareholder], replace: false }
       );
-      return (res.data.data ?? (res.data as any)) as Shareholder;
+      return (res.data.data ?? (res.data as any));
     },
     onSuccess: (_, { registerId }) => {
       queryClient.invalidateQueries({ queryKey: shareholderKeys.list(registerId) });
@@ -401,19 +411,21 @@ export function useBulkAddShareholders() {
     mutationFn: async ({
       registerId,
       shareholders,
+      replace = false,
     }: {
-      registerId: string;
-      shareholders: Omit<Shareholder, "id">[];
+      registerId:   string;
+      shareholders: ShareholderUploadItem[];
+      replace?:     boolean;
     }) => {
-      const res = await apiClient.post<ApiResponse<{ count: number }>>(
-        `/api/v1/client/registers/${registerId}/shareholders/bulk`,
-        { shareholders }
+      const res = await apiClient.post<ApiResponse<any>>(
+        `/api/v1/client/registers/${registerId}/shareholders`,
+        { shareholders, replace }
       );
-      return (res.data.data ?? (res.data as any)) as { count: number };
+      return (res.data.data ?? (res.data as any));
     },
-    onSuccess: (data, { registerId }) => {
+    onSuccess: (data, { registerId, shareholders }) => {
       queryClient.invalidateQueries({ queryKey: shareholderKeys.list(registerId) });
-      const count = (data as any)?.count ?? "?";
+      const count = (data as any)?.count ?? (data as any)?.imported ?? shareholders.length;
       popup.success("Shareholders Imported", `${count} shareholders added successfully.`, 3000);
     },
     onError: (error: any) => parseAndToastApiError(error, "Bulk import failed."),

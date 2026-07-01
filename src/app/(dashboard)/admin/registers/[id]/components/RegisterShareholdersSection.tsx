@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import {
-  Users, UserPlus, Upload, Trash2, Hash, Mail, Phone,
+  Users, UserPlus, Upload, Trash2, Hash, Mail,
   Check, X, FileText, AlertCircle, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   useBulkAddShareholders,
   useDeleteShareholder,
   type Shareholder,
+  type ShareholderUploadItem,
 } from "@/api/registers";
 import { cn } from "@/lib/utils";
 import Papa from "papaparse";
@@ -22,12 +23,11 @@ import Papa from "papaparse";
 // ── CSV row type ──────────────────────────────────────────────────────────────
 
 interface CsvRow {
-  firstName: string;
-  lastName:  string;
+  fullName:  string;
   email:     string;
-  phone?:    string;
   chn?:      string;
   units?:    number;
+  status?:   "ACTIVE" | "INACTIVE";
   _error?:   string;
 }
 
@@ -40,30 +40,29 @@ function mapCsvRow(raw: Record<string, string>): CsvRow {
   for (const [k, v] of Object.entries(raw)) norm[nk(k)] = (v ?? "").trim();
 
   // Name — handles "Full Name", "fullname", "name", "First Name"+"Last Name"
-  let firstName = norm["firstname"] ?? norm["first"] ?? norm["fname"] ?? "";
-  let lastName  = norm["lastname"]  ?? norm["last"]  ?? norm["lname"] ?? norm["surname"] ?? "";
-  if (!firstName && !lastName) {
-    const full = norm["fullname"] ?? norm["name"] ?? norm["shareholdername"] ?? "";
-    if (full) {
-      const parts = full.split(/\s+/);
-      firstName = parts[0] ?? "";
-      lastName  = parts.slice(1).join(" ");
-    }
+  let fullName = norm["fullname"] ?? norm["name"] ?? norm["shareholdername"] ?? "";
+  if (!fullName) {
+    const first = norm["firstname"] ?? norm["first"] ?? norm["fname"] ?? "";
+    const last  = norm["lastname"]  ?? norm["last"]  ?? norm["lname"] ?? norm["surname"] ?? "";
+    fullName = [first, last].filter(Boolean).join(" ");
   }
 
-  const email = norm["email"] ?? norm["emailaddress"] ?? norm["mail"] ?? "";
-  const phone = norm["phone"] ?? norm["mobile"] ?? norm["tel"] ?? "";
-  // CHN = Central Securities Clearing System Holder Number
-  const chn   = norm["chn"] ?? norm["holdernumber"] ?? norm["shareholderno"] ?? norm["ref"] ?? "";
-  const unitsRaw = norm["units"] ?? norm["shares"] ?? norm["shareunits"] ?? "";
-  const units = unitsRaw ? Number(unitsRaw.replace(/,/g, "")) : undefined;
+  const email    = norm["email"]    ?? norm["emailaddress"] ?? norm["mail"] ?? "";
+  const chn      = norm["chn"]      ?? norm["holdernumber"] ?? norm["shareholderno"] ?? norm["ref"] ?? "";
+  const unitsRaw = norm["units"]    ?? norm["shares"]       ?? norm["shareunits"] ?? "";
+  const units    = unitsRaw ? Number(unitsRaw.replace(/,/g, "")) : undefined;
+  const rawStatus = (norm["status"] ?? "").toUpperCase();
+  const status: "ACTIVE" | "INACTIVE" | undefined =
+    rawStatus === "INACTIVE" ? "INACTIVE" : rawStatus === "ACTIVE" ? "ACTIVE" : undefined;
 
   const missingEmail = !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const missingName  = !firstName && !lastName;
+  const missingName  = !fullName;
 
   return {
-    firstName, lastName, email, phone: phone || undefined,
-    chn: chn || undefined, units: units || undefined,
+    fullName, email,
+    chn:    chn    || undefined,
+    units:  units  || undefined,
+    status: status ?? "ACTIVE",
     _error: missingEmail ? "Invalid email" : missingName ? "Name missing" : undefined,
   };
 }
@@ -71,8 +70,9 @@ function mapCsvRow(raw: Record<string, string>): CsvRow {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function displayName(s: Shareholder) {
+  if (s.fullName) return s.fullName;
   if (s.firstName || s.lastName) return `${s.firstName ?? ""} ${s.lastName ?? ""}`.trim();
-  return s.fullName ?? "—";
+  return "—";
 }
 
 function avatarInitials(s: Shareholder) {
@@ -83,14 +83,12 @@ function avatarInitials(s: Shareholder) {
 // ── Add form ──────────────────────────────────────────────────────────────────
 
 interface AddForm {
-  firstName: string;
-  lastName:  string;
-  email:     string;
-  phone:     string;
-  chn:       string;
-  units:     string;
+  fullName: string;
+  email:    string;
+  chn:      string;
+  units:    string;
 }
-const EMPTY_FORM: AddForm = { firstName: "", lastName: "", email: "", phone: "", chn: "", units: "" };
+const EMPTY_FORM: AddForm = { fullName: "", email: "", chn: "", units: "" };
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -112,14 +110,14 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
   const [csvFileName,    setCsvFileName]    = useState("");
   const [showCsvPreview, setShowCsvPreview] = useState(false);
   const [csvImporting,   setCsvImporting]   = useState(false);
+  const [replaceAll,     setReplaceAll]     = useState(false);
   const csvRef = useRef<HTMLInputElement>(null);
 
   // ── Form validation ────────────────────────────────────────────────────────
 
   const errors = {
-    firstName: !form.firstName.trim(),
-    lastName:  !form.lastName.trim(),
-    email:     !form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()),
+    fullName: !form.fullName.trim(),
+    email:    !form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()),
   };
   const hasErrors = Object.values(errors).some(Boolean);
 
@@ -130,12 +128,11 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
       {
         registerId,
         shareholder: {
-          firstName: form.firstName.trim(),
-          lastName:  form.lastName.trim(),
-          email:     form.email.trim().toLowerCase(),
-          phone:     form.phone.trim() || undefined,
-          chn:       form.chn.trim()   || undefined,
-          units:     form.units ? Number(form.units) : undefined,
+          fullName: form.fullName.trim(),
+          email:    form.email.trim().toLowerCase(),
+          chn:      form.chn.trim()   || undefined,
+          units:    form.units ? Number(form.units) : undefined,
+          status:   "ACTIVE",
         },
       },
       { onSuccess: () => { setForm(EMPTY_FORM); setTouched(false); setShowForm(false); } }
@@ -166,17 +163,17 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
     bulkAdd.mutate(
       {
         registerId,
+        replace: replaceAll,
         shareholders: valid.map((r) => ({
-          firstName: r.firstName,
-          lastName:  r.lastName,
-          email:     r.email.toLowerCase(),
-          phone:     r.phone,
-          chn:       r.chn,
-          units:     r.units,
+          fullName: r.fullName,
+          email:    r.email.toLowerCase(),
+          chn:      r.chn,
+          units:    r.units,
+          status:   r.status ?? "ACTIVE",
         })),
       },
       {
-        onSuccess: () => { setCsvRows([]); setCsvFileName(""); setShowCsvPreview(false); setCsvImporting(false); },
+        onSuccess: () => { setCsvRows([]); setCsvFileName(""); setShowCsvPreview(false); setCsvImporting(false); setReplaceAll(false); },
         onError:   () => setCsvImporting(false),
       }
     );
@@ -220,8 +217,8 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
         </div>
 
         <p className="text-xs text-[hsl(var(--muted-foreground))] mt-3">
-          Shareholders can also be added via the backend API.{" "}
-          <span className="font-medium">CSV format: Full Name, CHN, Email, Units</span>
+          <span className="font-medium">CSV format: Full Name, CHN, Email, Units, Status</span>
+          {" "}· CHN is used for upsert deduplication.
         </p>
       </Card>
 
@@ -239,9 +236,18 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={replaceAll}
+                  onChange={(e) => setReplaceAll(e.target.checked)}
+                  className="accent-red-600"
+                />
+                Replace all existing
+              </label>
               <Button
                 size="sm" variant="ghost" className="h-7 text-xs text-[hsl(var(--muted-foreground))]"
-                onClick={() => { setCsvRows([]); setCsvFileName(""); setShowCsvPreview(false); }}
+                onClick={() => { setCsvRows([]); setCsvFileName(""); setShowCsvPreview(false); setReplaceAll(false); }}
               >
                 <X className="h-3.5 w-3.5 mr-1" /> Discard
               </Button>
@@ -274,7 +280,7 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                   <tr key={i} className={cn("attend-table-row", row._error && "bg-red-50")}>
                     <td className="px-4 py-2.5 text-[hsl(var(--muted-foreground))] tabular-nums">{i + 1}</td>
                     <td className="px-4 py-2.5 font-medium text-[hsl(var(--foreground))]">
-                      {[row.firstName, row.lastName].filter(Boolean).join(" ") || <span className="italic text-[hsl(var(--muted-foreground))]">—</span>}
+                      {row.fullName || <span className="italic text-[hsl(var(--muted-foreground))]">—</span>}
                     </td>
                     <td className="px-4 py-2.5 text-[hsl(var(--muted-foreground))]">{row.email || "—"}</td>
                     <td className="px-4 py-2.5 font-mono text-xs text-[hsl(var(--muted-foreground))]">{row.chn || "—"}</td>
@@ -298,29 +304,17 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
         <Card className="attend-card p-5">
           <h3 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-4">Add Shareholder</h3>
           <div className="grid grid-cols-2 gap-4 mb-4">
-            <div className="space-y-1.5">
+            <div className="col-span-2 space-y-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
-                First Name <span className="text-red-500">*</span>
+                Full Name <span className="text-red-500">*</span>
               </Label>
               <Input
-                value={form.firstName}
-                onChange={(e) => setForm((p) => ({ ...p, firstName: e.target.value }))}
-                placeholder="Ekezie"
-                className={cn(touched && errors.firstName && "border-red-400 focus-visible:ring-red-200")}
+                value={form.fullName}
+                onChange={(e) => setForm((p) => ({ ...p, fullName: e.target.value }))}
+                placeholder="Ngozi Okafor"
+                className={cn(touched && errors.fullName && "border-red-400 focus-visible:ring-red-200")}
               />
-              {touched && errors.firstName && <p className="text-xs text-red-500">Required</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
-                Last Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                value={form.lastName}
-                onChange={(e) => setForm((p) => ({ ...p, lastName: e.target.value }))}
-                placeholder="Chinonyerem"
-                className={cn(touched && errors.lastName && "border-red-400 focus-visible:ring-red-200")}
-              />
-              {touched && errors.lastName && <p className="text-xs text-red-500">Required</p>}
+              {touched && errors.fullName && <p className="text-xs text-red-500">Required</p>}
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
@@ -339,19 +333,6 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
-                Phone <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span>
-              </Label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
-                <Input
-                  type="tel" value={form.phone}
-                  onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-                  placeholder="08012345678" className="pl-9"
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
                 CHN <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span>
               </Label>
               <div className="relative">
@@ -359,7 +340,7 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                 <Input
                   value={form.chn}
                   onChange={(e) => setForm((p) => ({ ...p, chn: e.target.value }))}
-                  placeholder="0123456789" className="pl-9"
+                  placeholder="CHN123456789" className="pl-9"
                 />
               </div>
             </div>
@@ -370,7 +351,7 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
               <Input
                 type="number" min={0} value={form.units}
                 onChange={(e) => setForm((p) => ({ ...p, units: e.target.value }))}
-                placeholder="50000"
+                placeholder="150000"
               />
             </div>
           </div>

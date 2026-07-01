@@ -283,6 +283,110 @@ function parseStreamUrl(url: string): string {
   return url;
 }
 
+// ── Q&A Panel ─────────────────────────────────────────────────────────────────
+
+function QAPanel({
+  pending,
+  approvedQuestions,
+  onApproved,
+  approveMutation,
+  rejectMutation,
+  qaBadgeFlash,
+  eventId,
+}: {
+  pending:           LivePendingQuestion[];
+  approvedQuestions: LivePendingQuestion[];
+  onApproved:        (q: LivePendingQuestion) => void;
+  approveMutation:   ReturnType<typeof useApproveQuestion>;
+  rejectMutation:    ReturnType<typeof useRejectQuestion>;
+  qaBadgeFlash:      boolean;
+  eventId:           string;
+}) {
+  return (
+    <Card className="attend-card overflow-hidden flex flex-col">
+      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2 shrink-0">
+        <MessageSquare className={`h-4 w-4 transition-colors ${qaBadgeFlash ? "text-red-500" : "text-[hsl(var(--muted-foreground))]"}`} />
+        <h2 className="font-semibold text-[hsl(var(--foreground))]">Q&amp;A Queue</h2>
+        <span className={`ml-auto text-xs rounded-full px-2 py-0.5 font-semibold transition-all duration-300 ${
+          qaBadgeFlash
+            ? "bg-red-500 text-white animate-pulse"
+            : "bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]"
+        }`}>
+          {pending.length} pending
+        </span>
+      </div>
+
+      <div className="divide-y divide-[hsl(var(--border))] overflow-y-auto flex-1">
+        {pending.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-[hsl(var(--muted-foreground))] text-center italic">
+            No pending questions.
+          </p>
+        ) : pending.map((q) => (
+          <div key={q.id} className="px-5 py-4">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-semibold text-[hsl(var(--foreground))]">
+                {q.anonymous ? "Anonymous" : q.askerName}
+              </span>
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                {formatTime(q.submittedAt)}
+              </span>
+            </div>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3 leading-relaxed">
+              {q.content}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="h-7 text-xs flex-1 gap-1"
+                disabled={approveMutation.isPending || rejectMutation.isPending}
+                onClick={() =>
+                  approveMutation.mutate(
+                    { eventId, questionId: q.id },
+                    { onSuccess: () => onApproved(q) }
+                  )
+                }
+              >
+                <Check className="h-3 w-3" /> Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs flex-1 gap-1 text-red-600 border-red-200 hover:bg-red-50"
+                disabled={approveMutation.isPending || rejectMutation.isPending}
+                onClick={() => rejectMutation.mutate({ eventId, questionId: q.id })}
+              >
+                <X className="h-3 w-3" /> Reject
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {approvedQuestions.length > 0 && (
+        <>
+          <div className="px-5 py-2.5 bg-green-50 border-t border-green-100 flex items-center gap-1.5 shrink-0">
+            <Check className="h-3.5 w-3.5 text-green-600" />
+            <span className="text-xs font-semibold text-green-700">Approved ({approvedQuestions.length})</span>
+          </div>
+          <div className="divide-y divide-[hsl(var(--border))] max-h-40 overflow-y-auto">
+            {approvedQuestions.map((q) => (
+              <div key={q.id} className="px-5 py-3 bg-green-50/40">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-[hsl(var(--foreground))]">
+                    {q.anonymous ? "Anonymous" : q.askerName}
+                  </span>
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">{formatTime(q.submittedAt)}</span>
+                </div>
+                <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">{q.content}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
 // ── Session detail ─────────────────────────────────────────────────────────────
 
 // ── Chime helper (Web Audio API — no audio file required) ────────────────────
@@ -507,36 +611,53 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
         )}
       </div>
 
-      {/* Zoom Meeting — shown when backend created a Zoom meeting for this event */}
+      {/* Zoom Meeting + Q&A — side by side */}
       {hasZoomMeeting && (
-        <Card className="attend-card overflow-hidden">
-          <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
-            {/* Zoom logo */}
-            <svg viewBox="0 0 40 40" className="h-4 w-4 shrink-0" fill="none">
-              <rect width="40" height="40" rx="8" fill="#0B5CFF"/>
-              <path d="M7 14a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v5.5l6-4v9l-6-4V26a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3V14z" fill="white"/>
-            </svg>
-            <h2 className="font-semibold text-[hsl(var(--foreground))]">Zoom Meeting</h2>
-            <span className="text-xs text-[hsl(var(--muted-foreground))] ml-1">#{zoomMeeting!.meetingId}</span>
-            <div className="ml-auto flex items-center gap-2">
-              <a
-                href={zoomMeeting!.joinUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-[hsl(var(--primary))] hover:underline"
-              >
-                <ExternalLink className="h-3 w-3" /> Open in Zoom
-              </a>
-            </div>
+        <div className="grid grid-cols-3 gap-5 items-start">
+          {/* Zoom embed (2/3 width) */}
+          <div className="col-span-2">
+            <Card className="attend-card overflow-hidden">
+              <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+                <svg viewBox="0 0 40 40" className="h-4 w-4 shrink-0" fill="none">
+                  <rect width="40" height="40" rx="8" fill="#0B5CFF"/>
+                  <path d="M7 14a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v5.5l6-4v9l-6-4V26a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3V14z" fill="white"/>
+                </svg>
+                <h2 className="font-semibold text-[hsl(var(--foreground))]">Zoom Meeting</h2>
+                <span className="text-xs text-[hsl(var(--muted-foreground))] ml-1">#{zoomMeeting!.meetingId}</span>
+                <div className="ml-auto flex items-center gap-2">
+                  <a
+                    href={zoomMeeting!.joinUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-[hsl(var(--primary))] hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" /> Open in Zoom
+                  </a>
+                </div>
+              </div>
+              <ZoomEmbed
+                meetingNumber={zoomMeeting!.meetingId}
+                password={zoomMeeting!.password}
+                zak={zak}
+                userName={hostName}
+                height={480}
+              />
+            </Card>
           </div>
-          <ZoomEmbed
-            meetingNumber={zoomMeeting!.meetingId}
-            password={zoomMeeting!.password}
-            zak={zak}
-            userName={hostName}
-            height={480}
-          />
-        </Card>
+
+          {/* Q&A panel (1/3 width) */}
+          <div className="col-span-1" style={{ minHeight: 480 }}>
+            <QAPanel
+              pending={pending}
+              approvedQuestions={approvedQuestions}
+              onApproved={(q) => setApprovedQuestions((prev) => [...prev, q])}
+              approveMutation={approveMutation}
+              rejectMutation={rejectMutation}
+              qaBadgeFlash={qaBadgeFlash}
+              eventId={eventId}
+            />
+          </div>
+        </div>
       )}
 
       {/* Stream preview — only for virtual / hybrid events without a native Zoom meeting */}
@@ -632,91 +753,20 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
           <ResolutionsPanel resolutions={room.resolutions} color={color} eventId={eventId} />
         </div>
 
-        {/* Right: Q&A + Attendance */}
+        {/* Right: Q&A (only when no Zoom — otherwise shown above) + Attendance */}
         <div className="col-span-1 flex flex-col gap-5">
 
-          {/* Q&A Queue */}
-          <Card className="attend-card overflow-hidden">
-            <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
-              <MessageSquare className={`h-4 w-4 transition-colors ${qaBadgeFlash ? "text-red-500" : "text-[hsl(var(--muted-foreground))]"}`} />
-              <h2 className="font-semibold text-[hsl(var(--foreground))]">Q&amp;A Queue</h2>
-              <span className={`ml-auto text-xs rounded-full px-2 py-0.5 font-semibold transition-all duration-300 ${
-                qaBadgeFlash
-                  ? "bg-red-500 text-white animate-pulse"
-                  : "bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]"
-              }`}>
-                {pending.length} pending
-              </span>
-            </div>
-            <div className="divide-y divide-[hsl(var(--border))]">
-              {pending.length === 0 ? (
-                <p className="px-5 py-6 text-sm text-[hsl(var(--muted-foreground))] text-center italic">
-                  No pending questions.
-                </p>
-              ) : pending.map((q) => (
-                <div key={q.id} className="px-5 py-4">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-semibold text-[hsl(var(--foreground))]">
-                      {q.anonymous ? "Anonymous" : q.askerName}
-                    </span>
-                    <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                      {formatTime(q.submittedAt)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3 leading-relaxed">
-                    {q.content}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      className="h-7 text-xs flex-1 gap-1"
-                      disabled={approveMutation.isPending || rejectMutation.isPending}
-                      onClick={() =>
-                        approveMutation.mutate(
-                          { eventId, questionId: q.id },
-                          { onSuccess: () => setApprovedQuestions((prev) => [...prev, q]) }
-                        )
-                      }
-                    >
-                      <Check className="h-3 w-3" /> Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs flex-1 gap-1 text-red-600 border-red-200 hover:bg-red-50"
-                      disabled={approveMutation.isPending || rejectMutation.isPending}
-                      onClick={() => rejectMutation.mutate({ eventId, questionId: q.id })}
-                    >
-                      <X className="h-3 w-3" /> Reject
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Approved questions — stay visible after approval */}
-            {approvedQuestions.length > 0 && (
-              <>
-                <div className="px-5 py-2.5 bg-green-50 border-t border-green-100 flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-green-600" />
-                  <span className="text-xs font-semibold text-green-700">Approved ({approvedQuestions.length})</span>
-                </div>
-                <div className="divide-y divide-[hsl(var(--border))]">
-                  {approvedQuestions.map((q) => (
-                    <div key={q.id} className="px-5 py-3 bg-green-50/40">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-[hsl(var(--foreground))]">
-                          {q.anonymous ? "Anonymous" : q.askerName}
-                        </span>
-                        <span className="text-xs text-[hsl(var(--muted-foreground))]">{formatTime(q.submittedAt)}</span>
-                      </div>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">{q.content}</p>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </Card>
+          {!hasZoomMeeting && (
+            <QAPanel
+              pending={pending}
+              approvedQuestions={approvedQuestions}
+              onApproved={(q) => setApprovedQuestions((prev) => [...prev, q])}
+              approveMutation={approveMutation}
+              rejectMutation={rejectMutation}
+              qaBadgeFlash={qaBadgeFlash}
+              eventId={eventId}
+            />
+          )}
 
           {/* Attendance log */}
           <Card className="attend-card overflow-hidden">

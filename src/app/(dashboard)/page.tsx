@@ -201,13 +201,15 @@ export default function DashboardPage() {
   const isJudge      = JUDGE_ROLES.has(normalizedRole);
   const isAdmin      = userLoading || !currentUser || ADMIN_ROLES.has(normalizedRole);
 
-  // All hooks called unconditionally — Rules of Hooks
-  const { data: dashStats,        isLoading: statsLoading  } = useDashboardStats();
-  const { data: adminDashboard                             } = useAdminDashboard();
-  const { data: usersData,        isLoading: usersLoading  } = useUsers("", 0, 10);
-  const { data: eventsData,       isLoading: eventsLoading } = useEvents("", 0, 20);
-  const { data: publishedData                              } = useEvents("PUBLISHED", 0, 1);
-  const { data: registrarsData,   isLoading: regLoading    } = useRegistrars("", 0, 20);
+  // All hooks called unconditionally — Rules of Hooks.
+  // Admin-only endpoints are gated with enabled:isSuperAdmin so non-super_admin users
+  // never fire requests that would return 403/500.
+  const { data: dashStats,        isLoading: statsLoading  } = useDashboardStats(isSuperAdmin);
+  const { data: adminDashboard                             } = useAdminDashboard(isSuperAdmin);
+  const { data: usersData,        isLoading: usersLoading  } = useUsers("", 0, 10, isSuperAdmin);
+  const { data: eventsData,       isLoading: eventsLoading } = useEvents("", 0, 20, isSuperAdmin);
+  const { data: publishedData                              } = useEvents("PUBLISHED", 0, 1, isSuperAdmin);
+  const { data: registrarsData,   isLoading: regLoading    } = useRegistrars("", 0, 20, isSuperAdmin);
   const { data: registersData                              } = useRegisters("ACTIVE", 0, 6);
   const { data: clientEventsData, isLoading: clientLoading } = useClientEvents("ALL", 0, 20);
 

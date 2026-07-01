@@ -153,9 +153,10 @@ export function getRegistrarEmail(r: RegistrarItem | PendingRegistrarItem) {
  * API: GET /api/v1/admin/registrars
  * Unwrap: response.data.data.registrars ?? content ?? []
  */
-export function useRegistrars(status = "", page = 0, size = 50) {
+export function useRegistrars(status = "", page = 0, size = 50, enabled = true) {
   return useQuery({
     queryKey: registrarKeys.list(status, page, size),
+    enabled,
     queryFn:  async () => {
       const res = await apiClient.get<ApiResponse<any>>(
         "/api/v1/admin/registrars",

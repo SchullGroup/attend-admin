@@ -54,9 +54,10 @@ export const superAdminKeys = {
 
 // --- Queries ---
 
-export function useDashboardStats() {
+export function useDashboardStats(enabled = true) {
   return useQuery({
     queryKey: superAdminKeys.dashboardStats(),
+    enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<DashboardStatsResponse>>("/api/v1/admin/dashboard/stats");
       return res.data;
@@ -68,9 +69,10 @@ export function useDashboardStats() {
  * Full admin dashboard overview — GET /api/v1/admin/dashboard
  * Returns aggregated platform metrics, recent activity, and a KYC summary.
  */
-export function useAdminDashboard() {
+export function useAdminDashboard(enabled = true) {
   return useQuery({
     queryKey: [...superAdminKeys.all, "dashboard"] as const,
+    enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<any>>("/api/v1/admin/dashboard");
       return res.data.data ?? res.data;
@@ -101,9 +103,10 @@ export function useStakeholders(page = 0, limit = 10) {
   });
 }
 
-export function usePendingEnrollments(page = 0, limit = 20) {
+export function usePendingEnrollments(page = 0, limit = 20, enabled = true) {
   return useQuery({
     queryKey: superAdminKeys.pendingEnrollments(page, limit),
+    enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<PendingEnrollmentsResponse>>(
         `/api/v1/admin/stakeholders/pending?page=${page}&size=${limit}`
@@ -113,9 +116,10 @@ export function usePendingEnrollments(page = 0, limit = 20) {
   });
 }
 
-export function useEvents(status = "", page = 0, size = 10) {
+export function useEvents(status = "", page = 0, size = 10, enabled = true) {
   return useQuery({
     queryKey: superAdminKeys.events(status, page, size),
+    enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<any>>(
         `/api/v1/admin/events`,
@@ -147,9 +151,10 @@ export function useEvents(status = "", page = 0, size = 10) {
  * so every tab change produces a structurally different key and React Query
  * fires a fresh targeted request instead of serving a stale cached result.
  */
-export function useUsers(kycStatus = "", page = 0, limit = 20) {
+export function useUsers(kycStatus = "", page = 0, limit = 20, enabled = true) {
   return useQuery({
     queryKey: superAdminKeys.users(kycStatus, page, limit),
+    enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<PagedResponse<UserSummaryResponse>>>(
         "/api/v1/admin/users",
