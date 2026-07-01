@@ -253,6 +253,23 @@ export interface AssignJudgeRequest {
   specialtyTrack?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Judge Application Assignment types
+// ---------------------------------------------------------------------------
+
+export interface JudgeAssignment {
+  judgeId:    string;
+  judgeName?: string;
+  name?:      string;   // alias returned by some API versions
+  role:       "PRIMARY" | "CO_JUDGE";
+}
+
+export interface ApplicationAssignmentsResponse {
+  applicationId: string;
+  teamName?:     string;
+  judges:        JudgeAssignment[];
+}
+
 /** Export response for GET /challenges/{id}/export/applications */
 export interface ExportApplicationMember {
   fullName: string;
@@ -308,6 +325,8 @@ export const clientChallengeKeys = {
   judges:      (id: string) => ["clientChallenges", id, "judges"] as const,
   exportApps:  (id: string, from?: string, to?: string) =>
                  ["clientChallenges", id, "export", "applications", { from, to }] as const,
+  assignmentsPerApp: (challengeId: string, appId: string) =>
+                 ["clientChallenges", challengeId, "applications", appId, "assignments"] as const,
 };
 
 export const judgePoolKeys = {
@@ -667,6 +686,147 @@ export function useExportChallengeApplications(
     },
     enabled: false,
     staleTime: 0,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Judge Application Assignment hooks
+// ---------------------------------------------------------------------------
+
+/** GET /challenges/{id}/applications/{appId}/assignments */
+export function useApplicationJudgeAssignments(
+  challengeId:   string,
+  applicationId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: clientChallengeKeys.assignmentsPerApp(challengeId, applicationId),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<ApplicationAssignmentsResponse>>(
+        `/api/v1/client/challenges/${challengeId}/applications/${applicationId}/assignments`
+      );
+      return res.data.data;
+    },
+    enabled: !!challengeId && !!applicationId && enabled,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * POST /challenges/{id}/applications/assign
+ * Body: { assignments: [{ applicationId, judgeId }] }
+ * Assigns a primary judge to each listed application.
+ */
+export function useBulkAssignJudges() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      challengeId,
+      assignments,
+    }: {
+      challengeId:  string;
+      assignments:  { applicationId: string; judgeId: string }[];
+    }) => {
+      const res = await apiClient.post<ApiResponse<any>>(
+        `/api/v1/client/challenges/${challengeId}/applications/assign`,
+        { assignments }
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, { challengeId }) => {
+      queryClient.invalidateQueries({ queryKey: clientChallengeKeys.all });
+      popup.success("Judges Assigned", "Applications have been assigned to the selected judge.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Bulk assignment failed."),
+  });
+}
+
+/**
+ * POST /challenges/{id}/applications/auto-distribute?track=X
+ * Round-robin distributes applications across all assigned judges.
+ * Omit track to distribute all tracks.
+ */
+export function useAutoDistributeJudges() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      challengeId,
+      track,
+    }: {
+      challengeId: string;
+      track?:      string;
+    }) => {
+      const res = await apiClient.post<ApiResponse<any>>(
+        `/api/v1/client/challenges/${challengeId}/applications/auto-distribute`,
+        null,
+        { params: track ? { track } : {} }
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, { challengeId }) => {
+      queryClient.invalidateQueries({ queryKey: clientChallengeKeys.all });
+      popup.success(
+        "Auto-Distributed",
+        "Applications have been distributed across judges via round-robin.",
+        2500
+      );
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Auto-distribute failed."),
+  });
+}
+
+/** POST /challenges/{id}/applications/{appId}/co-judges/{judgeId} */
+export function useAddCoJudge() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      challengeId,
+      applicationId,
+      judgeId,
+    }: {
+      challengeId:   string;
+      applicationId: string;
+      judgeId:       string;
+    }) => {
+      const res = await apiClient.post<ApiResponse<any>>(
+        `/api/v1/client/challenges/${challengeId}/applications/${applicationId}/co-judges/${judgeId}`
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, { challengeId, applicationId }) => {
+      queryClient.invalidateQueries({
+        queryKey: clientChallengeKeys.assignmentsPerApp(challengeId, applicationId),
+      });
+      popup.success("Co-Judge Added", "Co-judge has been added to this application.", 2000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to add co-judge."),
+  });
+}
+
+/** DELETE /challenges/{id}/applications/{appId}/co-judges/{judgeId} */
+export function useRemoveCoJudge() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      challengeId,
+      applicationId,
+      judgeId,
+    }: {
+      challengeId:   string;
+      applicationId: string;
+      judgeId:       string;
+    }) => {
+      await apiClient.delete(
+        `/api/v1/client/challenges/${challengeId}/applications/${applicationId}/co-judges/${judgeId}`
+      );
+    },
+    onSuccess: (_, { challengeId, applicationId }) => {
+      queryClient.invalidateQueries({
+        queryKey: clientChallengeKeys.assignmentsPerApp(challengeId, applicationId),
+      });
+      popup.success("Co-Judge Removed", "Co-judge has been removed from this application.", 2000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to remove co-judge."),
   });
 }
 

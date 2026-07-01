@@ -1,7 +1,24 @@
 import type { NextConfig } from "next";
 
-// Zoom Meeting SDK is loaded inside /public/zoom-meeting.html via the Zoom CDN,
-// isolated from the host app bundle. No npm SDK import → no Turbopack config needed.
-const nextConfig: NextConfig = {};
+const nextConfig: NextConfig = {
+  async headers() {
+    return [
+      {
+        // Cross-Origin Isolation — required by Zoom Meeting SDK for video rendering.
+        // Without these headers the browser blocks SharedArrayBuffer (used by the
+        // Zoom canvas renderer) and video stays black / throws "includes of undefined".
+        //
+        // COEP: credentialless  — allows cross-origin assets (fonts, CDN scripts)
+        //                         without needing CORP headers on every resource.
+        // COOP: same-origin     — isolates the browsing context so SAB is available.
+        source: "/(.*)",
+        headers: [
+          { key: "Cross-Origin-Opener-Policy",  value: "same-origin" },
+          { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
+        ],
+      },
+    ];
+  },
+};
 
 export default nextConfig;

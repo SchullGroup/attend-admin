@@ -55,7 +55,7 @@ interface ZoomEmbedProps {
 
 export default function ZoomEmbed({
   userName,
-  height = 480,
+  height = 680,
   meetingNumber: meetingNumberProp,
   password: passwordProp,
   zak: zakProp,

@@ -5,17 +5,24 @@ import {
   Trophy, ArrowLeft, ChevronRight, Search, Lightbulb,
   Star, UserCheck, Plus, Trash2, CheckCircle2, MessageSquare,
   ExternalLink, FileText, Video, Code, Globe, Link2, Users, ClipboardList, Eye,
+  Shuffle,
 } from "lucide-react";
 import {
   useClientChallenges,
   useClientChallengeLeaderboard,
   useClientChallengeDetail,
   useClientChallengeJudges,
+  useClientChallengeApplications,
   useGetJudgePool,
   useAddJudgeToPool,
   useAssignJudge,
   useRemoveJudge,
   useRemoveJudgeFromPool,
+  useApplicationJudgeAssignments,
+  useBulkAssignJudges,
+  useAutoDistributeJudges,
+  useAddCoJudge,
+  useRemoveCoJudge,
   type ApplicationItem,
   type JudgeItem,
 } from "@/api/client-challenges";
@@ -415,35 +422,472 @@ function JudgesPanel({ challengeId }: { challengeId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// App Assignment Manager (expanded row — load-on-demand)
+// ---------------------------------------------------------------------------
+
+function AppAssignmentManager({
+  challengeId,
+  applicationId,
+  judges,
+}: {
+  challengeId:   string;
+  applicationId: string;
+  judges:        JudgeItem[];
+}) {
+  const { data, isLoading } = useApplicationJudgeAssignments(challengeId, applicationId);
+  const addCoJudge    = useAddCoJudge();
+  const removeCoJudge = useRemoveCoJudge();
+  const [selectedJudgeId, setSelectedJudgeId] = useState("");
+
+  const assignments = data?.judges ?? [];
+  const assignedIds = new Set(assignments.map((j) => j.judgeId));
+  const available   = judges.filter((j) => !assignedIds.has(j.id));
+
+  function handleAddCoJudge() {
+    if (!selectedJudgeId) return;
+    addCoJudge.mutate(
+      { challengeId, applicationId, judgeId: selectedJudgeId },
+      { onSuccess: () => setSelectedJudgeId("") }
+    );
+  }
+
+  if (isLoading) return <Loader variant="inline" text="Loading judge assignments…" />;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[10px] font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
+        Assigned Judges
+      </p>
+
+      {assignments.length === 0 ? (
+        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+          No judges assigned yet. Use <strong>Bulk Assign</strong> above, or add a co-judge below.
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {assignments.map((j) => {
+            const name      = j.judgeName || j.name || "Judge";
+            const isPrimary = j.role === "PRIMARY";
+            return (
+              <div
+                key={j.judgeId}
+                className="flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-full text-xs font-medium"
+                style={{
+                  backgroundColor: isPrimary ? "#7c22c918" : "#f8fafc",
+                  color:           isPrimary ? "#7c22c9"   : "#475569",
+                  border:          isPrimary ? "1px solid #e9d5ff" : "1px solid #e2e8f0",
+                }}
+              >
+                <div
+                  className="h-4 w-4 rounded-full flex items-center justify-center text-[8px] font-bold shrink-0"
+                  style={{
+                    backgroundColor: isPrimary ? "#7c22c930" : "#e2e8f0",
+                    color:           isPrimary ? "#7c22c9"   : "#64748b",
+                  }}
+                >
+                  {name.slice(0, 1).toUpperCase()}
+                </div>
+                <span>{name}</span>
+                <span className="opacity-50 text-[10px]">{isPrimary ? "Primary" : "Co-Judge"}</span>
+                {!isPrimary && (
+                  <button
+                    onClick={() =>
+                      removeCoJudge.mutate({ challengeId, applicationId, judgeId: j.judgeId })
+                    }
+                    disabled={removeCoJudge.isPending}
+                    className="ml-0.5 w-4 h-4 flex items-center justify-center rounded-full hover:bg-red-100 hover:text-red-600 transition-colors"
+                    title="Remove co-judge"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add co-judge */}
+      {judges.length > 0 && available.length > 0 && (
+        <div className="flex items-center gap-2 pt-1">
+          <Plus className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))] shrink-0" />
+          <select
+            value={selectedJudgeId}
+            onChange={(e) => setSelectedJudgeId(e.target.value)}
+            className="h-8 text-xs rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2.5 text-[hsl(var(--foreground))] min-w-[180px]"
+          >
+            <option value="">Add co-judge…</option>
+            {available.map((j) => (
+              <option key={j.id} value={j.id}>{j.name}</option>
+            ))}
+          </select>
+          <Button
+            size="sm" className="h-8 text-xs px-3"
+            disabled={!selectedJudgeId || addCoJudge.isPending}
+            onClick={handleAddCoJudge}
+          >
+            {addCoJudge.isPending ? "Adding…" : "Add Co-Judge"}
+          </Button>
+        </div>
+      )}
+
+      {judges.length === 0 && (
+        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+          Assign judges to this challenge first (Judges tab), then manage co-judges here.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Assignments panel
+// ---------------------------------------------------------------------------
+
+function AssignmentsPanel({ challengeId }: { challengeId: string }) {
+  const { data: appsData,    isLoading: appsLoading } = useClientChallengeApplications(challengeId, "", "", 0, 200);
+  const { data: judgePanel }                          = useClientChallengeJudges(challengeId);
+  const { data: detail }                              = useClientChallengeDetail(challengeId);
+  const bulkAssign     = useBulkAssignJudges();
+  const autoDistribute = useAutoDistributeJudges();
+
+  const [isBulkMode,            setIsBulkMode]            = useState(false);
+  const [bulkJudgeId,           setBulkJudgeId]           = useState("");
+  const [selectedAppIds,        setSelectedAppIds]        = useState<Set<string>>(new Set());
+  const [expandedAppId,         setExpandedAppId]         = useState<string | null>(null);
+  const [showAutoDistribute,    setShowAutoDistribute]    = useState(false);
+  const [autoTrack,             setAutoTrack]             = useState("");
+  const [confirmAutoDistribute, setConfirmAutoDistribute] = useState(false);
+
+  const apps   = appsData?.applications ?? [];
+  const judges = judgePanel?.judges     ?? [];
+  const tracks: string[] =
+    detail?.tracks ?? (Array.from(new Set(apps.map((a) => a.track).filter(Boolean))) as string[]);
+
+  const allSelected = apps.length > 0 && selectedAppIds.size === apps.length;
+
+  function toggleAll() {
+    setSelectedAppIds(allSelected ? new Set() : new Set(apps.map((a) => a.id)));
+  }
+
+  function toggleApp(id: string) {
+    setSelectedAppIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function handleBulkAssign() {
+    if (!bulkJudgeId || selectedAppIds.size === 0) return;
+    bulkAssign.mutate(
+      {
+        challengeId,
+        assignments: Array.from(selectedAppIds).map((applicationId) => ({
+          applicationId,
+          judgeId: bulkJudgeId,
+        })),
+      },
+      {
+        onSuccess: () => {
+          setIsBulkMode(false);
+          setSelectedAppIds(new Set());
+          setBulkJudgeId("");
+        },
+      }
+    );
+  }
+
+  function handleAutoDistribute() {
+    autoDistribute.mutate(
+      { challengeId, track: autoTrack || undefined },
+      {
+        onSuccess: () => {
+          setShowAutoDistribute(false);
+          setConfirmAutoDistribute(false);
+          setAutoTrack("");
+        },
+      }
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* ── Header ── */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="font-semibold text-[hsl(var(--foreground))]">Application Assignments</h2>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 max-w-sm">
+            Assign judges to specific applications. Until assigned, each judge sees all applications.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm" variant="outline" className="gap-1.5"
+            onClick={() => {
+              setShowAutoDistribute((v) => !v);
+              setIsBulkMode(false);
+              setExpandedAppId(null);
+              setConfirmAutoDistribute(false);
+            }}
+          >
+            <Shuffle className="h-3.5 w-3.5" /> Auto-Distribute
+          </Button>
+          <Button
+            size="sm"
+            variant={isBulkMode ? "outline" : "default"}
+            className="gap-1.5"
+            onClick={() => {
+              setIsBulkMode((v) => !v);
+              setShowAutoDistribute(false);
+              setExpandedAppId(null);
+              setSelectedAppIds(new Set());
+            }}
+          >
+            <ClipboardList className="h-3.5 w-3.5" /> {isBulkMode ? "Cancel" : "Bulk Assign"}
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Auto-distribute panel ── */}
+      {showAutoDistribute && (
+        <Card className="attend-card p-5">
+          <h3 className="font-semibold text-[hsl(var(--foreground))] mb-1">Auto-Distribute Applications</h3>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mb-4">
+            Distribute applications evenly across all assigned judges using round-robin.
+            Existing assignments will be overwritten.
+          </p>
+          <div className="flex items-end gap-3 flex-wrap">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Track (optional)</label>
+              <select
+                value={autoTrack}
+                onChange={(e) => { setAutoTrack(e.target.value); setConfirmAutoDistribute(false); }}
+                className="h-9 text-sm rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 min-w-[160px] text-[hsl(var(--foreground))]"
+              >
+                <option value="">All tracks</option>
+                {tracks.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+
+            {!confirmAutoDistribute ? (
+              <>
+                <Button size="sm" onClick={() => setConfirmAutoDistribute(true)}>
+                  Distribute Now
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setShowAutoDistribute(false)}>
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs font-semibold text-amber-600">
+                  This will redistribute {autoTrack ? `"${autoTrack}" track` : "all"} applications — are you sure?
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    className="bg-amber-600 hover:bg-amber-700"
+                    disabled={autoDistribute.isPending}
+                    onClick={handleAutoDistribute}
+                  >
+                    {autoDistribute.isPending ? "Distributing…" : "Yes, Distribute"}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setConfirmAutoDistribute(false)}>
+                    Back
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* ── Bulk assign bar ── */}
+      {isBulkMode && (
+        <Card className="attend-card p-4">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-sm font-medium text-[hsl(var(--foreground))]">
+              {selectedAppIds.size === 0
+                ? "Select applications below"
+                : `${selectedAppIds.size} application${selectedAppIds.size !== 1 ? "s" : ""} selected`}
+            </span>
+            <select
+              value={bulkJudgeId}
+              onChange={(e) => setBulkJudgeId(e.target.value)}
+              className="h-9 text-sm rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 min-w-[200px] text-[hsl(var(--foreground))]"
+            >
+              <option value="">Select judge to assign…</option>
+              {judges.map((j) => <option key={j.id} value={j.id}>{j.name}</option>)}
+            </select>
+            <Button
+              size="sm"
+              disabled={!bulkJudgeId || selectedAppIds.size === 0 || bulkAssign.isPending}
+              onClick={handleBulkAssign}
+            >
+              {bulkAssign.isPending ? "Assigning…" : "Assign to Selected"}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Applications table ── */}
+      {appsLoading ? (
+        <Loader variant="inline" text="Loading applications…" />
+      ) : (
+        <Card className="attend-card overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="attend-table-header">
+                {isBulkMode && (
+                  <th className="pl-5 pr-2 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                      className="rounded h-4 w-4 cursor-pointer"
+                    />
+                  </th>
+                )}
+                <th className="px-5 py-3 text-left">Team</th>
+                <th className="px-5 py-3 text-left">Track</th>
+                <th className="px-5 py-3 text-left">Status</th>
+                <th className="px-5 py-3 text-right"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {apps.map((app) => (
+                <React.Fragment key={app.id}>
+                  <tr
+                    className={`attend-table-row ${isBulkMode ? "cursor-pointer select-none" : ""} ${selectedAppIds.has(app.id) ? "bg-[#7c22c908]" : ""}`}
+                    onClick={isBulkMode ? () => toggleApp(app.id) : undefined}
+                  >
+                    {isBulkMode && (
+                      <td className="pl-5 pr-2 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedAppIds.has(app.id)}
+                          onChange={() => toggleApp(app.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="rounded h-4 w-4 cursor-pointer"
+                        />
+                      </td>
+                    )}
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                          style={{ backgroundColor: app.teamInitialColor || "#7c22c9" }}
+                        >
+                          {app.teamInitial || app.teamName?.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{app.teamName}</p>
+                          {app.ideaTitle && (
+                            <p className="text-xs text-[hsl(var(--muted-foreground))] truncate max-w-[200px]">
+                              {app.ideaTitle}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      {app.track ? (
+                        <span
+                          className="text-xs rounded-full px-2.5 py-0.5 font-medium"
+                          style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}
+                        >
+                          {app.track}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[hsl(var(--muted-foreground))]">—</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3">{statusChip(app.status)}</td>
+                    <td className="px-5 py-3 text-right">
+                      {!isBulkMode && (
+                        <Button
+                          size="sm" variant="ghost" className="h-7 text-xs gap-1.5 px-2"
+                          onClick={() =>
+                            setExpandedAppId((prev) => (prev === app.id ? null : app.id))
+                          }
+                        >
+                          <UserCheck className="h-3.5 w-3.5" />
+                          {expandedAppId === app.id ? "Close" : "Judges"}
+                          <ChevronRight
+                            className={`h-3 w-3 transition-transform ${expandedAppId === app.id ? "rotate-90" : ""}`}
+                          />
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+
+                  {/* Expanded row — shows assignments + co-judge form */}
+                  {!isBulkMode && expandedAppId === app.id && (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="px-5 py-4 border-b border-[hsl(var(--border))]"
+                        style={{ backgroundColor: "hsl(var(--muted) / 0.25)" }}
+                      >
+                        <AppAssignmentManager
+                          challengeId={challengeId}
+                          applicationId={app.id}
+                          judges={judges}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+          {apps.length === 0 && (
+            <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
+              No applications found.
+            </div>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Challenge judging view
 // ---------------------------------------------------------------------------
-type JudgingTab = "Leaderboard" | "Judges";
+type JudgingTab = "Leaderboard" | "Judges" | "Assignments";
 
 function ChallengeJudging({ challengeId }: { challengeId: string }) {
   const [tab, setTab] = useState<JudgingTab>("Leaderboard");
-  const TABS: JudgingTab[] = ["Leaderboard", "Judges"];
+
+  const TABS: { key: JudgingTab; icon: React.ElementType; label: string }[] = [
+    { key: "Leaderboard",  icon: Trophy,       label: "Leaderboard"  },
+    { key: "Judges",       icon: UserCheck,    label: "Judges"       },
+    { key: "Assignments",  icon: ClipboardList, label: "Assignments" },
+  ];
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 self-start">
-        {TABS.map((t) => (
+        {TABS.map(({ key, icon: Icon, label }) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-              tab === t
+            key={key}
+            onClick={() => setTab(key)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${
+              tab === key
                 ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
             }`}
           >
-            {t === "Leaderboard" ? <span className="flex items-center gap-1.5"><Trophy className="h-3.5 w-3.5" /> Leaderboard</span>
-              : <span className="flex items-center gap-1.5"><UserCheck className="h-3.5 w-3.5" /> Judges</span>}
+            <Icon className="h-3.5 w-3.5" /> {label}
           </button>
         ))}
       </div>
 
-      {tab === "Leaderboard" && <LeaderboardPanel challengeId={challengeId} />}
-      {tab === "Judges"      && <JudgesPanel      challengeId={challengeId} />}
+      {tab === "Leaderboard" && <LeaderboardPanel  challengeId={challengeId} />}
+      {tab === "Judges"      && <JudgesPanel        challengeId={challengeId} />}
+      {tab === "Assignments" && <AssignmentsPanel   challengeId={challengeId} />}
     </div>
   );
 }
