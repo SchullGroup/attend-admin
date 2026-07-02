@@ -44,8 +44,16 @@ interface ZoomEmbedProps {
   // Option A — pass backend zoomMeeting fields directly (preferred):
   meetingNumber?: string | number;
   password?:      string;
-  /** Host ZAK token extracted from event.zoomMeeting.startUrl. */
+  /**
+   * Host ZAK token (from zoomMeeting.startUrl). May be stale — if eventId is
+   * also provided the component will always fetch a fresh ZAK before joining.
+   */
   zak?:           string;
+  /**
+   * When provided, the component calls /api/zoom/refresh-meeting before every
+   * host join to ensure the ZAK is always fresh (ZAKs expire after ~24 h).
+   */
+  eventId?:       string;
 
   // Option B — parse from a raw Zoom join URL (fallback):
   streamUrl?: string;
@@ -59,6 +67,7 @@ export default function ZoomEmbed({
   meetingNumber: meetingNumberProp,
   password: passwordProp,
   zak: zakProp,
+  eventId,
   streamUrl,
 }: ZoomEmbedProps) {
   const iframeRef    = useRef<HTMLIFrameElement>(null);
@@ -91,11 +100,52 @@ export default function ZoomEmbed({
     cleanupListener();
 
     try {
-      // 1. Fetch signature from our server route
+      // 1. Always refresh the meeting before joining to get a fresh ZAK.
+      //    The ZAK in startUrl expires (~24 h). If the backend recreates the
+      //    meeting we also need the new meetingId and password, so we carry
+      //    the full fresh dto — not just the zak.
+      let joinNumber   = resolved.meetingNumber;
+      let joinPassword = resolved.password;
+      let joinZak      = resolved.zak;
+
+      if (eventId) {
+        try {
+          const refreshRes = await fetch("/api/zoom/refresh-meeting", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify({ eventId }),
+          });
+          if (refreshRes.ok) {
+            const meeting = await refreshRes.json() as {
+              meetingId?: number | string;
+              password?:  string;
+              startUrl?:  string;
+            };
+            // Use the fresh meetingId so signature and join are always in sync
+            if (meeting.meetingId) joinNumber   = String(meeting.meetingId);
+            if (meeting.password  !== undefined) joinPassword = meeting.password;
+            if (meeting.startUrl) {
+              try {
+                const freshZak = new URL(meeting.startUrl).searchParams.get("zak");
+                if (freshZak) joinZak = freshZak;
+              } catch { /* ignore malformed url */ }
+            }
+          } else {
+            const errBody = await refreshRes.json().catch(() => ({})) as { error?: string };
+            // Refresh failed — surface it so the user knows to act (e.g. re-login)
+            throw new Error(errBody.error ?? `Meeting refresh failed (${refreshRes.status})`);
+          }
+        } catch (refreshErr: unknown) {
+          if (refreshErr instanceof Error && refreshErr.message !== "Meeting refresh failed") throw refreshErr;
+          // Otherwise fall through with cached values and let Zoom report the real error
+        }
+      }
+
+      // 2. Fetch Meeting SDK signature (always role 1 = host)
       const res = await fetch("/api/zoom/signature", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ meetingNumber: resolved.meetingNumber, role: 1 }),
+        body:    JSON.stringify({ meetingNumber: joinNumber, role: 1 }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -109,16 +159,16 @@ export default function ZoomEmbed({
         const { type, message: errMessage } = event.data as { type: string; message?: string };
 
         if (type === "ZOOM_READY") {
-          // Iframe SDK is ready — send join params
+          // Iframe SDK is ready — send join params (use fresh values from refresh)
           iframeRef.current?.contentWindow?.postMessage(
             {
               type: "ZOOM_JOIN",
               sdkKey,
               signature,
-              meetingNumber: resolved.meetingNumber,
-              password:      resolved.password,
+              meetingNumber: joinNumber,
+              password:      joinPassword,
               userName:      userName || "Host",
-              ...(resolved.zak ? { zak: resolved.zak } : {}),
+              ...(joinZak ? { zak: joinZak } : {}),
             },
             "*"
           );
@@ -217,6 +267,17 @@ export default function ZoomEmbed({
           <div>
             <p className="text-sm font-semibold text-white mb-1">Failed to join meeting</p>
             <p className="text-xs text-gray-400 max-w-xs">{errMsg}</p>
+            {/* Contextual hints for the most common SDK error codes */}
+            {errMsg.includes("3000") && (
+              <p className="text-xs text-amber-400 max-w-xs mt-2">
+                Another Zoom meeting is already running on this account. End that meeting first, then try again.
+              </p>
+            )}
+            {errMsg.includes("200") && (
+              <p className="text-xs text-amber-400 max-w-xs mt-2">
+                Host token expired. Go to Event Settings → Refresh Meeting Token, then try again.
+              </p>
+            )}
           </div>
           <Button variant="outline" size="sm" onClick={() => { setStatus("idle"); setErrMsg(""); }}>
             Try again

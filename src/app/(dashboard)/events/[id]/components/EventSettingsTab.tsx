@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Radio, Star, Video, ExternalLink, Copy, Check } from "lucide-react";
+import { Radio, Star, Video, ExternalLink, Copy, Check, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -332,6 +332,26 @@ export function EventSettingsTab({
             <p className="text-xs text-[hsl(var(--muted-foreground))]">
               Join URL is automatically set as the stream URL for this event.
             </p>
+
+            {/* Refresh meeting — gets a fresh token (fixes expired ZAK / "code 200" errors) */}
+            <div className="flex items-center gap-2 pt-2 border-t border-[hsl(var(--border))]">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-[hsl(var(--foreground))]">Refresh Meeting Token</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  Fix "Not support start meeting" or "already in progress" errors.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 text-xs shrink-0"
+                disabled={zoomMutation.isPending}
+                onClick={handleCreateZoom}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${zoomMutation.isPending ? "animate-spin" : ""}`} />
+                {zoomMutation.isPending ? "Refreshing…" : "Refresh"}
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-3">

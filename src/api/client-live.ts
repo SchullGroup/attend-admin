@@ -36,13 +36,21 @@ export interface LiveResolution {
   abstainShares:     number;
 }
 
-export interface LivePendingQuestion {
-  id:          string;
-  content:     string;
-  askerName:   string;
-  anonymous:   boolean;
-  submittedAt: string;
+export interface LiveQuestion {
+  id:           string;
+  content:      string;
+  askerName:    string;
+  anonymous:    boolean;
+  submittedAt:  string;
+  /** PENDING = awaiting moderation, APPROVED = visible to all, ANSWERED = has answer, REJECTED = hidden */
+  status:       "PENDING" | "APPROVED" | "ANSWERED" | "REJECTED";
+  answer?:      string;
+  answeredBy?:  string;
+  answeredAt?:  string;
 }
+
+/** @deprecated use LiveQuestion */
+export type LivePendingQuestion = LiveQuestion;
 
 export interface LiveAttendeeEntry {
   name:     string;
@@ -67,7 +75,10 @@ export interface LiveRoomDetail {
   quorumPct?:        number;
   requiredQuorumPct?: number;
   resolutions:       LiveResolution[];
-  pendingQuestions:  LivePendingQuestion[];
+  /** All questions (PENDING / APPROVED / ANSWERED). Filter by status client-side. */
+  questions:         LiveQuestion[];
+  /** @deprecated alias — same as questions */
+  pendingQuestions?: LiveQuestion[];
   recentAttendance:  LiveAttendeeEntry[];
 }
 
@@ -96,6 +107,13 @@ export function useLiveRoomDetail(eventId: string | null | undefined) {
         `/api/v1/client/live/${eventId}`
       );
       const raw = (res.data.data ?? (res.data as any)) as LiveRoomDetail;
+      // Normalise: backend may return field as "questions" or "pendingQuestions"
+      if (!raw.questions) {
+        raw.questions = (raw.pendingQuestions ?? []).map((q) => ({
+          ...q,
+          status: (q as any).status ?? "PENDING" as const,
+        }));
+      }
       return raw;
     },
     enabled:        !!eventId,
@@ -158,6 +176,33 @@ export function useRejectQuestion() {
     },
     onSuccess: (_, { eventId }) => {
       toast.success("Question rejected");
+      qc.invalidateQueries({ queryKey: liveKeys.detail(eventId) });
+    },
+    onError: (error) => parseAndToastApiError(error),
+  });
+}
+
+/** Post an answer to an approved Q&A question. Broadcasts QUESTION_ANSWERED via WS. */
+export function useAnswerQuestion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      eventId,
+      questionId,
+      answer,
+    }: {
+      eventId:    string;
+      questionId: string;
+      answer:     string;
+    }) => {
+      const res = await apiClient.patch<ApiResponse<Record<string, string>>>(
+        `/api/v1/client/live/${eventId}/questions/${questionId}/answer`,
+        { answer }
+      );
+      return res.data;
+    },
+    onSuccess: (_, { eventId }) => {
+      toast.success("Answer posted");
       qc.invalidateQueries({ queryKey: liveKeys.detail(eventId) });
     },
     onError: (error) => parseAndToastApiError(error),
