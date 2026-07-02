@@ -35,14 +35,28 @@ export function parseAndToastApiError(
   // Tier 3: HTTP status code fallbacks when the response payload is blank
   if (error?.response?.status === 400) {
     toast.error(
-      "Submission Rejected (400): Missing required parameters or misaligned field keys. Double-check entity mapping."
+      "Bad request (400): The server rejected the payload. Check field names and values."
     );
     return;
   }
 
   if (error?.response?.status === 403) {
+    toast.error("Access denied (403): Your account does not have permission for this action.");
+    return;
+  }
+
+  if (error?.response?.status === 500) {
+    // Try to surface the actual Spring Boot / NestJS error message buried in the 500 body
+    const serverMsg =
+      responseData?.message ||
+      responseData?.error ||
+      responseData?.detail ||
+      (typeof responseData === "string" ? responseData : null);
     toast.error(
-      "Access Denied (403): Your account lacks authorization scopes for this workspace intervention."
+      serverMsg
+        ? `Server error: ${serverMsg}`
+        : "Server error (500). Check the browser console for details.",
+      { duration: 6000 }
     );
     return;
   }

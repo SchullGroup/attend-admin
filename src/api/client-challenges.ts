@@ -259,16 +259,33 @@ export interface AssignJudgeRequest {
 // ---------------------------------------------------------------------------
 
 export interface JudgeAssignment {
-  judgeId:    string;
-  judgeName?: string;
-  name?:      string;   // alias returned by some API versions
-  role:       "PRIMARY" | "CO_JUDGE";
+  judgeId:     string;
+  judgeName?:  string;
+  judgeEmail?: string;
+  name?:       string;   // alias returned by some API versions
+  role:        "PRIMARY" | "CO_JUDGE";
 }
 
 export interface ApplicationAssignmentsResponse {
   applicationId: string;
   teamName?:     string;
   judges:        JudgeAssignment[];
+}
+
+export interface BulkAssignEntry {
+  applicationId: string;
+  judgeId:       string;
+}
+
+export interface BulkAssignResponse {
+  eventId:  string;
+  assigned: number;
+}
+
+export interface AutoDistributeResponse {
+  eventId:       string;
+  totalAssigned: number;
+  tracks:        string[];
 }
 
 /** Export response for GET /challenges/{id}/export/applications */
@@ -550,6 +567,10 @@ export function useRemoveJudge() {
     onError: (error: any) => parseAndToastApiError(error, "Failed to remove judge."),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Application-level assignment hooks (bulk assign, auto-distribute, co-judges)
+// ---------------------------------------------------------------------------
 
 /** Full judge pool for this registrar — GET /api/v1/client/judges */
 export function useGetJudgePool() {
