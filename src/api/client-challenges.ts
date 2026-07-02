@@ -84,6 +84,7 @@ export interface ChallengeDetail {
   minTeamSize:             number;
   maxTeamSize:             number;
   tracks:                  string[];
+  participationType?:      "SOLO" | "TEAM" | "SOLO_AND_TEAM";
   prizeTiers:              PrizeTier[];
   problemStatement:        string;
   expectedDeliverable:     string;

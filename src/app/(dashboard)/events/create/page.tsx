@@ -103,7 +103,12 @@ function CreateEventInner() {
       return true;
     }
     if (module === "HACKATHON") {
-      if (s === 0) return !!hack.title.trim() && !!hack.startDate && hack.description.length >= 30;
+      if (s === 0) {
+        const _tp = hack.theme.split(",").map((t) => t.trim()).filter(Boolean);
+        const _seen = new Set<string>();
+        const _hasDupe = _tp.some((t) => { const k = t.toLowerCase(); if (_seen.has(k)) return true; _seen.add(k); return false; });
+        return !!hack.title.trim() && !!hack.startDate && hack.description.length >= 30 && !_hasDupe;
+      }
       if (s === 1) return hack.problemStatement.length >= 30;
       return true;
     }
@@ -183,8 +188,8 @@ function CreateEventInner() {
         submissionDeadline:  hack.submissionDeadline || undefined,
         allowedTechStack:    hack.techStack          || undefined,
         participationType:   (hack.participationType === "both" ? "SOLO_AND_TEAM" : hack.participationType.toUpperCase()) as "SOLO" | "TEAM" | "SOLO_AND_TEAM",
-        minTeamSize:         (hack.participationType !== "solo") ? (parseInt(hack.minTeam, 10) || undefined) : undefined,
-        maxTeamSize:         (hack.participationType !== "solo") ? (parseInt(hack.maxTeam, 10) || undefined) : undefined,
+        minTeamSize:         hack.participationType === "solo" ? 1 : (parseInt(hack.minTeam, 10) || undefined),
+        maxTeamSize:         hack.participationType === "solo" ? 1 : (parseInt(hack.maxTeam, 10) || undefined),
         eligibilityCriteria: hack.eligibility || undefined,
         maximumEntries:      parseInt(hack.capacity, 10) || undefined,
         prizeTiers:          hack.prizes.filter((p) => p.reward).map((p) => ({ position: p.place, reward: p.reward })),
@@ -402,8 +407,8 @@ function CreateEventInner() {
           submissionDeadline:   hack.submissionDeadline || undefined,
           allowedTechStack:     hack.techStack          || undefined,
           participationType:    (hack.participationType === "both" ? "SOLO_AND_TEAM" : hack.participationType.toUpperCase()) as "SOLO" | "TEAM" | "SOLO_AND_TEAM",
-          minTeamSize:          parseInt(hack.minTeam, 10) || undefined,
-          maxTeamSize:          parseInt(hack.maxTeam, 10) || undefined,
+          minTeamSize:          hack.participationType === "solo" ? 1 : (parseInt(hack.minTeam, 10) || undefined),
+          maxTeamSize:          hack.participationType === "solo" ? 1 : (parseInt(hack.maxTeam, 10) || undefined),
           eligibilityCriteria:  hack.eligibility        || undefined,
           maximumEntries:       parseInt(hack.capacity, 10) || undefined,
           prizeTiers:           hack.prizes.filter((p) => p.reward).map((p) => ({ position: p.place, reward: p.reward })),

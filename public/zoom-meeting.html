@@ -114,7 +114,23 @@
       }
 
       if (data.type === 'ZOOM_LEAVE') {
+        // Leave without ending — meeting stays live for participants.
+        // The host can rejoin by clicking Launch again.
         try { if (sdkClient) sdkClient.leaveMeeting(); } catch (_) {}
+      }
+
+      if (data.type === 'ZOOM_SEND_CHAT' && data.message && sdkClient) {
+        // Forward a website Q&A question into the live Zoom meeting chat.
+        try {
+          if (typeof sdkClient.sendChatMessage === 'function') {
+            // Zoom Embedded SDK ≥ 3.x: omit toUserId to send to everyone
+            sdkClient.sendChatMessage({ message: String(data.message) });
+          } else if (typeof sdkClient.getChatClient === 'function') {
+            sdkClient.getChatClient().sendToAll(String(data.message));
+          }
+        } catch (e) {
+          console.warn('[ZoomEmbed] Chat send failed:', e);
+        }
       }
     });
 

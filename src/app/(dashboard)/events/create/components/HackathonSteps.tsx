@@ -53,7 +53,14 @@ export function HackStep0({ s, organiserName, showErrors = false }: { s: HackSta
       <div>
         <Label className="mb-2 block">Theme / Tracks <span className="text-xs font-normal text-[hsl(var(--muted-foreground))]">— comma-separated</span></Label>
         <Input placeholder="e.g. Payments, Lending, InsurTech" value={s.theme} onChange={(e) => s.setTheme(e.target.value)} />
-        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Each comma-separated value becomes a selectable track for participants</p>
+        {(() => {
+          const parts  = s.theme.split(",").map((t) => t.trim()).filter(Boolean);
+          const seen   = new Set<string>();
+          const dups   = parts.filter((t) => { const k = t.toLowerCase(); if (seen.has(k)) return true; seen.add(k); return false; });
+          return dups.length > 0
+            ? <p className="text-xs text-red-500 mt-1">Duplicate track{dups.length > 1 ? "s" : ""}: <strong>{dups.join(", ")}</strong> — each track name must be unique.</p>
+            : <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Each comma-separated value becomes a selectable track for participants</p>;
+        })()}
       </div>
 
       <div className="grid grid-cols-2 gap-4">

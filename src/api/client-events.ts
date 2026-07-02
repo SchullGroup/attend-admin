@@ -105,16 +105,17 @@ export interface SpeakerRequest {
 
 // PATCH event
 export interface UpdateEventRequest {
-  title?:           string;
-  description?:     string;
-  format?:          "VIRTUAL" | "IN_PERSON" | "HYBRID";
-  date?:            string;
-  startTime?:       string;
-  streamUrl?:       string;
-  venue?:           string;
-  maximumCapacity?: number;
-  agenda?:          AgendaItemDto[];
-  speakers?:        SpeakerRequest[];
+  title?:                     string;
+  description?:               string;
+  format?:                    "VIRTUAL" | "IN_PERSON" | "HYBRID";
+  date?:                      string;
+  startTime?:                 string;
+  streamUrl?:                 string;
+  venue?:                     string;
+  maximumCapacity?:           number;
+  agenda?:                    AgendaItemDto[];
+  speakers?:                  SpeakerRequest[];
+  innovationChallengeConfig?: InnovationChallengeConfigRequest;
 }
 
 // Documents

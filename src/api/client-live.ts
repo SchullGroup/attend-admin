@@ -12,6 +12,7 @@ import { apiClient } from "@/lib/api-client";
 import { parseAndToastApiError } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
 import { toast } from "sonner";
+import type { ZoomMeetingDto } from "@/api/client-events";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,6 +81,8 @@ export interface LiveRoomDetail {
   /** @deprecated alias — same as questions */
   pendingQuestions?: LiveQuestion[];
   recentAttendance:  LiveAttendeeEntry[];
+  /** Zoom meeting info — returned by some backend versions alongside the live snapshot */
+  zoomMeeting?:      ZoomMeetingDto;
 }
 
 // ---------------------------------------------------------------------------
@@ -151,13 +154,25 @@ export function useApproveQuestion() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ eventId, questionId }: { eventId: string; questionId: string }) => {
+      // Send empty body — some backends return 400 if no JSON body is present on PATCH
       const res = await apiClient.patch<ApiResponse<Record<string, string>>>(
-        `/api/v1/client/live/${eventId}/questions/${questionId}/approve`
+        `/api/v1/client/live/${eventId}/questions/${questionId}/approve`,
+        {}
       );
       return res.data;
     },
-    onSuccess: (_, { eventId }) => {
+    onSuccess: (_, { eventId, questionId }) => {
       toast.success("Question approved");
+      // Optimistically update cached questions so the UI flips immediately
+      qc.setQueryData<any>(liveKeys.detail(eventId), (old: any) => {
+        if (!old?.questions) return old;
+        return {
+          ...old,
+          questions: old.questions.map((q: any) =>
+            q.id === questionId ? { ...q, status: "APPROVED" } : q
+          ),
+        };
+      });
       qc.invalidateQueries({ queryKey: liveKeys.detail(eventId) });
     },
     onError: (error) => parseAndToastApiError(error),
@@ -170,12 +185,22 @@ export function useRejectQuestion() {
   return useMutation({
     mutationFn: async ({ eventId, questionId }: { eventId: string; questionId: string }) => {
       const res = await apiClient.patch<ApiResponse<Record<string, string>>>(
-        `/api/v1/client/live/${eventId}/questions/${questionId}/reject`
+        `/api/v1/client/live/${eventId}/questions/${questionId}/reject`,
+        {}
       );
       return res.data;
     },
-    onSuccess: (_, { eventId }) => {
+    onSuccess: (_, { eventId, questionId }) => {
       toast.success("Question rejected");
+      qc.setQueryData<any>(liveKeys.detail(eventId), (old: any) => {
+        if (!old?.questions) return old;
+        return {
+          ...old,
+          questions: old.questions.map((q: any) =>
+            q.id === questionId ? { ...q, status: "REJECTED" } : q
+          ),
+        };
+      });
       qc.invalidateQueries({ queryKey: liveKeys.detail(eventId) });
     },
     onError: (error) => parseAndToastApiError(error),

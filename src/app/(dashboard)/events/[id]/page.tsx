@@ -226,7 +226,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               </Link>
             )}
             {currentStatus === "live" && !isSuperAdmin && (
-              <Link href="/events/live">
+              <Link href={`/events/live?eventId=${id}`}>
                 <Button className="gap-2 bg-red-600 hover:bg-red-700 text-white">
                   <Radio className="h-4 w-4" /> Control Room
                 </Button>

@@ -972,15 +972,11 @@ function SettingsTab({ challengeId }: { challengeId: string }) {
   };
 
   function toggle(key: keyof SubmissionRequirements) {
-    updateReqs.mutate({
-      challengeId,
-      data: { [key]: !reqs[key] },
-    });
+    updateReqs.mutate({ challengeId, data: { [key]: !reqs[key] } });
   }
 
   return (
     <div className="max-w-2xl flex flex-col gap-6">
-      {/* Submission Requirements card */}
       <Card className="attend-card overflow-hidden">
         <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
           <Settings className="h-4 w-4 text-[#7c22c9]" />
@@ -991,7 +987,6 @@ function SettingsTab({ challengeId }: { challengeId: string }) {
         </div>
 
         <div className="divide-y divide-[hsl(var(--border))]">
-          {/* Pair up items into rows of 2 */}
           {[0, 2, 4, 6].map((startIdx) => {
             const pair = SUBMISSION_FIELDS.slice(startIdx, startIdx + 2);
             return (
@@ -999,10 +994,7 @@ function SettingsTab({ challengeId }: { challengeId: string }) {
                 {pair.map(({ key, label, description, Icon }) => (
                   <div key={key} className="flex items-center justify-between px-5 py-4">
                     <div className="flex items-center gap-3">
-                      <div
-                        className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: "#7c22c918" }}
-                      >
+                      <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: "#7c22c918" }}>
                         <Icon className="h-4 w-4" style={{ color: "#7c22c9" }} />
                       </div>
                       <div>
@@ -1010,21 +1002,14 @@ function SettingsTab({ challengeId }: { challengeId: string }) {
                         <p className="text-xs text-[hsl(var(--muted-foreground))]">{description}</p>
                       </div>
                     </div>
-                    {/* Toggle switch */}
                     <button
                       onClick={() => toggle(key)}
                       disabled={updateReqs.isPending}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none shrink-0 ml-4 ${
-                        reqs[key] ? "bg-[#7c22c9]" : "bg-[hsl(var(--muted))]"
-                      }`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none shrink-0 ml-4 ${reqs[key] ? "bg-[#7c22c9]" : "bg-[hsl(var(--muted))]"}`}
                       aria-checked={reqs[key]}
                       role="switch"
                     >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                          reqs[key] ? "translate-x-6" : "translate-x-1"
-                        }`}
-                      />
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${reqs[key] ? "translate-x-6" : "translate-x-1"}`} />
                     </button>
                   </div>
                 ))}

@@ -8,15 +8,26 @@
  *   The iframe loads the SDK from the Zoom CDN in an isolated context with no React conflict.
  *
  * Communication:
- *   Parent → iframe: ZOOM_JOIN  (join params)
- *   Parent → iframe: ZOOM_LEAVE (request leave)
- *   iframe → Parent: ZOOM_READY  (SDK scripts loaded, ready to receive join params)
- *   iframe → Parent: ZOOM_JOINED (join() resolved successfully)
- *   iframe → Parent: ZOOM_ERROR  (join() rejected; carries .message)
+ *   Parent → iframe: ZOOM_JOIN      (join params)
+ *   Parent → iframe: ZOOM_LEAVE     (request leave)
+ *   Parent → iframe: ZOOM_SEND_CHAT (send a chat message inside the meeting)
+ *   iframe → Parent: ZOOM_READY     (SDK scripts loaded, ready to receive join params)
+ *   iframe → Parent: ZOOM_JOINED    (join() resolved successfully)
+ *   iframe → Parent: ZOOM_ERROR     (join() rejected; carries .message)
+ *
+ * Imperative API (via forwardRef):
+ *   ref.sendChat(message) — forwards a chat message into the live Zoom meeting.
+ *   Only works while status === "joined".
  */
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { Loader2, AlertTriangle, Video, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+/** Imperative handle exposed to parent components via ref */
+export interface ZoomEmbedHandle {
+  /** Send a chat message visible to all participants inside the Zoom meeting. */
+  sendChat: (message: string) => void;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -38,7 +49,7 @@ type Status = "idle" | "loading" | "joined" | "error";
 interface ZoomEmbedProps {
   /** Display name shown inside the meeting. */
   userName: string;
-  /** Height in px for the meeting panel. */
+  /** Height in px for the meeting panel. Minimum 600 recommended for Zoom SDK controls. */
   height?: number;
 
   // Option A — pass backend zoomMeeting fields directly (preferred):
@@ -61,7 +72,7 @@ interface ZoomEmbedProps {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function ZoomEmbed({
+const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed({
   userName,
   height = 680,
   meetingNumber: meetingNumberProp,
@@ -69,11 +80,18 @@ export default function ZoomEmbed({
   zak: zakProp,
   eventId,
   streamUrl,
-}: ZoomEmbedProps) {
+}: ZoomEmbedProps, ref) {
   const iframeRef    = useRef<HTMLIFrameElement>(null);
   const listenerRef  = useRef<((e: MessageEvent) => void) | null>(null);
   const [status,  setStatus]  = useState<Status>("idle");
   const [errMsg,  setErrMsg]  = useState("");
+
+  // Expose sendChat so parent components can push Q&A questions into Zoom chat
+  useImperativeHandle(ref, () => ({
+    sendChat: (message: string) => {
+      iframeRef.current?.contentWindow?.postMessage({ type: "ZOOM_SEND_CHAT", message }, "*");
+    },
+  }));
 
   // Resolve meeting params — direct props take priority over URL parsing
   const resolved: { meetingNumber: string; password: string; zak: string } | null =
@@ -93,22 +111,21 @@ export default function ZoomEmbed({
     }
   }
 
-  const handleLaunch = useCallback(async () => {
+  const handleLaunch = useCallback(async (forceRefresh = false) => {
     if (!resolved || !iframeRef.current) return;
     setStatus("loading");
     setErrMsg("");
     cleanupListener();
 
     try {
-      // 1. Always refresh the meeting before joining to get a fresh ZAK.
-      //    The ZAK in startUrl expires (~24 h). If the backend recreates the
-      //    meeting we also need the new meetingId and password, so we carry
-      //    the full fresh dto — not just the zak.
+      // Use stored meeting data by default — avoids creating a new meeting ID
+      // which would cause error 3000 if the previous meeting is still running.
+      // Only refresh when ZAK is missing or explicitly requested (after error 200).
       let joinNumber   = resolved.meetingNumber;
       let joinPassword = resolved.password;
       let joinZak      = resolved.zak;
 
-      if (eventId) {
+      if (eventId && (forceRefresh || !joinZak)) {
         try {
           const refreshRes = await fetch("/api/zoom/refresh-meeting", {
             method:  "POST",
@@ -121,9 +138,13 @@ export default function ZoomEmbed({
               password?:  string;
               startUrl?:  string;
             };
-            // Use the fresh meetingId so signature and join are always in sync
-            if (meeting.meetingId) joinNumber   = String(meeting.meetingId);
-            if (meeting.password  !== undefined) joinPassword = meeting.password;
+            // Only take the meeting ID if we don't already have one.
+            // Preserving the existing meetingNumber is critical: the backend's
+            // POST /zoom may create a new meeting on some calls; if the OLD
+            // meeting is still running, starting a different meeting causes
+            // error 3000. We just need a fresh ZAK, not a new meeting.
+            if (meeting.meetingId && !joinNumber) joinNumber = String(meeting.meetingId);
+            if (meeting.password  !== undefined && !joinPassword) joinPassword = meeting.password;
             if (meeting.startUrl) {
               try {
                 const freshZak = new URL(meeting.startUrl).searchParams.get("zak");
@@ -132,16 +153,14 @@ export default function ZoomEmbed({
             }
           } else {
             const errBody = await refreshRes.json().catch(() => ({})) as { error?: string };
-            // Refresh failed — surface it so the user knows to act (e.g. re-login)
             throw new Error(errBody.error ?? `Meeting refresh failed (${refreshRes.status})`);
           }
         } catch (refreshErr: unknown) {
-          if (refreshErr instanceof Error && refreshErr.message !== "Meeting refresh failed") throw refreshErr;
-          // Otherwise fall through with cached values and let Zoom report the real error
+          if (refreshErr instanceof Error) throw refreshErr;
         }
       }
 
-      // 2. Fetch Meeting SDK signature (always role 1 = host)
+      // Fetch Meeting SDK signature (always role 1 = host)
       const res = await fetch("/api/zoom/signature", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
@@ -153,13 +172,12 @@ export default function ZoomEmbed({
       }
       const { signature, sdkKey } = await res.json() as { signature: string; sdkKey: string };
 
-      // 2. Set up message listener before setting iframe src
+      // Set up message listener before loading the iframe
       const listener = (event: MessageEvent) => {
         if (!event.data) return;
         const { type, message: errMessage } = event.data as { type: string; message?: string };
 
         if (type === "ZOOM_READY") {
-          // Iframe SDK is ready — send join params (use fresh values from refresh)
           iframeRef.current?.contentWindow?.postMessage(
             {
               type: "ZOOM_JOIN",
@@ -176,19 +194,26 @@ export default function ZoomEmbed({
           setStatus("joined");
           cleanupListener();
         } else if (type === "ZOOM_ERROR") {
-          setStatus("error");
+          cleanupListener();
           const msg = typeof errMessage === "string" && errMessage
             ? errMessage
             : (() => { try { return JSON.stringify(errMessage); } catch { return "Failed to join Zoom meeting"; } })();
+
+          // Error 200 = ZAK expired. Silently refresh and retry once.
+          if (typeof msg === "string" && msg.includes("200") && eventId && !forceRefresh) {
+            handleLaunch(true);
+            return;
+          }
+
+          setStatus("error");
           setErrMsg(msg || "Failed to join Zoom meeting");
-          cleanupListener();
         }
       };
 
       listenerRef.current = listener;
       window.addEventListener("message", listener);
 
-      // 3. Load the iframe (cache-bust so re-launch always gets a fresh page)
+      // Load the iframe (cache-bust so re-launch always gets a fresh page)
       iframeRef.current.src = `/zoom-meeting.html?t=${Date.now()}`;
 
     } catch (e: unknown) {
@@ -241,7 +266,7 @@ export default function ZoomEmbed({
           </div>
           <p className="text-sm font-semibold text-white">Meeting #{resolved.meetingNumber}</p>
           <Button
-            onClick={handleLaunch}
+            onClick={() => handleLaunch()}
             className="gap-2 bg-[#0B5CFF] hover:bg-[#0B5CFF]/90 text-white"
           >
             <Video className="h-4 w-4" /> Launch In-Page Meeting
@@ -267,21 +292,25 @@ export default function ZoomEmbed({
           <div>
             <p className="text-sm font-semibold text-white mb-1">Failed to join meeting</p>
             <p className="text-xs text-gray-400 max-w-xs">{errMsg}</p>
-            {/* Contextual hints for the most common SDK error codes */}
-            {errMsg.includes("3000") && (
-              <p className="text-xs text-amber-400 max-w-xs mt-2">
-                Another Zoom meeting is already running on this account. End that meeting first, then try again.
-              </p>
-            )}
             {errMsg.includes("200") && (
               <p className="text-xs text-amber-400 max-w-xs mt-2">
                 Host token expired. Go to Event Settings → Refresh Meeting Token, then try again.
               </p>
             )}
+            {errMsg.includes("3000") && (
+              <div className="mt-2 rounded-lg bg-amber-900/40 border border-amber-700/50 px-4 py-3 text-left max-w-xs">
+                <p className="text-xs font-semibold text-amber-300 mb-1">Another meeting is still running</p>
+                <p className="text-xs text-amber-200/80 leading-relaxed">
+                  Open <a href="https://zoom.us/meeting" target="_blank" rel="noreferrer" className="underline text-amber-300 hover:text-white">zoom.us/meeting</a>, find the active meeting, click <strong>End</strong>, then come back and try again.
+                </p>
+              </div>
+            )}
           </div>
-          <Button variant="outline" size="sm" onClick={() => { setStatus("idle"); setErrMsg(""); }}>
-            Try again
-          </Button>
+          <div className="flex flex-col items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => { setStatus("idle"); setErrMsg(""); }}>
+              Try again
+            </Button>
+          </div>
         </div>
       )}
 
@@ -296,4 +325,6 @@ export default function ZoomEmbed({
       )}
     </div>
   );
-}
+});
+
+export default ZoomEmbed;

@@ -13,6 +13,40 @@ const publicEndpoints = [
   "/api/v1/auth/refresh-token",
 ];
 
+// ── Shared refresh singleton ──────────────────────────────────────────────────
+// All callers (layout silent-refresh + interceptor) share ONE in-flight request.
+// Without this, React StrictMode's double-effect invocation fires two simultaneous
+// POST /api/auth/refresh calls. If the backend uses rotating refresh tokens the
+// second call arrives with an already-consumed token → 401 → forced logout.
+
+let _refreshPromise: Promise<string> | null = null;
+
+export function refreshAccessToken(): Promise<string> {
+  if (_refreshPromise) return _refreshPromise;
+
+  _refreshPromise = axios
+    .post<{ data?: { token?: string; accessToken?: string }; token?: string; accessToken?: string }>(
+      "/api/auth/refresh"
+    )
+    .then(({ data }) => {
+      const tokenData = (data as any)?.data ?? data;
+      const token: string | undefined =
+        (tokenData as any)?.token ?? (tokenData as any)?.accessToken;
+      if (!token) throw new Error("No token in refresh response");
+      Cookies.set("accessToken", token, {
+        expires:  1,
+        secure:   process.env.NODE_ENV === "production",
+        sameSite: "strict",
+      });
+      return token;
+    })
+    .finally(() => {
+      _refreshPromise = null;
+    });
+
+  return _refreshPromise;
+}
+
 export const apiClient = axios.create({
   baseURL: API_URL,
   headers: {
@@ -81,17 +115,10 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // Call the local Next.js proxy route which automatically sends the HttpOnly refresh token cookie
-        const { data } = await axios.post("/api/auth/refresh");
-
-        const tokenData = data.data ?? data;
-        const newAccessToken = tokenData.token ?? tokenData.accessToken;
-        if (!newAccessToken) throw new Error("No token in refresh response");
-        Cookies.set("accessToken", newAccessToken, {
-          expires:  1, // 1 day — keep consistent with login
-          secure:   process.env.NODE_ENV === "production",
-          sameSite: "strict",
-        });
+        // Use the shared singleton so concurrent callers (including the layout's
+        // silent-refresh effect) never fire more than one POST /api/auth/refresh
+        // at the same time (critical for backends with rotating refresh tokens).
+        const newAccessToken = await refreshAccessToken();
 
         apiClient.defaults.headers.common["Authorization"] =
           "Bearer " + newAccessToken;

@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
-import axios from "axios";
+import { useEffect, useRef, useState } from "react";
 import Cookies from "js-cookie";
+import { refreshAccessToken } from "@/lib/api-client";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Header } from "@/components/shell/header";
 import { Loader } from "@/components/ui/Loader";
@@ -15,6 +15,12 @@ export default function DashboardLayout({
   // The effect below immediately flips to true if a token already exists, or
   // attempts a silent refresh first — avoiding a hydration mismatch.
   const [ready, setReady] = useState(false);
+  // Prevent React StrictMode's double-effect invocation from firing two concurrent
+  // POST /api/auth/refresh calls. If the backend uses rotating refresh tokens the
+  // second call arrives with an already-consumed token → 401 → forced logout.
+  // refreshAccessToken() is a singleton (returns the same Promise when in-flight),
+  // but this ref prevents even starting a second call from this effect.
+  const refreshStarted = useRef(false);
 
   useEffect(() => {
     if (Cookies.get("accessToken")) {
@@ -22,21 +28,17 @@ export default function DashboardLayout({
       return;
     }
 
+    // Guard against StrictMode double-invoke
+    if (refreshStarted.current) return;
+    refreshStarted.current = true;
+
     // Access token is missing (expired after 1 day) but the refresh token httpOnly
     // cookie may still be valid for up to 7 days. Attempt a silent refresh before
     // rendering anything so the user stays logged in.
-    axios
-      .post("/api/auth/refresh")
-      .then(({ data }) => {
-        const tokenData = data?.data ?? data;
-        const token = tokenData?.token ?? tokenData?.accessToken;
-        if (token) {
-          Cookies.set("accessToken", token, {
-            expires:  1,
-            secure:   process.env.NODE_ENV === "production",
-            sameSite: "strict",
-          });
-        }
+    // Uses the shared singleton from api-client so concurrent callers never
+    // trigger more than one POST /api/auth/refresh at the same time.
+    refreshAccessToken()
+      .then(() => {
         setReady(true);
       })
       .catch(() => {
