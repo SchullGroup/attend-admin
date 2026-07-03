@@ -141,9 +141,9 @@ export default function NotificationsPage() {
   );
   const { mutate: markClient } = useMarkClientNotificationRead();
 
-  // Judge hooks
+  // Judge hooks — only enabled once we know the user is a judge (avoids 403s for other roles)
   const { data: judgeData,  isLoading: judgeLoading  } = useJudgeNotifications(
-    page, limit, filter === "unread" ? false : undefined
+    page, limit, filter === "unread" ? false : undefined, !userLoading && isJudge
   );
   const { mutate: markJudge } = useMarkJudgeNotificationRead();
 

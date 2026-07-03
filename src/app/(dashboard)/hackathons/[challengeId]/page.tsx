@@ -1046,11 +1046,13 @@ function CoJudgePanel({
   challengeId,
   applicationId,
   judges,
+  appTrack,
   onClose,
 }: {
   challengeId:   string;
   applicationId: string;
   judges:        JudgeItem[];
+  appTrack?:     string;
   onClose:       () => void;
 }) {
   const { data: rawAssignments, isLoading } = useApplicationJudgeAssignments(challengeId, applicationId);
@@ -1066,7 +1068,14 @@ function CoJudgePanel({
   const coJudges  = assignments.filter((a) => a.role === "CO_JUDGE");
 
   const assignedJudgeIds = new Set(assignments.map((a) => a.judgeId));
-  const eligible = judges.filter((j) => !assignedJudgeIds.has(j.id) && j.id !== primaryId);
+  const eligible = judges.filter((j) => {
+    if (assignedJudgeIds.has(j.id) || j.id === primaryId) return false;
+    // Apply track restriction: a judge with a specialty can only co-judge their track
+    if (j.specialtyTrack && appTrack) {
+      return j.specialtyTrack.trim().toLowerCase() === appTrack.trim().toLowerCase();
+    }
+    return true;
+  });
 
   return (
     <tr className="bg-[hsl(var(--muted)/0.4)] border-t border-[hsl(var(--border))]">
@@ -1160,6 +1169,8 @@ function AppAssignmentRow({
   onDraftChange,
   expanded,
   onToggleExpand,
+  selected,
+  onToggleSelect,
 }: {
   challengeId:    string;
   app:            ApplicationItem;
@@ -1168,6 +1179,8 @@ function AppAssignmentRow({
   onDraftChange:  (judgeId: string) => void;
   expanded:       boolean;
   onToggleExpand: () => void;
+  selected:       boolean;
+  onToggleSelect: () => void;
 }) {
   // Load the saved assignment for this application so the dropdown is
   // pre-populated on page load / after reload.
@@ -1182,13 +1195,27 @@ function AppAssignmentRow({
   const selectValue = draft !== undefined ? draft : savedPrimaryId;
   const isDirty     = draft !== undefined && draft !== savedPrimaryId;
 
-  const eligibleJudges = judges.filter(
-    (j) => !j.specialtyTrack || !app.track || j.specialtyTrack === app.track
-  );
+  const eligibleJudges = judges.filter((j) => {
+    // Judges with no track restriction can be assigned anywhere
+    if (!j.specialtyTrack) return true;
+    // App has no track → any judge is fine
+    if (!app.track) return true;
+    // Case-insensitive match (handles minor casing differences in data)
+    return j.specialtyTrack.trim().toLowerCase() === app.track.trim().toLowerCase();
+  });
 
   return (
     <React.Fragment>
-      <tr className="attend-table-row">
+      <tr className={`attend-table-row ${selected ? "bg-[hsl(var(--muted)/0.6)]" : ""}`}>
+        {/* Checkbox */}
+        <td className="pl-4 pr-2 py-3 w-8">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            className="h-4 w-4 rounded border-[hsl(var(--border))] accent-[#7c22c9] cursor-pointer"
+          />
+        </td>
         {/* Team */}
         <td className="px-5 py-3">
           <div className="flex items-center gap-2.5">
@@ -1269,6 +1296,7 @@ function AppAssignmentRow({
           challengeId={challengeId}
           applicationId={app.id}
           judges={judges}
+          appTrack={app.track}
           onClose={onToggleExpand}
         />
       )}
@@ -1295,12 +1323,51 @@ function AssignmentsSection({
   const autoDistribute = useAutoDistributeJudges();
 
   // Only stores CHANGED values — saved state comes from per-row query
-  const [draftMap,    setDraftMap]    = useState<Record<string, string>>({});
-  const [autoTrack,   setAutoTrack]   = useState("");
-  const [expandedApp, setExpandedApp] = useState<string | null>(null);
+  const [draftMap,     setDraftMap]    = useState<Record<string, string>>({});
+  const [autoTrack,    setAutoTrack]   = useState("");
+  const [expandedApp,  setExpandedApp] = useState<string | null>(null);
+  // Bulk-select state
+  const [selectedApps, setSelectedApps] = useState<Set<string>>(new Set());
+  const [bulkJudgeId,  setBulkJudgeId]  = useState("");
 
-  const apps    = appsData?.applications ?? [];
+  const apps     = appsData?.applications ?? [];
   const hasDraft = Object.values(draftMap).some((v) => v !== undefined);
+
+  const allSelected  = apps.length > 0 && apps.every((a) => selectedApps.has(a.id));
+  const someSelected = selectedApps.size > 0;
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedApps(new Set());
+    } else {
+      setSelectedApps(new Set(apps.map((a) => a.id)));
+    }
+  }
+
+  function toggleSelectApp(id: string) {
+    setSelectedApps((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function handleBulkAssign() {
+    if (!bulkJudgeId || selectedApps.size === 0) return;
+    const assignments = Array.from(selectedApps).map((applicationId) => ({
+      applicationId,
+      judgeId: bulkJudgeId,
+    }));
+    bulkAssign.mutate(
+      { challengeId, assignments },
+      {
+        onSuccess: () => {
+          setSelectedApps(new Set());
+          setBulkJudgeId("");
+        },
+      }
+    );
+  }
 
   function handleSave() {
     const assignments = Object.entries(draftMap)
@@ -1361,10 +1428,52 @@ function AssignmentsSection({
         </Card>
       ) : (
         <>
+          {/* Bulk-assign bar — visible when rows are selected */}
+          {someSelected && (
+            <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-[#7c22c9]/30 bg-[#faf5ff] flex-wrap">
+              <span className="text-xs font-semibold text-[#7c22c9]">
+                {selectedApps.size} selected
+              </span>
+              <select
+                value={bulkJudgeId}
+                onChange={(e) => setBulkJudgeId(e.target.value)}
+                className="text-xs h-8 rounded-lg border border-[hsl(var(--border))] bg-white px-2 flex-1 min-w-[180px] max-w-[260px] focus:outline-none focus:ring-1 focus:ring-[#7c22c9]"
+              >
+                <option value="">— Select judge to assign —</option>
+                {judges.map((j) => (
+                  <option key={j.id} value={j.id}>{j.name}{j.specialtyTrack ? ` (${j.specialtyTrack})` : ""}</option>
+                ))}
+              </select>
+              <Button
+                size="sm"
+                disabled={!bulkJudgeId || bulkAssign.isPending}
+                onClick={handleBulkAssign}
+                className="gap-1.5"
+              >
+                <UserCheck className="h-3.5 w-3.5" />
+                {bulkAssign.isPending ? "Assigning…" : "Assign Selected"}
+              </Button>
+              <button
+                onClick={() => setSelectedApps(new Set())}
+                className="text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] ml-auto"
+              >
+                Clear selection
+              </button>
+            </div>
+          )}
+
           <Card className="attend-card overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="attend-table-header">
+                  <th className="pl-4 pr-2 py-3 w-8">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 rounded border-[hsl(var(--border))] accent-[#7c22c9] cursor-pointer"
+                    />
+                  </th>
                   <th className="px-5 py-3 text-left">Team</th>
                   <th className="px-5 py-3 text-left">Track</th>
                   <th className="px-5 py-3 text-left">Primary Judge</th>
@@ -1387,6 +1496,8 @@ function AssignmentsSection({
                     onToggleExpand={() =>
                       setExpandedApp(expandedApp === app.id ? null : app.id)
                     }
+                    selected={selectedApps.has(app.id)}
+                    onToggleSelect={() => toggleSelectApp(app.id)}
                   />
                 ))}
               </tbody>

@@ -369,9 +369,10 @@ export const judgeNotificationKeys = {
 };
 
 /** GET /api/v1/judge/notifications */
-export function useJudgeNotifications(page = 0, limit = 10, read?: boolean) {
+export function useJudgeNotifications(page = 0, limit = 10, read?: boolean, enabled = true) {
   return useQuery({
     queryKey: judgeNotificationKeys.list(page, limit, read),
+    enabled,
     queryFn: async () => {
       const params: Record<string, string> = {
         page:  page.toString(),
@@ -382,7 +383,14 @@ export function useJudgeNotifications(page = 0, limit = 10, read?: boolean) {
         "/api/v1/judge/notifications",
         { params }
       );
-      return res.data.data;
+      // Normalise: backend may return data at root or nested under .data
+      const raw = (res.data.data ?? res.data) as any;
+      return {
+        ...raw,
+        notifications: raw?.notifications ?? raw?.content ?? [],
+        totalCount:    raw?.totalCount    ?? raw?.totalElements ?? 0,
+        unreadCount:   raw?.unreadCount   ?? raw?.totalUnread   ?? 0,
+      } as JudgeNotificationListResponse;
     },
     refetchInterval:             30_000,
     refetchIntervalInBackground: false,
