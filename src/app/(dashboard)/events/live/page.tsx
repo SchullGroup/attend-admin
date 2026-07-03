@@ -109,7 +109,7 @@ function ResolutionsPanel({
     );
   }
 
-  const closed = resolutions.filter((r) => r.status?.toUpperCase() === "CLOSED").length;
+  const closed = resolutions.filter((r) => (r.status || "").toUpperCase() === "CLOSED").length;
 
   return (
     <Card className="attend-card overflow-hidden">
@@ -122,7 +122,9 @@ function ResolutionsPanel({
       <div className="divide-y divide-[hsl(var(--border))]">
         {resolutions.map((res, i) => {
           const total     = res.forCount + res.againstCount + res.abstainCount;
-          const statusUp  = res.status?.toUpperCase();
+          // Default null/undefined/empty status to PENDING — newly created
+          // resolutions have no status yet but are ready to be opened.
+          const statusUp  = (res.status || "PENDING").toUpperCase();
           const isPending = statusUp === "PENDING";
           const isOpen    = statusUp === "OPEN";
           const isClosed  = statusUp === "CLOSED";

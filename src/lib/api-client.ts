@@ -13,11 +13,36 @@ const publicEndpoints = [
   "/api/v1/auth/refresh-token",
 ];
 
+// ── Cross-tab refresh coordination ───────────────────────────────────────────
+// Backends that use rotating refresh tokens issue a NEW refresh token on every
+// call and invalidate the old one.  When the app is open in multiple tabs (or
+// React Query fires a burst of refetches), each tab independently attempts a
+// refresh — the second call arrives with an already-consumed token → 401 →
+// forced logout.
+//
+// Fix: the tab that wins the race stamps localStorage with the current time.
+// Any tab that loses the race (gets 401 from the refresh endpoint) checks the
+// stamp before giving up.  If another tab refreshed within the last 4 seconds
+// the shared HttpOnly+JS cookie will already contain the new access token, so
+// we just grab it and retry the original request instead of logging out.
+const LAST_REFRESH_TS_KEY = "__attend_last_refresh_ts";
+
+function stampRefreshTime(): void {
+  try { localStorage.setItem(LAST_REFRESH_TS_KEY, Date.now().toString()); } catch {}
+}
+
+function anotherTabJustRefreshed(): boolean {
+  try {
+    const ts = Number(localStorage.getItem(LAST_REFRESH_TS_KEY) ?? 0);
+    return Date.now() - ts < 4_000;
+  } catch {
+    return false;
+  }
+}
+
 // ── Shared refresh singleton ──────────────────────────────────────────────────
-// All callers (layout silent-refresh + interceptor) share ONE in-flight request.
-// Without this, React StrictMode's double-effect invocation fires two simultaneous
-// POST /api/auth/refresh calls. If the backend uses rotating refresh tokens the
-// second call arrives with an already-consumed token → 401 → forced logout.
+// All callers within the SAME tab share ONE in-flight Promise so we never fire
+// more than one POST /api/auth/refresh concurrently inside a single tab.
 
 let _refreshPromise: Promise<string> | null = null;
 
@@ -38,6 +63,9 @@ export function refreshAccessToken(): Promise<string> {
         secure:   process.env.NODE_ENV === "production",
         sameSite: "strict",
       });
+      // Tell other tabs that we refreshed so they don't try (and fail) with the
+      // now-consumed refresh token.
+      stampRefreshTime();
       return token;
     })
     .finally(() => {
@@ -128,15 +156,33 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError: any) {
         processQueue(refreshError, null);
-        // Only redirect to login on a definitive auth failure (401/403 from the proxy,
-        // or an error thrown because the response contained no token).
-        // Transient network errors should NOT log the user out.
+
         const httpStatus = refreshError?.response?.status;
         const isAuthFailure =
           httpStatus === 401 ||
           httpStatus === 403 ||
           refreshError?.message === "No token in refresh response";
+
         if (isAuthFailure) {
+          // ── Cross-tab race recovery ─────────────────────────────────────────
+          // Our refresh failed, but another browser tab may have already won the
+          // race and set a fresh access token in the shared cookie.  If the
+          // localStorage stamp shows a successful refresh happened in the last
+          // 4 seconds, grab the cookie (which the winning tab already updated)
+          // and retry the original request — no logout needed.
+          if (anotherTabJustRefreshed()) {
+            const freshToken = Cookies.get("accessToken");
+            if (freshToken) {
+              apiClient.defaults.headers.common["Authorization"] =
+                "Bearer " + freshToken;
+              originalRequest.headers["Authorization"] =
+                "Bearer " + freshToken;
+              // Don't processQueue with the error — let the retried request resolve/reject
+              return apiClient(originalRequest);
+            }
+          }
+
+          // Refresh token is genuinely expired or invalid — send to login.
           Cookies.remove("accessToken");
           if (typeof window !== "undefined") {
             window.location.href = "/login";

@@ -32,17 +32,18 @@ export async function POST(request: Request) {
 
     const data = await response.json();
 
-    // Only treat 401 / 403 from the backend as a definitive "token is invalid".
-    // On 4xx/5xx network errors we do NOT wipe the cookie — the old token may
-    // still be valid and we don't want to lock the user out over a flaky server.
     const backendStatus = response.status;
     if (!response.ok || data.status === "FAILURE") {
-      const isDefinitivelyInvalid = backendStatus === 401 || backendStatus === 403;
-      const errRes = NextResponse.json(data, { status: backendStatus || 401 });
-      if (isDefinitivelyInvalid) {
-        errRes.cookies.delete("refreshToken");
-      }
-      return errRes;
+      // Return the error status but do NOT delete the refreshToken cookie here.
+      //
+      // Why: with rotating refresh tokens, two simultaneous refresh requests
+      // (from two browser tabs or a burst of 401s) both forward the same cookie
+      // to the backend. The backend accepts the first and rejects the second
+      // with 401. If this route deleted the cookie on that 401, it would wipe
+      // the new token the winning tab already set — permanently locking the
+      // user out.  The frontend's logout flow (window.location.href = "/login"
+      // → POST /api/auth/logout) is the right place to clear the cookie.
+      return NextResponse.json(data, { status: backendStatus || 401 });
     }
 
     // Parse the wrapped or flat token shapes
