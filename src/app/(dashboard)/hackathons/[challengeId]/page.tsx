@@ -1058,8 +1058,10 @@ function CoJudgePanel({
   const removeCoJudge = useRemoveCoJudge();
   const [addOpen, setAddOpen] = useState(false);
 
-  // Normalise: hook returns ApplicationAssignmentsResponse | undefined
-  const assignments: JudgeAssignment[] = (rawAssignments as any)?.judges ?? [];
+  // API returns either a flat array or { judges: [] } depending on version
+  const assignments: JudgeAssignment[] = Array.isArray(rawAssignments)
+    ? (rawAssignments as unknown as JudgeAssignment[])
+    : ((rawAssignments as any)?.judges ?? []);
   const primaryId = assignments.find((a) => a.role === "PRIMARY")?.judgeId;
   const coJudges  = assignments.filter((a) => a.role === "CO_JUDGE");
 
@@ -1148,6 +1150,133 @@ function CoJudgePanel({
 }
 
 // ---------------------------------------------------------------------------
+// Single assignment row — loads its own saved primary judge on mount
+// ---------------------------------------------------------------------------
+function AppAssignmentRow({
+  challengeId,
+  app,
+  judges,
+  draft,
+  onDraftChange,
+  expanded,
+  onToggleExpand,
+}: {
+  challengeId:    string;
+  app:            ApplicationItem;
+  judges:         JudgeItem[];
+  draft:          string | undefined;
+  onDraftChange:  (judgeId: string) => void;
+  expanded:       boolean;
+  onToggleExpand: () => void;
+}) {
+  // Load the saved assignment for this application so the dropdown is
+  // pre-populated on page load / after reload.
+  const { data: rawAssignments } = useApplicationJudgeAssignments(challengeId, app.id);
+  // API returns either a flat array or { judges: [] }
+  const assignmentList: JudgeAssignment[] = Array.isArray(rawAssignments)
+    ? (rawAssignments as unknown as JudgeAssignment[])
+    : ((rawAssignments as any)?.judges ?? []);
+  const savedPrimaryId = assignmentList.find((a) => a.role === "PRIMARY")?.judgeId ?? "";
+
+  // Draft takes priority over the saved value
+  const selectValue = draft !== undefined ? draft : savedPrimaryId;
+  const isDirty     = draft !== undefined && draft !== savedPrimaryId;
+
+  const eligibleJudges = judges.filter(
+    (j) => !j.specialtyTrack || !app.track || j.specialtyTrack === app.track
+  );
+
+  return (
+    <React.Fragment>
+      <tr className="attend-table-row">
+        {/* Team */}
+        <td className="px-5 py-3">
+          <div className="flex items-center gap-2.5">
+            <div
+              className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+              style={{ backgroundColor: app.teamInitialColor || "#7c22c9" }}
+            >
+              {app.teamInitial || app.teamName?.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">{app.teamName}</p>
+              {app.ideaTitle && (
+                <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{app.ideaTitle}</p>
+              )}
+            </div>
+          </div>
+        </td>
+        {/* Track */}
+        <td className="px-5 py-3">
+          {app.track ? (
+            <span
+              className="text-xs px-2.5 py-0.5 rounded-full font-medium"
+              style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}
+            >
+              {app.track}
+            </span>
+          ) : (
+            <span className="text-xs text-[hsl(var(--muted-foreground))]">—</span>
+          )}
+        </td>
+        {/* Primary judge selector */}
+        <td className="px-5 py-3">
+          <div className="flex items-center gap-2">
+            <select
+              value={selectValue}
+              onChange={(e) => onDraftChange(e.target.value)}
+              className={`text-xs h-8 rounded-lg border px-2 min-w-[160px] focus:outline-none focus:ring-1 focus:ring-[#7c22c9] bg-[hsl(var(--background))] ${
+                isDirty
+                  ? "border-amber-400 ring-1 ring-amber-300"
+                  : "border-[hsl(var(--border))]"
+              }`}
+            >
+              <option value="">— Select judge —</option>
+              {eligibleJudges.map((j) => (
+                <option key={j.id} value={j.id}>{j.name}</option>
+              ))}
+            </select>
+            {isDirty && (
+              <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                Unsaved
+              </span>
+            )}
+            {!isDirty && savedPrimaryId && (
+              <span className="text-[10px] font-semibold text-green-700 bg-green-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                Saved
+              </span>
+            )}
+          </div>
+        </td>
+        {/* Co-judges indicator */}
+        <td className="px-5 py-3 text-xs text-[hsl(var(--muted-foreground))]">
+          {expanded ? (
+            <span className="text-[#7c22c9] font-medium">Editing…</span>
+          ) : (
+            <span className="italic">Click →</span>
+          )}
+        </td>
+        {/* Co-judges toggle */}
+        <td className="px-5 py-3 text-right">
+          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={onToggleExpand}>
+            Co-Judges
+            <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </Button>
+        </td>
+      </tr>
+      {expanded && (
+        <CoJudgePanel
+          challengeId={challengeId}
+          applicationId={app.id}
+          judges={judges}
+          onClose={onToggleExpand}
+        />
+      )}
+    </React.Fragment>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Assignments section — appears below the judge panel when judges exist
 // ---------------------------------------------------------------------------
 function AssignmentsSection({
@@ -1165,22 +1294,24 @@ function AssignmentsSection({
   const bulkAssign     = useBulkAssignJudges();
   const autoDistribute = useAutoDistributeJudges();
 
-  // Map of applicationId → selected judgeId (local draft, not yet saved)
-  const [draftMap, setDraftMap]     = useState<Record<string, string>>({});
-  const [autoTrack, setAutoTrack]   = useState("");
+  // Only stores CHANGED values — saved state comes from per-row query
+  const [draftMap,    setDraftMap]    = useState<Record<string, string>>({});
+  const [autoTrack,   setAutoTrack]   = useState("");
   const [expandedApp, setExpandedApp] = useState<string | null>(null);
 
-  const apps = appsData?.applications ?? [];
+  const apps    = appsData?.applications ?? [];
+  const hasDraft = Object.values(draftMap).some((v) => v !== undefined);
 
   function handleSave() {
     const assignments = Object.entries(draftMap)
       .filter(([, judgeId]) => !!judgeId)
       .map(([applicationId, judgeId]) => ({ applicationId, judgeId }));
     if (assignments.length === 0) return;
-    bulkAssign.mutate({ challengeId, assignments });
+    bulkAssign.mutate(
+      { challengeId, assignments },
+      { onSuccess: () => setDraftMap({}) }   // clear draft after save
+    );
   }
-
-  const hasDraft = Object.values(draftMap).some(Boolean);
 
   return (
     <div className="flex flex-col gap-4">
@@ -1192,7 +1323,7 @@ function AssignmentsSection({
             Application Assignments
           </h3>
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-            Assign primary judges to shortlisted applications. Once any assignment is saved, each judge only sees their assigned apps.
+            Assign a primary judge per application. Once saved, each judge only sees their assigned apps.
           </p>
         </div>
         {/* Auto-distribute */}
@@ -1243,101 +1374,38 @@ function AssignmentsSection({
               </thead>
               <tbody>
                 {apps.map((app) => (
-                  <React.Fragment key={app.id}>
-                    <tr className="attend-table-row">
-                      {/* Team */}
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                            style={{ backgroundColor: app.teamInitialColor || "#7c22c9" }}
-                          >
-                            {app.teamInitial || app.teamName?.slice(0, 2).toUpperCase()}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">{app.teamName}</p>
-                            {app.ideaTitle && (
-                              <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{app.ideaTitle}</p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      {/* Track */}
-                      <td className="px-5 py-3">
-                        {app.track ? (
-                          <span
-                            className="text-xs px-2.5 py-0.5 rounded-full font-medium"
-                            style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}
-                          >
-                            {app.track}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-[hsl(var(--muted-foreground))]">—</span>
-                        )}
-                      </td>
-                      {/* Primary judge selector */}
-                      <td className="px-5 py-3">
-                        <select
-                          value={draftMap[app.id] ?? ""}
-                          onChange={(e) => setDraftMap((prev) => ({ ...prev, [app.id]: e.target.value }))}
-                          className="text-xs h-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 min-w-[160px] focus:outline-none focus:ring-1 focus:ring-[#7c22c9]"
-                        >
-                          <option value="">— Select judge —</option>
-                          {judges
-                            .filter((j) => !j.specialtyTrack || !app.track || j.specialtyTrack === app.track)
-                            .map((j) => (
-                              <option key={j.id} value={j.id}>{j.name}</option>
-                            ))}
-                        </select>
-                      </td>
-                      {/* Co-judges indicator */}
-                      <td className="px-5 py-3 text-xs text-[hsl(var(--muted-foreground))]">
-                        {expandedApp === app.id ? (
-                          <span className="text-[#7c22c9] font-medium">Editing…</span>
-                        ) : (
-                          <span className="italic">Click →</span>
-                        )}
-                      </td>
-                      {/* Manage co-judges toggle */}
-                      <td className="px-5 py-3 text-right">
-                        <Button
-                          size="sm" variant="ghost"
-                          className="h-7 text-xs gap-1"
-                          onClick={() => setExpandedApp(expandedApp === app.id ? null : app.id)}
-                        >
-                          Co-Judges
-                          <ChevronDown className={`h-3 w-3 transition-transform ${expandedApp === app.id ? "rotate-180" : ""}`} />
-                        </Button>
-                      </td>
-                    </tr>
-                    {/* Expanded co-judge panel */}
-                    {expandedApp === app.id && (
-                      <CoJudgePanel
-                        challengeId={challengeId}
-                        applicationId={app.id}
-                        judges={judges}
-                        onClose={() => setExpandedApp(null)}
-                      />
-                    )}
-                  </React.Fragment>
+                  <AppAssignmentRow
+                    key={app.id}
+                    challengeId={challengeId}
+                    app={app}
+                    judges={judges}
+                    draft={draftMap[app.id]}
+                    onDraftChange={(judgeId) =>
+                      setDraftMap((prev) => ({ ...prev, [app.id]: judgeId }))
+                    }
+                    expanded={expandedApp === app.id}
+                    onToggleExpand={() =>
+                      setExpandedApp(expandedApp === app.id ? null : app.id)
+                    }
+                  />
                 ))}
               </tbody>
             </table>
           </Card>
 
-          {/* Save primary assignments */}
+          {/* Save bar */}
           <div className="flex items-center justify-between">
             <p className="text-xs text-[hsl(var(--muted-foreground))]">
               {hasDraft
-                ? `${Object.values(draftMap).filter(Boolean).length} assignment(s) ready to save`
-                : "Select a primary judge for each application, then save."}
+                ? `${Object.values(draftMap).filter(Boolean).length} unsaved change(s)`
+                : "All assignments saved."}
             </p>
             <Button
               size="sm"
               disabled={!hasDraft || bulkAssign.isPending}
               onClick={handleSave}
             >
-              {bulkAssign.isPending ? "Saving…" : "Save Primary Assignments"}
+              {bulkAssign.isPending ? "Saving…" : "Save Assignments"}
             </Button>
           </div>
         </>
