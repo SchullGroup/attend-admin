@@ -1,202 +1,621 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Vote, Rocket, Lightbulb, CalendarDays, MapPin } from "lucide-react";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useRegisters } from "@/api/registers";
+import {
+  useCreateAgmEvent,
+  useCreateGeneralEvent,
+  useCreateInnovationEvent,
+  useCreateProductLaunchEvent,
+} from "@/api/events";
+import { useCreateEvent, useImportShareholdersToEvent, useCreateEventZoomMeeting, type CreateEventRequest } from "@/api/client-events";
+import { useGetMe } from "@/api/auth/hooks";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { toast } from "sonner";
+import { Check, ChevronRight, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const MODULES = [
-  { id: "AGM", label: "AGM", desc: "Annual General Meeting", icon: Vote, color: "#1e40af", bg: "#eff6ff" },
-  { id: "LAUNCH", label: "Launch", desc: "Product Launch Event", icon: Rocket, color: "#ea6c00", bg: "#fff4eb" },
-  { id: "HACKATHON", label: "Innovation Challenge", desc: "Tech challenge or competition", icon: Lightbulb, color: "#7c22c9", bg: "#f8f0ff" },
-  { id: "GENERAL", label: "General", desc: "General Event", icon: CalendarDays, color: "#1d4ed8", bg: "#eff5ff" },
-];
+// ─── Component imports ────────────────────────────────────────────────────────
 
-const FORMATS = ["virtual", "hybrid", "in-person"];
+import { MODULES, STEPS, STEP_META, type ModuleId } from "./components/types";
+import { OrgCombobox, StepPanel, SectionHead } from "./components/shared";
+import {
+  useAgmState, useLaunchState, useHackState, useGeneralState,
+} from "./components/state-hooks";
+import {
+  AgmStep0, AgmAgendaStep, AgmNoticeStep, AgmResolutionsStep, AgmShareholdersStep, AgmReview,
+} from "./components/AgmSteps";
+import {
+  LaunchStep0, LaunchStep1, LaunchSpeakersStep, LaunchEmbargoStep, LaunchReview,
+} from "./components/LaunchSteps";
+import {
+  HackStep0, HackBriefStep, HackTeamsStep, HackPrizesStep, HackReview,
+} from "./components/HackathonSteps";
+import {
+  GeneralStep0, GeneralAudienceStep, GeneralReview,
+} from "./components/GeneralSteps";
 
-export default function CreateEventPage() {
+// ─── Inner page ───────────────────────────────────────────────────────────────
+
+function CreateEventInner() {
   const router = useRouter();
-  const [module, setModule] = useState("");
-  const [format, setFormat] = useState("virtual");
-  const [title, setTitle] = useState("");
-  const [organiser, setOrganiser] = useState("");
-  const [description, setDescription] = useState("");
-  const [date, setDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [venue, setVenue] = useState("");
-  const [capacity, setCapacity] = useState("");
-  const [rsvpDeadline, setRsvpDeadline] = useState("");
+  const searchParams = useSearchParams();
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    router.push("/events");
+  const { data: registersData } = useRegisters("ACTIVE", 0, 100);
+  const activeOrganisers = (registersData?.registers ?? []).map((reg) => ({
+    id:   reg.id,
+    name: reg.name || (reg as any).companyName || reg.id,
+  }));
+
+  const [selectedModule, setSelectedModule] = useState<ModuleId | null>(null);
+  const [step,           setStep]           = useState(0);
+  const [submitting,     setSubmitting]     = useState(false);
+  const [organiserId,    setOrganiserId]    = useState("");
+  const [showStepErrors, setShowStepErrors] = useState(false);
+
+  useEffect(() => {
+    const type = searchParams.get("type") as ModuleId | null;
+    if (type && ["AGM", "LAUNCH", "HACKATHON", "GENERAL"].includes(type)) {
+      setSelectedModule(type);
+      setStep(0);
+    }
+  }, [searchParams]);
+
+  const agm     = useAgmState();
+  const launch  = useLaunchState();
+  const hack    = useHackState();
+  const general = useGeneralState();
+
+  const { data: userResponse } = useGetMe();
+  const currentUser = userResponse?.data;
+  const ADMIN_ROLES = new Set(["super_admin", "event_manager", "kyc_officer", "judge"]);
+  const isAdmin = !!currentUser && ADMIN_ROLES.has(currentUser.role?.toLowerCase() ?? "");
+
+  const createAgm              = useCreateAgmEvent();
+  const createGeneral          = useCreateGeneralEvent();
+  const createHack             = useCreateInnovationEvent();
+  const createLaunch           = useCreateProductLaunchEvent();
+  const createClientEvent      = useCreateEvent();
+  const importShareholders     = useImportShareholdersToEvent();
+  const createEventZoomMeeting = useCreateEventZoomMeeting();
+
+  const selectedOrganiser = activeOrganisers.find((o) => o.id === organiserId) ?? null;
+  const organiserName     = selectedOrganiser?.name ?? "";
+  const mod               = selectedModule ? MODULES.find((m) => m.id === selectedModule)! : null;
+  const steps             = selectedModule ? STEPS[selectedModule] : [];
+  const meta              = selectedModule ? STEP_META[selectedModule] : [];
+  const isLast            = step === steps.length - 1;
+
+  // ─── Step validation ────────────────────────────────────────────────────────
+
+  function getStepValid(module: ModuleId, s: number): boolean {
+    if (module === "AGM") {
+      if (s === 0) return !!agm.title.trim() && !!agm.date && agm.description.length >= 30;
+      if (s === 1) return true; // agenda optional
+      if (s === 2) return true; // notice optional
+      if (s === 3) return agm.resolutions.some((r) => r.title.trim());
+      return true;
+    }
+    if (module === "LAUNCH") {
+      if (s === 0) return !!launch.title.trim() && !!launch.date && launch.description.length >= 30;
+      if (s === 1) return !!launch.productName.trim();
+      return true;
+    }
+    if (module === "HACKATHON") {
+      if (s === 0) {
+        const _tp = hack.theme.split(",").map((t) => t.trim()).filter(Boolean);
+        const _seen = new Set<string>();
+        const _hasDupe = _tp.some((t) => { const k = t.toLowerCase(); if (_seen.has(k)) return true; _seen.add(k); return false; });
+        return !!hack.title.trim() && !!hack.startDate && hack.description.length >= 30 && !_hasDupe;
+      }
+      if (s === 1) return hack.problemStatement.length >= 30;
+      return true;
+    }
+    if (module === "GENERAL") {
+      if (s === 0) return !!general.title.trim() && !!general.date && general.description.length >= 30;
+      return true;
+    }
+    return true;
+  }
+
+  const stepValid = selectedModule ? getStepValid(selectedModule, step) : true;
+
+  // ─── Navigation ─────────────────────────────────────────────────────────────
+
+  function next() {
+    if (!stepValid) {
+      setShowStepErrors(true);
+      toast.error("Please fill in all required fields before continuing.");
+      return;
+    }
+    setShowStepErrors(false);
+    setStep((s) => Math.min(s + 1, steps.length - 1));
+  }
+  function back() { setShowStepErrors(false); setStep((s) => Math.max(s - 1, 0)); }
+  function skip() { setShowStepErrors(false); setStep((s) => Math.min(s + 1, steps.length - 1)); }
+  function selectModule(id: ModuleId) { setSelectedModule(id); setStep(0); setShowStepErrors(false); }
+  function resetModule()               { setSelectedModule(null); setStep(0); setShowStepErrors(false); }
+
+  // ─── Submit ─────────────────────────────────────────────────────────────────
+
+  function handleSubmit() {
+    if (!organiserId) {
+      toast.error("Please select an organiser before creating an event.");
+      return;
+    }
+    if (!selectedModule) return;
+
+    const onDone = () => router.push("/events");
+    const fmt = (f: string) => f.toUpperCase() as "VIRTUAL" | "IN_PERSON" | "HYBRID";
+    const audience = (mode: string) =>
+      mode === "open" ? "OPEN_REGISTRATION" : "INVITE_ONLY" as const;
+
+    // ── Client path ──────────────────────────────────────────────────────────
+    if (!isAdmin) {
+      setSubmitting(true);
+
+      const eventTypeMap: Record<ModuleId, CreateEventRequest["eventType"]> = {
+        AGM:       "AGM_EGM",
+        LAUNCH:    "PRODUCT_LAUNCH",
+        HACKATHON: "INNOVATION_CHALLENGE",
+        GENERAL:   "GENERAL_EVENT",
+      };
+
+      const agmConfig = selectedModule === "AGM" ? {
+        resolutions: agm.resolutions
+          .filter((r) => r.title.trim())
+          .map((r) => ({ title: r.title, description: r.description || undefined, isSpecialResolution: r.isSpecial })),
+        shareholderTargeting: agm.shareholderTargeting === "all" ? "ALL_REGISTERED" as const : "CUSTOM_LIST" as const,
+        enableProxyVoting:    agm.proxyEnabled,
+        agmNoticeUrl:         agm.noticeUrl  || undefined,
+        agmNoticeFilename:    agm.noticeFile || undefined,
+      } : undefined;
+
+      const productLaunchConfig = selectedModule === "LAUNCH" ? {
+        audienceTargeting: audience(launch.audienceMode) as import("@/api/client-events").AudienceTargeting,
+        embargo: {
+          enabled:   launch.embargoEnabled,
+          releaseAt: launch.embargoEnabled ? (launch.embargoAt || undefined) : undefined,
+        },
+      } : undefined;
+
+      const innovationChallengeConfig = selectedModule === "HACKATHON" ? {
+        audienceTargeting:   "OPEN_REGISTRATION" as import("@/api/client-events").AudienceTargeting,
+        tracks:              hack.theme ? hack.theme.split(",").map((t) => t.trim()).filter(Boolean) : [],
+        problemStatement:    hack.problemStatement   || undefined,
+        expectedDeliverable: hack.deliverable        || undefined,
+        submissionDeadline:  hack.submissionDeadline || undefined,
+        allowedTechStack:    hack.techStack          || undefined,
+        participationType:   (hack.participationType === "both" ? "SOLO_AND_TEAM" : hack.participationType.toUpperCase()) as "SOLO" | "TEAM" | "SOLO_AND_TEAM",
+        minTeamSize:         hack.participationType === "solo" ? 1 : (parseInt(hack.minTeam, 10) || undefined),
+        maxTeamSize:         hack.participationType === "solo" ? 1 : (parseInt(hack.maxTeam, 10) || undefined),
+        eligibilityCriteria: hack.eligibility || undefined,
+        maximumEntries:      parseInt(hack.capacity, 10) || undefined,
+        prizeTiers:          hack.prizes.filter((p) => p.reward).map((p) => ({ position: p.place, reward: p.reward })),
+        judgingCriteria:     hack.criteria.filter((c) => c.label.trim()).map((c) => ({
+          criterion: c.label,
+          weight:    parseInt(c.weight.replace("%", ""), 10) || 0,
+        })),
+      } : undefined;
+
+      const generalEventConfig = selectedModule === "GENERAL" ? {
+        audienceTargeting: audience(general.audienceMode) as import("@/api/client-events").AudienceTargeting,
+      } : undefined;
+
+      const title = selectedModule === "AGM"      ? agm.title
+                  : selectedModule === "LAUNCH"    ? launch.title
+                  : selectedModule === "HACKATHON" ? hack.title
+                  : general.title;
+
+      const description = selectedModule === "AGM"      ? (agm.description     || undefined)
+                        : selectedModule === "LAUNCH"    ? (launch.description  || undefined)
+                        : selectedModule === "HACKATHON" ? (hack.description    || undefined)
+                        : (general.description || undefined);
+
+      const date = selectedModule === "AGM"      ? agm.date
+                 : selectedModule === "LAUNCH"    ? launch.date
+                 : selectedModule === "HACKATHON" ? hack.startDate
+                 : general.date;
+
+      const endDate = selectedModule === "HACKATHON" ? (hack.endDate || undefined) : undefined;
+
+      const startTime = selectedModule === "AGM"      ? agm.time
+                      : selectedModule === "LAUNCH"    ? launch.time
+                      : selectedModule === "HACKATHON" ? (hack.time || "09:00")
+                      : general.time;
+
+      const endTime = selectedModule === "AGM"      ? (agm.endTime     || undefined)
+                    : selectedModule === "LAUNCH"    ? (launch.endTime  || undefined)
+                    : selectedModule === "HACKATHON" ? (hack.endTime    || undefined)
+                    : (general.endTime || undefined);
+
+      const eventFormat = selectedModule === "AGM"      ? agm.format
+                        : selectedModule === "LAUNCH"    ? launch.format
+                        : selectedModule === "HACKATHON" ? hack.format
+                        : general.format;
+
+      const streamUrl = selectedModule === "AGM"      ? (agm.streamUrl    || undefined)
+                      : selectedModule === "LAUNCH"    ? (launch.streamUrl || undefined)
+                      : selectedModule === "HACKATHON" ? (hack.streamUrl   || undefined)
+                      : (general.streamUrl || undefined);
+
+      const venueValue = selectedModule === "AGM"      ? (agm.venue    || undefined)
+                       : selectedModule === "LAUNCH"    ? (launch.venue || undefined)
+                       : selectedModule === "HACKATHON" ? (hack.venue   || undefined)
+                       : (general.venue || undefined);
+
+      const maximumCapacity = selectedModule === "AGM"      ? (parseInt(agm.capacity,     10) || 0)
+                            : selectedModule === "LAUNCH"    ? (parseInt(launch.capacity,  10) || 0)
+                            : selectedModule === "HACKATHON" ? (parseInt(hack.capacity,    10) || 0)
+                            : (parseInt(general.capacity, 10) || 0);
+
+      const enableZoom = selectedModule === "AGM"   ? agm.enableZoomMeeting
+                      : selectedModule === "GENERAL" ? general.enableZoomMeeting
+                      : false;
+
+      const zoomDuration = enableZoom
+        ? (selectedModule === "AGM"   ? parseInt(agm.zoomDurationMinutes, 10)
+                                      : parseInt(general.zoomDurationMinutes, 10)) || 120
+        : undefined;
+
+      const featuredValue = selectedModule === "AGM"      ? agm.featured
+                          : selectedModule === "LAUNCH"    ? launch.featured
+                          : selectedModule === "HACKATHON" ? hack.featured
+                          : general.featured;
+
+      const speakers = selectedModule === "LAUNCH"
+        ? launch.speakers.filter((sp) => sp.name.trim()).map((sp) => ({ name: sp.name, roleTitle: sp.role, bio: sp.bio || undefined }))
+        : undefined;
+
+      createClientEvent.mutate(
+        {
+          registerId: organiserId,
+          eventType:  eventTypeMap[selectedModule],
+          title, description, date, endDate, startTime, endTime,
+          format:          fmt(eventFormat),
+          // When Zoom is enabled the backend creates the meeting and sets streamUrl itself;
+          // sending enableZoomMeeting:true is enough — no streamUrl needed.
+          streamUrl:           enableZoom ? undefined : streamUrl,
+          location:            venueValue,
+          venue:               venueValue,
+          maximumCapacity,
+          featured:            featuredValue || undefined,
+          rsvpEnabled:         selectedModule === "AGM" ? agm.rsvpEnabled : undefined,
+          speakers,
+          agenda: selectedModule === "AGM" && agm.agendaItems.some((a) => a.title.trim())
+            ? agm.agendaItems.filter((a) => a.title.trim()).map((a) => ({ time: a.time, title: a.title, speaker: a.speaker || undefined }))
+            : undefined,
+          agmConfig,
+          productLaunchConfig,
+          innovationChallengeConfig,
+          generalEventConfig,
+          enableZoomMeeting:   enableZoom || undefined,
+          zoomDurationMinutes: zoomDuration,
+        },
+        {
+          onSuccess: (createdEvent) => {
+            const eventId = (createdEvent as any)?.id ?? (createdEvent as any)?.eventId;
+
+            // Auto-import shareholders for AGM (best-effort — failure doesn't block navigation)
+            if (selectedModule === "AGM" && organiserId && eventId) {
+              importShareholders.mutate(
+                { eventId, registerId: organiserId },
+                { onError: () => {} } // suppress error toast — event was created successfully
+              );
+            }
+
+            setSubmitting(false);
+            onDone();
+          },
+          onError: () => setSubmitting(false),
+        }
+      );
+      return;
+    }
+
+    // ── Admin path ───────────────────────────────────────────────────────────
+    if (selectedModule === "AGM") {
+      setSubmitting(true);
+      const agmIsVirtual = agm.format === "virtual" || agm.format === "hybrid";
+      // Send placeholder streamUrl when Zoom is enabled + virtual/hybrid + no URL entered.
+      // The backend's /zoom endpoint (called in onSuccess) will replace it with the real link.
+      const agmStreamUrl = agm.enableZoomMeeting && agmIsVirtual && !agm.streamUrl
+        ? "https://zoom.us"
+        : (agm.streamUrl || undefined);
+      createAgm.mutate(
+        {
+          registerId:            organiserId,
+          title:                 agm.title,
+          date:                  agm.date,
+          startTime:             agm.time,
+          format:                fmt(agm.format),
+          streamUrl:             agmStreamUrl,
+          venue:                 agm.venue                || undefined,
+          quorumPercentage:      parseInt(agm.quorum, 10) || undefined,
+          eligibilityCutOffDate: agm.cutoff               || undefined,
+          enableProxyVoting:     agm.proxyEnabled,
+          shareholderTargeting:  agm.shareholderTargeting === "all" ? "ALL_REGISTERED" : "CUSTOM",
+          resolutions:           agm.resolutions
+            .filter((r) => r.title.trim())
+            .map((r) => ({ title: r.title, description: r.description || undefined, specialResolution: r.isSpecial })),
+        },
+        {
+          onSuccess: (createdEvent) => {
+            const eventId = (createdEvent as any)?.id ?? (createdEvent as any)?.eventId;
+            if (agm.enableZoomMeeting && eventId) {
+              // Admin AGM endpoint doesn't accept enableZoomMeeting — create Zoom separately.
+              // If it fails (e.g. endpoint restriction), navigate anyway and let user add Zoom from Settings.
+              createEventZoomMeeting.mutate(
+                { eventId, durationMinutes: parseInt(agm.zoomDurationMinutes, 10) || 120 },
+                {
+                  onSuccess:  () => { setSubmitting(false); onDone(); },
+                  onError:    () => {
+                    setSubmitting(false);
+                    toast.info("AGM created. Open the event → Settings to add the Zoom meeting.");
+                    onDone();
+                  },
+                }
+              );
+            } else {
+              setSubmitting(false);
+              onDone();
+            }
+          },
+          onError: () => setSubmitting(false),
+        }
+      );
+      return;
+    }
+
+    if (selectedModule === "GENERAL") {
+      setSubmitting(true);
+      createGeneral.mutate(
+        {
+          registerId:        organiserId,
+          title:             general.title,
+          description:       general.description  || undefined,
+          date:              general.date,
+          startTime:         general.time,
+          format:            fmt(general.format),
+          venue:             general.venue         || undefined,
+          streamUrl:         general.streamUrl     || undefined,
+          maximumCapacity:   parseInt(general.capacity, 10) || undefined,
+          audienceTargeting: audience(general.audienceMode),
+        },
+        { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+      );
+      return;
+    }
+
+    if (selectedModule === "HACKATHON") {
+      setSubmitting(true);
+      createHack.mutate(
+        {
+          registerId:           organiserId,
+          title:                hack.title,
+          eventType:            "INNOVATION_CHALLENGE",
+          themeTrack:           hack.theme              || undefined,
+          startDate:            hack.startDate,
+          endDate:              hack.endDate,
+          startTime:            hack.time               || "09:00",
+          format:               fmt(hack.format),
+          venue:                hack.venue              || undefined,
+          streamUrl:            hack.streamUrl          || undefined,
+          problemStatement:     hack.problemStatement   || undefined,
+          expectedDeliverable:  hack.deliverable        || undefined,
+          submissionDeadline:   hack.submissionDeadline || undefined,
+          allowedTechStack:     hack.techStack          || undefined,
+          participationType:    (hack.participationType === "both" ? "SOLO_AND_TEAM" : hack.participationType.toUpperCase()) as "SOLO" | "TEAM" | "SOLO_AND_TEAM",
+          minTeamSize:          hack.participationType === "solo" ? 1 : (parseInt(hack.minTeam, 10) || undefined),
+          maxTeamSize:          hack.participationType === "solo" ? 1 : (parseInt(hack.maxTeam, 10) || undefined),
+          eligibilityCriteria:  hack.eligibility        || undefined,
+          maximumEntries:       parseInt(hack.capacity, 10) || undefined,
+          prizeTiers:           hack.prizes.filter((p) => p.reward).map((p) => ({ position: p.place, reward: p.reward })),
+          judgingCriteria:      hack.criteria.map((c) => ({
+            criterion: c.label,
+            weight:    parseInt(c.weight.replace("%", ""), 10) || 0,
+          })),
+        },
+        { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+      );
+      return;
+    }
+
+    if (selectedModule === "LAUNCH") {
+      setSubmitting(true);
+      createLaunch.mutate(
+        {
+          registerId:         organiserId,
+          title:              launch.title,
+          date:               launch.date,
+          startTime:          launch.time,
+          format:             fmt(launch.format),
+          venue:              launch.venue               || undefined,
+          streamUrl:          launch.streamUrl           || undefined,
+          maximumCapacity:    parseInt(launch.capacity, 10) || undefined,
+          productName:        launch.productName          || undefined,
+          tagline:            launch.tagline              || undefined,
+          productDescription: launch.productDesc          || undefined,
+          micrositeSlug:      launch.slug                 || undefined,
+          audienceTargeting:  audience(launch.audienceMode),
+          embargo: {
+            enabled:   launch.embargoEnabled,
+            releaseAt: launch.embargoEnabled ? (launch.embargoAt || undefined) : undefined,
+          },
+          speakers: launch.speakers
+            .filter((sp) => sp.name.trim())
+            .map((sp) => ({ name: sp.name, roleTitle: sp.role, bio: sp.bio || undefined })),
+        },
+        { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+      );
+    }
+  }
+
+  // ─── Module selection screen ─────────────────────────────────────────────
+
+  if (!selectedModule) {
+    return (
+      <div className="w-full">
+        <div className="mb-6">
+          <h1 className="text-3xl font-black text-[hsl(var(--foreground))]">Create New Event</h1>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1.5">Choose the organiser and event type to begin setup.</p>
+        </div>
+
+        <div className="mb-8 rounded-2xl border border-[hsl(var(--border))] bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-8 w-8 rounded-full bg-[hsl(var(--primary))] flex items-center justify-center shrink-0">
+              <span className="text-xs font-bold text-white">1</span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Select Organiser</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Which organisation is hosting this event?</p>
+            </div>
+          </div>
+          <OrgCombobox value={organiserId} onValueChange={setOrganiserId} organisers={activeOrganisers} />
+          {organiserId
+            ? <p className="mt-2 text-xs text-emerald-600 font-medium flex items-center gap-1"><Check className="h-3 w-3" /> {organiserName} selected</p>
+            : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Required — every event must be linked to an organiser.</p>
+          }
+        </div>
+
+        <div className="flex items-center gap-3 mb-4">
+          <div className={cn("h-8 w-8 rounded-full flex items-center justify-center shrink-0 transition-colors",
+            organiserId ? "bg-[hsl(var(--primary))]" : "bg-[hsl(var(--muted-foreground)/0.3)]")}>
+            <span className="text-xs font-bold text-white">2</span>
+          </div>
+          <div>
+            <p className={cn("text-sm font-semibold transition-colors", organiserId ? "text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))]")}>Select Event Type</p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">Each type has its own tailored setup flow.</p>
+          </div>
+        </div>
+
+        <div className={cn("grid grid-cols-2 gap-5 transition-opacity duration-200", !organiserId && "opacity-50 pointer-events-none select-none")}>
+          {MODULES.map((m) => {
+            const Icon = m.icon;
+            const stepCount = STEPS[m.id].length;
+            return (
+              <button key={m.id} type="button" onClick={() => {
+                if (!organiserId) { toast.error("Please select an organiser first."); return; }
+                selectModule(m.id);
+              }}
+                className="text-left rounded-2xl border border-[hsl(var(--border))] bg-white overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 group">
+                <div className="h-1.5" style={{ backgroundColor: m.color }} />
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-5">
+                    <div className="h-12 w-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: m.bg }}>
+                      <Icon className="h-6 w-6" style={{ color: m.color }} />
+                    </div>
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ backgroundColor: m.bg, color: m.color }}>
+                      {stepCount} steps
+                    </span>
+                  </div>
+                  <p className="text-lg font-bold text-[hsl(var(--foreground))] mb-1">{m.label}</p>
+                  <p className="text-sm text-[hsl(var(--muted-foreground))] mb-4 leading-relaxed">{m.desc}</p>
+                  <div className="border-t border-[hsl(var(--border))] pt-4">
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">{m.detail}</p>
+                  </div>
+                  <div className="mt-5 flex items-center gap-1.5 text-sm font-semibold group-hover:gap-3 transition-all duration-200" style={{ color: m.color }}>
+                    Start setup <ChevronRight className="h-4 w-4" />
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Multi-step flow ─────────────────────────────────────────────────────
+
+  const stepMeta = meta[step];
+
+  function renderStep() {
+    if (selectedModule === "AGM") {
+      if (step === 0) return <AgmStep0          s={agm}    organiserName={organiserName} showErrors={showStepErrors} />;
+      if (step === 1) return <AgmAgendaStep      s={agm} />;
+      if (step === 2) return <AgmNoticeStep      s={agm} />;
+      if (step === 3) return <AgmResolutionsStep s={agm}    showErrors={showStepErrors} />;
+      if (step === 4) return <AgmShareholdersStep s={agm} />;
+      return           <AgmReview           s={agm}    organiserName={organiserName} />;
+    }
+    if (selectedModule === "LAUNCH") {
+      if (step === 0) return <LaunchStep0         s={launch} organiserName={organiserName} showErrors={showStepErrors} />;
+      if (step === 1) return <LaunchStep1         s={launch} showErrors={showStepErrors} />;
+      if (step === 2) return <LaunchSpeakersStep  s={launch} />;
+      if (step === 3) return <LaunchEmbargoStep   s={launch} />;
+      return           <LaunchReview        s={launch} organiserName={organiserName} />;
+    }
+    if (selectedModule === "HACKATHON") {
+      if (step === 0) return <HackStep0     s={hack} organiserName={organiserName} showErrors={showStepErrors} />;
+      if (step === 1) return <HackBriefStep s={hack} showErrors={showStepErrors} />;
+      if (step === 2) return <HackTeamsStep s={hack} />;
+      if (step === 3) return <HackPrizesStep s={hack} />;
+      return           <HackReview    s={hack} organiserName={organiserName} />;
+    }
+    if (selectedModule === "GENERAL") {
+      if (step === 0) return <GeneralStep0        s={general} organiserName={organiserName} showErrors={showStepErrors} />;
+      if (step === 1) return <GeneralAudienceStep s={general} />;
+      return           <GeneralReview       s={general} organiserName={organiserName} />;
+    }
+    return null;
   }
 
   return (
-    <div>
+    <div className="w-full">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Create Event</h1>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">Configure and publish a new event on the Attend platform</p>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">{stepMeta.subtitle}</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-        <Card className="attend-card p-6">
-          <h2 className="text-base font-semibold text-[hsl(var(--foreground))] mb-1">Event Details</h2>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mb-5">Select a module type and fill in the basic details</p>
+      <div className="flex gap-6 items-start">
+        <StepPanel steps={steps} current={step} moduleId={selectedModule} organiserName={organiserName} onReset={resetModule} />
 
-          <div className="mb-5">
-            <Label className="mb-3 block attend-section-title">Module Type</Label>
-            <div className="grid grid-cols-4 gap-3">
-              {MODULES.map((m) => {
-                const Icon = m.icon;
-                const selected = module === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setModule(m.id)}
-                    className={cn(
-                      "flex flex-col items-start gap-2 rounded-xl border-2 p-4 transition-all text-left",
-                      selected ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.04)]" : "border-[hsl(var(--border))] hover:border-[hsl(var(--ring)/0.4)]"
-                    )}
-                  >
-                    <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: m.bg }}>
-                      <Icon className="h-5 w-5" style={{ color: m.color }} />
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-[hsl(var(--foreground))]">{m.label}</div>
-                      <div className="text-xs text-[hsl(var(--muted-foreground))]">{m.desc}</div>
-                    </div>
+        <div className="flex-1 min-w-0 flex flex-col gap-4">
+          <Card className="attend-card p-6">
+            <SectionHead title={stepMeta.title} subtitle={stepMeta.subtitle} />
+            {renderStep()}
+          </Card>
+
+          <div className="rounded-2xl border border-[hsl(var(--border))] bg-white px-5 py-4 flex items-center justify-between gap-3">
+            <div>
+              {step > 0
+                ? <Button type="button" variant="outline" onClick={back} className="gap-1.5"><ChevronLeft className="h-4 w-4" /> Back</Button>
+                : <Button type="button" variant="outline" onClick={resetModule} className="gap-1.5"><ChevronLeft className="h-4 w-4" /> Change type</Button>
+              }
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-3">
+                {steps[step]?.optional && (
+                  <button type="button" onClick={skip} className="text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] underline transition-colors">
+                    Skip this step
                   </button>
-                );
-              })}
+                )}
+                {!isLast
+                  ? <Button type="button" onClick={next} className={cn("gap-1.5 px-6", !stepValid && "opacity-50 cursor-not-allowed")}>
+                      Continue <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  : <Button type="button" onClick={handleSubmit} disabled={submitting} className="gap-1.5 px-6" style={{ backgroundColor: mod!.color }}>
+                      {submitting ? "Creating…" : <><Check className="h-4 w-4" /> Create {mod!.label}</>}
+                    </Button>
+                }
+              </div>
+              {!isLast && !stepValid && showStepErrors && (
+                <p className="text-xs text-red-500">Complete the required fields above to continue.</p>
+              )}
             </div>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <Label htmlFor="title" className="mb-2 block">Event Title</Label>
-              <Input
-                id="title"
-                placeholder="e.g. Zenith Bank Plc — 2026 Annual General Meeting"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="organiser" className="mb-2 block">Organiser</Label>
-              <Input
-                id="organiser"
-                placeholder="e.g. Zenith Bank Plc"
-                value={organiser}
-                onChange={(e) => setOrganiser(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="description" className="mb-2 block">Description</Label>
-              <Input
-                id="description"
-                placeholder="Brief description of the event"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-          </div>
-        </Card>
-
-        <Card className="attend-card p-6">
-          <h2 className="text-base font-semibold text-[hsl(var(--foreground))] mb-1">Schedule</h2>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mb-5">Set the date, time, and delivery format for this event</p>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="date" className="mb-2 block">Date</Label>
-              <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
-            <div>
-              <Label htmlFor="start" className="mb-2 block">Start Time</Label>
-              <Input id="start" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-            </div>
-            <div>
-              <Label htmlFor="end" className="mb-2 block">End Time</Label>
-              <Input id="end" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <Label className="mb-3 block attend-section-title">Format</Label>
-            <div className="flex gap-2">
-              {FORMATS.map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setFormat(f)}
-                  className={cn(
-                    "px-4 py-2 rounded-lg border text-sm font-medium capitalize transition-all",
-                    format === f
-                      ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.06)] text-[hsl(var(--primary))]"
-                      : "border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--ring)/0.3)]"
-                  )}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {(format === "hybrid" || format === "in-person") && (
-            <div className="mt-4">
-              <Label htmlFor="venue" className="mb-2 block">
-                <MapPin className="h-3.5 w-3.5 inline mr-1" />
-                Venue Address
-              </Label>
-              <Input
-                id="venue"
-                placeholder="e.g. Civic Centre, Victoria Island, Lagos"
-                value={venue}
-                onChange={(e) => setVenue(e.target.value)}
-              />
-            </div>
-          )}
-        </Card>
-
-        <Card className="attend-card p-6">
-          <h2 className="text-base font-semibold text-[hsl(var(--foreground))] mb-1">Capacity & Registration</h2>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mb-5">Control attendance limits and registration windows</p>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="capacity" className="mb-2 block">Maximum Capacity</Label>
-              <Input
-                id="capacity"
-                type="number"
-                placeholder="e.g. 5000"
-                value={capacity}
-                onChange={(e) => setCapacity(e.target.value)}
-              />
-              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1.5">Leave blank for unlimited</p>
-            </div>
-            <div>
-              <Label htmlFor="rsvpDeadline" className="mb-2 block">RSVP Deadline</Label>
-              <Input
-                id="rsvpDeadline"
-                type="date"
-                value={rsvpDeadline}
-                onChange={(e) => setRsvpDeadline(e.target.value)}
-              />
-            </div>
-          </div>
-        </Card>
-
-        <div className="flex items-center justify-end gap-3">
-          <Button type="button" variant="outline" onClick={() => router.push("/events")}>Cancel</Button>
-          <Button type="submit">Create Event</Button>
         </div>
-      </form>
+      </div>
     </div>
+  );
+}
+
+export default function CreateEventPage() {
+  return (
+    <Suspense>
+      <CreateEventInner />
+    </Suspense>
   );
 }

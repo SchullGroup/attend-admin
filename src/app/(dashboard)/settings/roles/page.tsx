@@ -5,37 +5,56 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogDescription, DialogFooter, DialogClose,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectTrigger, SelectValue,
-  SelectContent, SelectItem,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
 } from "@/components/ui/select";
-import { Plus, Shield, Settings, Vote, Users } from "lucide-react";
+import { Plus, Shield, Settings, Vote, Users, ShieldOff, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
+import { useUsers, useSuspendUser, useActivateUser } from "@/api/super-admin";
+import { Loader } from "@/components/ui/Loader";
+import { popup } from "@/lib/popup-store";
 
-const ROLES = [
+const ROLES_INFO = [
   {
-    id: "super_admin",
+    id: "SUPER_ADMIN",
     name: "Super Admin",
     desc: "Full platform access including settings, user management, and all modules",
-    permissions: ["Events", "Participants", "KYC", "Documents", "Analytics", "Settings", "Roles"],
+    permissions: [
+      "Events",
+      "Participants",
+      "KYC",
+      "Documents",
+      "Analytics",
+      "Settings",
+      "Roles",
+    ],
     color: "#374151",
     bg: "#f3f4f6",
     icon: Shield,
   },
   {
-    id: "event_manager",
+    id: "EVENT_MANAGER",
     name: "Event Manager",
     desc: "Create and manage events, upload documents, control live sessions",
     permissions: ["Events", "Documents", "Analytics (read)"],
-    color: "#2563eb",
+    color: "#111827",
     bg: "#eff5ff",
     icon: Settings,
   },
   {
-    id: "kyc_officer",
+    id: "KYC_OFFICER",
     name: "KYC Officer",
     desc: "Review and approve or reject participant KYC submissions",
     permissions: ["KYC Queue", "Participants (read)"],
@@ -44,7 +63,7 @@ const ROLES = [
     icon: Users,
   },
   {
-    id: "judge",
+    id: "JUDGE",
     name: "Judge",
     desc: "Access hackathon applications and submit scores for assigned challenges",
     permissions: ["Innovation Challenge Applications (read)", "Judging"],
@@ -54,7 +73,7 @@ const ROLES = [
   },
 ];
 
-type RoleId = "super_admin" | "event_manager" | "kyc_officer" | "judge";
+type RoleId = "SUPER_ADMIN" | "EVENT_MANAGER" | "KYC_OFFICER" | "JUDGE";
 
 interface TeamMember {
   id: string;
@@ -64,24 +83,29 @@ interface TeamMember {
 }
 
 const INITIAL_TEAM: TeamMember[] = [
-  { id: "u1", name: "Stanley Jacob", email: "stanley.jacob@meristem.com", role: "super_admin" },
-  { id: "u2", name: "Adaeze Williams", email: "adaeze.w@meristem.com", role: "event_manager" },
-  { id: "u3", name: "Chinedu Obi", email: "chinedu.obi@meristem.com", role: "kyc_officer" },
-  { id: "u4", name: "Prof. Adeola Taiwo", email: "adeola.t@university.ng", role: "judge" },
+  { id: "u1", name: "Stanley Jacob", email: "stanley.jacob@meristem.com", role: "SUPER_ADMIN" },
+  { id: "u2", name: "Adaeze Williams", email: "adaeze.w@meristem.com", role: "EVENT_MANAGER" },
+  { id: "u3", name: "Chinedu Obi", email: "chinedu.obi@meristem.com", role: "KYC_OFFICER" },
+  { id: "u4", name: "Prof. Adeola Taiwo", email: "adeola.t@university.ng", role: "JUDGE" },
 ];
 
 export default function RolesPage() {
   const [team, setTeam] = useState<TeamMember[]>(INITIAL_TEAM);
+  const [page, setPage] = useState(0);
+  const { data: usersData, isLoading, isError } = useUsers("", page, 20);
+  
+  const suspendMutation = useSuspendUser();
+  const activateMutation = useActivateUser();
 
   // Invite dialog
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<RoleId>("event_manager");
+  const [inviteRole, setInviteRole] = useState<RoleId>("EVENT_MANAGER");
 
   // Edit role dialog
   const [editMember, setEditMember] = useState<TeamMember | null>(null);
-  const [editRole, setEditRole] = useState<RoleId>("event_manager");
+  const [editRole, setEditRole] = useState<RoleId>("EVENT_MANAGER");
 
   function handleInvite() {
     if (!inviteName.trim() || !inviteEmail.trim()) return;
@@ -96,7 +120,7 @@ export default function RolesPage() {
     setInviteOpen(false);
     setInviteName("");
     setInviteEmail("");
-    setInviteRole("event_manager");
+    setInviteRole("EVENT_MANAGER");
   }
 
   function openEditDialog(member: TeamMember) {
@@ -109,7 +133,7 @@ export default function RolesPage() {
     setTeam((prev) =>
       prev.map((m) => m.id === editMember.id ? { ...m, role: editRole } : m)
     );
-    const roleName = ROLES.find((r) => r.id === editRole)?.name ?? editRole;
+    const roleName = ROLES_INFO.find((r) => r.id === editRole)?.name ?? editRole;
     toast.success(`${editMember.name}'s role updated to ${roleName}`);
     setEditMember(null);
   }
@@ -133,8 +157,8 @@ export default function RolesPage() {
       </div>
 
       {/* Role cards */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        {ROLES.map((role) => {
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        {ROLES_INFO.map((role) => {
           const Icon = role.icon;
           const count = team.filter((u) => u.role === role.id).length;
           return (
@@ -184,7 +208,7 @@ export default function RolesPage() {
           </thead>
           <tbody>
             {team.map((u) => {
-              const role = ROLES.find((r) => r.id === u.role);
+              const role = ROLES_INFO.find((r) => r.id === u.role || r.id === u.role?.toUpperCase());
               const isSelf = u.id === "u1";
               return (
                 <tr key={u.id} className="attend-table-row">
@@ -285,7 +309,7 @@ export default function RolesPage() {
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
                 <SelectContent>
-                  {ROLES.map((r) => (
+                  {ROLES_INFO.map((r) => (
                     <SelectItem key={r.id} value={r.id}>
                       <div className="flex flex-col">
                         <span className="font-medium">{r.name}</span>
@@ -299,7 +323,7 @@ export default function RolesPage() {
 
             {/* Role preview */}
             {(() => {
-              const selected = ROLES.find((r) => r.id === inviteRole);
+              const selected = ROLES_INFO.find((r) => r.id === inviteRole);
               return selected ? (
                 <div
                   className="rounded-xl p-3 flex flex-wrap gap-1"
@@ -366,7 +390,7 @@ export default function RolesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ROLES.map((r) => (
+                    {ROLES_INFO.map((r) => (
                       <SelectItem key={r.id} value={r.id}>
                         <div className="flex flex-col">
                           <span className="font-medium">{r.name}</span>
@@ -380,7 +404,7 @@ export default function RolesPage() {
 
               {/* Role preview */}
               {(() => {
-                const selected = ROLES.find((r) => r.id === editRole);
+                const selected = ROLES_INFO.find((r) => r.id === editRole);
                 return selected ? (
                   <div
                     className="rounded-xl p-3 flex flex-wrap gap-1"
