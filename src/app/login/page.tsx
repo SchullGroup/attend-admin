@@ -108,8 +108,8 @@ function OtpInput({
 export default function LoginPage() {
   const router = useRouter();
   const [step, setStep] = useState<"credentials" | "otp">("credentials");
-  const [email, setEmail] = useState("stanley.jacob@meristem.com");
-  const [password, setPassword] = useState("password");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [otpError, setOtpError] = useState("");
@@ -131,12 +131,19 @@ export default function LoginPage() {
             ...(inner?.role ? [inner.role] : []),
           ];
           const normalized = rolesRaw
-            .map((r) => String(r ?? "").toLowerCase().replace(/[-\s]+/g, "_"))
+            .map((r) =>
+              String(r ?? "")
+                .toLowerCase()
+                .replace(/[-\s]+/g, "_"),
+            )
             .filter(Boolean);
-          const isAttendeeOnly = normalized.length > 0 && normalized.every((r) => r === "attendee");
+          const isAttendeeOnly =
+            normalized.length > 0 && normalized.every((r) => r === "attendee");
           if (isAttendeeOnly) {
             Cookies.remove("accessToken");
-            toast.error("Access denied. This portal is for administrators only.");
+            toast.error(
+              "Access denied. This portal is for administrators only.",
+            );
             return;
           }
           toast.success("Login successful");
@@ -213,7 +220,11 @@ export default function LoginPage() {
       >
         {/* Top logo bar */}
         <div className="flex items-center gap-2 px-10 pt-10 pb-0">
-          <img src="/attend-logo.png" alt="Attend" style={{ height: 40, width: "auto" }} />
+          <img
+            src="/attend-logo.png"
+            alt="Attend"
+            style={{ height: 40, width: "auto" }}
+          />
           <span
             className="text-xs font-semibold px-2 py-0.5 rounded-md"
             style={{ backgroundColor: "rgba(17,24,39,0.07)", color: "#6b7280" }}
@@ -224,7 +235,7 @@ export default function LoginPage() {
 
         {/* Centred form */}
         <div className="flex-1 flex items-center justify-center px-10">
-          <div className="w-full max-w-[380px]">
+          <div className="w-full max-w-95">
             <h1
               className="text-[2rem] font-bold tracking-tight mb-1"
               style={{ color: "#111827" }}
@@ -351,7 +362,12 @@ export default function LoginPage() {
             <img
               src="/attend-logo.png"
               alt="Attend"
-              style={{ height: 36, width: "auto", filter: "brightness(0) invert(1)", opacity: 0.9 }}
+              style={{
+                height: 36,
+                width: "auto",
+                filter: "brightness(0) invert(1)",
+                opacity: 0.9,
+              }}
             />
           </div>
 
