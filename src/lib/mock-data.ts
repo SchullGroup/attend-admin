@@ -1,158 +1,23 @@
-export type EventModule = "AGM" | "LAUNCH" | "HACKATHON" | "GENERAL";
-export type EventStatus =
-  | "draft"
-  | "published"
-  | "live"
-  | "ended"
-  | "cancelled";
-export type ParticipantStatus = "active" | "pending" | "suspended";
-export type KYCStatus = "none" | "basic" | "pending" | "full";
-export type ApplicationStatus =
-  | "submitted"
-  | "under_review"
-  | "shortlisted"
-  | "selected"
-  | "not_progressed";
-export type StakeholderStatus = "active" | "suspended" | "pending";
-
-export interface Stakeholder {
-  id: string;
-  name: string;
-  industry: string;
-  rcNumber: string;
-  contactEmail: string;
-  plan: "enterprise" | "growth" | "starter";
-  eventsCount: number;
-  status: StakeholderStatus;
-  enrolledAt: string;
-}
-
-export interface AdminUser {
-  id: string;
-  name: string;
-  email: string;
-  role: "super_admin" | "event_manager" | "kyc_officer" | "judge";
-  avatar?: string;
-}
-
-export interface AttendEvent {
-  id: string;
-  module: EventModule;
-  title: string;
-  organiser: string;
-  status: EventStatus;
-  date: string;
-  startTime: string;
-  endTime: string;
-  format: "virtual" | "hybrid" | "in-person";
-  venue?: string;
-  rsvpCount: number;
-  capacity?: number;
-  color: string;
-  createdAt: string;
-}
-
-export interface Participant {
-  id: string;
-  fullName: string;
-  email: string;
-  phone: string;
-  kycStatus: KYCStatus;
-  status: ParticipantStatus;
-  eventsAttended: number;
-  registeredAt: string;
-  bvn?: string;
-  chn?: string;
-}
-
-export interface HackathonApplication {
-  id: string;
-  eventId: string;
-  teamName: string;
-  ideaTitle: string;
-  track: string;
-  status: ApplicationStatus;
-  memberCount: number;
-  submittedAt: string;
-  score?: number;
-}
-
-export interface AppDocument {
-  id: string;
-  title: string;
-  type:
-    | "notice"
-    | "agenda"
-    | "minutes"
-    | "report"
-    | "certificate"
-    | "press_kit";
-  eventId: string;
-  eventTitle: string;
-  fileSize: string;
-  uploadedAt: string;
-  downloadCount: number;
-}
-
-export interface LiveVote {
-  resolutionId: string;
-  title: string;
-  for: number;
-  against: number;
-  abstain: number;
-  status: "pending" | "open" | "closed";
-}
-
-export interface LivePoll {
-  id: string;
-  question: string;
-  options: { id: string; text: string; votes: number }[];
-  status: "draft" | "active" | "closed";
-}
-
-export interface LiveAgendaItem {
-  id: string;
-  title: string;
-  durationMinutes: number;
-  isCurrent: boolean;
-}
-
-export interface LiveQAItem {
-  id: string;
-  name: string;
-  question: string;
-  approved: boolean | null;
-  time: string;
-}
-
-export interface LiveRecentJoin {
-  name: string;
-  time: string;
-  method: "Virtual" | "In-person";
-}
-
-export interface LiveSession {
-  id: string;
-  eventId: string;
-  eventTitle: string;
-  organiser: string;
-  module: EventModule;
-  color: string;
-  format: "virtual" | "hybrid" | "in-person";
-  venue?: string;
-  attendees: number;
-  capacity?: number;
-  elapsedMinutes: number;
-  quorumPct: number | null;
-  votes: LiveVote[];
-  polls: LivePoll[];
-  agendaItems: LiveAgendaItem[];
-  pressKitReleased?: boolean;
-  winnerTeam?: string;
-  qaQueue: LiveQAItem[];
-  recentJoins: LiveRecentJoin[];
-}
-
+import type {
+  EventModule,
+  EventStatus,
+  ParticipantStatus,
+  KYCStatus,
+  ApplicationStatus,
+  StakeholderStatus,
+  Stakeholder,
+  AdminUser,
+  AttendEvent,
+  Participant,
+  HackathonApplication,
+  AppDocument,
+  LiveVote,
+  LivePoll,
+  LiveAgendaItem,
+  LiveQAItem,
+  LiveRecentJoin,
+  LiveSession,
+} from "@/types/mock";
 export const CURRENT_ADMIN: AdminUser = {
   id: "adm_001",
   name: "Stanley Jacob",
@@ -1625,6 +1490,792 @@ export const MOCK_LIVE_SESSIONS: LiveSession[] = [
   },
 ];
 
+export const MOCK_AGM_VOTE_RECORDS: {
+  eventId: string;
+  eventTitle: string;
+  organiser: string;
+  date: string;
+  status: EventStatus;
+  totalShares: number;
+  resolutions: {
+    id: string;
+    title: string;
+    for: number;
+    against: number;
+    abstain: number;
+    status: "pending" | "open" | "closed";
+  }[];
+}[] = [
+  {
+    eventId: "evt_001",
+    eventTitle: "Zenith Bank Plc — 2026 Annual General Meeting",
+    organiser: "Zenith Bank Plc",
+    date: "2026-05-25",
+    status: "live",
+    totalShares: 31396500000,
+    resolutions: [
+      {
+        id: "res_z1",
+        title: "Adoption of Financial Statements",
+        for: 4200000,
+        against: 50000,
+        abstain: 20000,
+        status: "closed",
+      },
+      {
+        id: "res_z2",
+        title: "Declaration of Final Dividend of ₦3.50/share",
+        for: 4180000,
+        against: 70000,
+        abstain: 20000,
+        status: "closed",
+      },
+      {
+        id: "res_z3",
+        title: "Re-election of Directors",
+        for: 2100000,
+        against: 340000,
+        abstain: 95000,
+        status: "open",
+      },
+      {
+        id: "res_z4",
+        title: "Appointment of PricewaterhouseCoopers as Auditors",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+    ],
+  },
+  {
+    eventId: "evt_016",
+    eventTitle: "Zenith Bank Plc — 2025 Annual General Meeting",
+    organiser: "Zenith Bank Plc",
+    date: "2025-05-30",
+    status: "ended",
+    totalShares: 31396500000,
+    resolutions: [
+      {
+        id: "res_z25_1",
+        title: "Adoption of Financial Statements for FY 2024",
+        for: 5102000,
+        against: 48000,
+        abstain: 12000,
+        status: "closed",
+      },
+      {
+        id: "res_z25_2",
+        title: "Declaration of Final Dividend of ₦3.00/share",
+        for: 5098000,
+        against: 25000,
+        abstain: 39000,
+        status: "closed",
+      },
+      {
+        id: "res_z25_3",
+        title: "Approval of Directors' Remuneration Report",
+        for: 4200000,
+        against: 820000,
+        abstain: 142000,
+        status: "closed",
+      },
+      {
+        id: "res_z25_4",
+        title: "Re-appointment of External Auditors",
+        for: 5040000,
+        against: 61000,
+        abstain: 61000,
+        status: "closed",
+      },
+    ],
+  },
+  {
+    eventId: "evt_002",
+    eventTitle: "GTCo Holdings — 2026 EGM: Rights Issue Approval",
+    organiser: "GTCo Holdings",
+    date: "2026-06-10",
+    status: "published",
+    totalShares: 29431180000,
+    resolutions: [
+      {
+        id: "res_g1",
+        title: "Approval of Rights Issue at ₦44.50 per share",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+      {
+        id: "res_g2",
+        title: "Authorisation for Board to allot new shares",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+      {
+        id: "res_g3",
+        title: "Amendment to the Memorandum of Association",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+    ],
+  },
+  {
+    eventId: "evt_015",
+    eventTitle: "GTCo Holdings — 2025 Annual General Meeting",
+    organiser: "GTCo Holdings",
+    date: "2025-10-22",
+    status: "ended",
+    totalShares: 29431180000,
+    resolutions: [
+      {
+        id: "res_g25_1",
+        title: "Adoption of Consolidated Financial Statements for FY 2024",
+        for: 7280000,
+        against: 21000,
+        abstain: 8000,
+        status: "closed",
+      },
+      {
+        id: "res_g25_2",
+        title: "Declaration of Final Dividend of ₦2.30/share",
+        for: 7260000,
+        against: 32000,
+        abstain: 17000,
+        status: "closed",
+      },
+      {
+        id: "res_g25_3",
+        title: "Election of Mrs. Ajoritsedere Awosika as Director",
+        for: 6940000,
+        against: 310000,
+        abstain: 59000,
+        status: "closed",
+      },
+      {
+        id: "res_g25_4",
+        title: "Re-appointment of Deloitte & Touche as External Auditors",
+        for: 7190000,
+        against: 80000,
+        abstain: 39000,
+        status: "closed",
+      },
+    ],
+  },
+  {
+    eventId: "evt_007",
+    eventTitle: "Access Bank Plc — 2026 Annual General Meeting",
+    organiser: "Access Bank Plc",
+    date: "2026-06-20",
+    status: "published",
+    totalShares: 35545225000,
+    resolutions: [
+      {
+        id: "res_a1",
+        title: "Presentation and Adoption of Financial Statements",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+      {
+        id: "res_a2",
+        title: "Approval of Proposed Dividend of ₦1.80/share",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+      {
+        id: "res_a3",
+        title: "Re-election of Dr. Herbert Wigwe as Executive Director",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+      {
+        id: "res_a4",
+        title: "Approval of Directors' Fees for 2026",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+      {
+        id: "res_a5",
+        title: "Appointment of KPMG as External Auditors",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+    ],
+  },
+  {
+    eventId: "evt_017",
+    eventTitle: "Stanbic IBTC Holdings — 2026 Annual General Meeting",
+    organiser: "Stanbic IBTC Holdings",
+    date: "2026-07-15",
+    status: "published",
+    totalShares: 12857471600,
+    resolutions: [
+      {
+        id: "res_s1",
+        title: "Consideration of Report of Directors and Financial Statements",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+      {
+        id: "res_s2",
+        title: "Approval of Final Dividend of ₦3.20/share",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+      {
+        id: "res_s3",
+        title: "Re-election of Retiring Directors",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+    ],
+  },
+  {
+    eventId: "evt_008",
+    eventTitle: "Stanbic IBTC Holdings — 2025 Annual General Meeting",
+    organiser: "Stanbic IBTC Holdings",
+    date: "2025-12-10",
+    status: "ended",
+    totalShares: 12857471600,
+    resolutions: [
+      {
+        id: "res_s25_1",
+        title: "Adoption of Financial Statements for FY 2024",
+        for: 3120000,
+        against: 8200,
+        abstain: 4100,
+        status: "closed",
+      },
+      {
+        id: "res_s25_2",
+        title: "Declaration of Final Dividend of ₦2.50/share",
+        for: 3118000,
+        against: 4100,
+        abstain: 10200,
+        status: "closed",
+      },
+      {
+        id: "res_s25_3",
+        title: "Approval of Board Remuneration for 2025",
+        for: 2680000,
+        against: 412000,
+        abstain: 40200,
+        status: "closed",
+      },
+      {
+        id: "res_s25_4",
+        title: "Re-appointment of PricewaterhouseCoopers as Auditors",
+        for: 3100000,
+        against: 18000,
+        abstain: 14200,
+        status: "closed",
+      },
+    ],
+  },
+  {
+    eventId: "evt_012",
+    eventTitle: "Nigerian Breweries Plc — 2025 Annual General Meeting",
+    organiser: "Nigerian Breweries Plc",
+    date: "2025-11-25",
+    status: "ended",
+    totalShares: 7990236000,
+    resolutions: [
+      {
+        id: "res_nb1",
+        title: "Approval of Report of Directors and Financial Statements",
+        for: 8940000,
+        against: 28000,
+        abstain: 11000,
+        status: "closed",
+      },
+      {
+        id: "res_nb2",
+        title: "Declaration of Interim Dividend",
+        for: 8920000,
+        against: 9000,
+        abstain: 50000,
+        status: "closed",
+      },
+      {
+        id: "res_nb3",
+        title: "Election of Director — Mrs. Uche Okoro",
+        for: 8540000,
+        against: 380000,
+        abstain: 59000,
+        status: "closed",
+      },
+    ],
+  },
+  {
+    eventId: "evt_003",
+    eventTitle: "Dangote Cement Plc — 2026 Annual General Meeting",
+    organiser: "Dangote Cement Plc",
+    date: "2026-07-05",
+    status: "draft",
+    totalShares: 17040000000,
+    resolutions: [
+      {
+        id: "res_d1",
+        title: "Consideration of the Annual Report and Financial Statements",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+      {
+        id: "res_d2",
+        title: "Approval of Final Dividend of ₦22.00/share",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+      {
+        id: "res_d3",
+        title: "Re-election of Retiring Directors",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+      {
+        id: "res_d4",
+        title: "Appointment of Ernst & Young as External Auditors",
+        for: 0,
+        against: 0,
+        abstain: 0,
+        status: "pending",
+      },
+    ],
+  },
+];
+
+export type AuditSeverity = "info" | "warning" | "critical";
+export type AuditCategory =
+  | "auth"
+  | "events"
+  | "organisers"
+  | "kyc"
+  | "voting"
+  | "documents"
+  | "system";
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  actor: string;
+  actorEmail: string;
+  actorRole: string;
+  action: string;
+  category: AuditCategory;
+  resource: string;
+  details?: string;
+  ip: string;
+  severity: AuditSeverity;
+}
+
+export const MOCK_AUDIT_LOG: AuditLogEntry[] = [
+  {
+    id: "aud_001",
+    timestamp: "2026-06-05T08:12:44Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Signed in",
+    category: "auth",
+    resource: "Admin Portal",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_002",
+    timestamp: "2026-06-05T08:12:51Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "2FA verified",
+    category: "auth",
+    resource: "Admin Portal",
+    details: "TOTP code accepted",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_003",
+    timestamp: "2026-06-05T08:35:02Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Registrar enrolled",
+    category: "organisers",
+    resource: "AIICO Insurance Plc",
+    details: "Status changed: pending → active",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_004",
+    timestamp: "2026-06-05T09:01:18Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "KYC approved",
+    category: "kyc",
+    resource: "Ngozi Okafor (usr_001)",
+    details: "Full verification — BVN + CHN confirmed",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_005",
+    timestamp: "2026-06-05T09:14:30Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "KYC rejected",
+    category: "kyc",
+    resource: "Rukayat Oduola (usr_017)",
+    details: "Reason: NIN document expired",
+    ip: "197.210.54.12",
+    severity: "warning",
+  },
+  {
+    id: "aud_006",
+    timestamp: "2026-06-04T11:22:05Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Voting opened",
+    category: "voting",
+    resource: "Adoption of Financial Statements — Zenith Bank 2026 AGM",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_007",
+    timestamp: "2026-06-04T11:44:29Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Voting closed",
+    category: "voting",
+    resource: "Adoption of Financial Statements — Zenith Bank 2026 AGM",
+    details: "Result: 98.4% For",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_008",
+    timestamp: "2026-06-04T11:45:03Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Voting opened",
+    category: "voting",
+    resource: "Declaration of Dividend — Zenith Bank 2026 AGM",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_009",
+    timestamp: "2026-06-04T12:01:17Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Voting closed",
+    category: "voting",
+    resource: "Declaration of Dividend — Zenith Bank 2026 AGM",
+    details: "Result: 97.7% For",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_010",
+    timestamp: "2026-06-03T14:55:00Z",
+    actor: "Unknown",
+    actorEmail: "—",
+    actorRole: "—",
+    action: "Failed login attempt",
+    category: "auth",
+    resource: "Admin Portal",
+    details: "3 consecutive failures from this IP",
+    ip: "41.207.202.88",
+    severity: "critical",
+  },
+  {
+    id: "aud_011",
+    timestamp: "2026-06-03T14:55:32Z",
+    actor: "Unknown",
+    actorEmail: "—",
+    actorRole: "—",
+    action: "2FA failed — account locked",
+    category: "auth",
+    resource: "Admin Portal",
+    details: "Account temporarily locked for 30 minutes",
+    ip: "41.207.202.88",
+    severity: "critical",
+  },
+  {
+    id: "aud_012",
+    timestamp: "2026-06-03T10:12:44Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Admin role updated",
+    category: "system",
+    resource: "Bode Mensah",
+    details: "Role changed: event_manager → kyc_officer",
+    ip: "197.210.54.12",
+    severity: "warning",
+  },
+  {
+    id: "aud_013",
+    timestamp: "2026-06-03T09:40:00Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Event cancelled",
+    category: "events",
+    resource: "Zenith Bank — Zenith SME Connect Launch (evt_019)",
+    ip: "197.210.54.12",
+    severity: "warning",
+  },
+  {
+    id: "aud_014",
+    timestamp: "2026-06-02T16:30:00Z",
+    actor: "Bode Mensah",
+    actorEmail: "bode.mensah@meristem.com",
+    actorRole: "kyc_officer",
+    action: "Signed in",
+    category: "auth",
+    resource: "Admin Portal",
+    ip: "197.210.54.99",
+    severity: "info",
+  },
+  {
+    id: "aud_015",
+    timestamp: "2026-06-02T16:30:09Z",
+    actor: "Bode Mensah",
+    actorEmail: "bode.mensah@meristem.com",
+    actorRole: "kyc_officer",
+    action: "2FA verified",
+    category: "auth",
+    resource: "Admin Portal",
+    ip: "197.210.54.99",
+    severity: "info",
+  },
+  {
+    id: "aud_016",
+    timestamp: "2026-06-02T16:45:21Z",
+    actor: "Bode Mensah",
+    actorEmail: "bode.mensah@meristem.com",
+    actorRole: "kyc_officer",
+    action: "KYC flagged for review",
+    category: "kyc",
+    resource: "Kola Adesanya (usr_007)",
+    details: "Suspicious CHN — forwarded to compliance team",
+    ip: "197.210.54.99",
+    severity: "warning",
+  },
+  {
+    id: "aud_017",
+    timestamp: "2026-06-02T17:10:00Z",
+    actor: "Bode Mensah",
+    actorEmail: "bode.mensah@meristem.com",
+    actorRole: "kyc_officer",
+    action: "KYC approved",
+    category: "kyc",
+    resource: "Yetunde Abiodun (usr_010)",
+    details: "Full verification completed",
+    ip: "197.210.54.99",
+    severity: "info",
+  },
+  {
+    id: "aud_018",
+    timestamp: "2026-06-02T17:12:00Z",
+    actor: "Bode Mensah",
+    actorEmail: "bode.mensah@meristem.com",
+    actorRole: "kyc_officer",
+    action: "Signed out",
+    category: "auth",
+    resource: "Admin Portal",
+    ip: "197.210.54.99",
+    severity: "info",
+  },
+  {
+    id: "aud_019",
+    timestamp: "2026-06-01T13:00:00Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Registrar suspended",
+    category: "organisers",
+    resource: "Nigerian Breweries Plc",
+    details: "Reason: Non-payment of platform fees",
+    ip: "197.210.54.12",
+    severity: "warning",
+  },
+  {
+    id: "aud_020",
+    timestamp: "2026-06-01T11:20:00Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Registrar application rejected",
+    category: "organisers",
+    resource: "BUA Foods Plc",
+    details: "Reason: Incomplete regulatory documentation",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_021",
+    timestamp: "2026-05-31T10:05:00Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Document deleted",
+    category: "documents",
+    resource: "Draft AGM Notice v0.1 — Dangote Cement",
+    details: "Replaced by final version",
+    ip: "197.210.54.12",
+    severity: "warning",
+  },
+  {
+    id: "aud_022",
+    timestamp: "2026-05-30T09:00:00Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "2FA policy enforced",
+    category: "system",
+    resource: "All admin accounts",
+    details: "System-wide 2FA requirement enabled",
+    ip: "197.210.54.12",
+    severity: "warning",
+  },
+  {
+    id: "aud_023",
+    timestamp: "2026-05-29T14:30:00Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Innovation Challenge shortlisted",
+    category: "events",
+    resource: "FinFlow — MeriHack 2026",
+    details: "Score: 82 / 100",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_024",
+    timestamp: "2026-05-29T14:35:00Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Innovation Challenge winner selected",
+    category: "events",
+    resource: "CreditSense — MeriHack 2026",
+    details: "Final score: 91 / 100",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_025",
+    timestamp: "2026-05-28T12:00:00Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Vote audit log exported",
+    category: "documents",
+    resource: "Zenith Bank 2026 AGM — All Resolutions",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_026",
+    timestamp: "2026-05-27T09:15:00Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Live session started",
+    category: "events",
+    resource: "Zenith Bank Plc — 2026 Annual General Meeting",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_027",
+    timestamp: "2026-05-26T16:00:00Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Registrar enrolled",
+    category: "organisers",
+    resource: "FintechNGR Association",
+    details: "Plan: Starter · Contact: admin@fintechngr.org",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_028",
+    timestamp: "2026-05-25T08:45:00Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Event published",
+    category: "events",
+    resource: "Access Bank Plc — 2026 Annual General Meeting (evt_007)",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+  {
+    id: "aud_029",
+    timestamp: "2026-05-24T15:30:00Z",
+    actor: "Bode Mensah",
+    actorEmail: "bode.mensah@meristem.com",
+    actorRole: "kyc_officer",
+    action: "Bulk KYC review completed",
+    category: "kyc",
+    resource: "3 accounts reviewed",
+    details: "2 approved, 1 flagged",
+    ip: "197.210.54.99",
+    severity: "info",
+  },
+  {
+    id: "aud_030",
+    timestamp: "2026-05-23T11:00:00Z",
+    actor: "Stanley Jacob",
+    actorEmail: "stanley.jacob@meristem.com",
+    actorRole: "super_admin",
+    action: "Analytics report exported",
+    category: "system",
+    resource: "Platform-wide Q2 2026 Report",
+    ip: "197.210.54.12",
+    severity: "info",
+  },
+];
+
 export const ACTIVITY_LOG = [
   {
     action: "Event published",
@@ -1663,7 +2314,7 @@ export const ACTIVITY_LOG = [
     time: "2026-05-01T09:00:00Z",
   },
   {
-    action: "Stakeholder enrolled",
+    action: "Registrar enrolled",
     actor: "Admin",
     context: "FintechNGR Association",
     time: "2026-04-10T08:30:00Z",
@@ -1693,7 +2344,7 @@ export const ACTIVITY_LOG = [
     time: "2026-05-10T10:00:00Z",
   },
   {
-    action: "Stakeholder enrolled",
+    action: "Registrar enrolled",
     actor: "Admin",
     context: "AIICO Insurance Plc — pending review",
     time: "2026-05-22T08:30:00Z",
@@ -1715,5 +2366,46 @@ export const ACTIVITY_LOG = [
     actor: "Stanbic IBTC Holdings",
     context: "2026 AGM Notice (1.4 MB)",
     time: "2026-05-15T09:00:00Z",
+  },
+];
+
+export type TeamRole = "Admin" | "Event Manager" | "Viewer";
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: TeamRole;
+  joinedAt: string;
+}
+
+export const MOCK_TEAM: TeamMember[] = [
+  {
+    id: "tm_001",
+    name: "Stanley Jacob",
+    email: "stanley.jacob@meristem.com",
+    role: "Admin",
+    joinedAt: "2025-10-01T09:00:00Z",
+  },
+  {
+    id: "tm_002",
+    name: "Adaeze Okonkwo",
+    email: "adaeze.okonkwo@meristem.com",
+    role: "Event Manager",
+    joinedAt: "2025-11-15T09:00:00Z",
+  },
+  {
+    id: "tm_003",
+    name: "Bode Mensah",
+    email: "bode.mensah@meristem.com",
+    role: "Event Manager",
+    joinedAt: "2026-01-10T09:00:00Z",
+  },
+  {
+    id: "tm_004",
+    name: "Chioma Eze",
+    email: "chioma.eze@meristem.com",
+    role: "Viewer",
+    joinedAt: "2026-03-01T09:00:00Z",
   },
 ];

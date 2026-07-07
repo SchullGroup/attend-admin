@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
@@ -21,20 +20,41 @@ export async function POST(request: Request) {
       return NextResponse.json(data, { status: response.status || 400 });
     }
 
-    const { refreshToken, ...restData } = data.data;
+    const tokenData = data.data ?? data;
 
-    // Set HttpOnly cookie for refreshToken
-    const cookieStore = await cookies();
-    cookieStore.set("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
-    });
+    // Block attendee-only accounts at the proxy level — token never reaches the browser.
+    const rolesRaw: string[] = [
+      ...(Array.isArray(tokenData.roles) ? tokenData.roles : []),
+      ...(tokenData.role ? [tokenData.role] : []),
+    ];
+    const normalized = rolesRaw.map((r: string) => String(r ?? "").toLowerCase().replace(/[-\s]+/g, "_")).filter(Boolean);
+    const isAttendeeOnly = normalized.length > 0 && normalized.every((r: string) => r === "attendee");
+    if (isAttendeeOnly) {
+      return NextResponse.json(
+        { status: false, message: "Access denied. This portal is for administrators only." },
+        { status: 403 },
+      );
+    }
 
-    // Return the response without the refreshToken in the body
-    return NextResponse.json({ ...data, data: restData }, { status: 200 });
+    const { refreshToken, ...restData } = tokenData;
+
+    // Build response first, then set the HttpOnly cookie directly on it.
+    // Do NOT use cookies().set() — in Next.js App Router that call can fail to
+    // merge with the NextResponse headers, meaning the browser never receives the
+    // Set-Cookie header and the refreshToken is never stored.
+    const res = NextResponse.json({ ...data, data: restData }, { status: 200 });
+
+    if (refreshToken) {
+      res.cookies.set("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure:   process.env.NODE_ENV === "production",
+        sameSite: "lax",   // lax allows the cookie on same-site navigations
+        path:     "/",
+        maxAge:   7 * 24 * 60 * 60, // 7 days — matches backend TTL
+      });
+    }
+
+    return res;
   } catch (error) {
     console.error("Login Proxy Error:", error);
     return NextResponse.json(

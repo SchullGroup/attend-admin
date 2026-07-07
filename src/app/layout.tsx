@@ -15,6 +15,7 @@ export const metadata: Metadata = {
 };
 
 import { QueryProvider } from "@/components/providers/query-provider";
+import { PopupModal } from "@/components/ui/PopupModal";
 
 export default function RootLayout({
   children,
@@ -27,6 +28,7 @@ export default function RootLayout({
         <QueryProvider>
           {children}
           <Toaster richColors position="top-right" />
+          <PopupModal />
         </QueryProvider>
       </body>
     </html>
