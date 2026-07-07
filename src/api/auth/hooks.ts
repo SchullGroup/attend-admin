@@ -1,0 +1,64 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { authClient } from "./client";
+import Cookies from "js-cookie";
+
+export const authKeys = {
+  all: ["auth"] as const,
+  me: () => [...authKeys.all, "me"] as const,
+};
+
+export const useLogin = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: authClient.login,
+    onSuccess: (response) => {
+      // Access token is saved here manually for the interceptor
+      // The Next.js proxy route has already set the refreshToken as an HttpOnly cookie
+      const token = response.data.token;
+      if (token) {
+        Cookies.set("accessToken", token, {
+          expires:  1, // 1 day — prevents it becoming a session cookie that vanishes on tab close
+          secure:   process.env.NODE_ENV === "production",
+          sameSite: "strict",
+        });
+      }
+      // Persist logoUrl from login response — /me endpoint may not return it
+      if (typeof window !== "undefined") {
+        const logoUrl = response.data.logoUrl;
+        if (logoUrl) {
+          localStorage.setItem("userLogoUrl", logoUrl);
+        } else {
+          localStorage.removeItem("userLogoUrl");
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: authKeys.me() });
+    },
+  });
+};
+
+export const useLogout = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: authClient.logout,
+    onSuccess: () => {
+      Cookies.remove("accessToken");
+      if (typeof window !== "undefined") localStorage.removeItem("userLogoUrl");
+      queryClient.clear();
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+    },
+  });
+};
+
+export const useGetMe = () => {
+  return useQuery({
+    queryKey: authKeys.me(),
+    queryFn: authClient.getMe,
+    // only fetch if access token exists
+    enabled: !!Cookies.get("accessToken"),
+    retry: false,
+  });
+};
