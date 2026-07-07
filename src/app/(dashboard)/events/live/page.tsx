@@ -121,13 +121,14 @@ function ResolutionsPanel({
       </div>
       <div className="divide-y divide-[hsl(var(--border))]">
         {resolutions.map((res, i) => {
-          const total     = res.forCount + res.againstCount + res.abstainCount;
-          // Default null/undefined/empty status to PENDING — newly created
-          // resolutions have no status yet but are ready to be opened.
-          const statusUp  = (res.status || "PENDING").toUpperCase();
-          const isPending = statusUp === "PENDING";
+          const total    = res.forCount + res.againstCount + res.abstainCount;
+          // Only "OPEN" and "CLOSED" are definitive states.
+          // Everything else (null, "PENDING", "CREATED", "NOT_STARTED", etc.)
+          // means the resolution is ready to be opened — show the Open Voting button.
+          const statusUp  = (res.status ?? "").toUpperCase();
           const isOpen    = statusUp === "OPEN";
           const isClosed  = statusUp === "CLOSED";
+          const isPending = !isOpen && !isClosed;
           const busy      = openVote.isPending || closeVote.isPending;
 
           return (
