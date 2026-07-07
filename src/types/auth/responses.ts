@@ -7,6 +7,8 @@ export interface AuthResponse {
   firstName: string;
   lastName: string;
   roles: string[];
+  logoUrl?: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface MeResponse {
@@ -16,8 +18,11 @@ export interface MeResponse {
   fullName: string;
   initials: string;
   role: string;
+  /** Some backends return an array instead of/alongside the single role string. */
+  roles?: string[];
   email: string;
   avatarUrl: string | null;
+  logoUrl?: string | null;
 }
 
 export type AuthApiResponse = ApiResponse<AuthResponse>;

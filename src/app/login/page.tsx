@@ -1,13 +1,23 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useStore } from "@/lib/store";
-import { useLogin } from "@/api/auth/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, ShieldCheck, BarChart3, Radio, Vote } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  BarChart3,
+  Radio,
+  Vote,
+  Shield,
+} from "lucide-react";
+import { useLogin } from "@/api/auth/hooks";
 import { toast } from "sonner";
+import Cookies from "js-cookie";
 
 const FEATURES = [
   {
@@ -32,21 +42,110 @@ const FEATURES = [
   },
 ];
 
+function OtpInput({
+  onComplete,
+  onAnyChange,
+}: {
+  onComplete: (code: string) => void;
+  onAnyChange?: () => void;
+}) {
+  const [digits, setDigits] = useState(["", "", "", "", "", ""]);
+  const refs = useRef<(HTMLInputElement | null)[]>([]);
+
+  function handleChange(i: number, val: string) {
+    const d = val.replace(/\D/g, "").slice(-1);
+    const next = digits.map((v, idx) => (idx === i ? d : v));
+    setDigits(next);
+    onAnyChange?.();
+    if (d && i < 5) refs.current[i + 1]?.focus();
+    if (next.every(Boolean)) onComplete(next.join(""));
+  }
+
+  function handleKeyDown(i: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace" && !digits[i] && i > 0)
+      refs.current[i - 1]?.focus();
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    e.preventDefault();
+    const pasted = e.clipboardData
+      .getData("text")
+      .replace(/\D/g, "")
+      .slice(0, 6);
+    if (!pasted) return;
+    const next = ["", "", "", "", "", ""].map((_, i) => pasted[i] ?? "");
+    setDigits(next);
+    refs.current[Math.min(pasted.length, 5)]?.focus();
+    if (pasted.length === 6) onComplete(pasted);
+  }
+
+  return (
+    <div className="flex gap-2" onPaste={handlePaste}>
+      {digits.map((d, i) => (
+        <input
+          key={i}
+          ref={(el) => {
+            refs.current[i] = el;
+          }}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={d}
+          onChange={(e) => handleChange(i, e.target.value)}
+          onKeyDown={(e) => handleKeyDown(i, e)}
+          className="h-12 w-12 rounded-lg text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-gray-900 transition-all"
+          style={{
+            border: `1.5px solid ${d ? "#111827" : "#e5e7eb"}`,
+            color: "#111827",
+            backgroundColor: d ? "rgba(17,24,39,0.04)" : "#ffffff",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function LoginPage() {
   const router = useRouter();
-  const { seedStore } = useStore();
-  const { mutate: loginMutation, isPending } = useLogin();
-  const [email, setEmail] = useState("stanley.jacob@meristem.com");
-  const [password, setPassword] = useState("password");
+  const [step, setStep] = useState<"credentials" | "otp">("credentials");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [otpError, setOtpError] = useState("");
+  const [countdown, setCountdown] = useState(60);
+  const [resendKey, setResendKey] = useState(0);
+  const { mutate: loginMutation, isPending } = useLogin();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    seedStore(); // Retain mock data for events etc.
     loginMutation(
       { email, password },
       {
-        onSuccess: () => {
+        onSuccess: (response) => {
+          // Block attendee-only accounts — this portal is admin-only.
+          // AuthResponse nests the payload in response.data; roles come as string[] (e.g. ["ATTENDEE"])
+          const inner = (response as any)?.data ?? response;
+          const rolesRaw: string[] = [
+            ...(Array.isArray(inner?.roles) ? inner.roles : []),
+            ...(inner?.role ? [inner.role] : []),
+          ];
+          const normalized = rolesRaw
+            .map((r) =>
+              String(r ?? "")
+                .toLowerCase()
+                .replace(/[-\s]+/g, "_"),
+            )
+            .filter(Boolean);
+          const isAttendeeOnly =
+            normalized.length > 0 && normalized.every((r) => r === "attendee");
+          if (isAttendeeOnly) {
+            Cookies.remove("accessToken");
+            toast.error(
+              "Access denied. This portal is for administrators only.",
+            );
+            return;
+          }
           toast.success("Login successful");
           router.push("/");
         },
@@ -54,11 +153,62 @@ export default function LoginPage() {
           toast.error(
             err?.response?.data?.message ||
               err?.message ||
-              "Invalid email or password"
+              "Invalid email or password",
           );
         },
-      }
+      },
     );
+  }
+
+  useEffect(() => {
+    if (step !== "otp") return;
+    setCountdown(60);
+    const interval = setInterval(
+      () => setCountdown((c) => Math.max(0, c - 1)),
+      1000,
+    );
+    return () => clearInterval(interval);
+  }, [step, resendKey]);
+
+  function handleCredentials(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      setStep("otp");
+    }, 600);
+  }
+
+  function handleOtp(code: string) {
+    setOtpError("");
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      setStep("credentials");
+    }, 600);
+    // addAuditEntry({
+    //   actor: "Admin User",
+    //   actorEmail: email,
+    //   actorRole: "super_admin",
+    //   action: "Signed in",
+    //   category: "auth",
+    //   resource: "Admin Portal",
+    //   details: "Successful credential verification",
+    //   ip: "197.210.xx.xx",
+    //   severity: "info",
+    // });
+    // addAuditEntry({
+    //   actor: "Admin User",
+    //   actorEmail: email,
+    //   actorRole: "super_admin",
+    //   action: "2FA verified",
+    //   category: "auth",
+    //   resource: "Admin Portal",
+    //   details: "OTP authentication completed successfully",
+    //   ip: "197.210.xx.xx",
+    //   severity: "info",
+    // });
+    setTimeout(() => router.push("/"), 400);
   }
 
   return (
@@ -70,7 +220,11 @@ export default function LoginPage() {
       >
         {/* Top logo bar */}
         <div className="flex items-center gap-2 px-10 pt-10 pb-0">
-          <img src="/attend-logo.png" alt="Attend" style={{ height: 40 }} />
+          <img
+            src="/attend-logo.png"
+            alt="Attend"
+            style={{ height: 40, width: "auto" }}
+          />
           <span
             className="text-xs font-semibold px-2 py-0.5 rounded-md"
             style={{ backgroundColor: "rgba(17,24,39,0.07)", color: "#6b7280" }}
@@ -81,7 +235,7 @@ export default function LoginPage() {
 
         {/* Centred form */}
         <div className="flex-1 flex items-center justify-center px-10">
-          <div className="w-full max-w-[380px]">
+          <div className="w-full max-w-95">
             <h1
               className="text-[2rem] font-bold tracking-tight mb-1"
               style={{ color: "#111827" }}
@@ -121,13 +275,13 @@ export default function LoginPage() {
                   >
                     Password
                   </Label>
-                  <button
-                    type="button"
+                  <Link
+                    href="/forgot-password"
                     className="text-xs hover:underline"
                     style={{ color: "#6b7280" }}
                   >
                     Forgot password?
-                  </button>
+                  </Link>
                 </div>
                 <div className="relative">
                   <Input
@@ -175,7 +329,7 @@ export default function LoginPage() {
                 type="submit"
                 className="w-full h-11 text-sm font-semibold mt-1"
                 disabled={isPending}
-                style={{ backgroundColor: "#2563eb" }}
+                style={{ backgroundColor: "#111827" }}
               >
                 {isPending ? "Signing in…" : "Sign In"}
               </Button>
@@ -210,6 +364,7 @@ export default function LoginPage() {
               alt="Attend"
               style={{
                 height: 36,
+                width: "auto",
                 filter: "brightness(0) invert(1)",
                 opacity: 0.9,
               }}

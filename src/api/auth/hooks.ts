@@ -18,9 +18,19 @@ export const useLogin = () => {
       const token = response.data.token;
       if (token) {
         Cookies.set("accessToken", token, {
-          secure: process.env.NODE_ENV === "production",
+          expires:  1, // 1 day — prevents it becoming a session cookie that vanishes on tab close
+          secure:   process.env.NODE_ENV === "production",
           sameSite: "strict",
         });
+      }
+      // Persist logoUrl from login response — /me endpoint may not return it
+      if (typeof window !== "undefined") {
+        const logoUrl = response.data.logoUrl;
+        if (logoUrl) {
+          localStorage.setItem("userLogoUrl", logoUrl);
+        } else {
+          localStorage.removeItem("userLogoUrl");
+        }
       }
       queryClient.invalidateQueries({ queryKey: authKeys.me() });
     },
@@ -34,6 +44,7 @@ export const useLogout = () => {
     mutationFn: authClient.logout,
     onSuccess: () => {
       Cookies.remove("accessToken");
+      if (typeof window !== "undefined") localStorage.removeItem("userLogoUrl");
       queryClient.clear();
       if (typeof window !== "undefined") {
         window.location.href = "/login";

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zoom Meeting</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #111; }
+
+    #meetingSDKElement {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%; height: 100%;
+      z-index: 1;
+    }
+
+    #loading, #error {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 10;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #111;
+    }
+    #loading { color: #9ca3af; gap: 14px; }
+    #error   { display: none; color: #f87171; text-align: center; padding: 32px; font-size: 14px; }
+
+    #loading-spinner {
+      width: 32px; height: 32px; border: 3px solid #333;
+      border-top-color: #0B5CFF; border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="meetingSDKElement"></div>
+
+  <div id="loading">
+    <div id="loading-spinner"></div>
+    <p style="font-size:13px">Loading Zoom…</p>
+  </div>
+  <div id="error"></div>
+
+  <script src="https://source.zoom.us/6.1.0/lib/vendor/react.min.js"></script>
+  <script src="https://source.zoom.us/6.1.0/lib/vendor/react-dom.min.js"></script>
+  <script src="https://source.zoom.us/6.1.0/lib/vendor/redux.min.js"></script>
+  <script src="https://source.zoom.us/6.1.0/lib/vendor/redux-thunk.min.js"></script>
+  <script src="https://source.zoom.us/6.1.0/lib/vendor/lodash.min.js"></script>
+  <script src="https://source.zoom.us/zoom-meeting-embedded-6.1.0.min.js"></script>
+
+  <script>
+    var sdkClient = null;
+
+    function extractError(e) {
+      if (!e) return 'Unknown error';
+      if (typeof e === 'string') return e;
+      if (e.reason)       return e.reason + (e.errorCode ? ' (code ' + e.errorCode + ')' : '');
+      if (e.errorMessage) return e.errorMessage + (e.errorCode ? ' (code ' + e.errorCode + ')' : '');
+      if (typeof e.message === 'string' && e.message) return e.message;
+      try { return JSON.stringify(e); } catch (_) { return 'Unknown error'; }
+    }
+
+    function showError(e) {
+      var msg = extractError(e);
+      document.getElementById('loading').style.display = 'none';
+      var el = document.getElementById('error');
+      el.style.display = 'flex';
+      el.textContent = 'Error: ' + msg;
+      window.parent.postMessage({ type: 'ZOOM_ERROR', message: msg }, '*');
+    }
+
+    window.addEventListener('message', async function (event) {
+      var data = event.data;
+      if (!data) return;
+
+      if (data.type === 'ZOOM_JOIN') {
+        try {
+          var el = document.getElementById('meetingSDKElement');
+          var w  = Math.floor(el.offsetWidth  || window.innerWidth);
+          var h  = Math.floor(el.offsetHeight || window.innerHeight);
+
+          sdkClient = ZoomMtgEmbedded.createClient();
+
+          await sdkClient.init({
+            sdkKey:       data.sdkKey,
+            zoomAppRoot:  el,
+            language:     'en-US',
+            patchJsMedia: true,
+            customize: {
+              video: {
+                isResizable: true,
+                viewSizes: { default: { width: w, height: h } },
+              },
+            },
+          });
+
+          await sdkClient.join({
+            sdkKey:        String(data.sdkKey        || ''),
+            signature:     String(data.signature     || ''),
+            meetingNumber: String(data.meetingNumber || ''),
+            password:      String(data.password      || ''),
+            userName:      String(data.userName      || 'Host'),
+            ...(data.zak ? { zak: String(data.zak) } : {}),
+          });
+
+          document.getElementById('loading').style.display = 'none';
+          window.parent.postMessage({ type: 'ZOOM_JOINED' }, '*');
+        } catch (e) {
+          showError(e);
+        }
+      }
+
+      if (data.type === 'ZOOM_LEAVE') {
+        // Leave without ending — meeting stays live for participants.
+        // The host can rejoin by clicking Launch again.
+        try { if (sdkClient) sdkClient.leaveMeeting(); } catch (_) {}
+      }
+
+      if (data.type === 'ZOOM_SEND_CHAT' && data.message && sdkClient) {
+        // Forward a website Q&A question into the live Zoom meeting chat.
+        try {
+          if (typeof sdkClient.sendChatMessage === 'function') {
+            // Zoom Embedded SDK ≥ 3.x: omit toUserId to send to everyone
+            sdkClient.sendChatMessage({ message: String(data.message) });
+          } else if (typeof sdkClient.getChatClient === 'function') {
+            sdkClient.getChatClient().sendToAll(String(data.message));
+          }
+        } catch (e) {
+          console.warn('[ZoomEmbed] Chat send failed:', e);
+        }
+      }
+    });
+
+    window.addEventListener('load', function () {
+      window.parent.postMessage({ type: 'ZOOM_READY' }, '*');
+    });
+  </script>
+</body>
+</html>
