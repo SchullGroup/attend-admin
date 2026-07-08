@@ -1,10 +1,9 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import {
-  Upload, Download, Trash2, FileText, FileBarChart, Bell,
-  BookOpen, Award, Package, Send, Search, Check, ChevronDown,
-  Monitor,
+  Upload, Download, Trash2, FileText, Send, Search, Check, ChevronDown,
 } from "lucide-react";
+import { DOC_TYPES, DOC_TYPE_CONFIG, type DocType } from "@/lib/document-type";
 import { useGetMe } from "@/api/auth/hooks";
 import { useGlobalDocuments as useAdminGlobalDocuments } from "@/api/super-admin";
 import {
@@ -25,25 +24,6 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-/** Allowed documentType values from the API */
-const DOC_TYPES = [
-  "NOTICE", "AGENDA", "MINUTES", "REPORT",
-  "PRESENTATION", "PRESS_KIT", "CERTIFICATE", "OTHER",
-] as const;
-
-type DocType = typeof DOC_TYPES[number];
-
-const TYPE_CONFIG: Record<DocType, { label: string; icon: React.ElementType; bg: string; color: string }> = {
-  NOTICE:       { label: "Notice",       icon: Bell,        bg: "#dbeafe", color: "#1d4ed8" },
-  AGENDA:       { label: "Agenda",       icon: BookOpen,    bg: "#dcfce7", color: "#16a34a" },
-  MINUTES:      { label: "Minutes",      icon: FileText,    bg: "#f3f4f6", color: "#6b7280" },
-  REPORT:       { label: "Report",       icon: FileBarChart,bg: "#fef9c3", color: "#a16207" },
-  PRESENTATION: { label: "Presentation", icon: Monitor,     bg: "#ede9fe", color: "#7c3aed" },
-  PRESS_KIT:    { label: "Press Kit",    bg: "#f3e8ff", color: "#7c22c9", icon: Package },
-  CERTIFICATE:  { label: "Certificate",  icon: Award,       bg: "#fff4eb", color: "#ea6c00" },
-  OTHER:        { label: "Other",        icon: FileText,    bg: "#f3f4f6", color: "#6b7280" },
-};
 
 const TYPE_FILTERS = [
   { label: "All",          value: "" },
@@ -248,7 +228,7 @@ export default function DocumentsPage() {
                         : "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] border-transparent hover:border-[hsl(var(--border))]"
                     }`}
                   >
-                    {TYPE_CONFIG[t].label}
+                    {DOC_TYPE_CONFIG[t].label}
                   </button>
                 ))}
               </div>
@@ -376,7 +356,7 @@ export default function DocumentsPage() {
           <tbody>
             {docs.map((doc: any) => {
               const typeKey    = ((doc.documentType ?? doc.type ?? "OTHER") as string).toUpperCase() as DocType;
-              const typeConfig = TYPE_CONFIG[typeKey] ?? TYPE_CONFIG.OTHER;
+              const typeConfig = DOC_TYPE_CONFIG[typeKey] ?? DOC_TYPE_CONFIG.OTHER;
               const TypeIcon   = typeConfig.icon;
               return (
                 <tr key={doc.id} className="attend-table-row">

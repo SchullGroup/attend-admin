@@ -5,7 +5,7 @@ import {
   ArrowLeft, Trophy, Users, FileText, Lightbulb, Star, ChevronDown,
   Plus, Trash2, ToggleLeft, ToggleRight, ListOrdered, Target, Award,
   ClipboardList, UserCheck, BookOpen, ChevronRight, ExternalLink, Code,
-  Globe, Video, FolderOpen, Settings, Link2,
+  Globe, Video, FolderOpen, Settings, Link2, Download, X,
 } from "lucide-react";
 import {
   useClientChallengeDetail,
@@ -312,13 +312,52 @@ function ApplicationsTab({ challengeId }: { challengeId: string }) {
   const [activeTrack,  setActiveTrack]   = useState("");
   const [openMenu,     setOpenMenu]      = useState<string | null>(null);
   const [selectedApp,  setSelectedApp]   = useState<string | null>(null);
+  const [showExport,   setShowExport]    = useState(false);
+  const [exportFrom,   setExportFrom]    = useState("");
+  const [exportTo,     setExportTo]      = useState("");
 
   const { data, isLoading } = useClientChallengeApplications(challengeId, activeStatus, activeTrack, 0, 100);
   const updateStatus = useUpdateClientApplicationStatus();
+  const { refetch: fetchExport, isFetching: exporting } = useExportChallengeApplications(
+    challengeId, exportFrom || undefined, exportTo || undefined
+  );
 
   const apps = data?.applications ?? [];
   const tabs = data?.tabs ?? [];
   const tracks = Array.from(new Set(apps.map((a) => a.track).filter(Boolean)));
+
+  async function handleExport() {
+    const result = await fetchExport();
+    const d = result.data;
+    if (!d) {
+      popup.error("Export Failed", "No data returned for the selected range.", 3000);
+      return;
+    }
+    const headers = [
+      "Team", "Track", "Idea Title", "Idea Description", "Lead Name", "Lead Email",
+      "Members", "Status", "Score", "Submitted",
+      "Pitch Deck", "Pitch Video", "Idea Video", "Demo Video", "Source Code",
+      "Live Demo", "Supporting Doc", "Additional Docs",
+    ];
+    const rows = d.applications.map((a: ExportApplicationItem) => [
+      a.teamName, a.track ?? "", a.ideaTitle ?? "", a.ideaDescription ?? "",
+      a.leadName ?? "", a.leadEmail ?? "", String(a.memberCount ?? ""), a.status,
+      a.score != null ? String(a.score) : "", a.submittedAt ?? "",
+      a.pitchDeckUrl ?? "", a.pitchVideoUrl ?? "", a.ideaVideoUrl ?? "", a.demoVideoUrl ?? "",
+      a.sourceCodeUrl ?? "", a.liveDemoUrl ?? "", a.ideaSupportingDocUrl ?? "", a.additionalDocumentsUrl ?? "",
+    ]);
+    const xml  = buildExcelXml(headers, rows);
+    const blob = new Blob([xml], { type: "application/vnd.ms-excel" });
+    const url  = URL.createObjectURL(blob);
+    const el   = document.createElement("a");
+    const rangeSuffix = exportFrom || exportTo ? `-${exportFrom || "start"}_to_${exportTo || "end"}` : "";
+    el.href = url;
+    el.download = `${(d.challengeTitle ?? challengeId).replace(/\s+/g, "-")}-applications${rangeSuffix}.xls`;
+    el.click();
+    URL.revokeObjectURL(url);
+    popup.success("Export Ready", `Exported ${d.total ?? d.applications.length} application(s).`, 2500);
+    setShowExport(false);
+  }
 
   if (selectedApp) {
     return (
@@ -335,6 +374,82 @@ function ApplicationsTab({ challengeId }: { challengeId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="font-semibold text-[hsl(var(--foreground))]">
+            Applications {data?.totalCount ? `(${data.totalCount})` : ""}
+          </h2>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+            Review submissions and export the full list to Excel
+          </p>
+        </div>
+        <Button
+          size="sm" variant="outline" className="gap-1.5"
+          onClick={() => setShowExport((v) => !v)}
+        >
+          <Download className="h-3.5 w-3.5" /> Export Applications
+        </Button>
+      </div>
+
+      {/* Export panel */}
+      {showExport && (
+        <Card className="attend-card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-semibold text-[hsl(var(--foreground))]">Export Applications</h3>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                Optionally filter by submission date, then download an Excel file with full application details.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowExport(false)}
+              className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex items-end gap-3 flex-wrap">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">From</label>
+              <Input
+                type="date"
+                value={exportFrom}
+                onChange={(e) => setExportFrom(e.target.value)}
+                max={exportTo || undefined}
+                className="h-9 w-40"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">To</label>
+              <Input
+                type="date"
+                value={exportTo}
+                onChange={(e) => setExportTo(e.target.value)}
+                min={exportFrom || undefined}
+                className="h-9 w-40"
+              />
+            </div>
+            {(exportFrom || exportTo) && (
+              <Button
+                size="sm" variant="ghost" className="h-9 text-xs"
+                onClick={() => { setExportFrom(""); setExportTo(""); }}
+              >
+                Clear dates
+              </Button>
+            )}
+            <Button
+              size="sm" className="h-9 gap-1.5 ml-auto"
+              disabled={exporting}
+              onClick={handleExport}
+            >
+              <Download className="h-3.5 w-3.5" />
+              {exporting ? "Exporting…" : "Download .xls"}
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Summary chips */}
       {data?.summary && (
         <div className="grid grid-cols-3 gap-4">

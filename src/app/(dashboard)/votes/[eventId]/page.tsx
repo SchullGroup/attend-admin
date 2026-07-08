@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, CheckCircle2, XCircle, Radio,
   Users, Share2, ChevronDown, ChevronUp, Timer,
-  Download, PlusCircle, X,
+  Download, PlusCircle, X, ToggleLeft, ToggleRight,
 } from "lucide-react";
 import {
   useVoteResults,
@@ -13,6 +13,7 @@ import {
   useCloseResolutionVoting,
   useAddResolution,
   useExportResolutions,
+  useSetShareWeightedTallies,
   ResolutionResult,
 } from "@/api/client-votes";
 import { Card } from "@/components/ui/card";
@@ -480,6 +481,7 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
 
   const { data, isLoading }         = useVoteResults(eventId);
   const { refetch: fetchExport }    = useExportResolutions(eventId);
+  const shareWeightedTallies        = useSetShareWeightedTallies();
 
   async function handleExport() {
     setExporting(true);
@@ -542,6 +544,21 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
                 <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" /> LIVE
               </span>
             )}
+            <Button
+              size="sm" variant="outline" className="gap-1.5"
+              disabled={shareWeightedTallies.isPending}
+              onClick={() =>
+                shareWeightedTallies.mutate({
+                  eventId,
+                  enabled: !data.shareWeightedTalliesEnabled,
+                })
+              }
+            >
+              {data.shareWeightedTalliesEnabled
+                ? <ToggleRight className="h-4 w-4 text-green-600" />
+                : <ToggleLeft className="h-4 w-4" />}
+              Share-Weighted Tallies {data.shareWeightedTalliesEnabled ? "On" : "Off"}
+            </Button>
             <Button size="sm" variant="outline" disabled={exporting} onClick={handleExport}>
               <Download className="h-3.5 w-3.5 mr-1.5" />
               {exporting ? "Exporting…" : "Export CSV"}

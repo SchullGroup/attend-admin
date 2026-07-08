@@ -106,6 +106,9 @@ export interface VoteResultsResponse {
   quorumPercentage: number;
   quorumMet:        boolean;
   resolutions:      ResolutionResult[];
+  // Whether tallies show share-weighted totals in addition to headcount.
+  // API field name isn't confirmed yet — normalized from common aliases in the hook below.
+  shareWeightedTalliesEnabled?: boolean;
 }
 
 export interface OfflineVoteRequest {
@@ -231,7 +234,16 @@ export function useVoteResults(eventId: string) {
       const res = await apiClient.get<ApiResponse<VoteResultsResponse>>(
         `/api/v1/client/votes/${eventId}/results`
       );
-      return res.data.data;
+      const raw = res.data.data as any;
+      if (!raw) return raw as VoteResultsResponse;
+      // Normalize whichever alias the backend uses for the share-weighted toggle.
+      const shareWeightedTalliesEnabled =
+        raw.shareWeightedTalliesEnabled ??
+        raw.shareWeightedTallies ??
+        raw.weightedTalliesEnabled ??
+        raw.showShareWeightedTallies ??
+        false;
+      return { ...raw, shareWeightedTalliesEnabled } as VoteResultsResponse;
     },
     enabled: !!eventId,
     staleTime: 15_000,
@@ -257,6 +269,35 @@ export function useExportResolutions(eventId: string) {
 // ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------
+
+/**
+ * PATCH /api/v1/client/votes/{eventId}/config/share-weighted-tallies
+ * Toggle whether vote tallies show only headcount (false) or headcount +
+ * share-weighted totals, using each shareholder's Units from the register.
+ */
+export function useSetShareWeightedTallies() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, enabled }: { eventId: string; enabled: boolean }) => {
+      const res = await apiClient.patch<ApiResponse<any>>(
+        `/api/v1/client/votes/${eventId}/config/share-weighted-tallies`,
+        { enabled }
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, { eventId, enabled }) => {
+      queryClient.invalidateQueries({ queryKey: clientVoteKeys.results(eventId) });
+      popup.success(
+        enabled ? "Share-Weighted Tallies On" : "Share-Weighted Tallies Off",
+        enabled
+          ? "Vote tallies now show share-weighted totals alongside headcount."
+          : "Vote tallies now show headcount only.",
+        2500
+      );
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to update tally display setting."),
+  });
+}
 
 /** Enter / update physical in-room (offline) vote counts for a resolution. */
 export function useRecordOfflineVotes() {
