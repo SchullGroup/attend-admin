@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, CheckCircle2, XCircle, Radio,
   Users, Share2, ChevronDown, ChevronUp, Timer,
-  Download, PlusCircle, X, ToggleLeft, ToggleRight,
+  Download, PlusCircle, X, ToggleLeft, ToggleRight, Pencil, Check, Lock,
 } from "lucide-react";
 import {
   useVoteResults,
@@ -13,7 +13,8 @@ import {
   useCloseResolutionVoting,
   useAddResolution,
   useExportResolutions,
-  useSetShareWeightedTallies,
+  useSetResolutionShareWeightedTallies,
+  useSetQuorum,
   ResolutionResult,
 } from "@/api/client-votes";
 import { Card } from "@/components/ui/card";
@@ -135,8 +136,9 @@ function ResolutionCard({
   const [showOffline,  setShowOffline]  = useState(false);
   const [duration,     setDuration]     = useState<string>("");
 
-  const openMutation  = useOpenResolutionVoting();
-  const closeMutation = useCloseResolutionVoting();
+  const openMutation           = useOpenResolutionVoting();
+  const closeMutation          = useCloseResolutionVoting();
+  const shareWeightedTallies   = useSetResolutionShareWeightedTallies();
 
   const ss   = resolutionStatusStyle(res.status);
   const pct  = Math.round(res.percentageFor ?? 0);
@@ -293,6 +295,37 @@ function ResolutionCard({
                 <StatCell label="Abstain" value={res.combinedAbstainShares} />
               </div>
             </div>
+          </div>
+
+          {/* Per-resolution share-weighted tallies toggle — default OFF, locked while OPEN */}
+          <div className="mt-4 pt-4 border-t border-[hsl(var(--border))] flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Share2 className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+              <div>
+                <p className="text-xs font-semibold text-[hsl(var(--foreground))]">Share-Weighted Tallies</p>
+                <p className="text-[11px] text-[hsl(var(--muted-foreground))]">
+                  {isOpen ? "Locked while voting is open" : "Show share totals alongside headcount for this resolution"}
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm" variant="outline" className="gap-1.5 h-8"
+              disabled={isOpen || shareWeightedTallies.isPending}
+              onClick={() =>
+                shareWeightedTallies.mutate({
+                  eventId,
+                  resolutionId: res.id,
+                  enabled: !res.shareWeightedTalliesEnabled,
+                })
+              }
+            >
+              {isOpen
+                ? <Lock className="h-3.5 w-3.5" />
+                : res.shareWeightedTalliesEnabled
+                  ? <ToggleRight className="h-4 w-4 text-green-600" />
+                  : <ToggleLeft className="h-4 w-4" />}
+              {res.shareWeightedTalliesEnabled ? "On" : "Off"}
+            </Button>
           </div>
 
           {/* Open / Close controls (only for LIVE events) */}
@@ -479,9 +512,12 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
   const [showAddForm, setShowAddForm] = useState(false);
   const [exporting,   setExporting]   = useState(false);
 
+  const [editingQuorum, setEditingQuorum] = useState(false);
+  const [quorumInput,   setQuorumInput]   = useState("");
+
   const { data, isLoading }         = useVoteResults(eventId);
   const { refetch: fetchExport }    = useExportResolutions(eventId);
-  const shareWeightedTallies        = useSetShareWeightedTallies();
+  const setQuorum                   = useSetQuorum();
 
   async function handleExport() {
     setExporting(true);
@@ -520,6 +556,22 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
 
   const isLive       = data.status?.toUpperCase() === "LIVE";
   const resolutions  = [...(data.resolutions ?? [])].sort((a, b) => a.order - b.order);
+  const votingStarted = resolutions.some((r) => ["OPEN", "CLOSED"].includes(r.status?.toUpperCase()));
+  const quorumLocked  = isLive && votingStarted;
+
+  function startEditQuorum() {
+    setQuorumInput(String(Math.round(data!.requiredQuorumPercentage ?? data!.quorumPercentage ?? 0)));
+    setEditingQuorum(true);
+  }
+
+  function saveQuorum() {
+    const val = Number(quorumInput);
+    if (Number.isNaN(val) || val < 0 || val > 100) return;
+    setQuorum.mutate(
+      { eventId, quorumPercentage: val },
+      { onSuccess: () => setEditingQuorum(false) }
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -544,21 +596,6 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
                 <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" /> LIVE
               </span>
             )}
-            <Button
-              size="sm" variant="outline" className="gap-1.5"
-              disabled={shareWeightedTallies.isPending}
-              onClick={() =>
-                shareWeightedTallies.mutate({
-                  eventId,
-                  enabled: !data.shareWeightedTalliesEnabled,
-                })
-              }
-            >
-              {data.shareWeightedTalliesEnabled
-                ? <ToggleRight className="h-4 w-4 text-green-600" />
-                : <ToggleLeft className="h-4 w-4" />}
-              Share-Weighted Tallies {data.shareWeightedTalliesEnabled ? "On" : "Off"}
-            </Button>
             <Button size="sm" variant="outline" disabled={exporting} onClick={handleExport}>
               <Download className="h-3.5 w-3.5 mr-1.5" />
               {exporting ? "Exporting…" : "Export CSV"}
@@ -574,11 +611,50 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
           <div className="text-2xl font-bold tabular-nums">{(data.totalVotesCast ?? 0).toLocaleString()}</div>
         </Card>
         <Card className="attend-card p-5">
-          <div className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Quorum</div>
-          <div className="text-2xl font-bold tabular-nums">{Math.round(data.quorumPercentage ?? 0)}%</div>
-          <div className={`text-xs font-semibold mt-1 ${data.quorumMet ? "text-green-600" : "text-red-500"}`}>
-            {data.quorumMet ? "Quorum met" : "Quorum not met"}
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-xs text-[hsl(var(--muted-foreground))]">Quorum</div>
+            {!editingQuorum && !quorumLocked && (
+              <button
+                onClick={startEditQuorum}
+                className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                title="Edit required quorum %"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {quorumLocked && (
+              <span title="Locked — voting has started on a resolution">
+                <Lock className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+              </span>
+            )}
           </div>
+
+          {editingQuorum ? (
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number" min={0} max={100}
+                value={quorumInput}
+                onChange={(e) => setQuorumInput(e.target.value)}
+                className="h-8 w-20 text-sm"
+                autoFocus
+              />
+              <span className="text-sm text-[hsl(var(--muted-foreground))]">%</span>
+              <Button size="sm" className="h-8 w-8 p-0" disabled={setQuorum.isPending} onClick={saveQuorum}>
+                <Check className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setEditingQuorum(false)}>
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="text-2xl font-bold tabular-nums">{Math.round(data.quorumPercentage ?? 0)}%</div>
+              <div className={`text-xs font-semibold mt-1 ${data.quorumMet ? "text-green-600" : "text-red-500"}`}>
+                {data.quorumMet ? "Quorum met" : "Quorum not met"}
+                {data.requiredQuorumPercentage != null && ` · required ${Math.round(data.requiredQuorumPercentage)}%`}
+              </div>
+            </>
+          )}
         </Card>
         <Card className="attend-card p-5">
           <div className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Register</div>

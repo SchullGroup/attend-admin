@@ -930,7 +930,7 @@ export function useImportShareholdersToEvent() {
       const count = (data as any)?.imported ?? "some";
       popup.success("Shareholders Imported", `${count} shareholders added as expected attendees.`, 3000);
     },
-    // No hook-level onError — this is a background best-effort call; callers handle errors themselves
+    onError: (error: any) => parseAndToastApiError(error, "Failed to import shareholders from register."),
   });
 }
 

@@ -1,0 +1,129 @@
+# Backend Fixes & Additions — attend-admin
+
+Frontend: Next.js admin dashboard. Base URL: `NEXT_PUBLIC_API_URL` (Spring Boot).
+All responses are expected in the envelope: `{ status, message, data, error }`.
+
+---
+
+## 1. Live event "elapsed time" does not display
+
+**Status: existing endpoint, field not populating correctly**
+
+- **Endpoint:** `GET /api/v1/client/live/{eventId}`
+- **Broken field:** `data.elapsedMinutes` (number)
+- **Expected behavior:** minutes elapsed since the event's live session started (i.e. `now - event.liveStartedAt`, in whole minutes). Frontend formats it client-side as `Xh Ym` / `Ym`.
+- **Current behavior:** field is missing, `null`, or always `0`, so the "Elapsed" stat on the Live Control Room never advances.
+- **Fix needed:** compute `elapsedMinutes` server-side on every poll using the event's actual live-start timestamp (not event creation time). The frontend polls this endpoint every 4 seconds, so it must be cheap to compute (no need to cache).
+
+---
+
+## 2. ~~No endpoint to set/update quorum requirement~~ — SHIPPED, integrated
+
+**Status: done.** Backend added `PATCH /api/v1/client/votes/{eventId}/config/quorum` (`{ "quorumPercentage": 0–100 }`, 409 if voting has started). Frontend now calls this from an editable Quorum card on the vote results page (`useSetQuorum` in `client-votes.ts`), locked in the UI once any resolution is OPEN/CLOSED, with a 409 toast if the backend rejects it anyway.
+
+One thing to confirm: the success response currently matches the generic placeholder schema (`{ data: { additionalProp1: "string", ... } }`). Frontend re-fetches `GET .../results` after a successful PATCH rather than trusting the PATCH response body directly — please confirm `GET .../results` reflects the new `quorumPercentage`/`quorumMet` immediately after the PATCH, and ideally also returns the configured threshold itself (frontend reads `requiredQuorumPercentage` / `quorumRequiredPercentage` / `quorumThreshold` — whichever alias is easiest on your side).
+
+---
+
+## 3. ~~Share-weighted tallies must be per-resolution~~ — SHIPPED, integrated
+
+**Status: done.** Backend added `PATCH /api/v1/client/votes/{eventId}/resolutions/{resolutionId}/config/share-weighted-tallies` (`{ "enabled": boolean }`, 409 if that resolution's voting is OPEN). Frontend now renders this as a per-resolution toggle (default OFF) inside each resolution card on the vote results page, disabled with a lock icon while `status === "OPEN"`, and shows a 409-specific toast if the backend rejects a change mid-vote. The old event-level endpoint/button has been removed from the frontend.
+
+**Still needed on the backend side:** the per-resolution field in `GET /api/v1/client/votes/{eventId}/results` → `resolutions[]`. Frontend currently normalizes from `shareWeightedTalliesEnabled` / `shareWeightedTallies` / `weightedTalliesEnabled` (defaults to `false` if none present) — please confirm which one the results payload actually returns per resolution, or add `shareWeightedTalliesEnabled: boolean` if it's not there yet, so the "Share-Weighted" badge and share totals row on the event's Vote Results tab reflect real state instead of always defaulting to off.
+
+---
+
+## 4. Document size not showing
+
+**Status: existing endpoints, field not populating**
+
+- **Endpoints affected:**
+  - `GET /api/v1/client/documents` (global vault — powers `/documents` page and the register detail page's Documents section)
+  - `GET /api/v1/client/documents/{documentId}`
+- **Broken fields:** `data.documents[].sizeLabel` (string, e.g. `"1.2 MB"`) and/or `data.documents[].sizeBytes` (number, raw byte count — frontend formats it if `sizeLabel` isn't present).
+- **Current behavior:** both fields come back empty/`0`/`null` for uploaded documents, so the Size column always shows "—".
+- **Fix needed:** populate the actual uploaded file size (in bytes, plus optionally a pre-formatted label) at upload time and persist it, or compute it from the stored file (e.g. Cloudinary `bytes` field from the upload response) on read.
+
+---
+
+## 5. Revoking a team member's access doesn't actually block login
+
+**Status: existing endpoint, enforcement missing**
+
+- **Endpoint:** `DELETE /api/v1/client/organisation/team/{id}/revoke` — this call succeeds and the frontend shows the member as `REVOKED`, but the user can still log in and use the app afterward.
+- **Fix needed (pick one or both):**
+  1. At `POST /api/v1/auth/login`, check the user's team-membership status and reject login (401/403) if `status === "REVOKED"`.
+  2. Invalidate all existing sessions/refresh tokens for that user at the moment of revocation, so an already-logged-in tab is also kicked out on its next token refresh — not just blocked from a fresh login.
+- Ideally both — (1) prevents new logins, (2) kills any session already in progress.
+
+---
+
+## 6. Analytics: monthly RSVP trend, event performance table, export registrations — not working
+
+**Status: existing endpoints, need backend verification**
+
+All three are already integrated on the frontend and expect these exact contracts. Please verify each is implemented and returns data in this shape (currently they appear to 404, error, or return empty data):
+
+- **Monthly trend:**
+  ```
+  GET /api/v1/client/analytics/monthly-trend
+  Response: { data: { trend: [ { month: "Jan 2025", registrations: number }, ... ] } }
+  ```
+
+- **Event performance table (paginated):**
+  ```
+  GET /api/v1/client/analytics/event-performance?page=0&size=10
+  Response: {
+    data: {
+      totalCount: number, page: number, size: number,
+      events: [
+        {
+          id: string, title: string, eventType?: string, date: string, status: string,
+          rsvpCount: number, capacity: number, fillRate: number,
+          checkedInCount: number, checkInRate: number
+        }, ...
+      ]
+    }
+  }
+  ```
+
+- **Export registrations:**
+  ```
+  GET /api/v1/client/analytics/export/registrations?eventId={id}&from=YYYY-MM-DD&to=YYYY-MM-DD
+  Response: {
+    data: {
+      eventId, eventTitle, eventDate, exportedAt, total: number,
+      registrations: [
+        { fullName, email, phone?, registeredAt, checkedIn: boolean, checkedInAt? }, ...
+      ]
+    }
+  }
+  ```
+
+Please check server logs for these three routes specifically — if they're returning 404 they may not be implemented yet; if 500, likely a query/mapping bug; if 200 with empty arrays, likely a data-source or filter bug.
+
+---
+
+## 7. Post-AGM endpoints — SHIPPED, integrated (new since original list)
+
+**Status: done.** The full Post-AGM suite is now live and wired up on the Post-AGM tab of the event detail page (new `src/api/client-post-agm.ts`):
+
+- `GET .../post-agm/summary` — drives the summary strip (resolutions passed, votes cast, attendees present, minutes status).
+- `GET .../post-agm/minutes` + `PUT .../post-agm/minutes` (save draft) + `POST .../post-agm/minutes/finalise` — Draft Minutes editor. Textarea locks and shows a "Finalised" badge once `status === "FINALISED"`; a 409 on save/finalise shows the appropriate toast ("already finalised" / "no draft exists").
+- `GET .../post-agm/certificates/eligibility` + `POST .../post-agm/certificates/send` — Certificates card now shows real eligible/sent/pending counts and queues sending for real.
+- `GET .../post-agm/export/attendance` and `GET .../post-agm/export/vote-audit` — both documented as raw CSV text bodies (not the JSON envelope). Frontend fetches with `responseType: "text"` and downloads directly. **Please confirm these truly return a raw CSV string** and not `{ status, data: "...", error }` — if they're wrapped, the frontend will download a malformed CSV containing JSON. If the vote-audit CSV route 404s, frontend falls back to the older `GET /votes/{eventId}/export/resolutions` (structured JSON) and builds the CSV client-side, so nothing is broken either way — just flag if that fallback is firing.
+- `GET .../post-agm/statutory-return` — Swagger only documents this as a generic object (`{ additionalProp1: "string", ... }`). Frontend downloads whatever comes back as a `.json` file for now ("Export Data" button) since there's nothing to build a formatted PDF from yet. **Please send the real field names/shape** once finalized (attendance counts, quorum, per-resolution totals) so this can become an actual formatted statutory filing document instead of a raw JSON dump.
+
+---
+
+## Summary table
+
+| # | Issue | Endpoint status | Action needed |
+|---|-------|-----------------|----------------|
+| 1 | Live elapsed time | Exists | Fix `elapsedMinutes` calculation |
+| 2 | Set quorum | **Shipped** ✅ | Confirm `GET .../results` reflects new threshold + returns it |
+| 3 | Per-resolution share-weighted tallies | **Shipped** ✅ | Confirm/add `shareWeightedTalliesEnabled` field per resolution in `GET .../results` |
+| 4 | Document size | Exists | Populate `sizeBytes`/`sizeLabel` on upload |
+| 5 | Revoke access | Exists, not enforced | Block login + invalidate sessions for revoked users |
+| 6 | Analytics (trend, performance, export) | Exists | Verify/fix — currently broken |
+| 7 | Post-AGM (minutes, certificates, exports, statutory return) | **Shipped** ✅ | Confirm CSV exports are raw text, not JSON-wrapped; send real statutory-return field shape |

@@ -38,6 +38,11 @@ function ResolutionCard({ res, index }: { res: ResolutionResult; index: number }
                 Special
               </span>
             )}
+            {res.shareWeightedTalliesEnabled && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">
+                Share-Weighted
+              </span>
+            )}
           </div>
         </div>
         <StatusBadge status={res.status} />
@@ -53,6 +58,14 @@ function ResolutionCard({ res, index }: { res: ResolutionResult; index: number }
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-4">
             Total votes: <span className="font-semibold text-[hsl(var(--foreground))]">{total.toLocaleString()}</span>
           </p>
+          {res.shareWeightedTalliesEnabled && (
+            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+              Total shares: <span className="font-semibold text-[hsl(var(--foreground))]">
+                {((res.combinedForShares ?? 0) + (res.combinedAgainstShares ?? 0) + (res.combinedAbstainShares ?? 0)).toLocaleString()}
+              </span>
+              {" "}(For {res.combinedForShares?.toLocaleString() ?? 0} · Against {res.combinedAgainstShares?.toLocaleString() ?? 0} · Abstain {res.combinedAbstainShares?.toLocaleString() ?? 0})
+            </p>
+          )}
         </>
       ) : (
         <p className="text-sm italic text-[hsl(var(--muted-foreground))]">
