@@ -245,16 +245,29 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
 
   return (
     <div className="relative w-full bg-black overflow-hidden" style={{ minHeight: height }}>
-      {/* Iframe always in DOM — only visible when joined */}
+      {/*
+        Iframe always occupies real, non-zero space — even before "joined".
+        Why: zoom-meeting.html measures its container's offsetWidth/offsetHeight
+        when initializing the Zoom SDK. If the iframe were `display: none` at
+        that point (as it used to be while status !== "joined"), the iframe's
+        own content window collapses to a 0×0 viewport, so the Zoom SDK inits
+        its video/control-bar layout at 0×0. That leaves invisible, misplaced
+        elements once the iframe becomes visible — the exact "can't click on
+        anything else" symptom, since a stray 0-sized-turned-stale element can
+        end up covering parts of the page. The opaque idle/loading/error
+        overlays below (all solid `bg-black`) visually hide the iframe until
+        it's actually joined, without ever un-rendering it.
+      */}
       <iframe
         ref={iframeRef}
         title="Zoom Meeting"
         allow="camera; microphone; display-capture; fullscreen; autoplay"
         style={{
-          width:   "100%",
-          height,
-          border:  "none",
-          display: status === "joined" ? "block" : "none",
+          position: "absolute",
+          inset:    0,
+          width:    "100%",
+          height:   "100%",
+          border:   "none",
         }}
       />
 

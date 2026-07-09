@@ -46,61 +46,23 @@ One thing to confirm: the success response currently matches the generic placeho
 
 ---
 
-## 5. Revoking a team member's access doesn't actually block login
+## 5. ~~Revoking a team member's access doesn't actually block login~~ — SHIPPED, needs live verification
 
-**Status: existing endpoint, enforcement missing**
+**Status: backend confirms this is fixed.** `DELETE /api/v1/client/organisation/team/{id}/revoke` is now documented as "Deactivates a team member. They lose access immediately... Requires CLIENT_ADMIN role. Accepts both DELETE and POST." This matches the existing frontend call in `useRevokeTeamMember` (`client-organisation.ts`) exactly — no frontend change needed.
 
-- **Endpoint:** `DELETE /api/v1/client/organisation/team/{id}/revoke` — this call succeeds and the frontend shows the member as `REVOKED`, but the user can still log in and use the app afterward.
-- **Fix needed (pick one or both):**
-  1. At `POST /api/v1/auth/login`, check the user's team-membership status and reject login (401/403) if `status === "REVOKED"`.
-  2. Invalidate all existing sessions/refresh tokens for that user at the moment of revocation, so an already-logged-in tab is also kicked out on its next token refresh — not just blocked from a fresh login.
-- Ideally both — (1) prevents new logins, (2) kills any session already in progress.
+**One thing worth testing live** before calling this fully closed: "lose access immediately" could mean either (a) enforced per-request — an already-open browser tab gets kicked out on its very next API call, or (b) only blocks *new* logins while an already-open tab keeps working until its access token naturally expires (up to ~1 day per the JS cookie TTL). Recommend testing both: revoke a test account, then check (1) a fresh login attempt is rejected, and (2) an already-logged-in tab in another browser gets logged out on its next action, not just its next full page reload.
 
 ---
 
-## 6. Analytics: monthly RSVP trend, event performance table, export registrations — not working
+## 6. ~~Analytics: monthly RSVP trend, event performance table, export registrations~~ — SHIPPED, integrated
 
-**Status: existing endpoints, need backend verification**
+**Status: done.** All three endpoints now match the frontend's existing contracts exactly (`client-analytics.ts`, no changes needed):
 
-All three are already integrated on the frontend and expect these exact contracts. Please verify each is implemented and returns data in this shape (currently they appear to 404, error, or return empty data):
+- `GET /api/v1/client/analytics/monthly-trend` → `{ data: { trend: [{ month, registrations }] } }`
+- `GET /api/v1/client/analytics/event-performance?page=&size=` → `{ data: { totalCount, page, size, events: [{ id, title, eventType, dotColor, date, status, rsvpCount, capacity, fillRate, checkedInCount, checkInRate }] } }` — note `fillRate` is returned as a 0–1 fraction (e.g. `0.1` = 10%); frontend already detects and multiplies by 100.
+- `GET /api/v1/client/analytics/export/registrations?eventId=&from=&to=` → `{ data: { eventId, eventTitle, eventDate, exportedAt, total, registrations: [{ fullName, email, phone, registeredAt, checkedIn, checkedInAt }] } }`
 
-- **Monthly trend:**
-  ```
-  GET /api/v1/client/analytics/monthly-trend
-  Response: { data: { trend: [ { month: "Jan 2025", registrations: number }, ... ] } }
-  ```
-
-- **Event performance table (paginated):**
-  ```
-  GET /api/v1/client/analytics/event-performance?page=0&size=10
-  Response: {
-    data: {
-      totalCount: number, page: number, size: number,
-      events: [
-        {
-          id: string, title: string, eventType?: string, date: string, status: string,
-          rsvpCount: number, capacity: number, fillRate: number,
-          checkedInCount: number, checkInRate: number
-        }, ...
-      ]
-    }
-  }
-  ```
-
-- **Export registrations:**
-  ```
-  GET /api/v1/client/analytics/export/registrations?eventId={id}&from=YYYY-MM-DD&to=YYYY-MM-DD
-  Response: {
-    data: {
-      eventId, eventTitle, eventDate, exportedAt, total: number,
-      registrations: [
-        { fullName, email, phone?, registeredAt, checkedIn: boolean, checkedInAt? }, ...
-      ]
-    }
-  }
-  ```
-
-Please check server logs for these three routes specifically — if they're returning 404 they may not be implemented yet; if 500, likely a query/mapping bug; if 200 with empty arrays, likely a data-source or filter bug.
+These should now render correctly on the Analytics page (Monthly RSVP Trend chart, Event Performance table with pagination, and the CSV export button) — no code changes required on the frontend side.
 
 ---
 
@@ -124,6 +86,6 @@ Please check server logs for these three routes specifically — if they're retu
 | 2 | Set quorum | **Shipped** ✅ | Confirm `GET .../results` reflects new threshold + returns it |
 | 3 | Per-resolution share-weighted tallies | **Shipped** ✅ | Confirm/add `shareWeightedTalliesEnabled` field per resolution in `GET .../results` |
 | 4 | Document size | Exists | Populate `sizeBytes`/`sizeLabel` on upload |
-| 5 | Revoke access | Exists, not enforced | Block login + invalidate sessions for revoked users |
-| 6 | Analytics (trend, performance, export) | Exists | Verify/fix — currently broken |
+| 5 | Revoke access | **Shipped** ✅ | Live-test that an already-open tab is also kicked, not just new logins |
+| 6 | Analytics (trend, performance, export) | **Shipped** ✅ | None — contracts match, should just work |
 | 7 | Post-AGM (minutes, certificates, exports, statutory return) | **Shipped** ✅ | Confirm CSV exports are raw text, not JSON-wrapped; send real statutory-return field shape |

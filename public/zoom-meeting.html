@@ -79,10 +79,26 @@
       if (data.type === 'ZOOM_JOIN') {
         try {
           var el = document.getElementById('meetingSDKElement');
-          var w  = Math.floor(el.offsetWidth  || window.innerWidth);
-          var h  = Math.floor(el.offsetHeight || window.innerHeight);
 
           sdkClient = ZoomMtgEmbedded.createClient();
+
+          // Without an explicit viewSizes.default, the Embedded SDK falls
+          // back to its own small default ("ribbon") window instead of
+          // filling zoomAppRoot — that small draggable box is exactly the
+          // "floating video widget sitting on top of the Participants panel,
+          // neither clickable" bug that was reported. The fix is to size it
+          // explicitly against the real (now guaranteed non-zero, since the
+          // parent iframe is never display:none) container, and to disable
+          // dragging so the window can't be moved on top of other panels.
+          // Clamp to a standard meeting-window size rather than the raw
+          // container size — sizing the video tile to the FULL container
+          // width (often 1400-1600px on wide dashboard cards) makes a
+          // camera-off participant's avatar scale up into a giant, "zoomed
+          // in" letter tile. Zoom's own desktop app uses a similar bounded
+          // window size regardless of screen width.
+          var rect   = el.getBoundingClientRect();
+          var width  = Math.min(Math.max(Math.round(rect.width),  640), 960);
+          var height = Math.min(Math.max(Math.round(rect.height), 480), 600);
 
           await sdkClient.init({
             sdkKey:       data.sdkKey,
@@ -92,7 +108,20 @@
             customize: {
               video: {
                 isResizable: true,
-                viewSizes: { default: { width: w, height: h } },
+                // Gallery View shows every participant as an equal-sized
+                // tile that shrinks as more people join, instead of Speaker
+                // View's one huge tile for whoever's currently talking (the
+                // "enlarged avatar" behavior being reported). This is the
+                // same toggle as the grid icon in the meeting toolbar —
+                // just defaulting it on instead of requiring a manual click.
+                defaultViewType: 'gallery',
+                viewSizes: {
+                  default: { width: width, height: height },
+                  ribbon:  { width: width, height: height },
+                },
+                popper: {
+                  disableDraggable: true,
+                },
               },
             },
           });

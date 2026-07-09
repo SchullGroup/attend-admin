@@ -194,9 +194,9 @@ function ClientAnalytics() {
   const { data: byType,       isLoading: byTypeLoading  } = useAnalyticsByType();
   const { data: rsvps,        isLoading: rsvpsLoading   } = useAnalyticsRsvpsByEvent();
   const { data: fillRate,     isLoading: fillLoading     } = useAnalyticsFillRateOverview();
-  const { data: performance,  isLoading: perfLoading     } = useAnalyticsEventPerformance(perfPage, perfSize);
+  const { data: performance,  isLoading: perfLoading,  isError: perfError,  error: perfErrorObj  } = useAnalyticsEventPerformance(perfPage, perfSize);
   const { data: checkInData,  isLoading: checkInLoading  } = useAnalyticsCheckInOverview();
-  const { data: trendData,    isLoading: trendLoading    } = useAnalyticsMonthlyTrend();
+  const { data: trendData,    isLoading: trendLoading, isError: trendError, error: trendErrorObj } = useAnalyticsMonthlyTrend();
 
   const loading = statsLoading || byTypeLoading || rsvpsLoading || fillLoading || perfLoading || trendLoading;
   if (loading) return <Loader variant="page" text="Loading Analytics…" />;
@@ -483,7 +483,14 @@ function ClientAnalytics() {
             <TrendingUp className="h-4 w-4 text-[hsl(var(--primary))]" />
             <span className="attend-section-title">Monthly RSVP Trend</span>
           </div>
-          {trendMonths.length === 0 ? (
+          {trendError ? (
+            <div className="py-8 text-center text-sm text-red-600">
+              Failed to load trend data
+              <div className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                {(trendErrorObj as any)?.response?.status ?? ""} {(trendErrorObj as any)?.response?.data?.message ?? (trendErrorObj as any)?.message ?? "Unknown error"}
+              </div>
+            </div>
+          ) : trendMonths.length === 0 ? (
             <div className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">No trend data available.</div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -600,7 +607,17 @@ function ClientAnalytics() {
                 </tr>
               );
             })}
-            {perfEvents.length === 0 && (
+            {perfError && (
+              <tr>
+                <td colSpan={8} className="py-10 text-center text-sm text-red-600">
+                  Failed to load event performance data
+                  <div className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                    {(perfErrorObj as any)?.response?.status ?? ""} {(perfErrorObj as any)?.response?.data?.message ?? (perfErrorObj as any)?.message ?? "Unknown error"}
+                  </div>
+                </td>
+              </tr>
+            )}
+            {!perfError && perfEvents.length === 0 && (
               <tr>
                 <td colSpan={8} className="py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
                   No event performance data available.

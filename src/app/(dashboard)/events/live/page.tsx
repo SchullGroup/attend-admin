@@ -283,8 +283,28 @@ function isGoogleMeetUrl(url: string) {
   return /meet\.google\.com\//.test(url);
 }
 
+function isYoutubeUrl(url: string) {
+  return /(?:youtu\.be\/|youtube\.com\/)/.test(url);
+}
+
+/**
+ * True when the URL is a youtube.com/youtu.be link but has no resolvable
+ * 11-char video ID — e.g. a channel's vanity "/live" or "/@handle/live" page.
+ * These pages set X-Frame-Options / CSP frame-ancestors and refuse to load in
+ * an iframe ("youtube.com refused to connect"), unlike /embed/{videoId} URLs
+ * which explicitly allow framing. Caller should show an "Open in YouTube"
+ * fallback instead of iframing these directly.
+ */
+function isUnembeddableYoutubeUrl(url: string) {
+  return isYoutubeUrl(url) && !/\/embed\//.test(parseStreamUrl(url));
+}
+
 function parseStreamUrl(url: string): string {
-  const yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|live\/))([A-Za-z0-9_-]{11})/);
+  // Already an embed URL — pass through untouched.
+  if (/youtube\.com\/embed\//.test(url)) return url;
+  const yt = url.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|live\/|shorts\/|embed\/))([A-Za-z0-9_-]{11})/
+  );
   if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=0&controls=1&rel=0&modestbranding=1`;
   return url;
 }
@@ -834,12 +854,37 @@ function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => voi
                   <ExternalLink className="h-4 w-4" /> Join Google Meet
                 </a>
               </div>
+            ) : isUnembeddableYoutubeUrl(streamUrl) ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+                <div className="rounded-2xl bg-red-500/15 p-4">
+                  {/* YouTube icon */}
+                  <svg viewBox="0 0 40 40" className="h-10 w-10" fill="none">
+                    <rect width="40" height="40" rx="8" fill="#FF0000"/>
+                    <path d="M27.5 15.5c-.2-1-1-1.7-2-1.9-1.8-.3-5.5-.3-5.5-.3s-3.7 0-5.5.3c-1 .2-1.8.9-2 1.9-.3 1.6-.3 5-.3 5s0 3.4.3 5c.2 1 1 1.7 2 1.9 1.8.3 5.5.3 5.5.3s3.7 0 5.5-.3c1-.2 1.8-.9 2-1.9.3-1.6.3-5 .3-5s0-3.4-.3-5z" fill="white"/>
+                    <path d="M18 17.5v6l5-3-5-3z" fill="#FF0000"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">YouTube Live</p>
+                  <p className="text-xs text-gray-400 mt-1 max-w-xs">
+                    This link doesn't point to a specific video, so YouTube won't allow it to load inline. Use the exact video/live URL (e.g. from the Share button on the live stream) for an inline preview, or open it directly.
+                  </p>
+                </div>
+                <a
+                  href={streamUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-700"
+                >
+                  <ExternalLink className="h-4 w-4" /> Open in YouTube
+                </a>
+              </div>
             ) : (
               <iframe
                 key={streamUrl}
                 src={streamUrl}
                 className="absolute inset-0 w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
               />
             )
