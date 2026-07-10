@@ -41,15 +41,30 @@
   <div id="loading">
     <div id="loading-spinner"></div>
     <p style="font-size:13px">Loading Zoom…</p>
+    <p id="coi-debug" style="font-size:11px;color:#666;font-family:monospace"></p>
   </div>
   <div id="error"></div>
+  <script>
+    // Diagnostic only: confirms whether this iframe is actually
+    // cross-origin-isolated (required for SharedArrayBuffer, which
+    // Ribbon/Gallery view depend on). Visible on screen and logged to
+    // console so it can be checked without opening devtools on the
+    // right frame.
+    (function () {
+      var isolated = typeof window.crossOriginIsolated !== 'undefined' ? window.crossOriginIsolated : 'unsupported';
+      console.log('[ZoomEmbed] crossOriginIsolated =', isolated);
+      var el = document.getElementById('coi-debug');
+      if (el) el.textContent = 'crossOriginIsolated: ' + isolated;
+      window.parent.postMessage({ type: 'ZOOM_DEBUG', crossOriginIsolated: isolated }, '*');
+    })();
+  </script>
 
-  <script src="https://source.zoom.us/6.1.0/lib/vendor/react.min.js"></script>
-  <script src="https://source.zoom.us/6.1.0/lib/vendor/react-dom.min.js"></script>
-  <script src="https://source.zoom.us/6.1.0/lib/vendor/redux.min.js"></script>
-  <script src="https://source.zoom.us/6.1.0/lib/vendor/redux-thunk.min.js"></script>
-  <script src="https://source.zoom.us/6.1.0/lib/vendor/lodash.min.js"></script>
-  <script src="https://source.zoom.us/zoom-meeting-embedded-6.1.0.min.js"></script>
+  <script src="https://source.zoom.us/6.2.0/lib/vendor/react.min.js"></script>
+  <script src="https://source.zoom.us/6.2.0/lib/vendor/react-dom.min.js"></script>
+  <script src="https://source.zoom.us/6.2.0/lib/vendor/redux.min.js"></script>
+  <script src="https://source.zoom.us/6.2.0/lib/vendor/redux-thunk.min.js"></script>
+  <script src="https://source.zoom.us/6.2.0/lib/vendor/lodash.min.js"></script>
+  <script src="https://source.zoom.us/zoom-meeting-embedded-6.2.0.min.js"></script>
 
   <script>
     var sdkClient = null;
@@ -80,25 +95,10 @@
         try {
           var el = document.getElementById('meetingSDKElement');
 
-          sdkClient = ZoomMtgEmbedded.createClient();
+          try { localStorage.clear(); } catch (_) {}
+          try { sessionStorage.clear(); } catch (_) {}
 
-          // Without an explicit viewSizes.default, the Embedded SDK falls
-          // back to its own small default ("ribbon") window instead of
-          // filling zoomAppRoot — that small draggable box is exactly the
-          // "floating video widget sitting on top of the Participants panel,
-          // neither clickable" bug that was reported. The fix is to size it
-          // explicitly against the real (now guaranteed non-zero, since the
-          // parent iframe is never display:none) container, and to disable
-          // dragging so the window can't be moved on top of other panels.
-          // Clamp to a standard meeting-window size rather than the raw
-          // container size — sizing the video tile to the FULL container
-          // width (often 1400-1600px on wide dashboard cards) makes a
-          // camera-off participant's avatar scale up into a giant, "zoomed
-          // in" letter tile. Zoom's own desktop app uses a similar bounded
-          // window size regardless of screen width.
-          var rect   = el.getBoundingClientRect();
-          var width  = Math.min(Math.max(Math.round(rect.width),  640), 960);
-          var height = Math.min(Math.max(Math.round(rect.height), 480), 600);
+          sdkClient = ZoomMtgEmbedded.createClient();
 
           await sdkClient.init({
             sdkKey:       data.sdkKey,
@@ -108,23 +108,9 @@
             customize: {
               video: {
                 isResizable: true,
-                // Ribbon View — the small, compact floating window with its
-                // own mic/camera/participants controls — is what this app
-                // used originally and is what should stay default. The real
-                // bug was never the ribbon's size; it was that the window
-                // could be dragged on top of the Participants panel and
-                // block clicks (fixed above via popper.disableDraggable).
-                defaultViewType: 'ribbon',
                 viewSizes: {
-                  // Full-size window, used only if the user manually
-                  // switches to Gallery/Speaker view via the toolbar.
-                  default: { width: width, height: height },
-                  // Ribbon's own compact size — intentionally small and
-                  // fixed, not derived from the (much wider) page container.
-                  ribbon:  { width: 340, height: 240 },
-                },
-                popper: {
-                  disableDraggable: true,
+                  default: { width: 340, height: 520 },
+                  ribbon:  { width: 340, height: 120 },
                 },
               },
             },
@@ -147,9 +133,10 @@
       }
 
       if (data.type === 'ZOOM_LEAVE') {
-        // Leave without ending — meeting stays live for participants.
-        // The host can rejoin by clicking Launch again.
-        try { if (sdkClient) sdkClient.leaveMeeting(); } catch (_) {}
+        (async () => {
+          try { if (sdkClient) await sdkClient.leaveMeeting(); } catch (_) {}
+          window.parent.postMessage({ type: 'ZOOM_LEFT' }, '*');
+        })();
       }
 
       if (data.type === 'ZOOM_SEND_CHAT' && data.message && sdkClient) {

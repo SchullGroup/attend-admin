@@ -16,6 +16,7 @@ import {
   useExportVoteAuditLog,
   useStatutoryReturn,
   downloadCsvText,
+  formatStatutoryReturnText,
 } from "@/api/client-post-agm";
 import type { EventShim } from "./types";
 
@@ -114,10 +115,11 @@ export function EventPostAgmTab({ event, voteResults, participants, eventId }: P
     try {
       const result = await fetchStatutoryReturn();
       if (result.data) {
-        const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: "application/json" });
+        const text = formatStatutoryReturnText(result.data);
+        const blob = new Blob([text], { type: "text/plain" });
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement("a");
-        a.href = url; a.download = `${event.title ?? eventId}-statutory-return.json`; a.click();
+        a.href = url; a.download = `${event.title ?? eventId}-statutory-return.txt`; a.click();
         URL.revokeObjectURL(url);
       }
     } finally {

@@ -69,13 +69,30 @@ export interface SendCertificatesResponse {
   message:       string;
 }
 
-/**
- * Opaque structured payload for the statutory return filing document — the
- * Swagger spec only documents this as a generic object (attendance, quorum,
- * per-resolution vote totals per the endpoint description). Treat as unknown
- * shape until the backend documents concrete fields; render defensively.
- */
-export type StatutoryReturn = Record<string, unknown>;
+export interface StatutoryReturnResolution {
+  order:             number;
+  title:             string;
+  specialResolution: boolean;
+  forVotes:          number;
+  againstVotes:      number;
+  abstainVotes:      number;
+  forShares:         number;
+  againstShares:     number;
+  abstainShares:     number;
+  passed:            boolean;
+}
+
+/** Confirmed shape — vote/share totals already fold in offline (paper/proxy) votes. */
+export interface StatutoryReturn {
+  eventName:            string;
+  eventDate:             string;
+  eventVenue:            string;
+  organisationName:      string;
+  totalRegistered:       number;
+  totalAttended:         number;
+  totalVotesCastShares:  number;
+  resolutions:           StatutoryReturnResolution[];
+}
 
 // ---------------------------------------------------------------------------
 // Query keys
@@ -285,4 +302,43 @@ export function downloadCsvText(filename: string, csvText: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** Render the statutory return as a readable plain-text filing document (SEC/CAC style). */
+export function formatStatutoryReturnText(r: StatutoryReturn): string {
+  const pct = (n: number, total: number) => (total > 0 ? `${((n / total) * 100).toFixed(1)}%` : "0.0%");
+  const lines: string[] = [
+    "STATUTORY RETURN",
+    "=".repeat(60),
+    "",
+    `Organisation:      ${r.organisationName}`,
+    `Meeting:           ${r.eventName}`,
+    `Date:              ${r.eventDate}`,
+    `Venue:             ${r.eventVenue}`,
+    "",
+    "ATTENDANCE",
+    "-".repeat(60),
+    `Total Registered:  ${r.totalRegistered.toLocaleString()}`,
+    `Total Attended:    ${r.totalAttended.toLocaleString()} (${pct(r.totalAttended, r.totalRegistered)})`,
+    `Total Shares Voted: ${r.totalVotesCastShares.toLocaleString()}`,
+    "",
+    "RESOLUTIONS",
+    "-".repeat(60),
+  ];
+
+  for (const res of r.resolutions) {
+    const totalShares = res.forShares + res.againstShares + res.abstainShares;
+    lines.push(
+      "",
+      `${res.order}. ${res.title}${res.specialResolution ? "  [SPECIAL RESOLUTION]" : ""}`,
+      `   Result: ${res.passed ? "PASSED" : "NOT PASSED"}`,
+      `   Votes   — For: ${res.forVotes.toLocaleString()}  Against: ${res.againstVotes.toLocaleString()}  Abstain: ${res.abstainVotes.toLocaleString()}`,
+      `   Shares  — For: ${res.forShares.toLocaleString()} (${pct(res.forShares, totalShares)})  ` +
+        `Against: ${res.againstShares.toLocaleString()} (${pct(res.againstShares, totalShares)})  ` +
+        `Abstain: ${res.abstainShares.toLocaleString()} (${pct(res.abstainShares, totalShares)})`
+    );
+  }
+
+  lines.push("", "=".repeat(60), `Generated: ${new Date().toLocaleString()}`);
+  return lines.join("\n");
 }
