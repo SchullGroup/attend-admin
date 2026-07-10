@@ -356,6 +356,7 @@ export interface Shareholder {
 export interface ShareholderUploadItem {
   fullName:  string;
   email:     string;
+  phone?:    string;
   chn?:      string;
   units?:    number;
   status?:   "ACTIVE" | "INACTIVE";

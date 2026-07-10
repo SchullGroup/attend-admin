@@ -332,7 +332,6 @@ function CreateEventInner() {
           format:                fmt(agm.format),
           streamUrl:             agmStreamUrl,
           venue:                 agm.venue                || undefined,
-          quorumPercentage:      parseInt(agm.quorum, 10) || undefined,
           eligibilityCutOffDate: agm.cutoff               || undefined,
           enableProxyVoting:     agm.proxyEnabled,
           shareholderTargeting:  agm.shareholderTargeting === "all" ? "ALL_REGISTERED" : "CUSTOM",

@@ -254,6 +254,21 @@ export function AgmNoticeStep({ s }: { s: AgmState }) {
         )}
         <input type="file" accept=".pdf" className="hidden" onChange={handleFileChange} disabled={s.noticeUploading} />
       </label>
+      {uploaded && !s.noticeUploading && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="self-center gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
+          onClick={() => {
+            s.setNoticeFile("");
+            s.setNoticeFileSize(0);
+            s.setNoticeUrl("");
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" /> Remove document
+        </Button>
+      )}
       {!uploaded && !s.noticeUploading && (
         <p className="text-xs text-[hsl(var(--muted-foreground))] text-center">
           The notice document is optional — you can skip this step and upload it later from the event settings.
@@ -355,9 +370,9 @@ export function AgmShareholdersStep({ s }: { s: AgmState }) {
         </div>
         <Toggle checked={s.proxyEnabled} onChange={s.setProxyEnabled} color="#374151" />
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div><Label className="mb-2 block">Quorum (%)</Label><Input type="number" placeholder="25" value={s.quorum} onChange={(e) => s.setQuorum(e.target.value)} /></div>
-        <div><Label className="mb-2 block">Eligibility Cut-off Date</Label><Input type="date" value={s.cutoff} onChange={(e) => s.setCutoff(e.target.value)} /></div>
+      <div>
+        <Label className="mb-2 block">Eligibility Cut-off Date</Label>
+        <Input type="date" value={s.cutoff} onChange={(e) => s.setCutoff(e.target.value)} />
       </div>
       <div className="flex items-center gap-2 p-3 rounded-xl bg-[hsl(var(--muted)/0.5)] border border-[hsl(var(--border))]">
         <ShieldCheck className="h-4 w-4 text-[#374151] shrink-0" />

@@ -25,6 +25,7 @@ import Papa from "papaparse";
 interface CsvRow {
   fullName:  string;
   email:     string;
+  phone?:    string;
   chn?:      string;
   units?:    number;
   status?:   "ACTIVE" | "INACTIVE";
@@ -48,6 +49,7 @@ function mapCsvRow(raw: Record<string, string>): CsvRow {
   }
 
   const email    = norm["email"]    ?? norm["emailaddress"] ?? norm["mail"] ?? "";
+  const phone    = norm["phone"]    ?? norm["phonenumber"]  ?? norm["mobile"] ?? norm["tel"] ?? "";
   const chn      = norm["chn"]      ?? norm["holdernumber"] ?? norm["shareholderno"] ?? norm["ref"] ?? "";
   const unitsRaw = norm["units"]    ?? norm["shares"]       ?? norm["shareunits"] ?? "";
   const units    = unitsRaw ? Number(unitsRaw.replace(/,/g, "")) : undefined;
@@ -60,6 +62,7 @@ function mapCsvRow(raw: Record<string, string>): CsvRow {
 
   return {
     fullName, email,
+    phone:  phone  || undefined,
     chn:    chn    || undefined,
     units:  units  || undefined,
     status: status ?? "ACTIVE",
@@ -85,10 +88,11 @@ function avatarInitials(s: Shareholder) {
 interface AddForm {
   fullName: string;
   email:    string;
+  phone:    string;
   chn:      string;
   units:    string;
 }
-const EMPTY_FORM: AddForm = { fullName: "", email: "", chn: "", units: "" };
+const EMPTY_FORM: AddForm = { fullName: "", email: "", phone: "", chn: "", units: "" };
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -130,7 +134,8 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
         shareholder: {
           fullName: form.fullName.trim(),
           email:    form.email.trim().toLowerCase(),
-          chn:      form.chn.trim()   || undefined,
+          phone:    form.phone.trim()  || undefined,
+          chn:      form.chn.trim()    || undefined,
           units:    form.units ? Number(form.units) : undefined,
           status:   "ACTIVE",
         },
@@ -167,6 +172,7 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
         shareholders: valid.map((r) => ({
           fullName: r.fullName,
           email:    r.email.toLowerCase(),
+          phone:    r.phone,
           chn:      r.chn,
           units:    r.units,
           status:   r.status ?? "ACTIVE",
@@ -217,7 +223,7 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
         </div>
 
         <p className="text-xs text-[hsl(var(--muted-foreground))] mt-3">
-          <span className="font-medium">CSV format: Full Name, CHN, Email, Units, Status</span>
+          <span className="font-medium">CSV format: Full Name, CHN, Email, Phone, Units, Status</span>
           {" "}· CHN is used for upsert deduplication.
         </p>
       </Card>
@@ -330,6 +336,16 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                 />
               </div>
               {touched && errors.email && <p className="text-xs text-red-500">Valid email required</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                Phone <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span>
+              </Label>
+              <Input
+                type="tel" value={form.phone}
+                onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+                placeholder="+234 801 234 5678"
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
