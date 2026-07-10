@@ -108,16 +108,20 @@
             customize: {
               video: {
                 isResizable: true,
-                // Gallery View shows every participant as an equal-sized
-                // tile that shrinks as more people join, instead of Speaker
-                // View's one huge tile for whoever's currently talking (the
-                // "enlarged avatar" behavior being reported). This is the
-                // same toggle as the grid icon in the meeting toolbar —
-                // just defaulting it on instead of requiring a manual click.
-                defaultViewType: 'gallery',
+                // Ribbon View — the small, compact floating window with its
+                // own mic/camera/participants controls — is what this app
+                // used originally and is what should stay default. The real
+                // bug was never the ribbon's size; it was that the window
+                // could be dragged on top of the Participants panel and
+                // block clicks (fixed above via popper.disableDraggable).
+                defaultViewType: 'ribbon',
                 viewSizes: {
+                  // Full-size window, used only if the user manually
+                  // switches to Gallery/Speaker view via the toolbar.
                   default: { width: width, height: height },
-                  ribbon:  { width: width, height: height },
+                  // Ribbon's own compact size — intentionally small and
+                  // fixed, not derived from the (much wider) page container.
+                  ribbon:  { width: 340, height: 240 },
                 },
                 popper: {
                   disableDraggable: true,

@@ -78,6 +78,17 @@ These should now render correctly on the Analytics page (Monthly RSVP Trend char
 
 ---
 
+## 8. `POST /expected-attendees/import` returns 500
+
+**Status: broken, currently worked around on the frontend**
+
+- **Endpoint:** `POST /api/v1/client/events/{eventId}/expected-attendees/import` (`{ registerId }`)
+- **Observed:** consistently returns HTTP 500 (no useful body) when called — both from the auto-import-on-AGM-creation flow and the "Import from Register" button on the event's Expected Attendees tab.
+- **Current workaround:** the frontend no longer calls this endpoint. Instead it fetches the register's shareholders via `GET /api/v1/client/registers/{registerId}/shareholders?status=ACTIVE&page=&size=` (paginated) and submits them through the already-working `POST /api/v1/client/events/{eventId}/expected-attendees` (bulk upload, `{ attendees: [...] }`) endpoint. Shareholders with no email on file are skipped client-side since that endpoint requires one.
+- **Fix needed:** either fix the 500 on the import endpoint (nice to have — the client-side workaround is functional), or confirm this endpoint should be deprecated in favor of the shareholders-list + bulk-upload combination, in which case it can be removed from Swagger.
+
+---
+
 ## Summary table
 
 | # | Issue | Endpoint status | Action needed |
@@ -89,3 +100,4 @@ These should now render correctly on the Analytics page (Monthly RSVP Trend char
 | 5 | Revoke access | **Shipped** ✅ | Live-test that an already-open tab is also kicked, not just new logins |
 | 6 | Analytics (trend, performance, export) | **Shipped** ✅ | None — contracts match, should just work |
 | 7 | Post-AGM (minutes, certificates, exports, statutory return) | **Shipped** ✅ | Confirm CSV exports are raw text, not JSON-wrapped; send real statutory-return field shape |
+| 8 | Expected-attendees import 500 | Broken | Fix or deprecate — frontend now works around it via shareholders-list + bulk-upload |
