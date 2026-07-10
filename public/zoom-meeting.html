@@ -4,6 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Zoom Meeting</title>
+  <!-- The coi-serviceworker.js approach was tried and abandoned (it never
+       achieved crossOriginIsolated=true here and eventually self-disabled
+       COEP). COOP/COEP is now set server-side via middleware.ts instead,
+       scoped to this path only. This cleanup unregisters any leftover
+       service worker from that earlier attempt so it doesn't keep
+       intercepting requests from this page. -->
+  <script>
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (r) { r.unregister(); });
+      });
+    }
+  </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #111; }
@@ -98,6 +111,21 @@
           try { localStorage.clear(); } catch (_) {}
           try { sessionStorage.clear(); } catch (_) {}
 
+          // Zoom doesn't expose separate sizes for Gallery/Active
+          // Speaker/Speaker — they all render inside the single "default"
+          // box, so sizing it to the real container width/height makes
+          // all three fill the card instead of leaving a black gap.
+          // "ribbon" gets the same box so its tile strip doesn't overflow
+          // and push the bottom toolbar off-screen once 4+ participants
+          // join. PAD_W keeps content off the right edge (near Zoom's own
+          // Leave button); PAD_H reserves room at the top (host-role
+          // banner) and bottom (mic/camera/participants toolbar) so
+          // neither gets covered or pushed out of view.
+          var PAD_W = 24;
+          var PAD_H = 100;
+          var w = Math.max(0, Math.floor(el.offsetWidth  || 340) - PAD_W);
+          var h = Math.max(0, Math.floor(el.offsetHeight || 520) - PAD_H);
+
           sdkClient = ZoomMtgEmbedded.createClient();
 
           await sdkClient.init({
@@ -109,8 +137,8 @@
               video: {
                 isResizable: true,
                 viewSizes: {
-                  default: { width: 340, height: 520 },
-                  ribbon:  { width: 340, height: 120 },
+                  default: { width: 300, height: 300 },
+                  ribbon:  { width: 300, height: 300 },
                 },
               },
             },

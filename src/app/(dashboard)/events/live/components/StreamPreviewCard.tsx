@@ -98,6 +98,16 @@ export function StreamPreviewCard({
               className="absolute inset-0 w-full h-full"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
+              // @ts-expect-error -- `credentialless` is a valid HTML iframe
+              // attribute (not yet in React's IframeHTMLAttributes types).
+              // Required so this cross-origin YouTube iframe can still load
+              // once the parent page (/events/live) carries
+              // Cross-Origin-Embedder-Policy for the Zoom iframe's
+              // isolation — without it, COEP would block this embed since
+              // YouTube doesn't send back a Cross-Origin-Resource-Policy
+              // header. `credentialless` lets it load in an ephemeral,
+              // credential-less context instead of being blocked outright.
+              credentialless=""
             />
           )
         ) : (
