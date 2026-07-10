@@ -20,7 +20,7 @@ import type { NextRequest } from "next/server";
 // `credentialless` attribute directly on that <iframe> tag — Chrome's
 // purpose-built mechanism for letting an isolated page embed a
 // non-cooperating cross-origin iframe without breaking either side.
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const response = NextResponse.next();
 
   const pathname = request.nextUrl.pathname;
