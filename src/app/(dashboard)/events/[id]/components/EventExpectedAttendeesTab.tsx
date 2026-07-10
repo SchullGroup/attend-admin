@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import {
   Users, UserPlus, Trash2, Loader2, Hash, Mail, Phone, X, Check,
-  Upload, FileText, AlertCircle, ChevronDown, ChevronUp,
+  Upload, FileText, AlertCircle, ChevronDown, ChevronUp, Download,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   useUploadExpectedAttendees,
   useDeleteExpectedAttendee,
   useDeleteAllExpectedAttendees,
+  useImportShareholdersToEvent,
   type ExpectedAttendee,
 } from "@/api/client-events";
 import { cn } from "@/lib/utils";
@@ -143,7 +144,7 @@ function SkeletonRow() {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function EventExpectedAttendeesTab({ eventId }: { eventId: string }) {
+export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: string; registerId?: string }) {
   const [showForm,     setShowForm]     = useState(false);
   const [form,         setForm]         = useState<AddForm>(EMPTY_FORM);
   const [touched,      setTouched]      = useState(false);
@@ -161,6 +162,12 @@ export function EventExpectedAttendeesTab({ eventId }: { eventId: string }) {
   const addMutation    = useUploadExpectedAttendees();
   const deleteMutation = useDeleteExpectedAttendee();
   const clearMutation  = useDeleteAllExpectedAttendees();
+  const importMutation = useImportShareholdersToEvent();
+
+  function handleImportFromRegister() {
+    if (!registerId) return;
+    importMutation.mutate({ eventId, registerId });
+  }
 
   const attendees: ExpectedAttendee[] = data?.attendees ?? [];
 
@@ -308,6 +315,24 @@ export function EventExpectedAttendeesTab({ eventId }: { eventId: string }) {
                   <Trash2 className="h-3.5 w-3.5 mr-1" /> Clear all
                 </Button>
               )
+            )}
+
+            {/* Import from Register */}
+            {registerId && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                disabled={importMutation.isPending}
+                onClick={handleImportFromRegister}
+                title="Pull the shareholder list from this event's register"
+              >
+                {importMutation.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Download className="h-3.5 w-3.5" />
+                }
+                Import from Register
+              </Button>
             )}
 
             {/* Import CSV */}
@@ -558,7 +583,9 @@ export function EventExpectedAttendeesTab({ eventId }: { eventId: string }) {
                       <Users className="h-8 w-8 mx-auto mb-3 text-[hsl(var(--muted-foreground))] opacity-25" />
                       <p className="text-sm font-medium text-[hsl(var(--foreground))]">No expected attendees yet</p>
                       <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                        Add shareholders who are expected to attend this AGM.
+                        {registerId
+                          ? "Import from Register to pull the shareholder list, or add attendees manually."
+                          : "Add shareholders who are expected to attend this AGM."}
                       </p>
                     </td>
                   </tr>

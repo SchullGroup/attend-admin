@@ -1,24 +1,14 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  async headers() {
-    return [
-      {
-        // Cross-Origin Isolation — required by Zoom Meeting SDK for video rendering.
-        // Without these headers the browser blocks SharedArrayBuffer (used by the
-        // Zoom canvas renderer) and video stays black / throws "includes of undefined".
-        //
-        // COEP: credentialless  — allows cross-origin assets (fonts, CDN scripts)
-        //                         without needing CORP headers on every resource.
-        // COOP: same-origin     — isolates the browsing context so SAB is available.
-        source: "/(.*)",
-        headers: [
-          { key: "Cross-Origin-Opener-Policy",  value: "same-origin" },
-          { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
-        ],
-      },
-    ];
-  },
-};
+// Cross-Origin Isolation for Zoom's Ribbon/Gallery view (needs
+// SharedArrayBuffer, which needs COOP/COEP) is now handled entirely
+// client-side by public/coi-serviceworker.js, registered from inside
+// public/zoom-meeting.html with its scope narrowed to that one path.
+// See middleware.ts (currently disabled) for the server-header approach
+// that was tried first and dropped — it kept coinciding with the YouTube
+// embed on /events/live breaking, and this app already hit one confirmed
+// Next.js bug where headers() doesn't reliably reach files under /public.
+// No headers are set here; nothing to configure.
+const nextConfig: NextConfig = {};
 
 export default nextConfig;

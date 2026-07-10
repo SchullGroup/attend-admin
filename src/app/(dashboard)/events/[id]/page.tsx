@@ -264,7 +264,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       )}
       {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} isAdmin={isAdmin} />}
       {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin} />}
-      {tab === "Stakeholders"   && !isSuperAdmin && isAGM   && <EventExpectedAttendeesTab eventId={id} />}
+      {tab === "Stakeholders"   && !isSuperAdmin && isAGM   && <EventExpectedAttendeesTab eventId={id} registerId={(apiEvent as any).registerId} />}
       {tab === "Audience Tiers" && !isSuperAdmin && isLAUNCH && <EventLaunchAudienceTab    eventId={id} />}
       {tab === "Waitlist"       && !isSuperAdmin && isLAUNCH && <EventLaunchWaitlistTab    eventId={id} />}
       {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab eventId={id} />}

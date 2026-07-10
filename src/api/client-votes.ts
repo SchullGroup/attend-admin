@@ -92,6 +92,8 @@ export interface ResolutionResult {
   percentageFor:         number;
   passed:                boolean;
   specialResolution:     boolean;
+  // Per-resolution share-weighted tally display — default OFF, locked while status === "OPEN".
+  shareWeightedTalliesEnabled?: boolean;
 }
 
 export interface VoteResultsResponse {
@@ -105,6 +107,8 @@ export interface VoteResultsResponse {
   totalVotesCast:   number;
   quorumPercentage: number;
   quorumMet:        boolean;
+  /** The configured required check-in % for quorum (editable via useSetQuorum). */
+  requiredQuorumPercentage?: number;
   resolutions:      ResolutionResult[];
 }
 
@@ -231,7 +235,17 @@ export function useVoteResults(eventId: string) {
       const res = await apiClient.get<ApiResponse<VoteResultsResponse>>(
         `/api/v1/client/votes/${eventId}/results`
       );
-      return res.data.data;
+      const raw = res.data.data as any;
+      if (!raw) return raw as VoteResultsResponse;
+      const requiredQuorumPercentage =
+        raw.requiredQuorumPercentage ?? raw.quorumRequiredPercentage ?? raw.quorumThreshold ?? undefined;
+      const resolutions: ResolutionResult[] = (raw.resolutions ?? []).map((r: any) => ({
+        ...r,
+        // Normalize whichever alias the backend uses for the per-resolution share-weighted toggle.
+        shareWeightedTalliesEnabled:
+          r.shareWeightedTalliesEnabled ?? r.shareWeightedTallies ?? r.weightedTalliesEnabled ?? false,
+      }));
+      return { ...raw, requiredQuorumPercentage, resolutions } as VoteResultsResponse;
     },
     enabled: !!eventId,
     staleTime: 15_000,
@@ -257,6 +271,79 @@ export function useExportResolutions(eventId: string) {
 // ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------
+
+/**
+ * PATCH /api/v1/client/votes/{eventId}/resolutions/{resolutionId}/config/share-weighted-tallies
+ * Toggle whether this specific resolution's tallies show only headcount (false) or
+ * headcount + share-weighted totals, using each shareholder's Units from the register.
+ * Default is OFF per resolution. Returns 409 if voting on this resolution is currently OPEN.
+ */
+export function useSetResolutionShareWeightedTallies() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      eventId,
+      resolutionId,
+      enabled,
+    }: {
+      eventId:      string;
+      resolutionId: string;
+      enabled:      boolean;
+    }) => {
+      const res = await apiClient.patch<ApiResponse<any>>(
+        `/api/v1/client/votes/${eventId}/resolutions/${resolutionId}/config/share-weighted-tallies`,
+        { enabled }
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, { eventId, enabled }) => {
+      queryClient.invalidateQueries({ queryKey: clientVoteKeys.results(eventId) });
+      popup.success(
+        enabled ? "Share-Weighted Tallies On" : "Share-Weighted Tallies Off",
+        enabled
+          ? "This resolution's tallies now show share-weighted totals alongside headcount."
+          : "This resolution's tallies now show headcount only.",
+        2500
+      );
+    },
+    onError: (error: any) => {
+      if (error?.response?.status === 409) {
+        popup.error("Voting Is Open", "Can't change tally display while voting is open on this resolution.", 3000);
+        return;
+      }
+      parseAndToastApiError(error, "Failed to update tally display setting.");
+    },
+  });
+}
+
+/**
+ * PATCH /api/v1/client/votes/{eventId}/config/quorum
+ * Sets the required check-in percentage for quorum (0–100). Rejected (409) if the
+ * event is LIVE and voting has already started on any resolution.
+ */
+export function useSetQuorum() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, quorumPercentage }: { eventId: string; quorumPercentage: number }) => {
+      const res = await apiClient.patch<ApiResponse<any>>(
+        `/api/v1/client/votes/${eventId}/config/quorum`,
+        { quorumPercentage }
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: clientVoteKeys.results(eventId) });
+      popup.success("Quorum Updated", "The required quorum percentage has been saved.", 2500);
+    },
+    onError: (error: any) => {
+      if (error?.response?.status === 409) {
+        popup.error("Can't Update Quorum", "Voting has already started on a resolution — quorum is locked for this meeting.", 3500);
+        return;
+      }
+      parseAndToastApiError(error, "Failed to update quorum requirement.");
+    },
+  });
+}
 
 /** Enter / update physical in-room (offline) vote counts for a resolution. */
 export function useRecordOfflineVotes() {

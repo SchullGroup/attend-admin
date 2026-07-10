@@ -226,9 +226,31 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
 
   function handleLeave() {
     cleanupListener();
+
+    // Wait for the iframe to confirm leaveMeeting() actually completed
+    // before tearing it down — destroying the iframe (and its network
+    // connection) immediately after posting ZOOM_LEAVE cuts the async leave
+    // request off mid-flight, leaving a "zombie" participant session on
+    // Zoom's servers. That's what was causing duplicate self-entries in the
+    // Participants panel after repeated Leave→relaunch cycles. A short
+    // timeout still tears it down even if the confirmation never arrives
+    // (e.g. connection already dropped), so Leave never hangs.
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener("message", onLeft);
+      clearTimeout(timeout);
+      if (iframeRef.current) iframeRef.current.src = "";
+      setStatus("idle");
+    };
+    const onLeft = (event: MessageEvent) => {
+      if (event.data?.type === "ZOOM_LEFT") finish();
+    };
+    window.addEventListener("message", onLeft);
+    const timeout = setTimeout(finish, 1500);
+
     iframeRef.current?.contentWindow?.postMessage({ type: "ZOOM_LEAVE" }, "*");
-    if (iframeRef.current) iframeRef.current.src = "";
-    setStatus("idle");
   }
 
   // Cleanup listener on unmount
@@ -245,16 +267,29 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
 
   return (
     <div className="relative w-full bg-black overflow-hidden" style={{ minHeight: height }}>
-      {/* Iframe always in DOM — only visible when joined */}
+      {/*
+        Iframe always occupies real, non-zero space — even before "joined".
+        Why: zoom-meeting.html measures its container's offsetWidth/offsetHeight
+        when initializing the Zoom SDK. If the iframe were `display: none` at
+        that point (as it used to be while status !== "joined"), the iframe's
+        own content window collapses to a 0×0 viewport, so the Zoom SDK inits
+        its video/control-bar layout at 0×0. That leaves invisible, misplaced
+        elements once the iframe becomes visible — the exact "can't click on
+        anything else" symptom, since a stray 0-sized-turned-stale element can
+        end up covering parts of the page. The opaque idle/loading/error
+        overlays below (all solid `bg-black`) visually hide the iframe until
+        it's actually joined, without ever un-rendering it.
+      */}
       <iframe
         ref={iframeRef}
         title="Zoom Meeting"
         allow="camera; microphone; display-capture; fullscreen; autoplay"
         style={{
-          width:   "100%",
-          height,
-          border:  "none",
-          display: status === "joined" ? "block" : "none",
+          position: "absolute",
+          inset:    0,
+          width:    "100%",
+          height:   "100%",
+          border:   "none",
         }}
       />
 

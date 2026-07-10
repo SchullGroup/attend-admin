@@ -1,8 +1,9 @@
 "use client";
 
-import { FileText, Download, FolderOpen } from "lucide-react";
+import { Download, FolderOpen } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useRegisterDocuments } from "@/api/registers";
+import { getDocTypeConfig } from "@/lib/document-type";
 
 function formatBytes(bytes: number): string {
   if (!bytes) return "—";
@@ -51,12 +52,15 @@ export function RegisterDocumentsSection({ registerId }: { registerId: string })
             </tr>
           </thead>
           <tbody className="divide-y divide-[hsl(var(--border))]">
-            {docs.map((doc, i) => (
+            {docs.map((doc, i) => {
+              const typeConfig = getDocTypeConfig(doc.documentType);
+              const TypeIcon   = typeConfig.icon;
+              return (
               <tr key={doc.id ?? i} className="attend-table-row">
                 <td className="px-5 py-3.5">
                   <div className="flex items-center gap-2.5">
-                    <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                      <FileText className="h-4 w-4 text-blue-600" />
+                    <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: typeConfig.bg }}>
+                      <TypeIcon className="h-4 w-4" style={{ color: typeConfig.color }} />
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate max-w-[220px]" title={doc.title}>
@@ -81,7 +85,8 @@ export function RegisterDocumentsSection({ registerId }: { registerId: string })
                   {doc.uploadedAt ? formatDate(doc.uploadedAt) : "—"}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       )}

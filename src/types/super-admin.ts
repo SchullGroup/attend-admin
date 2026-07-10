@@ -27,6 +27,8 @@ export interface RegisterDocumentItem {
   fileType?:     string;
   mimeType?:     string;
   url?:          string;
+  /** e.g. NOTICE, AGENDA, MINUTES, REPORT — drives the icon shown in the UI */
+  documentType?: string;
 }
 
 /**

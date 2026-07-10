@@ -910,27 +910,106 @@ export interface UploadAttendeesRequest {
   }>;
 }
 
+export interface RegisterShareholderItem {
+  id:       string;
+  fullName: string;
+  chn?:     string;
+  email?:   string;
+  units?:   number;
+  status?:  string;
+}
+
+interface RegisterShareholdersResponse {
+  totalCount:    number;
+  activeCount:   number;
+  page:          number;
+  size:          number;
+  shareholders:  RegisterShareholderItem[];
+}
+
 /**
  * Import shareholders from a register into an event's expected-attendees list.
- * POST /api/v1/client/events/{eventId}/expected-attendees/import
- * Body: { registerId }
+ *
+ * The backend's one-shot POST /expected-attendees/import endpoint has been
+ * unreliable (500s). Instead, this pulls the register's ACTIVE shareholders
+ * page-by-page from the proven-working
+ * GET /api/v1/client/registers/{registerId}/shareholders endpoint, maps them
+ * to the expected-attendee shape, and submits them through the
+ * already-working POST /api/v1/client/events/{eventId}/expected-attendees
+ * (bulk upload) endpoint instead.
  */
 export function useImportShareholdersToEvent() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ eventId, registerId }: { eventId: string; registerId: string }) => {
-      const res = await apiClient.post<ApiResponse<{ imported: number }>>(
-        `/api/v1/client/events/${eventId}/expected-attendees/import`,
-        { registerId }
+      const PAGE_SIZE = 200;
+      const HARD_PAGE_CAP = 50; // safety net against a runaway loop
+      const attendees: UploadAttendeesRequest["attendees"] = [];
+      let skipped = 0;
+      let page = 0;
+      let totalPages = 1;
+
+      do {
+        const res = await apiClient.get<ApiResponse<RegisterShareholdersResponse>>(
+          `/api/v1/client/registers/${registerId}/shareholders`,
+          { params: { status: "ACTIVE", page, size: PAGE_SIZE } }
+        );
+        const data = res.data.data;
+        const list = data?.shareholders ?? [];
+
+        for (const sh of list) {
+          const email = (sh.email ?? "").trim();
+          // Expected-attendees requires a usable email — shareholders on the
+          // register without one can't be imported this way; skip and report.
+          if (!email || !email.includes("@")) {
+            skipped += 1;
+            continue;
+          }
+          const parts = (sh.fullName ?? "").trim().split(/\s+/).filter(Boolean);
+          attendees.push({
+            firstName:      parts[0] ?? sh.fullName ?? "Shareholder",
+            lastName:       parts.slice(1).join(" ") || "-",
+            email,
+            shareholderRef: sh.chn || sh.id,
+          });
+        }
+
+        totalPages = data ? Math.max(1, Math.ceil((data.totalCount ?? 0) / PAGE_SIZE)) : 1;
+        page += 1;
+      } while (page < totalPages && page < HARD_PAGE_CAP);
+
+      if (attendees.length === 0) {
+        throw new Error(
+          skipped > 0
+            ? `Found ${skipped} shareholder(s) on this register, but none have an email on file to import.`
+            : "No active shareholders found on this register."
+        );
+      }
+
+      const res = await apiClient.post<ApiResponse<any>>(
+        `/api/v1/client/events/${eventId}/expected-attendees`,
+        { attendees } as UploadAttendeesRequest
       );
-      return (res.data.data ?? (res.data as any)) as { imported: number };
+      return { imported: attendees.length, skipped, ...(res.data.data ?? {}) };
     },
     onSuccess: (data, { eventId }) => {
       queryClient.invalidateQueries({ queryKey: ["clientEvents", "expectedAttendees", eventId] });
-      const count = (data as any)?.imported ?? "some";
-      popup.success("Shareholders Imported", `${count} shareholders added as expected attendees.`, 3000);
+      const { imported, skipped } = data as { imported: number; skipped: number };
+      popup.success(
+        "Shareholders Imported",
+        skipped > 0
+          ? `${imported} shareholder(s) added as expected attendees (${skipped} skipped — no email on file).`
+          : `${imported} shareholder(s) added as expected attendees.`,
+        4000
+      );
     },
-    // No hook-level onError — this is a background best-effort call; callers handle errors themselves
+    onError: (error: any) => {
+      if (error instanceof Error && !(error as any).response) {
+        popup.error("Import Failed", error.message, 4000);
+        return;
+      }
+      parseAndToastApiError(error, "Failed to import shareholders from register.");
+    },
   });
 }
 

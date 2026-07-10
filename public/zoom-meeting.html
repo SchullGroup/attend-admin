@@ -4,6 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Zoom Meeting</title>
+  <!-- The coi-serviceworker.js approach was tried and abandoned (it never
+       achieved crossOriginIsolated=true here and eventually self-disabled
+       COEP). COOP/COEP is now set server-side via middleware.ts instead,
+       scoped to this path only. This cleanup unregisters any leftover
+       service worker from that earlier attempt so it doesn't keep
+       intercepting requests from this page. -->
+  <script>
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (r) { r.unregister(); });
+      });
+    }
+  </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #111; }
@@ -41,15 +54,30 @@
   <div id="loading">
     <div id="loading-spinner"></div>
     <p style="font-size:13px">Loading Zoom…</p>
+    <p id="coi-debug" style="font-size:11px;color:#666;font-family:monospace"></p>
   </div>
   <div id="error"></div>
+  <script>
+    // Diagnostic only: confirms whether this iframe is actually
+    // cross-origin-isolated (required for SharedArrayBuffer, which
+    // Ribbon/Gallery view depend on). Visible on screen and logged to
+    // console so it can be checked without opening devtools on the
+    // right frame.
+    (function () {
+      var isolated = typeof window.crossOriginIsolated !== 'undefined' ? window.crossOriginIsolated : 'unsupported';
+      console.log('[ZoomEmbed] crossOriginIsolated =', isolated);
+      var el = document.getElementById('coi-debug');
+      if (el) el.textContent = 'crossOriginIsolated: ' + isolated;
+      window.parent.postMessage({ type: 'ZOOM_DEBUG', crossOriginIsolated: isolated }, '*');
+    })();
+  </script>
 
-  <script src="https://source.zoom.us/6.1.0/lib/vendor/react.min.js"></script>
-  <script src="https://source.zoom.us/6.1.0/lib/vendor/react-dom.min.js"></script>
-  <script src="https://source.zoom.us/6.1.0/lib/vendor/redux.min.js"></script>
-  <script src="https://source.zoom.us/6.1.0/lib/vendor/redux-thunk.min.js"></script>
-  <script src="https://source.zoom.us/6.1.0/lib/vendor/lodash.min.js"></script>
-  <script src="https://source.zoom.us/zoom-meeting-embedded-6.1.0.min.js"></script>
+  <script src="https://source.zoom.us/6.2.0/lib/vendor/react.min.js"></script>
+  <script src="https://source.zoom.us/6.2.0/lib/vendor/react-dom.min.js"></script>
+  <script src="https://source.zoom.us/6.2.0/lib/vendor/redux.min.js"></script>
+  <script src="https://source.zoom.us/6.2.0/lib/vendor/redux-thunk.min.js"></script>
+  <script src="https://source.zoom.us/6.2.0/lib/vendor/lodash.min.js"></script>
+  <script src="https://source.zoom.us/zoom-meeting-embedded-6.2.0.min.js"></script>
 
   <script>
     var sdkClient = null;
@@ -79,8 +107,24 @@
       if (data.type === 'ZOOM_JOIN') {
         try {
           var el = document.getElementById('meetingSDKElement');
-          var w  = Math.floor(el.offsetWidth  || window.innerWidth);
-          var h  = Math.floor(el.offsetHeight || window.innerHeight);
+
+          try { localStorage.clear(); } catch (_) {}
+          try { sessionStorage.clear(); } catch (_) {}
+
+          // Zoom doesn't expose separate sizes for Gallery/Active
+          // Speaker/Speaker — they all render inside the single "default"
+          // box, so sizing it to the real container width/height makes
+          // all three fill the card instead of leaving a black gap.
+          // "ribbon" gets the same box so its tile strip doesn't overflow
+          // and push the bottom toolbar off-screen once 4+ participants
+          // join. PAD_W keeps content off the right edge (near Zoom's own
+          // Leave button); PAD_H reserves room at the top (host-role
+          // banner) and bottom (mic/camera/participants toolbar) so
+          // neither gets covered or pushed out of view.
+          var PAD_W = 24;
+          var PAD_H = 100;
+          var w = Math.max(0, Math.floor(el.offsetWidth  || 340) - PAD_W);
+          var h = Math.max(0, Math.floor(el.offsetHeight || 520) - PAD_H);
 
           sdkClient = ZoomMtgEmbedded.createClient();
 
@@ -92,7 +136,10 @@
             customize: {
               video: {
                 isResizable: true,
-                viewSizes: { default: { width: w, height: h } },
+                viewSizes: {
+                  default: { width: 300, height: 300 },
+                  ribbon:  { width: 300, height: 300 },
+                },
               },
             },
           });
@@ -114,9 +161,10 @@
       }
 
       if (data.type === 'ZOOM_LEAVE') {
-        // Leave without ending — meeting stays live for participants.
-        // The host can rejoin by clicking Launch again.
-        try { if (sdkClient) sdkClient.leaveMeeting(); } catch (_) {}
+        (async () => {
+          try { if (sdkClient) await sdkClient.leaveMeeting(); } catch (_) {}
+          window.parent.postMessage({ type: 'ZOOM_LEFT' }, '*');
+        })();
       }
 
       if (data.type === 'ZOOM_SEND_CHAT' && data.message && sdkClient) {

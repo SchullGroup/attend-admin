@@ -247,9 +247,11 @@ export default function EventsPage() {
   const [registrarFilter,  setRegistrarFilter]  = useState("");
   const [organizerFilter,  setOrganizerFilter]  = useState("");
 
-  const { data: adminData,    isLoading: adminLoading  } = useEvents(activeStatus, page, LIMIT);
+  // These two hit super-admin-only backend endpoints — must stay gated behind
+  // isSuperAdmin, or a Client Admin gets a 403 firing on every page load.
+  const { data: adminData,    isLoading: adminLoading  } = useEvents(activeStatus, page, LIMIT, isSuperAdmin);
   const { data: clientData,   isLoading: clientLoading } = useClientEvents(activeType, page, LIMIT);
-  const { data: registrarsData                         } = useRegistrars("", 0, 100);
+  const { data: registrarsData                         } = useRegistrars("", 0, 100, isSuperAdmin);
   const { data: registersData                          } = useRegisters("ACTIVE", 0, 200);
 
   const isLoading = isAdmin ? adminLoading : clientLoading;

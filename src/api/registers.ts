@@ -153,8 +153,9 @@ export function useRegisterEvents(registerId: string) {
 /**
  * Compliance document vault for this register.
  *
- * GET /api/v1/client/documents/filters/registers
- * Params: registerId
+ * GET /api/v1/client/documents?registerId={id}
+ * (NOT /api/v1/client/documents/filters/registers — that endpoint only returns
+ * dropdown filter options { events: [{id, label}] }, not actual documents.)
  * Column contract:
  *   doc.title         — filename string
  *   doc.eventTitle    — meeting scope (default "Global Space Notice" when null)
@@ -167,11 +168,24 @@ export function useRegisterDocuments(registerId: string) {
     queryKey: registerKeys.documents(registerId),
     queryFn:  async () => {
       const res = await apiClient.get<ApiResponse<any>>(
-        `/api/v1/client/documents/filters/registers`,
-        { params: { registerId } }
+        `/api/v1/client/documents`,
+        { params: { registerId, page: 0, size: 100 } }
       );
       const raw = res.data.data;
-      return (raw?.documents ?? raw?.content ?? raw?.data ?? []) as RegisterDocumentItem[];
+      const docs: any[] = raw?.documents ?? raw?.content ?? raw?.data ?? [];
+      // Normalize global-vault field names to the RegisterDocumentItem shape.
+      return docs.map((d) => ({
+        id:            d.id,
+        title:         d.title ?? d.originalFilename ?? "Untitled",
+        eventTitle:    d.eventTitle ?? d.eventName ?? null,
+        fileSizeBytes: d.fileSizeBytes ?? d.sizeBytes ?? 0,
+        downloadCount: d.downloadCount ?? 0,
+        uploadedAt:    d.uploadedAt,
+        fileType:      d.fileType,
+        mimeType:      d.mimeType,
+        url:           d.url ?? d.fileUrl,
+        documentType:  d.documentType ?? d.type,
+      })) as RegisterDocumentItem[];
     },
     enabled:   !!registerId,
     staleTime: 60_000,
@@ -342,6 +356,7 @@ export interface Shareholder {
 export interface ShareholderUploadItem {
   fullName:  string;
   email:     string;
+  phone?:    string;
   chn?:      string;
   units?:    number;
   status?:   "ACTIVE" | "INACTIVE";
