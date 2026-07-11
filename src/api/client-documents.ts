@@ -59,6 +59,8 @@ export interface UploadGlobalDocumentRequest {
   fileUrl:             string;  // Cloudinary URL from /api/v1/upload
   cloudinaryPublicId?: string;
   originalFilename:    string;
+  /** File size in bytes — the backend 500s without this on some endpoints, and sizeLabel is blank ("0 B") without it. */
+  sizeBytes?:          number;
 }
 
 export interface DocumentEventFilterOption {
@@ -250,6 +252,7 @@ export function useUploadGlobalDocument() {
         eventId,
         fileUrl,
         originalFilename: file.name,
+        sizeBytes: file.size,
         ...(cloudinaryPublicId ? { cloudinaryPublicId } : {}),
       };
       const res = await apiClient.post<ApiResponse<GlobalDocumentItem>>(
@@ -314,7 +317,7 @@ export function useUploadCloudinaryDocument() {
       // 3. Register the document in the vault
       const docRes = await apiClient.post<ApiResponse<GlobalDocumentItem>>(
         "/api/v1/client/documents",
-        { title, documentType, eventId, fileUrl, cloudinaryPublicId, originalFilename }
+        { title, documentType, eventId, fileUrl, cloudinaryPublicId, originalFilename, sizeBytes: blob.size }
       );
       return docRes.data.data;
     },

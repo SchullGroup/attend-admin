@@ -410,7 +410,8 @@ export default function DocumentsPage() {
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5">
                       <Button
-                        size="sm" variant="outline" className="h-7 text-xs gap-1"
+                        size="sm" variant="outline" className="h-7 w-7 p-0"
+                        title="Download"
                         disabled={downloadMutation.isPending}
                         onClick={() => {
                           if (doc.fileUrl) {
@@ -425,7 +426,7 @@ export default function DocumentsPage() {
                           }
                         }}
                       >
-                        <Download className="h-3 w-3" /> Download
+                        <Download className="h-3.5 w-3.5" />
                       </Button>
                       {!isAdmin && (
                         confirmDeleteId === doc.id ? (
