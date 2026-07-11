@@ -23,6 +23,8 @@ import type { RegisterItem } from "@/types/super-admin";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
+import { useGetMe } from "@/api/auth/hooks";
+import { resolveRole } from "@/lib/utils";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -52,6 +54,13 @@ export default function RegistersPage() {
    */
   const [confirmId,     setConfirmId]     = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<"suspend" | "reject" | null>(null);
+
+  // Only the organisation's actual Client Admin (owner) may suspend a
+  // register — other team roles (Admin, Event Manager, Viewer, Judge) get
+  // the same read/manage view otherwise, but this destructive action stays
+  // owner-only.
+  const { data: userResponse } = useGetMe();
+  const isClientAdmin = resolveRole(userResponse?.data) === "client_admin";
 
   // Server-side status filter — "all" sends no status param
   const statusParam = activeTab === "all" ? "" : activeTab.toUpperCase();
@@ -230,8 +239,8 @@ export default function RegistersPage() {
                           </>
                         )}
 
-                        {/* ACTIVE — Suspend (double-confirm) */}
-                        {isActive && (
+                        {/* ACTIVE — Suspend (double-confirm), Client Admin only */}
+                        {isActive && isClientAdmin && (
                           isSuspendConf ? (
                             <>
                               <Button

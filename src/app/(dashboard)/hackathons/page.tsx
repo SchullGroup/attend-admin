@@ -189,8 +189,8 @@ export default function HackathonsPage() {
   const isJudge        = JUDGE_ROLES.has(normalizedRole);
 
   // Always call these — hooks must not be conditional
-  const { data: clientData, isLoading: clientLoading, isFetching: clientFetching } = useClientChallenges(search, statusTab, 0, 50);
-  const { data: adminData,  isLoading: adminLoading,  isFetching: adminFetching  } = useAdminChallenges(search, "", statusTab, 0, 50);
+  const { data: clientData, isLoading: clientLoading, isFetching: clientFetching, isError: clientError } = useClientChallenges(search, statusTab, 0, 50);
+  const { data: adminData,  isLoading: adminLoading,  isFetching: adminFetching, isError: adminErrorFlag  } = useAdminChallenges(search, "", statusTab, 0, 50);
 
   // Judge gets its own view
   if (isJudge) return <JudgeChallengesView />;
@@ -198,6 +198,7 @@ export default function HackathonsPage() {
   const isLoading  = isSuperAdmin ? adminLoading  : clientLoading;
   const isFetching = isSuperAdmin ? adminFetching : clientFetching;
   const data       = isSuperAdmin ? adminData     : clientData;
+  const isError    = isSuperAdmin ? adminErrorFlag : clientError;
 
   if (isLoading) return <Loader variant="page" text="Loading Challenges…" />;
 
@@ -218,6 +219,16 @@ export default function HackathonsPage() {
           </p>
         </div>
       </div>
+
+      {isError && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <span className="text-xs text-amber-800">
+            Couldn't load challenges — this may show as "no challenges" below even if some exist.
+            This can happen if your account role doesn't have access yet; contact your Client Admin
+            or Attend support if this keeps happening.
+          </span>
+        </div>
+      )}
 
       <div className="rounded-2xl overflow-hidden" style={{ background: "linear-gradient(135deg, #9333ea 0%, #7c22c9 60%, #5b21b6 100%)" }}>
         <div className="p-6 text-white">
