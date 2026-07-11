@@ -80,3 +80,19 @@ For reference/pattern-matching against bug #2 (now fixed): this endpoint previou
 ## 6. NEW — Notifications for team role "Admin"
 
 **Ask:** Team members with role `ADMIN` should receive notifications the same way the org owner (`client_admin`) does (event reminders, RSVP updates, document uploads, etc. — whatever the org owner currently gets). Please confirm notification generation targets the whole organisation's `ADMIN`-role members, not just the owner account.
+
+---
+
+## 7. NEW — Event Manager needs event-management action access
+
+Frontend now hides the genuinely owner-only actions from `EVENT_MANAGER` (Suspend register, Revoke/Reactivate team member, Invite team member, Enrol new register, Open/Close resolution voting, Audit Log). But `EVENT_MANAGER` should still be able to perform day-to-day event management, and right now the following actions all return **"You do not have permission to perform this action."** (403) for that role:
+
+- Import from Register (Expected Attendees / Stakeholders tab)
+- Add / Save Resolution (Resolutions tab)
+- Refresh Zoom Meeting Token
+- Unfeature Event
+- Status Controls — Publish, Go Live, Cancel Event
+
+**Ask:** Please grant `EVENT_MANAGER` write access to these five actions/endpoints — they're event-management operations the role is meant to perform, distinct from the org-owner-only actions listed above which should stay restricted to `client_admin`.
+
+**Also:** Notifications for `EVENT_MANAGER` should be scoped to events only (RSVP updates, event reminders, resolution activity, document uploads, etc.) — please exclude Innovation Challenge notifications for this role, since that entire feature area is hidden from their dashboard.

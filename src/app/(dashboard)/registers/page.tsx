@@ -99,9 +99,11 @@ export default function RegistersPage() {
             Companies whose meetings and events are managed on the platform
           </p>
         </div>
-        <Link href="/admin/registers/enrol">
-          <Button className="gap-2">Enrol New Register</Button>
-        </Link>
+        {isClientAdmin && (
+          <Link href="/admin/registers/enrol">
+            <Button className="gap-2">Enrol New Register</Button>
+          </Link>
+        )}
       </div>
 
       {/* ── Status filter tabs ── */}
