@@ -896,6 +896,8 @@ export interface ExpectedAttendee {
   email:           string;
   phone?:          string;
   shareholderRef?: string;
+  /** Share units owned — carried over from the register when available. */
+  units?:          number;
 }
 
 export interface ExpectedAttendeeListResponse {
@@ -911,6 +913,7 @@ export interface UploadAttendeesRequest {
     email:           string;
     phone?:          string;
     shareholderRef?: string;
+    units?:          number;
   }>;
 }
 
@@ -919,6 +922,7 @@ export interface RegisterShareholderItem {
   fullName: string;
   chn?:     string;
   email?:   string;
+  phone?:   string;
   units?:   number;
   status?:  string;
 }
@@ -974,7 +978,9 @@ export function useImportShareholdersToEvent() {
             firstName:      parts[0] ?? sh.fullName ?? "Shareholder",
             lastName:       parts.slice(1).join(" ") || "-",
             email,
+            phone:          sh.phone || undefined,
             shareholderRef: sh.chn || sh.id,
+            units:          sh.units,
           });
         }
 
@@ -1079,6 +1085,35 @@ export function useDeleteExpectedAttendee() {
       queryClient.invalidateQueries({ queryKey: ["clientEvents", "expectedAttendees", eventId] });
     },
     onError: (error: any) => parseAndToastApiError(error, "Delete failed."),
+  });
+}
+
+/**
+ * Delete several expected attendees at once.
+ * There's no bulk-by-ids endpoint, so this fires the existing per-attendee
+ * DELETE for each selected id in parallel.
+ */
+export function useBulkDeleteExpectedAttendees() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, attendeeIds }: { eventId: string; attendeeIds: string[] }) => {
+      const results = await Promise.allSettled(
+        attendeeIds.map((id) =>
+          apiClient.delete(`/api/v1/client/events/${eventId}/expected-attendees/${id}`)
+        )
+      );
+      const failed = results.filter((r) => r.status === "rejected").length;
+      return { removed: attendeeIds.length - failed, failed };
+    },
+    onSuccess: ({ removed, failed }, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "expectedAttendees", eventId] });
+      if (failed > 0) {
+        popup.error("Partial Delete", `${removed} removed, ${failed} failed. Try again for the rest.`, 3500);
+      } else {
+        popup.success("Attendees Removed", `${removed} attendee${removed !== 1 ? "s" : ""} removed from the list.`, 2500);
+      }
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Bulk delete failed."),
   });
 }
 

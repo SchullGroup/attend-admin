@@ -15,6 +15,7 @@ import {
   useUploadExpectedAttendees,
   useDeleteExpectedAttendee,
   useDeleteAllExpectedAttendees,
+  useBulkDeleteExpectedAttendees,
   useImportShareholdersToEvent,
   type ExpectedAttendee,
 } from "@/api/client-events";
@@ -29,10 +30,11 @@ interface AddForm {
   email:          string;
   phone:          string;
   shareholderRef: string;
+  units:          string;
 }
 
 const EMPTY_FORM: AddForm = {
-  firstName: "", lastName: "", email: "", phone: "", shareholderRef: "",
+  firstName: "", lastName: "", email: "", phone: "", shareholderRef: "", units: "",
 };
 
 interface CsvRow {
@@ -41,6 +43,7 @@ interface CsvRow {
   email:          string;
   phone:          string;
   shareholderRef: string;
+  units?:         number;
   _error?:        string;
 }
 
@@ -56,7 +59,8 @@ const FULL_NAME_KEYS   = new Set(["fullname", "name", "shareholdername"]);
 const EMAIL_KEYS       = new Set(["email", "emailaddress", "mail"]);
 const PHONE_KEYS       = new Set(["phone", "phonenumber", "mobile", "tel", "telephone"]);
 const REF_KEYS         = new Set(["shareholderref", "ref", "shareholderid", "memberid",
-                                   "shareholderno", "accountnumber", "sharecount", "shares"]);
+                                   "shareholderno", "accountnumber"]);
+const UNITS_KEYS        = new Set(["units", "shares", "shareunits", "sharecount"]);
 
 function mapCsvRow(raw: Record<string, string>): CsvRow {
   const norm: Record<string, string> = {};
@@ -104,6 +108,12 @@ function mapCsvRow(raw: Record<string, string>): CsvRow {
     if (REF_KEYS.has(k)) { shareholderRef = v; break; }
   }
 
+  let unitsRaw = "";
+  for (const [k, v] of Object.entries(norm)) {
+    if (UNITS_KEYS.has(k)) { unitsRaw = v; break; }
+  }
+  const units = unitsRaw ? Number(unitsRaw.replace(/,/g, "")) : undefined;
+
   const missingEmail = !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const missingName  = !firstName && !lastName;
 
@@ -113,6 +123,7 @@ function mapCsvRow(raw: Record<string, string>): CsvRow {
     email,
     phone,
     shareholderRef,
+    units: units && !Number.isNaN(units) ? units : undefined,
     _error: missingEmail ? "Invalid email" : missingName ? "Name missing" : undefined,
   };
 }
@@ -134,6 +145,7 @@ function initials(a: ExpectedAttendee): string {
 function SkeletonRow() {
   return (
     <tr className="attend-table-row">
+      <td className="px-5 py-3.5"></td>
       <td className="px-5 py-3.5">
         <div className="flex items-center gap-2.5">
           <div className="h-7 w-7 rounded-full bg-[hsl(var(--muted))] animate-pulse shrink-0" />
@@ -167,10 +179,14 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
 
   // ── Queries & mutations ──────────────────────────────────────────────────
   const { data, isLoading } = useExpectedAttendees(eventId);
-  const addMutation    = useUploadExpectedAttendees();
-  const deleteMutation = useDeleteExpectedAttendee();
-  const clearMutation  = useDeleteAllExpectedAttendees();
-  const importMutation = useImportShareholdersToEvent();
+  const addMutation       = useUploadExpectedAttendees();
+  const deleteMutation    = useDeleteExpectedAttendee();
+  const clearMutation     = useDeleteAllExpectedAttendees();
+  const bulkDeleteMutation = useBulkDeleteExpectedAttendees();
+  const importMutation    = useImportShareholdersToEvent();
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   function handleImportFromRegister() {
     if (!registerId) return;
@@ -205,6 +221,7 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
             email:          form.email.trim().toLowerCase(),
             phone:          form.phone.trim() || undefined,
             shareholderRef: form.shareholderRef.trim() || undefined,
+            units:          form.units ? Number(form.units) : undefined,
           }],
         },
       },
@@ -225,6 +242,30 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
   function handleClearAll() {
     if (!confirmClear) { setConfirmClear(true); return; }
     clearMutation.mutate(eventId, { onSuccess: () => setConfirmClear(false) });
+  }
+
+  // ── Bulk selection ────────────────────────────────────────────────────────
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) =>
+      prev.size === attendees.length ? new Set() : new Set(attendees.map((a) => a.id))
+    );
+  }
+
+  function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    bulkDeleteMutation.mutate(
+      { eventId, attendeeIds: Array.from(selectedIds) },
+      { onSuccess: () => setSelectedIds(new Set()) }
+    );
   }
 
   // ── CSV import ────────────────────────────────────────────────────────────
@@ -260,6 +301,7 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
             email:          r.email.toLowerCase(),
             phone:          r.phone   || undefined,
             shareholderRef: r.shareholderRef || undefined,
+            units:          r.units,
           })),
         },
       },
@@ -298,6 +340,21 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Bulk delete selected */}
+            {selectedIds.size > 0 && (
+              <Button
+                size="sm" variant="ghost"
+                className="h-7 text-xs text-red-600 bg-red-50 font-semibold hover:bg-red-100"
+                disabled={bulkDeleteMutation.isPending}
+                onClick={handleBulkDelete}
+              >
+                {bulkDeleteMutation.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <><Trash2 className="h-3.5 w-3.5 mr-1" /> Delete {selectedIds.size} selected</>
+                }
+              </Button>
+            )}
+
             {/* Clear all — double-confirm */}
             {attendees.length > 0 && (
               confirmClear ? (
@@ -412,7 +469,7 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
 
           {/* Column mapping hint */}
           <div className="px-5 py-2 bg-[hsl(var(--muted)/0.4)] border-b border-[hsl(var(--border))] text-xs text-[hsl(var(--muted-foreground))]">
-            Columns auto-mapped from: <span className="font-mono">firstName / lastName / fullName / email / phone / shareholderRef</span>
+            Columns auto-mapped from: <span className="font-mono">firstName / lastName / fullName / email / phone / shareholderRef / units</span>
           </div>
 
           <div className="overflow-x-auto max-h-72 overflow-y-auto">
@@ -424,6 +481,7 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
                   <th className="px-4 py-2.5 text-left">Email</th>
                   <th className="px-4 py-2.5 text-left">Phone</th>
                   <th className="px-4 py-2.5 text-left">Ref</th>
+                  <th className="px-4 py-2.5 text-right">Shares</th>
                   <th className="px-4 py-2.5 text-left">Status</th>
                 </tr>
               </thead>
@@ -437,6 +495,7 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
                     <td className="px-4 py-2.5 text-[hsl(var(--muted-foreground))]">{row.email || "—"}</td>
                     <td className="px-4 py-2.5 text-[hsl(var(--muted-foreground))]">{row.phone || "—"}</td>
                     <td className="px-4 py-2.5 text-[hsl(var(--muted-foreground))] font-mono text-xs">{row.shareholderRef || "—"}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-[hsl(var(--muted-foreground))]">{row.units?.toLocaleString() ?? "—"}</td>
                     <td className="px-4 py-2.5">
                       {row._error ? (
                         <span className="flex items-center gap-1 text-xs text-red-600 font-semibold">
@@ -525,8 +584,8 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
               />
             </div>
 
-            {/* Shareholder Ref — full width */}
-            <div className="col-span-2 space-y-1.5">
+            {/* Shareholder Ref */}
+            <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
                 Shareholder Reference <span className="text-[hsl(var(--muted-foreground))] normal-case font-normal">(optional)</span>
               </Label>
@@ -539,6 +598,19 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
                   className="pl-9"
                 />
               </div>
+            </div>
+
+            {/* Shares / Units */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                Shares <span className="text-[hsl(var(--muted-foreground))] normal-case font-normal">(optional)</span>
+              </Label>
+              <Input
+                type="number" min={0}
+                value={form.units}
+                onChange={(e) => handleChange("units", e.target.value)}
+                placeholder="150000"
+              />
             </div>
           </div>
 
@@ -569,6 +641,19 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
         <table className="w-full">
           <thead>
             <tr className="attend-table-header">
+              <th className="px-5 py-3 text-left w-10">
+                {attendees.length > 0 && (
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 rounded accent-[hsl(var(--primary))]"
+                    checked={selectedIds.size === attendees.length}
+                    ref={(el) => {
+                      if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < attendees.length;
+                    }}
+                    onChange={toggleSelectAll}
+                  />
+                )}
+              </th>
               <th className="px-5 py-3 text-left">Shareholder</th>
               <th className="px-5 py-3 text-left">Phone</th>
               <th className="px-5 py-3 text-left">Shareholder Ref</th>
@@ -581,7 +666,7 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
               : attendees.length === 0
                 ? (
                   <tr>
-                    <td colSpan={4} className="px-5 py-14 text-center">
+                    <td colSpan={5} className="px-5 py-14 text-center">
                       <Users className="h-8 w-8 mx-auto mb-3 text-[hsl(var(--muted-foreground))] opacity-25" />
                       <p className="text-sm font-medium text-[hsl(var(--foreground))]">No expected attendees yet</p>
                       <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
@@ -593,7 +678,17 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
                   </tr>
                 )
                 : attendees.map((a) => (
-                  <tr key={a.id} className="attend-table-row">
+                  <tr key={a.id} className={cn("attend-table-row", selectedIds.has(a.id) && "bg-[hsl(var(--primary)/0.03)]")}>
+
+                    {/* Select */}
+                    <td className="px-5 py-3">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 rounded accent-[hsl(var(--primary))]"
+                        checked={selectedIds.has(a.id)}
+                        onChange={() => toggleSelect(a.id)}
+                      />
+                    </td>
 
                     {/* Name + email */}
                     <td className="px-5 py-3 max-w-[220px]">

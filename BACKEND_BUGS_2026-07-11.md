@@ -1,65 +1,56 @@
 # Backend bugs — for backend team
 
-## 1. Revoke access doesn't actually revoke
+## 1. Revoke access doesn't actually revoke — ✅ FIXED (backend, 2026-07-11)
 
-**Endpoint:** `DELETE /api/v1/client/organisation/team/{id}/revoke`
+**Endpoint:** `DELETE /api/v1/client/organisation/team/{id}/revoke` (also accepts `POST`)
 
-**Expected:** After calling this, the team member should no longer be able to log in / their session and future logins should be rejected.
+**Was:** Revoke returned `200 OK` and the UI showed the member as revoked, but the status update was silently dropped before it reached the database (persistence-context ordering bug) — the user's account stayed `ACTIVE` and could still log in.
 
-**Actual:** The endpoint returns `200 OK` (success), and the UI reflects the member as revoked, but the revoked user can still log in normally afterward — their access is not actually being invalidated server-side.
-
-**Suspected cause:** The revoke handler is likely only flipping a status flag on the team member record (e.g. `status = REVOKED`) without also invalidating that user's active session/refresh tokens, or without checking that status flag during the login/auth flow.
-
-**Repro steps:**
-1. As a client admin, go to Team Members and revoke a member's access.
-2. Confirm the 200 response and that the UI shows them as revoked.
-3. Log in as that revoked user — login still succeeds.
+**Now:** Fixed server-side. Revoked users are actually deactivated and can no longer log in. No request/response shape change — nothing for FE to update, just re-verify the flow blocks login.
 
 ---
 
-## 2. Monthly RSVP Trend — 500 Internal Server Error
+## 2. Monthly RSVP Trend — 500 Internal Server Error — ✅ FIXED (backend, 2026-07-11)
 
 **Endpoint:** `GET /api/v1/client/analytics/monthly-trend`
 
-**Expected:** Returns the last 6 months of registration counts, shape:
+**Was:** A native SQL query result was being cast to the wrong Java type, throwing on every call (confirmed 500 on every request, not intermittent).
+
+**Now:** Fixed. Returns `200` with the expected shape:
 ```json
 { "data": { "trend": [ { "month": "Jan 2025", "registrations": 12 }, ... ] } }
 ```
-
-**Actual:** Consistently returns `500 Internal Server Error` (confirmed via Network tab, ~350–700ms response time, small response body returned but not yet inspected for stack trace — request the raw response body/exception from server logs for this endpoint).
-
-**Repro:** `GET https://attend-api.schulltech.com/api/v1/client/analytics/monthly-trend` with a valid client admin bearer token — reproduces every time, not intermittent.
-
-**Note:** Every other `/api/v1/client/analytics/*` endpoint (`stats`, `by-type`, `rsvps-by-event`, `fill-rate-overview`, `check-in-overview`, `event-performance`) returns `200` normally — this is isolated to `monthly-trend`.
+FE's `useAnalyticsMonthlyTrend()` already parses this shape correctly — no code change needed.
 
 ---
 
-## 3. Shareholder `phone` not showing in list — likely not persisted or not returned
+## 3. Shareholder `phone` not showing in list — ✅ FIXED (backend, 2026-07-11) + 2 new endpoints
 
-**Endpoint:** `GET /api/v1/client/registers/{id}/shareholders` (and the `POST` create endpoints that feed it)
+**Endpoints:**
+- `POST /api/v1/client/registers/{registerId}/shareholders` (bulk create/upsert)
+- `GET  /api/v1/client/registers/{registerId}/shareholders` (list)
 
-**Expected:** A shareholder added with a phone number (via "Add Manually" or CSV upload, both of which send `phone` in the request body) should show that phone number when the list is fetched afterward.
+**Was:** `phone` didn't exist anywhere in the backend (not on the DB table, not on any DTO) — silently dropped on create, never present in the list response.
 
-**Actual:** Every shareholder in the list shows "—" for phone, even ones added with a phone number filled in. Confirmed on the frontend side that the `POST /api/v1/client/registers/{id}/shareholders` request body does include `phone`.
+**Now:** Both endpoints support `phone` — send it in each shareholder object on upload, it comes back in the list response. Shareholders created *before* this fix will show `phone: null` until edited or re-uploaded (no historical backfill).
 
-**Confirmed via direct API call** — `GET /api/v1/client/registers/083006e2-1666-4b30-9450-9614100c551a/shareholders?page=0&size=100` returns shareholder objects with NO `phone` key at all (not even `null`):
-```json
-{
-  "chn": "CHN234567892",
-  "email": "jasperbusiness247@gmail.com",
-  "fullName": "Ezepue James",
-  "id": "7a32fc08-df75-4d04-afe6-b36de0932c5e",
-  "status": "ACTIVE",
-  "units": 120000
-}
+**New — single-shareholder update:**
 ```
-So this is confirmed backend-side — either:
-1. The create handler isn't persisting `phone` when saving the shareholder record, or
-2. It's persisted fine, but the `GET` list response serializer is omitting `phone` from the shareholder DTO entirely.
+PATCH /api/v1/client/registers/{registerId}/shareholders/{shareholderId}
+```
+Body — all fields optional, send only what changed:
+```json
+{ "fullName": "...", "chn": "...", "email": "...", "phone": "...", "units": 150000, "status": "ACTIVE" }
+```
+Returns the updated shareholder object. Returns `409` if the new `chn` collides with another shareholder in the same register.
 
-**Ask:** Check whether `phone` is present in the database row after creation. If it is, the fix is adding `phone` to the shareholder list response DTO/serializer. If it isn't, the fix is in the create handler.
+**New — single-shareholder delete:**
+```
+DELETE /api/v1/client/registers/{registerId}/shareholders/{shareholderId}
+```
+(Correction to earlier note in this file: delete did **not** already exist — both PATCH and DELETE above are brand new endpoints.)
 
-**Also flagging:** there's currently no edit/update endpoint for a single shareholder (only create-single, create-bulk, and delete). If shareholder records need to be correctable after creation (e.g. fixing a typo'd phone/email/CHN), please add `PUT`/`PATCH /api/v1/client/registers/{id}/shareholders/{shareholderId}`. Delete already exists and works (`DELETE /api/v1/client/registers/{id}/shareholders/{shareholderId}`) — this is only a request for edit support.
+**FE status:** Wired up — `useUpdateShareholder()` / `useDeleteShareholder()` added in `src/api/registers.ts`, edit (pencil icon, inline row) and delete buttons added to the Shareholders table in `RegisterShareholdersSection.tsx`. Typecheck clean.
 
 ---
 
@@ -67,4 +58,4 @@ So this is confirmed backend-side — either:
 
 **Endpoint:** `POST /api/v1/client/events/{id}/documents`
 
-For reference/pattern-matching against bug #2: this endpoint previously 500'd whenever the request body omitted `sizeBytes` (present in the Swagger schema but not documented as required). Frontend now always sends it, masking the issue — but the same root pattern (likely an NPE from `sizeBytes.longValue()` or similar without a null check) is worth checking on `monthly-trend` and other endpoints that compute derived/formatted fields.
+For reference/pattern-matching against bug #2 (now fixed): this endpoint previously 500'd whenever the request body omitted `sizeBytes` (present in the Swagger schema but not documented as required). Frontend now always sends it on every upload path, masking the issue — but the same root pattern (likely an NPE from `sizeBytes.longValue()` or similar without a null check) is worth a final check if any other endpoint that computes a derived/formatted field (like `sizeLabel`) still omits a null guard.
