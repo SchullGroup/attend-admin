@@ -2,13 +2,14 @@
 
 import { useState, useRef } from "react";
 import {
-  Users, UserPlus, Trash2, Loader2, Hash, Mail, Phone, X, Check,
+  Users, UserPlus, Trash2, Loader2, Hash, Mail, X, Check,
   Upload, FileText, AlertCircle, ChevronDown, ChevronUp, Download,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/ui/phone-input";
 import {
   useExpectedAttendees,
   useUploadExpectedAttendees,
@@ -17,7 +18,7 @@ import {
   useImportShareholdersToEvent,
   type ExpectedAttendee,
 } from "@/api/client-events";
-import { cn } from "@/lib/utils";
+import { cn, digitsOnly } from "@/lib/utils";
 import Papa from "papaparse";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -86,10 +87,17 @@ function mapCsvRow(raw: Record<string, string>): CsvRow {
     if (EMAIL_KEYS.has(k)) { email = v; break; }
   }
 
-  let phone = "";
+  let phoneRaw = "";
   for (const [k, v] of Object.entries(norm)) {
-    if (PHONE_KEYS.has(k)) { phone = v; break; }
+    if (PHONE_KEYS.has(k)) { phoneRaw = v; break; }
   }
+  // Always save with an explicit country code — trust an existing "+",
+  // otherwise assume Nigeria (+234) and strip a leading 0.
+  const phone = phoneRaw
+    ? (phoneRaw.trim().startsWith("+")
+        ? `+${digitsOnly(phoneRaw)}`
+        : `+234${digitsOnly(phoneRaw).replace(/^0+/, "")}`)
+    : "";
 
   let shareholderRef = "";
   for (const [k, v] of Object.entries(norm)) {
@@ -511,16 +519,10 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
               <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
                 Phone <span className="text-[hsl(var(--muted-foreground))] normal-case font-normal">(optional)</span>
               </Label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
-                <Input
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => handleChange("phone", e.target.value)}
-                  placeholder="08012345678"
-                  className="pl-9"
-                />
-              </div>
+              <PhoneInput
+                value={form.phone}
+                onChange={(e164) => handleChange("phone", e164)}
+              />
             </div>
 
             {/* Shareholder Ref — full width */}

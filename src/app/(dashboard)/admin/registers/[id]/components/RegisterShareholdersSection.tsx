@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/ui/phone-input";
 import {
   useRegisterShareholders,
   useAddShareholder,
@@ -17,7 +18,7 @@ import {
   type Shareholder,
   type ShareholderUploadItem,
 } from "@/api/registers";
-import { cn } from "@/lib/utils";
+import { cn, digitsOnly, withIdPrefix } from "@/lib/utils";
 import Papa from "papaparse";
 
 // ── CSV row type ──────────────────────────────────────────────────────────────
@@ -48,14 +49,29 @@ function mapCsvRow(raw: Record<string, string>): CsvRow {
     fullName = [first, last].filter(Boolean).join(" ");
   }
 
-  const email    = norm["email"]    ?? norm["emailaddress"] ?? norm["mail"] ?? "";
-  const phone    = norm["phone"]    ?? norm["phonenumber"]  ?? norm["mobile"] ?? norm["tel"] ?? "";
-  const chn      = norm["chn"]      ?? norm["holdernumber"] ?? norm["shareholderno"] ?? norm["ref"] ?? "";
-  const unitsRaw = norm["units"]    ?? norm["shares"]       ?? norm["shareunits"] ?? "";
-  const units    = unitsRaw ? Number(unitsRaw.replace(/,/g, "")) : undefined;
+  const email     = norm["email"]    ?? norm["emailaddress"] ?? norm["mail"] ?? "";
+  const phoneRaw  = norm["phone"]    ?? norm["phonenumber"]  ?? norm["mobile"] ?? norm["tel"] ?? "";
+  const chnRaw    = norm["chn"]      ?? norm["holdernumber"] ?? norm["shareholderno"] ?? norm["ref"] ?? "";
+  const unitsRaw  = norm["units"]    ?? norm["shares"]       ?? norm["shareunits"] ?? "";
+  const units     = unitsRaw ? Number(unitsRaw.replace(/,/g, "")) : undefined;
   const rawStatus = (norm["status"] ?? "").toUpperCase();
   const status: "ACTIVE" | "INACTIVE" | undefined =
     rawStatus === "INACTIVE" ? "INACTIVE" : rawStatus === "ACTIVE" ? "ACTIVE" : undefined;
+
+  // Whatever a person typed in the CSV — "chn123", "CHN 123", "Chn-123",
+  // just "123" — always saves as "CHN123". digitsOnly strips the letters
+  // entirely so casing/spelling in the source file can't matter.
+  const chn = withIdPrefix("CHN", chnRaw);
+
+  // Phone: always save with an explicit country code. If the CSV value
+  // already starts with "+", trust it as-is (person may be entering a
+  // non-Nigerian number); otherwise assume Nigeria and prepend +234,
+  // stripping a leading 0 (common local format: "0801...").
+  const phone = phoneRaw
+    ? (phoneRaw.trim().startsWith("+")
+        ? `+${digitsOnly(phoneRaw)}`
+        : `+234${digitsOnly(phoneRaw).replace(/^0+/, "")}`)
+    : "";
 
   const missingEmail = !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const missingName  = !fullName;
@@ -134,8 +150,11 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
         shareholder: {
           fullName: form.fullName.trim(),
           email:    form.email.trim().toLowerCase(),
-          phone:    form.phone.trim()  || undefined,
-          chn:      form.chn.trim()    || undefined,
+          // form.phone is already a full E.164 string from PhoneInput;
+          // form.chn is digits-only from the input — prefix applied here so
+          // it always saves as "CHN..." no matter how it was typed.
+          phone:    form.phone || undefined,
+          chn:      withIdPrefix("CHN", form.chn) || undefined,
           units:    form.units ? Number(form.units) : undefined,
           status:   "ACTIVE",
         },
@@ -341,10 +360,9 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
               <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
                 Phone <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span>
               </Label>
-              <Input
-                type="tel" value={form.phone}
-                onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-                placeholder="+234 801 234 5678"
+              <PhoneInput
+                value={form.phone}
+                onChange={(e164) => setForm((p) => ({ ...p, phone: e164 }))}
               />
             </div>
             <div className="space-y-1.5">
@@ -352,13 +370,18 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                 CHN <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span>
               </Label>
               <div className="relative">
+                <span className="absolute left-9 top-1/2 -translate-y-1/2 text-xs font-semibold text-[hsl(var(--muted-foreground))] pointer-events-none">
+                  CHN
+                </span>
                 <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
                 <Input
                   value={form.chn}
-                  onChange={(e) => setForm((p) => ({ ...p, chn: e.target.value }))}
-                  placeholder="CHN123456789" className="pl-9"
+                  onChange={(e) => setForm((p) => ({ ...p, chn: digitsOnly(e.target.value) }))}
+                  placeholder="123456789" className="pl-16"
+                  inputMode="numeric"
                 />
               </div>
+              <p className="text-[11px] text-[hsl(var(--muted-foreground))]">Numbers only — "CHN" is added automatically.</p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">

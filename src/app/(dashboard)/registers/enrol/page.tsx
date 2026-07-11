@@ -25,7 +25,8 @@ import { Card } from "@/components/ui/card";
 import { CustomSelect } from "@/components/custom/custom-select";
 import { Loader } from "@/components/ui/Loader";
 import { DateCell } from "@/components/ui/date-cell";
-import { cn } from "@/lib/utils";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { cn, digitsOnly, withIdPrefix } from "@/lib/utils";
 import { toast } from "sonner";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -107,10 +108,14 @@ export default function EnrolRegisterPage() {
     const payload: EnrollRegisterPayload = {
       name:                form.name.trim(),
       email:               form.email.trim(),
-      rcNumber:            form.rcNumber.trim()            || null,
+      // form.rcNumber is digits-only from the input — "RC" is prefixed here
+      // so it always saves consistently no matter how it was typed.
+      // form.representativePhone is already a full E.164 string from
+      // PhoneInput.
+      rcNumber:            withIdPrefix("RC", form.rcNumber) || null,
       industry:            form.industry                   || null,
       representativeName:  form.representativeName.trim()  || undefined,
-      representativePhone: form.representativePhone.trim() || undefined,
+      representativePhone: form.representativePhone         || undefined,
     };
 
     enrollMutation.mutate(payload, {
@@ -191,16 +196,23 @@ export default function EnrolRegisterPage() {
             />
           </div>
 
-          {/* rcNumber — optional, nullable */}
+          {/* rcNumber — optional, nullable. Numbers only; "RC" is added
+              automatically on submit so it always saves consistently. */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">RC Number</label>
-            <input
-              type="text"
-              value={form.rcNumber}
-              onChange={(e) => handleChange("rcNumber", e.target.value)}
-              placeholder="e.g. RC 125384 (optional)"
-              className={fieldClass(false)}
-            />
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[hsl(var(--muted-foreground))] pointer-events-none">
+                RC
+              </span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={form.rcNumber}
+                onChange={(e) => handleChange("rcNumber", digitsOnly(e.target.value))}
+                placeholder="125384 (optional)"
+                className={cn(fieldClass(false), "pl-9")}
+              />
+            </div>
           </div>
 
           {/* representativeName — optional */}
@@ -222,12 +234,9 @@ export default function EnrolRegisterPage() {
             <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
               Representative Phone
             </label>
-            <input
-              type="tel"
+            <PhoneInput
               value={form.representativePhone}
-              onChange={(e) => handleChange("representativePhone", e.target.value)}
-              placeholder="e.g. +234 801 234 5678 (optional)"
-              className={fieldClass(false)}
+              onChange={(e164) => handleChange("representativePhone", e164)}
             />
           </div>
 

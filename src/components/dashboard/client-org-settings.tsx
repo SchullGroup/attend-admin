@@ -2,13 +2,14 @@
 
 import { useRef, useState, useEffect } from "react";
 import {
-  Upload, Building2, Globe, Mail, Phone, Hash, Briefcase,
+  Upload, Building2, Globe, Mail, Hash, Briefcase,
   Loader2, Check, X, Palette,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { PhoneInput } from "@/components/ui/phone-input";
 import {
   useOrganisationProfile,
   useUploadOrgLogo,
@@ -141,7 +142,12 @@ function OrgInfoCard() {
               <Field id="rcNumber"     label="RC Number"     value={info?.rcNumber}     icon={Hash}      readOnly />
               <Field id="contactEmail" label="Contact Email" value={info?.contactEmail} icon={Mail}      readOnly type="email" />
               {/* Editable fields */}
-              <Field id="phone"   label="Phone"   value={phone}   onChange={setPhone}   icon={Phone} type="tel" placeholder="+234 800 000 0000" />
+              <div className="space-y-1.5">
+                <Label htmlFor="phone" className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                  Phone
+                </Label>
+                <PhoneInput value={phone} onChange={setPhone} />
+              </div>
               <Field id="website" label="Website" value={website} onChange={setWebsite} icon={Globe} type="url" placeholder="https://company.com" />
             </>
           )}

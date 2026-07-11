@@ -29,6 +29,40 @@ export function formatDate(iso: string) {
   });
 }
 
+/**
+ * Strip everything except digits. Used for registration-ID inputs (CHN, RC
+ * number) so the field itself can never contain the prefix — people used to
+ * type "chn123", "CHN123", "Chn123", etc. inconsistently, which meant the
+ * saved value's casing/format depended entirely on how each person typed it.
+ * The prefix is now applied programmatically (see withIdPrefix) instead of
+ * trusting free-text input.
+ */
+export function digitsOnly(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+/**
+ * Prepend a fixed, uppercase prefix to a digits-only ID number for the
+ * payload — e.g. withIdPrefix("CHN", "1234567892") -> "CHN1234567892".
+ * Returns "" for an empty value so optional fields stay optional.
+ */
+export function withIdPrefix(prefix: string, rawDigits: string): string {
+  const clean = digitsOnly(rawDigits);
+  return clean ? `${prefix.toUpperCase()}${clean}` : "";
+}
+
+/**
+ * Combine a country dial code and a local number into a single E.164-style
+ * string, e.g. toE164("+234", "8012345678") -> "+2348012345678". Strips any
+ * leading zero from the local number (common in Nigerian numbers written as
+ * "0801...") since the dial code already replaces it. Returns "" if the
+ * local number is empty.
+ */
+export function toE164(dialCode: string, localNumber: string): string {
+  const digits = digitsOnly(localNumber).replace(/^0+/, "");
+  return digits ? `${dialCode}${digits}` : "";
+}
+
 export function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);

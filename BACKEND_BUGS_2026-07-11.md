@@ -34,7 +34,36 @@
 
 ---
 
-## 3. (Related, already worked around on frontend) Missing `sizeBytes` causes 500 on document upload
+## 3. Shareholder `phone` not showing in list — likely not persisted or not returned
+
+**Endpoint:** `GET /api/v1/client/registers/{id}/shareholders` (and the `POST` create endpoints that feed it)
+
+**Expected:** A shareholder added with a phone number (via "Add Manually" or CSV upload, both of which send `phone` in the request body) should show that phone number when the list is fetched afterward.
+
+**Actual:** Every shareholder in the list shows "—" for phone, even ones added with a phone number filled in. Confirmed on the frontend side that the `POST /api/v1/client/registers/{id}/shareholders` request body does include `phone`.
+
+**Confirmed via direct API call** — `GET /api/v1/client/registers/083006e2-1666-4b30-9450-9614100c551a/shareholders?page=0&size=100` returns shareholder objects with NO `phone` key at all (not even `null`):
+```json
+{
+  "chn": "CHN234567892",
+  "email": "jasperbusiness247@gmail.com",
+  "fullName": "Ezepue James",
+  "id": "7a32fc08-df75-4d04-afe6-b36de0932c5e",
+  "status": "ACTIVE",
+  "units": 120000
+}
+```
+So this is confirmed backend-side — either:
+1. The create handler isn't persisting `phone` when saving the shareholder record, or
+2. It's persisted fine, but the `GET` list response serializer is omitting `phone` from the shareholder DTO entirely.
+
+**Ask:** Check whether `phone` is present in the database row after creation. If it is, the fix is adding `phone` to the shareholder list response DTO/serializer. If it isn't, the fix is in the create handler.
+
+**Also flagging:** there's currently no edit/update endpoint for a single shareholder (only create-single, create-bulk, and delete). If shareholder records need to be correctable after creation (e.g. fixing a typo'd phone/email/CHN), please add `PUT`/`PATCH /api/v1/client/registers/{id}/shareholders/{shareholderId}`. Delete already exists and works (`DELETE /api/v1/client/registers/{id}/shareholders/{shareholderId}`) — this is only a request for edit support.
+
+---
+
+## 4. (Related, already worked around on frontend) Missing `sizeBytes` causes 500 on document upload
 
 **Endpoint:** `POST /api/v1/client/events/{id}/documents`
 
