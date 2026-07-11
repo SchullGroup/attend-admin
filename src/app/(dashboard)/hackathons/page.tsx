@@ -187,11 +187,10 @@ export default function HackathonsPage() {
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
   const isSuperAdmin   = SUPER_ADMIN_ROLES.has(normalizedRole);
   const isJudge        = JUDGE_ROLES.has(normalizedRole);
-  // Viewer gets read-only access — the challenge detail page (Open Challenge/
-  // Open) is where applications are accepted/rejected and judges assigned,
-  // so that drill-in is hidden here the same way Applications/Judging are
-  // hidden from Viewer's sidebar.
-  const isViewer       = normalizedRole === "viewer";
+  // Viewer gets read + export access to Innovation Challenges like
+  // everywhere else — the challenge detail page (Open Challenge/Open) hides
+  // its own write actions (application status changes, judge assignment,
+  // scoring) for this role instead of being blocked from entry entirely.
 
   // Always call these — hooks must not be conditional
   const { data: clientData, isLoading: clientLoading, isFetching: clientFetching, isError: clientError } = useClientChallenges(search, statusTab, 0, 50);
@@ -258,7 +257,7 @@ export default function HackathonsPage() {
                   <p className="text-purple-200 text-sm mb-4">Create your first innovation challenge from Events.</p>
                 </>
               )}
-              {featured && !isSuperAdmin && !isViewer && (
+              {featured && !isSuperAdmin && (
                 <Button
                   className="h-9 text-sm bg-white text-purple-700 hover:bg-white/90 gap-2"
                   onClick={() => router.push(`/hackathons/${featured.id}`)}
@@ -357,7 +356,7 @@ export default function HackathonsPage() {
                     </span>
                   </td>
                   <td className="px-5 py-4">
-                    {!isSuperAdmin && !isViewer && (
+                    {!isSuperAdmin && (
                       <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/hackathons/${c.id}`)}>
                         Open <ChevronRight className="h-3.5 w-3.5" />
                       </Button>

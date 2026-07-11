@@ -155,7 +155,7 @@ function LeaderboardPanel({ challengeId }: { challengeId: string }) {
 // ---------------------------------------------------------------------------
 type JudgePanelFormTab = "pool" | "new";
 
-function JudgesPanel({ challengeId }: { challengeId: string }) {
+function JudgesPanel({ challengeId, readOnly = false }: { challengeId: string; readOnly?: boolean }) {
   const { data: challenge } = useClientChallengeDetail(challengeId);
   const { data: panel,  isLoading: judgesLoading } = useClientChallengeJudges(challengeId);
   const judges = panel?.judges ?? [];
@@ -222,12 +222,14 @@ function JudgesPanel({ challengeId }: { challengeId: string }) {
             Scoring is averaged across all assigned judges
           </p>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={openForm}>
-          <Plus className="h-3.5 w-3.5" /> Assign Judge
-        </Button>
+        {!readOnly && (
+          <Button size="sm" className="gap-1.5" onClick={openForm}>
+            <Plus className="h-3.5 w-3.5" /> Assign Judge
+          </Button>
+        )}
       </div>
 
-      {showForm && (
+      {!readOnly && showForm && (
         <Card className="attend-card p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-[hsl(var(--foreground))]">Assign Judge to Challenge</h3>
@@ -387,14 +389,16 @@ function JudgesPanel({ challengeId }: { challengeId: string }) {
                     </div>
                   </td>
                   <td className="px-5 py-3 text-right">
-                    <Button
-                      size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
-                      disabled={unassignJudge.isPending}
-                      onClick={() => unassignJudge.mutate({ challengeId, judgeId: j.id })}
-                      title="Unassign from challenge"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {!readOnly && (
+                      <Button
+                        size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
+                        disabled={unassignJudge.isPending}
+                        onClick={() => unassignJudge.mutate({ challengeId, judgeId: j.id })}
+                        title="Unassign from challenge"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -419,7 +423,7 @@ function JudgesPanel({ challengeId }: { challengeId: string }) {
 // ---------------------------------------------------------------------------
 type JudgingTab = "Leaderboard" | "Judges" | "Assignments";
 
-function ChallengeJudging({ challengeId }: { challengeId: string }) {
+function ChallengeJudging({ challengeId, readOnly = false }: { challengeId: string; readOnly?: boolean }) {
   const [tab, setTab] = useState<JudgingTab>("Leaderboard");
 
   // Fetched here (not inside AssignmentsSection) so the same judges/tracks
@@ -455,12 +459,13 @@ function ChallengeJudging({ challengeId }: { challengeId: string }) {
       </div>
 
       {tab === "Leaderboard" && <LeaderboardPanel  challengeId={challengeId} />}
-      {tab === "Judges"      && <JudgesPanel        challengeId={challengeId} />}
+      {tab === "Judges"      && <JudgesPanel        challengeId={challengeId} readOnly={readOnly} />}
       {tab === "Assignments" && (
         <AssignmentsSection
           challengeId={challengeId}
           judges={judges}
           tracks={challenge?.tracks ?? []}
+          readOnly={readOnly}
         />
       )}
     </div>
@@ -1429,13 +1434,13 @@ export default function JudgingPage() {
   const isJudge = JUDGE_ROLES.has(normalizedRole);
 
   if (isJudge) return <JudgeJudgingPage />;
-  return <ClientJudgingView />;
+  return <ClientJudgingView isViewer={normalizedRole === "viewer"} />;
 }
 
 // ---------------------------------------------------------------------------
 // Client / admin judging view
 // ---------------------------------------------------------------------------
-function ClientJudgingView() {
+function ClientJudgingView({ isViewer = false }: { isViewer?: boolean }) {
   const router = useRouter();
   const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
   const [search,              setSearch]              = useState("");
@@ -1474,7 +1479,7 @@ function ClientJudgingView() {
             </Button>
           </div>
         </div>
-        <ChallengeJudging challengeId={selectedChallengeId} />
+        <ChallengeJudging challengeId={selectedChallengeId} readOnly={isViewer} />
       </div>
     );
   }

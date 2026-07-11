@@ -110,7 +110,7 @@ const VALID_TRANSITIONS: Record<string, ApplicationStatus[]> = {
 // ---------------------------------------------------------------------------
 // Overview tab
 // ---------------------------------------------------------------------------
-function OverviewTab({ challengeId }: { challengeId: string }) {
+function OverviewTab({ challengeId, readOnly = false }: { challengeId: string; readOnly?: boolean }) {
   const { data: c, isLoading } = useClientChallengeDetail(challengeId);
   const toggleOpen = useToggleApplicationsOpen();
 
@@ -281,17 +281,19 @@ function OverviewTab({ challengeId }: { challengeId: string }) {
                 {c.applicationsOpen ? "Participants can apply" : "Applications are paused"}
               </p>
             </div>
-            <Button
-              size="sm"
-              variant={c.applicationsOpen ? "outline" : "default"}
-              disabled={toggleOpen.isPending}
-              className="gap-1.5"
-              onClick={() => toggleOpen.mutate({ challengeId, open: !c.applicationsOpen })}
-            >
-              {c.applicationsOpen
-                ? <><ToggleRight className="h-4 w-4" /> Close</>
-                : <><ToggleLeft className="h-4 w-4" /> Open</>}
-            </Button>
+            {!readOnly && (
+              <Button
+                size="sm"
+                variant={c.applicationsOpen ? "outline" : "default"}
+                disabled={toggleOpen.isPending}
+                className="gap-1.5"
+                onClick={() => toggleOpen.mutate({ challengeId, open: !c.applicationsOpen })}
+              >
+                {c.applicationsOpen
+                  ? <><ToggleRight className="h-4 w-4" /> Close</>
+                  : <><ToggleLeft className="h-4 w-4" /> Open</>}
+              </Button>
+            )}
           </div>
         </Card>
       </div>
@@ -302,7 +304,7 @@ function OverviewTab({ challengeId }: { challengeId: string }) {
 // ---------------------------------------------------------------------------
 // Applications tab
 // ---------------------------------------------------------------------------
-function ApplicationsTab({ challengeId }: { challengeId: string }) {
+function ApplicationsTab({ challengeId, readOnly = false }: { challengeId: string; readOnly?: boolean }) {
   const [activeStatus, setActiveStatus]  = useState("");
   const [activeTrack,  setActiveTrack]   = useState("");
   const [openMenu,     setOpenMenu]      = useState<string | null>(null);
@@ -363,6 +365,7 @@ function ApplicationsTab({ challengeId }: { challengeId: string }) {
         onStatusChange={(appId, status) =>
           updateStatus.mutate({ challengeId, applicationId: appId, status })
         }
+        readOnly={readOnly}
       />
     );
   }
@@ -590,6 +593,7 @@ function ApplicationsTab({ challengeId }: { challengeId: string }) {
                       >
                         View <ChevronRight className="h-3 w-3" />
                       </Button>
+                      {!readOnly && (
                       <div className="relative">
                         <Button
                           size="sm"
@@ -619,6 +623,7 @@ function ApplicationsTab({ challengeId }: { challengeId: string }) {
                           </div>
                         )}
                       </div>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -644,11 +649,13 @@ function ApplicationDetailPanel({
   applicationId,
   onBack,
   onStatusChange,
+  readOnly = false,
 }: {
   challengeId:    string;
   applicationId:  string;
   onBack:         () => void;
   onStatusChange: (id: string, status: ApplicationStatus) => void;
+  readOnly?:      boolean;
 }) {
   const { data: app, isLoading } = useClientChallengeApplication(challengeId, applicationId);
 
@@ -861,7 +868,8 @@ function ApplicationDetailPanel({
         {/* ── Right sidebar ── */}
         <div className="flex flex-col gap-5">
 
-          {/* Status update */}
+          {/* Status update — hidden for Viewer (read-only) */}
+          {!readOnly && (
           <Card className="attend-card p-5">
             <h2 className="font-semibold text-[hsl(var(--foreground))] mb-1">Update Status</h2>
             <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3">Current: {statusChip(app.status)}</p>
@@ -881,6 +889,7 @@ function ApplicationDetailPanel({
               <p className="text-xs text-[hsl(var(--muted-foreground))]">No further transitions available.</p>
             )}
           </Card>
+          )}
 
           {/* Details */}
           <Card className="attend-card p-5">
@@ -1152,7 +1161,7 @@ function SettingsTab({ challengeId }: { challengeId: string }) {
 // ---------------------------------------------------------------------------
 // Judges tab
 // ---------------------------------------------------------------------------
-function JudgesTab({ challengeId }: { challengeId: string }) {
+function JudgesTab({ challengeId, readOnly = false }: { challengeId: string; readOnly?: boolean }) {
   const { data: challenge, isLoading: challengeLoading } = useClientChallengeDetail(challengeId);
   const { data: panel,    isLoading: judgesLoading }     = useClientChallengeJudges(challengeId);
   const { data: teamData, isLoading: teamLoading }       = useOrganisationTeam("", "", 0, 100);
@@ -1240,26 +1249,30 @@ function JudgesTab({ challengeId }: { challengeId: string }) {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            size="sm" variant="outline" className="gap-1.5"
-            disabled={toggleScoring.isPending}
-            onClick={() => toggleScoring.mutate({ challengeId, open: !scoringOpen })}
-          >
-            {scoringOpen ? <ToggleRight className="h-4 w-4 text-green-600" /> : <ToggleLeft className="h-4 w-4" />}
-            Scoring {scoringOpen ? "Open" : "Closed"}
-          </Button>
+          {!readOnly && (
+            <Button
+              size="sm" variant="outline" className="gap-1.5"
+              disabled={toggleScoring.isPending}
+              onClick={() => toggleScoring.mutate({ challengeId, open: !scoringOpen })}
+            >
+              {scoringOpen ? <ToggleRight className="h-4 w-4 text-green-600" /> : <ToggleLeft className="h-4 w-4" />}
+              Scoring {scoringOpen ? "Open" : "Closed"}
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="gap-1.5" disabled={exporting} onClick={handleExport}>
             <FileText className="h-3.5 w-3.5" />
             {exporting ? "Exporting…" : "Export Applications"}
           </Button>
-          <Button size="sm" className="gap-1.5" onClick={() => setShowAssign(true)}>
-            <Plus className="h-3.5 w-3.5" /> Assign Judge
-          </Button>
+          {!readOnly && (
+            <Button size="sm" className="gap-1.5" onClick={() => setShowAssign(true)}>
+              <Plus className="h-3.5 w-3.5" /> Assign Judge
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Assign panel */}
-      {showAssign && (
+      {!readOnly && showAssign && (
         <Card className="attend-card p-5">
           <h3 className="font-semibold text-[hsl(var(--foreground))] mb-4">Assign Judge from Organisation</h3>
 
@@ -1416,15 +1429,17 @@ function JudgesTab({ challengeId }: { challengeId: string }) {
                     </div>
                   </td>
                   <td className="px-5 py-3 text-right">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
-                      disabled={removeJudge.isPending}
-                      onClick={() => removeJudge.mutate({ challengeId, judgeId: j.id })}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {!readOnly && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
+                        disabled={removeJudge.isPending}
+                        onClick={() => removeJudge.mutate({ challengeId, judgeId: j.id })}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1449,6 +1464,7 @@ function JudgesTab({ challengeId }: { challengeId: string }) {
             challengeId={challengeId}
             judges={judges}
             tracks={challenge?.tracks ?? []}
+            readOnly={readOnly}
           />
         </>
       )}
@@ -1647,6 +1663,10 @@ export default function ChallengeDetailPage({
   const { data: userResponse } = useGetMe();
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
   const isSuperAdmin   = SUPER_ADMIN_ROLES.has(normalizedRole);
+  // Viewer — read + export only. No application status changes, judge
+  // assignment/removal, scoring toggle, applications open/close toggle, or
+  // challenge Settings (which is pure write configuration).
+  const isViewer        = normalizedRole === "viewer";
 
   const [clientTab, setClientTab] = useState<ClientTab>("Overview");
   const [adminTab,  setAdminTab]  = useState<AdminTab>("Overview");
@@ -1670,7 +1690,7 @@ export default function ChallengeDetailPage({
     );
   }
 
-  const tabs    = isSuperAdmin ? ADMIN_TABS  : CLIENT_TABS;
+  const tabs    = isSuperAdmin ? ADMIN_TABS  : (isViewer ? CLIENT_TABS.filter((t) => t !== "Settings") : CLIENT_TABS);
   const tab     = isSuperAdmin ? adminTab    : clientTab;
   const setTab  = isSuperAdmin
     ? (t: string) => setAdminTab(t as AdminTab)
@@ -1755,11 +1775,11 @@ export default function ChallengeDetailPage({
       {isSuperAdmin && tab === "Judges"      && <AdminJudgesTab       challengeId={challengeId} />}
 
       {/* Tab panels — client admin */}
-      {!isSuperAdmin && tab === "Overview"     && <OverviewTab     challengeId={challengeId} />}
-      {!isSuperAdmin && tab === "Applications" && <ApplicationsTab challengeId={challengeId} />}
+      {!isSuperAdmin && tab === "Overview"     && <OverviewTab     challengeId={challengeId} readOnly={isViewer} />}
+      {!isSuperAdmin && tab === "Applications" && <ApplicationsTab challengeId={challengeId} readOnly={isViewer} />}
       {!isSuperAdmin && tab === "Leaderboard"  && <LeaderboardTab  challengeId={challengeId} />}
-      {!isSuperAdmin && tab === "Judges"       && <JudgesTab       challengeId={challengeId} />}
-      {!isSuperAdmin && tab === "Settings"     && <SettingsTab     challengeId={challengeId} />}
+      {!isSuperAdmin && tab === "Judges"       && <JudgesTab       challengeId={challengeId} readOnly={isViewer} />}
+      {!isSuperAdmin && !isViewer && tab === "Settings" && <SettingsTab challengeId={challengeId} />}
     </div>
   );
 }

@@ -25,12 +25,14 @@ function CoJudgePanel({
   judges,
   appTrack,
   onClose,
+  readOnly = false,
 }: {
   challengeId:   string;
   applicationId: string;
   judges:        JudgeItem[];
   appTrack?:     string;
   onClose:       () => void;
+  readOnly?:     boolean;
 }) {
   const { data: rawAssignments, isLoading } = useApplicationJudgeAssignments(challengeId, applicationId);
   const addCoJudge    = useAddCoJudge();
@@ -81,20 +83,22 @@ function CoJudgePanel({
                     style={{ backgroundColor: "#7c22c918", color: "#7c22c9", border: "1px solid #e9d5ff" }}
                   >
                     {name}
-                    <button
-                      disabled={removeCoJudge.isPending}
-                      onClick={() => removeCoJudge.mutate({ challengeId, applicationId, judgeId: cj.judgeId })}
-                      className="ml-0.5 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors p-0.5"
-                    >
-                      ✕
-                    </button>
+                    {!readOnly && (
+                      <button
+                        disabled={removeCoJudge.isPending}
+                        onClick={() => removeCoJudge.mutate({ challengeId, applicationId, judgeId: cj.judgeId })}
+                        className="ml-0.5 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors p-0.5"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </span>
                 );
               })}
             </div>
           )}
 
-          {!addOpen ? (
+          {!readOnly && (!addOpen ? (
             <button
               onClick={() => setAddOpen(true)}
               disabled={eligible.length === 0}
@@ -128,7 +132,7 @@ function CoJudgePanel({
                 Cancel
               </button>
             </div>
-          )}
+          ))}
         </div>
       </td>
     </tr>
@@ -148,6 +152,7 @@ function AppAssignmentRow({
   onToggleExpand,
   selected,
   onToggleSelect,
+  readOnly = false,
 }: {
   challengeId:    string;
   app:            ApplicationItem;
@@ -158,6 +163,7 @@ function AppAssignmentRow({
   onToggleExpand: () => void;
   selected:       boolean;
   onToggleSelect: () => void;
+  readOnly?:      boolean;
 }) {
   // Load the saved assignment for this application so the dropdown is
   // pre-populated on page load / after reload.
@@ -184,14 +190,16 @@ function AppAssignmentRow({
   return (
     <React.Fragment>
       <tr className={`attend-table-row ${selected ? "bg-[hsl(var(--muted)/0.6)]" : ""}`}>
-        {/* Checkbox */}
+        {/* Checkbox — hidden for Viewer (read-only) */}
         <td className="pl-4 pr-2 py-3 w-8">
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={onToggleSelect}
-            className="h-4 w-4 rounded border-[hsl(var(--border))] accent-[#7c22c9] cursor-pointer"
-          />
+          {!readOnly && (
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onToggleSelect}
+              className="h-4 w-4 rounded border-[hsl(var(--border))] accent-[#7c22c9] cursor-pointer"
+            />
+          )}
         </td>
         {/* Team */}
         <td className="px-5 py-3">
@@ -223,9 +231,14 @@ function AppAssignmentRow({
             <span className="text-xs text-[hsl(var(--muted-foreground))]">—</span>
           )}
         </td>
-        {/* Primary judge selector */}
+        {/* Primary judge selector — plain text for Viewer (read-only) */}
         <td className="px-5 py-3">
           <div className="flex items-center gap-2">
+            {readOnly ? (
+              <span className="text-xs text-[hsl(var(--foreground))]">
+                {judges.find((j) => j.id === savedPrimaryId)?.name ?? <span className="text-[hsl(var(--muted-foreground))] italic">Unassigned</span>}
+              </span>
+            ) : (
             <select
               value={selectValue}
               onChange={(e) => onDraftChange(e.target.value)}
@@ -240,7 +253,8 @@ function AppAssignmentRow({
                 <option key={j.id} value={j.id}>{j.name}</option>
               ))}
             </select>
-            {isDirty && (
+            )}
+            {!readOnly && isDirty && (
               <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">
                 Unsaved
               </span>
@@ -275,6 +289,7 @@ function AppAssignmentRow({
           judges={judges}
           appTrack={app.track}
           onClose={onToggleExpand}
+          readOnly={readOnly}
         />
       )}
     </React.Fragment>
@@ -294,10 +309,12 @@ export function AssignmentsSection({
   challengeId,
   judges,
   tracks,
+  readOnly = false,
 }: {
   challengeId: string;
   judges:      JudgeItem[];
   tracks:      string[];
+  readOnly?:   boolean;
 }) {
   const { data: appsData, isLoading: appsLoading } =
     useClientChallengeApplications(challengeId, "SHORTLISTED", "", 0, 200);
@@ -376,27 +393,29 @@ export function AssignmentsSection({
             Assign a primary judge per application. Once saved, each judge only sees their assigned apps.
           </p>
         </div>
-        {/* Auto-distribute */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {tracks.length > 0 && (
-            <select
-              value={autoTrack}
-              onChange={(e) => setAutoTrack(e.target.value)}
-              className="text-xs h-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 focus:outline-none"
+        {/* Auto-distribute — hidden for Viewer (read-only) */}
+        {!readOnly && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {tracks.length > 0 && (
+              <select
+                value={autoTrack}
+                onChange={(e) => setAutoTrack(e.target.value)}
+                className="text-xs h-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 focus:outline-none"
+              >
+                <option value="">All tracks</option>
+                {tracks.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )}
+            <Button
+              size="sm" variant="outline" className="gap-1.5"
+              disabled={autoDistribute.isPending || judges.length === 0}
+              onClick={() => autoDistribute.mutate({ challengeId, track: autoTrack || undefined })}
             >
-              <option value="">All tracks</option>
-              {tracks.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          )}
-          <Button
-            size="sm" variant="outline" className="gap-1.5"
-            disabled={autoDistribute.isPending || judges.length === 0}
-            onClick={() => autoDistribute.mutate({ challengeId, track: autoTrack || undefined })}
-          >
-            <Award className="h-3.5 w-3.5" />
-            {autoDistribute.isPending ? "Distributing…" : "Auto-Distribute"}
-          </Button>
-        </div>
+              <Award className="h-3.5 w-3.5" />
+              {autoDistribute.isPending ? "Distributing…" : "Auto-Distribute"}
+            </Button>
+          </div>
+        )}
       </div>
 
       {appsLoading ? (
@@ -411,8 +430,8 @@ export function AssignmentsSection({
         </Card>
       ) : (
         <>
-          {/* Bulk-assign bar — visible when rows are selected */}
-          {someSelected && (
+          {/* Bulk-assign bar — visible when rows are selected, hidden for Viewer (read-only) */}
+          {!readOnly && someSelected && (
             <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-[#7c22c9]/30 bg-[#faf5ff] flex-wrap">
               <span className="text-xs font-semibold text-[#7c22c9]">
                 {selectedApps.size} selected
@@ -450,12 +469,14 @@ export function AssignmentsSection({
               <thead>
                 <tr className="attend-table-header">
                   <th className="pl-4 pr-2 py-3 w-8">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleSelectAll}
-                      className="h-4 w-4 rounded border-[hsl(var(--border))] accent-[#7c22c9] cursor-pointer"
-                    />
+                    {!readOnly && (
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleSelectAll}
+                        className="h-4 w-4 rounded border-[hsl(var(--border))] accent-[#7c22c9] cursor-pointer"
+                      />
+                    )}
                   </th>
                   <th className="px-5 py-3 text-left">Team</th>
                   <th className="px-5 py-3 text-left">Track</th>
@@ -481,27 +502,30 @@ export function AssignmentsSection({
                     }
                     selected={selectedApps.has(app.id)}
                     onToggleSelect={() => toggleSelectApp(app.id)}
+                    readOnly={readOnly}
                   />
                 ))}
               </tbody>
             </table>
           </Card>
 
-          {/* Save bar */}
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">
-              {hasDraft
-                ? `${Object.values(draftMap).filter(Boolean).length} unsaved change(s)`
-                : "All assignments saved."}
-            </p>
-            <Button
-              size="sm"
-              disabled={!hasDraft || bulkAssign.isPending}
-              onClick={handleSave}
-            >
-              {bulkAssign.isPending ? "Saving…" : "Save Assignments"}
-            </Button>
-          </div>
+          {/* Save bar — hidden for Viewer (read-only) */}
+          {!readOnly && (
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                {hasDraft
+                  ? `${Object.values(draftMap).filter(Boolean).length} unsaved change(s)`
+                  : "All assignments saved."}
+              </p>
+              <Button
+                size="sm"
+                disabled={!hasDraft || bulkAssign.isPending}
+                onClick={handleSave}
+              >
+                {bulkAssign.isPending ? "Saving…" : "Save Assignments"}
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>

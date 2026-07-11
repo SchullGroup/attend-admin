@@ -319,7 +319,7 @@ export default function EventsPage() {
               : `${totalCount} total event${totalCount !== 1 ? "s" : ""} in your organisation`}
           </p>
         </div>
-        {!isSuperAdmin && (
+        {!isSuperAdmin && !isViewer && (
           <Link href="/events/create">
             <Button size="sm" className="gap-1.5">Create Event</Button>
           </Link>

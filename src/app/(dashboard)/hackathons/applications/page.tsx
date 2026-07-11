@@ -101,10 +101,12 @@ function ApplicationDetail({
   challengeId,
   applicationId,
   onBack,
+  readOnly = false,
 }: {
   challengeId:   string;
   applicationId: string;
   onBack:        () => void;
+  readOnly?:     boolean;
 }) {
   const { data: app, isLoading } = useClientChallengeApplication(challengeId, applicationId);
   const updateStatus = useUpdateClientApplicationStatus();
@@ -327,7 +329,8 @@ function ApplicationDetail({
         {/* ── Right column ── */}
         <div className="flex flex-col gap-5">
 
-          {/* Update status */}
+          {/* Update status — hidden for Viewer (read-only) */}
+          {!readOnly && (
           <Card className="attend-card p-5">
             <h2 className="font-semibold text-[hsl(var(--foreground))] mb-1">Update Status</h2>
             <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3">Current: {statusChip(app.status)}</p>
@@ -348,6 +351,7 @@ function ApplicationDetail({
               <p className="text-xs text-[hsl(var(--muted-foreground))]">No further transitions available.</p>
             )}
           </Card>
+          )}
 
           {/* Details */}
           <Card className="attend-card p-5">
@@ -411,9 +415,11 @@ function ApplicationDetail({
 function ChallengeApplications({
   challengeId,
   onViewDetail,
+  readOnly = false,
 }: {
   challengeId:  string;
   onViewDetail: (appId: string) => void;
+  readOnly?:    boolean;
 }) {
   const [activeStatus, setActiveStatus] = useState("");
   const [activeTrack,  setActiveTrack]  = useState("");
@@ -657,7 +663,7 @@ function ChallengeApplications({
                       >
                         View <ChevronRight className="h-3 w-3" />
                       </Button>
-                      {(VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).length > 0 && (
+                      {!readOnly && (VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).length > 0 && (
                         <div className="relative">
                           <Button
                             size="sm" variant="outline" className="h-7 text-xs gap-1"
@@ -1057,7 +1063,9 @@ export default function ApplicationsPage() {
   const [search,              setSearch]              = useState("");
 
   const { data: userResponse } = useGetMe();
-  const isJudge = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "judge";
+  const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
+  const isJudge  = normalizedRole === "judge";
+  const isViewer = normalizedRole === "viewer";
 
   const { data, isLoading } = useClientChallenges("", "", 0, 100);
   const challenges = data?.challenges ?? [];
@@ -1086,6 +1094,7 @@ export default function ApplicationsPage() {
           challengeId={selectedChallengeId}
           applicationId={selectedAppId}
           onBack={() => setSelectedAppId(null)}
+          readOnly={isViewer}
         />
       </div>
     );
@@ -1116,6 +1125,7 @@ export default function ApplicationsPage() {
         <ChallengeApplications
           challengeId={selectedChallengeId}
           onViewDetail={(appId) => setSelectedAppId(appId)}
+          readOnly={isViewer}
         />
       </div>
     );
