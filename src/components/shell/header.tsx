@@ -14,8 +14,10 @@ import { useClientStakeholder } from "@/api/client-organisation";
 import {
   useAdminNotifications,
   useMarkNotificationRead,
+  useMarkAllNotificationsRead,
   useClientNotifications,
   useMarkClientNotificationRead,
+  useMarkAllClientNotificationsRead,
 } from "@/api/notifications";
 import { useGlobalSearch } from "@/api/super-admin";
 import { useClientSearch, type SearchEvent, type SearchTeamMember, type SearchDocument } from "@/api/client-search";
@@ -168,10 +170,18 @@ export function Header() {
   const { data: adminUnreadData } = useAdminNotifications(0, 1, false, isAdmin);
   const { data: adminNotifData  } = useAdminNotifications(0, 5, undefined, isAdmin);
   const { mutate: markAdminRead } = useMarkNotificationRead();
+  const { mutate: markAllAdminRead, isPending: markingAllAdmin } = useMarkAllNotificationsRead();
 
   // ── Client notifications ───────────────────────────────────────────────────
   const { data: clientNotifData  } = useClientNotifications(0, 5);
   const { mutate: markClientRead } = useMarkClientNotificationRead();
+  const { mutate: markAllClientRead, isPending: markingAllClient } = useMarkAllClientNotificationsRead();
+
+  const markingAllRead = isAdmin ? markingAllAdmin : markingAllClient;
+  function markAllRead() {
+    if (isAdmin) markAllAdminRead();
+    else         markAllClientRead();
+  }
 
   // ── Unified values ─────────────────────────────────────────────────────────
   const unreadCount = isAdmin
@@ -418,9 +428,20 @@ export function Header() {
           <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
             <div className="px-4 py-2.5 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] flex items-center justify-between">
               <span className="font-semibold text-sm">Notifications</span>
-              {unreadCount > 0 && (
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">{unreadCount} new</span>
-              )}
+              <div className="flex items-center gap-2">
+                {unreadCount > 0 && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">{unreadCount} new</span>
+                )}
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllRead}
+                    disabled={markingAllRead}
+                    className="text-[11px] font-medium text-[hsl(var(--primary))] hover:underline disabled:opacity-50"
+                  >
+                    {markingAllRead ? "Marking…" : "Mark all read"}
+                  </button>
+                )}
+              </div>
             </div>
             <div className="max-h-64 overflow-y-auto divide-y divide-[hsl(var(--border))]">
               {notifications.length > 0 ? (

@@ -5,13 +5,16 @@ import { useGetMe } from "@/api/auth/hooks";
 import {
   useAdminNotifications,
   useMarkNotificationRead,
+  useMarkAllNotificationsRead,
   useClientNotifications,
   useMarkClientNotificationRead,
+  useMarkAllClientNotificationsRead,
   ClientNotificationItem,
 } from "@/api/notifications";
 import {
   useJudgeNotifications,
   useMarkJudgeNotificationRead,
+  useMarkAllJudgeNotificationsRead,
 } from "@/api/judge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -134,18 +137,28 @@ export default function NotificationsPage() {
     page, limit, filter === "unread" ? false : undefined, !userLoading && isAdmin
   );
   const { mutate: markAdmin } = useMarkNotificationRead();
+  const { mutate: markAllAdmin, isPending: markingAllAdmin } = useMarkAllNotificationsRead();
 
   // Client hooks
   const { data: clientData, isLoading: clientLoading } = useClientNotifications(
     page, limit, filter === "unread" ? false : undefined
   );
   const { mutate: markClient } = useMarkClientNotificationRead();
+  const { mutate: markAllClient, isPending: markingAllClient } = useMarkAllClientNotificationsRead();
 
   // Judge hooks — only enabled once we know the user is a judge (avoids 403s for other roles)
   const { data: judgeData,  isLoading: judgeLoading  } = useJudgeNotifications(
     page, limit, filter === "unread" ? false : undefined, !userLoading && isJudge
   );
   const { mutate: markJudge } = useMarkJudgeNotificationRead();
+  const { mutate: markAllJudge, isPending: markingAllJudge } = useMarkAllJudgeNotificationsRead();
+
+  const markingAll = isAdmin ? markingAllAdmin : isJudge ? markingAllJudge : markingAllClient;
+  function handleMarkAllRead() {
+    if (isAdmin)      markAllAdmin();
+    else if (isJudge) markAllJudge();
+    else              markAllClient();
+  }
 
   const isLoading = userLoading || (
     isAdmin ? adminLoading : isJudge ? judgeLoading : clientLoading
@@ -194,21 +207,36 @@ export default function NotificationsPage() {
           </p>
         </div>
 
-        {/* Filter tabs */}
-        <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
-          {(["all", "unread"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => { setFilter(f); setPage(0); setSelected(null); }}
-              className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all capitalize ${
-                filter === f
-                  ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
-                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-              }`}
+        <div className="flex items-center gap-3">
+          {unreadCount > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleMarkAllRead}
+              disabled={markingAll}
+              className="gap-1.5"
             >
-              {f}
-            </button>
-          ))}
+              <CheckCheck className="h-3.5 w-3.5" />
+              {markingAll ? "Marking…" : "Mark all as read"}
+            </Button>
+          )}
+
+          {/* Filter tabs */}
+          <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
+            {(["all", "unread"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => { setFilter(f); setPage(0); setSelected(null); }}
+                className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all capitalize ${
+                  filter === f
+                    ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
+                    : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

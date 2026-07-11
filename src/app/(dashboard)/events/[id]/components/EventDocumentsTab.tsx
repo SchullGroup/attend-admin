@@ -4,6 +4,7 @@ import { Upload, FileText, Download, Trash2, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
+import { UploadProgress } from "@/components/ui/upload-progress";
 import {
   useClientEventDocuments,
   useUploadEventDocument,
@@ -65,6 +66,7 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false }: Pr
   const [pendingFile,       setPendingFile]       = useState<File | null>(null);
   const [docType,           setDocType]           = useState<DocType>("REPORT");
   const [uploading,         setUploading]         = useState(false);
+  const [uploadProgress,    setUploadProgress]    = useState(0);
   const [noticeRegistered,  setNoticeRegistered]  = useState(false);
 
   // ── Data hooks — admin vs client ──────────────────────────────────────────
@@ -139,13 +141,19 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false }: Pr
   async function handleConfirmUpload() {
     if (!pendingFile) return;
     setUploading(true);
+    setUploadProgress(0);
     try {
       const form = new FormData();
       form.append("file", pendingFile);
       const uploadRes = await apiClient.post<any>(
         "/api/v1/upload", form,
         { params: { folder: "documents" }, headers: { "Content-Type": undefined },
-          maxBodyLength: Infinity, maxContentLength: Infinity, timeout: 120_000 }
+          maxBodyLength: Infinity, maxContentLength: Infinity, timeout: 120_000,
+          onUploadProgress: (evt) => {
+            if (!evt.total) return;
+            setUploadProgress(Math.round((evt.loaded / evt.total) * 100));
+          },
+        }
       );
       const uploadData = uploadRes.data?.data ?? uploadRes.data ?? {};
       const fileUrl    =
@@ -171,6 +179,7 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false }: Pr
       toast.error(err?.response?.data?.message ?? err?.message ?? "Upload failed");
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   }
 
@@ -235,10 +244,14 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false }: Pr
               ))}
             </div>
 
+            {uploading && (
+              <UploadProgress percent={uploadProgress} label={`Uploading ${pendingFile.name}…`} className="mb-4" />
+            )}
+
             <div className="flex gap-2">
               <Button disabled={isBusy} onClick={handleConfirmUpload} className="gap-2">
                 {isBusy
-                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {uploading ? `Uploading… ${uploadProgress}%` : "Saving…"}</>
                   : <><Upload className="h-3.5 w-3.5" /> Upload as {TYPE_LABEL[docType]}</>
                 }
               </Button>

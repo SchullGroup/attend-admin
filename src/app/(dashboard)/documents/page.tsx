@@ -20,6 +20,7 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { UploadProgress } from "@/components/ui/upload-progress";
 import { formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -145,6 +146,7 @@ export default function DocumentsPage() {
   const [form,           setForm]           = useState({ title: "", type: "NOTICE" as DocType, eventId: "" });
   const [selectedFile,   setSelectedFile]   = useState<File | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Client document hooks
@@ -176,14 +178,20 @@ export default function DocumentsPage() {
 
   function handleUpload() {
     if (!form.title || !form.eventId || !selectedFile) return;
+    setUploadProgress(0);
     uploadMutation.mutate(
-      { file: selectedFile, title: form.title, documentType: form.type, eventId: form.eventId },
+      {
+        file: selectedFile, title: form.title, documentType: form.type, eventId: form.eventId,
+        onProgress: setUploadProgress,
+      },
       {
         onSuccess: () => {
           setUploadOpen(false);
           setForm({ title: "", type: "NOTICE", eventId: "" });
           setSelectedFile(null);
+          setUploadProgress(0);
         },
+        onError: () => setUploadProgress(0),
       }
     );
   }
@@ -272,14 +280,18 @@ export default function DocumentsPage() {
               </div>
             </div>
 
+            {uploadMutation.isPending && (
+              <UploadProgress percent={uploadProgress} label={`Uploading ${selectedFile?.name ?? ""}…`} />
+            )}
+
             <div className="flex gap-2 justify-end pt-1">
-              <Button variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>
+              <Button variant="outline" disabled={uploadMutation.isPending} onClick={() => setUploadOpen(false)}>Cancel</Button>
               <Button
                 disabled={!form.title || !form.eventId || !selectedFile || uploadMutation.isPending}
                 onClick={handleUpload}
                 className="gap-2"
               >
-                {uploadMutation.isPending ? "Uploading…" : <><Send className="h-4 w-4" /> Upload</>}
+                {uploadMutation.isPending ? `Uploading… ${uploadProgress}%` : <><Send className="h-4 w-4" /> Upload</>}
               </Button>
             </div>
           </div>

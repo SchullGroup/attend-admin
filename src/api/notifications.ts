@@ -114,6 +114,36 @@ export function useMarkNotificationRead() {
   });
 }
 
+/**
+ * Mark every unread admin notification as read.
+ *
+ * There's no bulk "mark all read" endpoint on the backend, so this fetches
+ * every currently-unread notification (large limit, read:false) and fires
+ * the existing per-notification PATCH for each one in parallel.
+ */
+export function useMarkAllNotificationsRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const listRes = await apiClient.get<ApiResponse<any>>(
+        "/api/v1/admin/notifications",
+        { params: { page: 0, limit: 500, read: false } }
+      );
+      const raw = listRes.data.data ?? (listRes.data as any);
+      const unread: any[] = raw?.notifications ?? raw?.content ?? [];
+      await Promise.allSettled(
+        unread.map((n) => apiClient.patch(`/api/v1/admin/notifications/${n.id}/read`))
+      );
+      return unread.length;
+    },
+    onSuccess: (count: number) => {
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
+      if (count > 0) popup.success("All Caught Up", `${count} notification${count !== 1 ? "s" : ""} marked as read.`, 2000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to mark all notifications as read."),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Client notification hooks  (GET /api/v1/client/notifications)
 // ---------------------------------------------------------------------------
@@ -160,5 +190,32 @@ export function useMarkClientNotificationRead() {
       queryClient.invalidateQueries({ queryKey: clientNotificationKeys.all });
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to mark notification as read."),
+  });
+}
+
+/**
+ * Mark every unread client notification as read.
+ * Same "no bulk endpoint" workaround as useMarkAllNotificationsRead.
+ */
+export function useMarkAllClientNotificationsRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const listRes = await apiClient.get<ApiResponse<ClientNotificationListResponse>>(
+        "/api/v1/client/notifications",
+        { params: { page: 0, limit: 500, read: false } }
+      );
+      const raw = listRes.data.data ?? (listRes.data as any);
+      const unread: ClientNotificationItem[] = raw?.notifications ?? (raw as any)?.content ?? [];
+      await Promise.allSettled(
+        unread.map((n) => apiClient.patch(`/api/v1/client/notifications/${n.id}/read`))
+      );
+      return unread.length;
+    },
+    onSuccess: (count: number) => {
+      queryClient.invalidateQueries({ queryKey: clientNotificationKeys.all });
+      if (count > 0) popup.success("All Caught Up", `${count} notification${count !== 1 ? "s" : ""} marked as read.`, 2000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to mark all notifications as read."),
   });
 }

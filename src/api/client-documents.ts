@@ -200,11 +200,14 @@ export function useUploadGlobalDocument() {
       title,
       documentType,
       eventId,
+      onProgress,
     }: {
       file:         File;
       title:        string;
       documentType: string;
       eventId:      string;
+      /** Called with 0–100 as the file uploads, for a progress bar in the UI. */
+      onProgress?:  (percent: number) => void;
     }) => {
       // Step 1 — upload file to Cloudinary via backend proxy
       // Do NOT set Content-Type manually: the browser must set it with the multipart boundary.
@@ -220,6 +223,10 @@ export function useUploadGlobalDocument() {
           maxBodyLength:    Infinity,
           maxContentLength: Infinity,
           timeout:          120_000,
+          onUploadProgress: (evt) => {
+            if (!onProgress || !evt.total) return;
+            onProgress(Math.round((evt.loaded / evt.total) * 100));
+          },
         }
       );
       const uploadData         = uploadRes.data?.data ?? {};
