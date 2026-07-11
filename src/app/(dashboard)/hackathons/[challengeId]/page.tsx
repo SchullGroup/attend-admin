@@ -321,7 +321,16 @@ function ApplicationsTab({ challengeId, readOnly = false }: { challengeId: strin
 
   const apps = data?.applications ?? [];
   const tabs = data?.tabs ?? [];
-  const tracks = Array.from(new Set(apps.map((a) => a.track).filter(Boolean)));
+
+  // Track filter options must stay independent of the current track
+  // selection — deriving them from the already-track-filtered `apps` list
+  // meant that picking a track shrank the option list down to just that
+  // one track, hiding the entire filter row (which only renders once there's
+  // more than one track) and trapping the user with no way back to "All
+  // tracks". Fetch a track-unfiltered list (still respecting the status
+  // tab) purely to build the option set.
+  const { data: allTracksData } = useClientChallengeApplications(challengeId, activeStatus, "", 0, 100);
+  const tracks = Array.from(new Set((allTracksData?.applications ?? []).map((a) => a.track).filter(Boolean)));
 
   async function handleExport() {
     const result = await fetchExport();

@@ -232,9 +232,10 @@ export function useClientEventDetail(id: string, opts?: { enabled?: boolean }) {
 }
 
 /** Minimal id + label list for filter dropdowns. */
-export function useClientEventsDropdown() {
+export function useClientEventsDropdown(enabled = true) {
   return useQuery({
     queryKey: clientEventKeys.dropdown(),
+    enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<{ events: EventOption[] }>>(
         "/api/v1/client/events/dropdown"

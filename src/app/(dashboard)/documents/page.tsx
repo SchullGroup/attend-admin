@@ -162,12 +162,13 @@ export default function DocumentsPage() {
     useAdminGlobalDocuments(search, "", typeFilter, 0, 50);
 
   // Narrower list, scoped to events that already have documents — used for
-  // the top-of-page filter dropdown only.
-  const { data: eventOptions    = [] } = useDocumentEventFilterOptions();
-  const { data: registerOptions = [] } = useDocumentRegisterFilterOptions();
+  // the top-of-page filter dropdown only. Client-org-only endpoints — don't
+  // fire them for Super Admin, which uses the admin document API instead.
+  const { data: eventOptions    = [] } = useDocumentEventFilterOptions(!isAdmin);
+  const { data: registerOptions = [] } = useDocumentRegisterFilterOptions(!isAdmin);
   // Full org event list — used for the Upload dialog's required event
   // picker, which needs every event (not just ones with existing docs).
-  const { data: allEventOptions = [] } = useClientEventsDropdown();
+  const { data: allEventOptions = [] } = useClientEventsDropdown(!isAdmin);
 
   const deleteMutation   = useDeleteGlobalDocument();
   const downloadMutation = useDownloadGlobalDocument();

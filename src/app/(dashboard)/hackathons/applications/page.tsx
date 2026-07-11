@@ -436,7 +436,11 @@ function ChallengeApplications({
 
   const apps   = data?.applications ?? [];
   const tabs   = data?.tabs ?? [];
-  const tracks = Array.from(new Set(apps.map((a) => a.track).filter(Boolean)));
+
+  // Track options must stay independent of the active track filter — see
+  // matching fix in hackathons/[challengeId]/page.tsx's ApplicationsTab.
+  const { data: allTracksData } = useClientChallengeApplications(challengeId, activeStatus, "", 0, 100);
+  const tracks = Array.from(new Set((allTracksData?.applications ?? []).map((a) => a.track).filter(Boolean)));
 
   async function handleExport() {
     const result = await fetchExport();

@@ -127,3 +127,20 @@ Frontend now hides the genuinely owner-only actions from `EVENT_MANAGER` (Suspen
 - Challenge status changes relevant to judging — e.g. scoring opens/closes, applications close, shortlist published
 
 Also please confirm judge notifications are scoped to Innovation Challenges only (no event/AGM/document notifications — those aren't part of the Judge dashboard at all).
+
+---
+
+## 10. NEW — Super Admin Analytics & Reports: several endpoints return empty/zero despite real data existing
+
+**Context:** `/analytics` for `SUPER_ADMIN` calls 8 endpoints. Two of them return real data — `GET /api/v1/admin/analytics/by-type` (Events by Module: 10 AGM/EGM, 1 Innovation Challenge, 5 General — 16 events with RSVPs) and `GET /api/v1/admin/audit-logs` (Recent Activity Log shows real sign-in/team events with timestamps). The other six all return empty/zero, which is inconsistent with the confirmed 16 events + RSVPs already in the system:
+
+- `GET /api/v1/admin/analytics/summary` — Total Registrations, Events Hosted, Docs Distributed, Votes Cast all show `0`
+- `GET /api/v1/admin/analytics/top-organisers` — "No data yet."
+- `GET /api/v1/admin/analytics/kyc-breakdown` — "No KYC data yet."
+- `GET /api/v1/admin/analytics/event-format` — "No format data yet."
+- `GET /api/v1/admin/analytics/engagement` — Avg Watch Time, Poll Response Rate, Q&A Participation, Document Downloads all `0`
+- `GET /api/v1/admin/analytics/event-performance` — Per-Event Breakdown table shows "No events yet."
+
+**Frontend status:** Already correctly wired — `useAdminSummaryStats`, `useAdminTopOrganisers`, `useAdminKycBreakdown`, `useAdminEventFormat`, `useAdminEngagement`, `useAdminAnalyticsEventPerformance` in `src/api/super-admin.ts` all call the endpoints above and parse several reasonable field-name fallbacks (e.g. `totalRegistrations ?? registrations ?? totalParticipants`) so this isn't a response-shape mismatch on our end — the responses appear to be genuinely empty.
+
+**Ask:** Please confirm whether these six endpoints are fully implemented and querying real data, or still stubbed/returning placeholder empty responses. Since `by-type` and `audit-logs` prove the underlying event/RSVP data exists and is queryable, we'd expect at minimum `summary` (event/registration/vote counts) and `event-performance` (per-event RSVP/check-in rows) to return non-empty results from the same dataset. If any of `top-organisers`, `kyc-breakdown`, `event-format`, or `engagement` genuinely have no data yet (e.g. no completed KYC records, no engagement tracking implemented), that's fine — just let us know which of the six fall into "not implemented yet" vs "implemented but broken" so we can prioritize accordingly.

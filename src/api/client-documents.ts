@@ -126,9 +126,10 @@ export function useGlobalDocuments(
 }
 
 /** Dropdown options for the event filter on the document list. */
-export function useDocumentEventFilterOptions() {
+export function useDocumentEventFilterOptions(enabled = true) {
   return useQuery({
     queryKey: clientDocumentKeys.filterEvents,
+    enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<DocumentFilterEventsResponse>>(
         "/api/v1/client/documents/filters/events"
@@ -140,9 +141,10 @@ export function useDocumentEventFilterOptions() {
 }
 
 /** Dropdown options for the register (organiser) filter on the document list. */
-export function useDocumentRegisterFilterOptions() {
+export function useDocumentRegisterFilterOptions(enabled = true) {
   return useQuery({
     queryKey: clientDocumentKeys.filterRegisters,
+    enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<DocumentFilterEventsResponse>>(
         "/api/v1/client/documents/filters/registers"
