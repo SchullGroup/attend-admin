@@ -353,6 +353,7 @@ export default function SettingsPage() {
   const TEAM_ROLE_LABELS: Record<string, string> = {
     admin:         "Admin",
     event_manager: "Event Manager",
+    viewer:        "Viewer",
   };
   const isTeamAdmin  = normalizedRole in TEAM_ROLE_LABELS;
 

@@ -41,6 +41,8 @@ interface Props {
   agmNoticeUrl?: string;
   /** When true, use admin endpoints; otherwise use client endpoints. */
   isAdmin?:      boolean;
+  /** When true (e.g. Viewer role), hide upload/delete — view + download only. */
+  readOnly?:     boolean;
 }
 
 function formatBytes(bytes: number): string {
@@ -61,7 +63,7 @@ function formatDate(dateStr?: string): string {
   }
 }
 
-export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false }: Props) {
+export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, readOnly = false }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [pendingFile,       setPendingFile]       = useState<File | null>(null);
@@ -95,7 +97,7 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false }: Pr
 
   // Auto-register AGM notice URL (already on Cloudinary from event creation)
   useEffect(() => {
-    if (!agmNoticeUrl || isLoading || noticeRegistered) return;
+    if (!agmNoticeUrl || isLoading || noticeRegistered || readOnly) return;
     const alreadyUploaded = docs.some(
       (d: any) => d.documentType === "NOTICE" || d.title?.toLowerCase().includes("agm notice")
     );
@@ -207,8 +209,8 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false }: Pr
   return (
     <div className="flex flex-col gap-4">
 
-      {/* ── Upload UI — hidden for admin (read-only) ── */}
-      {!isAdmin && (
+      {/* ── Upload UI — hidden for admin and Viewer (read-only) ── */}
+      {!isAdmin && !readOnly && (
         pendingFile ? (
           <Card className="attend-card p-5">
             <div className="flex items-start justify-between mb-4">
@@ -333,7 +335,7 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false }: Pr
                             : <Download className="h-3.5 w-3.5" />
                           }
                         </Button>
-                        {!isAdmin && (
+                        {!isAdmin && !readOnly && (
                           <Button
                             size="sm" variant="ghost"
                             className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"

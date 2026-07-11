@@ -164,7 +164,7 @@ function SkeletonRow() {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: string; registerId?: string }) {
+export function EventExpectedAttendeesTab({ eventId, registerId, readOnly = false }: { eventId: string; registerId?: string; readOnly?: boolean }) {
   const [showForm,     setShowForm]     = useState(false);
   const [form,         setForm]         = useState<AddForm>(EMPTY_FORM);
   const [touched,      setTouched]      = useState(false);
@@ -341,7 +341,7 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
 
           <div className="flex items-center gap-2">
             {/* Bulk delete selected */}
-            {selectedIds.size > 0 && (
+            {!readOnly && selectedIds.size > 0 && (
               <Button
                 size="sm" variant="ghost"
                 className="h-7 text-xs text-red-600 bg-red-50 font-semibold hover:bg-red-100"
@@ -356,7 +356,7 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
             )}
 
             {/* Clear all — double-confirm */}
-            {attendees.length > 0 && (
+            {!readOnly && attendees.length > 0 && (
               confirmClear ? (
                 <div className="flex items-center gap-1.5">
                   <Button
@@ -383,7 +383,7 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
             )}
 
             {/* Import from Register */}
-            {registerId && (
+            {!readOnly && registerId && (
               <Button
                 size="sm"
                 variant="outline"
@@ -401,14 +401,16 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
             )}
 
             {/* Import CSV */}
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5"
-              onClick={() => csvInputRef.current?.click()}
-            >
-              <Upload className="h-3.5 w-3.5" /> Import CSV
-            </Button>
+            {!readOnly && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => csvInputRef.current?.click()}
+              >
+                <Upload className="h-3.5 w-3.5" /> Import CSV
+              </Button>
+            )}
             <input
               ref={csvInputRef}
               type="file"
@@ -418,22 +420,24 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
             />
 
             {/* Add attendee toggle */}
-            <Button
-              size="sm"
-              className="gap-1.5"
-              onClick={() => { setShowForm((p) => !p); setTouched(false); setForm(EMPTY_FORM); }}
-            >
-              {showForm
-                ? <><X className="h-3.5 w-3.5" /> Cancel</>
-                : <><UserPlus className="h-3.5 w-3.5" /> Add Attendee</>
-              }
-            </Button>
+            {!readOnly && (
+              <Button
+                size="sm"
+                className="gap-1.5"
+                onClick={() => { setShowForm((p) => !p); setTouched(false); setForm(EMPTY_FORM); }}
+              >
+                {showForm
+                  ? <><X className="h-3.5 w-3.5" /> Cancel</>
+                  : <><UserPlus className="h-3.5 w-3.5" /> Add Attendee</>
+                }
+              </Button>
+            )}
           </div>
         </div>
       </Card>
 
       {/* ── CSV preview ── */}
-      {showCsvPreview && csvRows.length > 0 && (
+      {!readOnly && showCsvPreview && csvRows.length > 0 && (
         <Card className="attend-card overflow-hidden">
           <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -516,7 +520,7 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
       )}
 
       {/* ── Inline add form ── */}
-      {showForm && (
+      {!readOnly && showForm && (
         <Card className="attend-card p-5">
           <h3 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-4">New Expected Attendee</h3>
 
@@ -642,7 +646,7 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
           <thead>
             <tr className="attend-table-header">
               <th className="px-5 py-3 text-left w-10">
-                {attendees.length > 0 && (
+                {!readOnly && attendees.length > 0 && (
                   <input
                     type="checkbox"
                     className="h-3.5 w-3.5 rounded accent-[hsl(var(--primary))]"
@@ -682,12 +686,14 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
 
                     {/* Select */}
                     <td className="px-5 py-3">
-                      <input
-                        type="checkbox"
-                        className="h-3.5 w-3.5 rounded accent-[hsl(var(--primary))]"
-                        checked={selectedIds.has(a.id)}
-                        onChange={() => toggleSelect(a.id)}
-                      />
+                      {!readOnly && (
+                        <input
+                          type="checkbox"
+                          className="h-3.5 w-3.5 rounded accent-[hsl(var(--primary))]"
+                          checked={selectedIds.has(a.id)}
+                          onChange={() => toggleSelect(a.id)}
+                        />
+                      )}
                     </td>
 
                     {/* Name + email */}
@@ -727,18 +733,20 @@ export function EventExpectedAttendeesTab({ eventId, registerId }: { eventId: st
 
                     {/* Delete */}
                     <td className="px-5 py-3">
-                      <Button
-                        size="sm" variant="ghost"
-                        className="h-7 w-7 p-0 text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:bg-red-50"
-                        disabled={deleteMutation.isPending}
-                        onClick={() => handleDelete(a.id)}
-                        title="Remove from list"
-                      >
-                        {deleteMutation.isPending
-                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          : <Trash2 className="h-3.5 w-3.5" />
-                        }
-                      </Button>
+                      {!readOnly && (
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-7 w-7 p-0 text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:bg-red-50"
+                          disabled={deleteMutation.isPending}
+                          onClick={() => handleDelete(a.id)}
+                          title="Remove from list"
+                        >
+                          {deleteMutation.isPending
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <Trash2 className="h-3.5 w-3.5" />
+                          }
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))

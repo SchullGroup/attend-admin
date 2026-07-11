@@ -188,6 +188,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   // into that same feature area) hidden here too for consistency.
   const isEventManager = (currentUser?.role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "event_manager";
 
+  // Viewer role — read-only access to all events. No write actions anywhere:
+  // no add/edit/delete resolutions or agenda, no vote control, no broadcast,
+  // no settings/status/zoom/feature changes, no attendee import/add/delete.
+  const isViewer = (currentUser?.role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "viewer";
+
   const expectedAttendeesCount = expectedAttendeesData?.totalCount ?? 0;
 
   const TABS = [
@@ -200,11 +205,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       "Documents",
       ...(isAGM && !isSuperAdmin ? ["Resolutions", "Stakeholders"] : isAGM ? ["Resolutions"] : []),
       ...(!isSuperAdmin && isLAUNCH ? ["Audience Tiers", "Waitlist"] : []),
-      // Broadcast is a write operation — hidden for super admin (read-only)
-      ...(!isSuperAdmin ? ["Broadcast"] : []),
+      // Broadcast is a write operation — hidden for super admin and Viewer (read-only)
+      ...(!isSuperAdmin && !isViewer ? ["Broadcast"] : []),
       ...(isAGM ? ["Vote Results", "Post-AGM"] : []),
-      // Super admin is read-only for events — no settings/mutations
-      ...(!isSuperAdmin ? ["Settings"] : []),
+      // Super admin and Viewer are read-only for events — no settings/mutations
+      ...(!isSuperAdmin && !isViewer ? ["Settings"] : []),
     ]),
   ];
 
@@ -235,14 +240,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{event.organiser}</p>
           </div>
           <div className="flex items-center gap-2">
-            {isHACKATHON && !isSuperAdmin && !isEventManager && (
+            {isHACKATHON && !isSuperAdmin && !isEventManager && !isViewer && (
               <Link href={`/hackathons/${id}`}>
                 <Button variant="outline" className="gap-2">
                   <FileText className="h-4 w-4" /> View Applications
                 </Button>
               </Link>
             )}
-            {currentStatus === "live" && !isSuperAdmin && (
+            {currentStatus === "live" && !isSuperAdmin && !isViewer && (
               <Link href={`/events/live?eventId=${id}`}>
                 <Button className="gap-2 bg-red-600 hover:bg-red-700 text-white">
                   <Radio className="h-4 w-4" /> Control Room
@@ -279,9 +284,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           stakeholderData={apiEvent as any}
         />
       )}
-      {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} isAdmin={isAdmin} />}
-      {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin} canControlVoting={isClientAdmin} />}
-      {tab === "Stakeholders"   && !isSuperAdmin && isAGM   && <EventExpectedAttendeesTab eventId={id} registerId={(apiEvent as any).registerId} />}
+      {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} isAdmin={isAdmin} readOnly={isViewer} />}
+      {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin || isViewer} canControlVoting={isClientAdmin} />}
+      {tab === "Stakeholders"   && !isSuperAdmin && isAGM   && <EventExpectedAttendeesTab eventId={id} registerId={(apiEvent as any).registerId} readOnly={isViewer} />}
       {tab === "Audience Tiers" && !isSuperAdmin && isLAUNCH && <EventLaunchAudienceTab    eventId={id} />}
       {tab === "Waitlist"       && !isSuperAdmin && isLAUNCH && <EventLaunchWaitlistTab    eventId={id} />}
       {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab eventId={id} />}

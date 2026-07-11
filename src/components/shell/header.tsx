@@ -105,7 +105,8 @@ export function Header() {
   const breadcrumbs = getBreadcrumbs(pathname);
 
   // ── Role detection — must come before hooks that depend on it ─────────────
-  const isAdmin = isSuperAdminRole(resolveRole(currentUser));
+  const isAdmin  = isSuperAdminRole(resolveRole(currentUser));
+  const isViewer = resolveRole(currentUser) === "viewer";
 
   // ── Search state ───────────────────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState("");
@@ -410,56 +411,58 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        {/* Notifications */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="h-8 w-8 rounded-lg flex items-center justify-center text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors relative">
-              <Bell className="h-4 w-4" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
-              )}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] flex items-center justify-between">
-              <span className="font-semibold text-sm">Notifications</span>
-              <div className="flex items-center gap-2">
+        {/* Notifications — hidden for Viewer role */}
+        {!isViewer && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="h-8 w-8 rounded-lg flex items-center justify-center text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors relative">
+                <Bell className="h-4 w-4" />
                 {unreadCount > 0 && (
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">{unreadCount} new</span>
+                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
                 )}
-                {unreadCount > 0 && (
-                  <button
-                    onClick={markAllRead}
-                    disabled={markingAllRead}
-                    className="text-[11px] font-medium text-[hsl(var(--primary))] hover:underline disabled:opacity-50"
-                  >
-                    {markingAllRead ? "Marking…" : "Mark all read"}
-                  </button>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] flex items-center justify-between">
+                <span className="font-semibold text-sm">Notifications</span>
+                <div className="flex items-center gap-2">
+                  {unreadCount > 0 && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">{unreadCount} new</span>
+                  )}
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllRead}
+                      disabled={markingAllRead}
+                      className="text-[11px] font-medium text-[hsl(var(--primary))] hover:underline disabled:opacity-50"
+                    >
+                      {markingAllRead ? "Marking…" : "Mark all read"}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="max-h-64 overflow-y-auto divide-y divide-[hsl(var(--border))]">
+                {notifications.length > 0 ? (
+                  notifications.map((n: any) => (
+                    <div
+                      key={n.id}
+                      onClick={() => { if (!n.read) markAsRead(n.id as string); }}
+                      className={`p-3 cursor-pointer hover:bg-[hsl(var(--muted)/0.4)] transition-colors ${!n.read ? "bg-[hsl(var(--primary)/0.03)]" : ""}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={`text-xs ${!n.read ? "font-semibold text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))]"}`}>{n.title}</p>
+                        {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1" />}
+                      </div>
+                      <p className="text-[11px] text-[hsl(var(--muted-foreground))] mt-0.5 line-clamp-2">{n.message}</p>
+                      <span className="text-[10px] text-[hsl(var(--muted-foreground))] mt-1 block">{timeAgo(n.createdAt)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-8 text-center text-xs text-[hsl(var(--muted-foreground))]">No notifications.</div>
                 )}
               </div>
-            </div>
-            <div className="max-h-64 overflow-y-auto divide-y divide-[hsl(var(--border))]">
-              {notifications.length > 0 ? (
-                notifications.map((n: any) => (
-                  <div
-                    key={n.id}
-                    onClick={() => { if (!n.read) markAsRead(n.id as string); }}
-                    className={`p-3 cursor-pointer hover:bg-[hsl(var(--muted)/0.4)] transition-colors ${!n.read ? "bg-[hsl(var(--primary)/0.03)]" : ""}`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={`text-xs ${!n.read ? "font-semibold text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))]"}`}>{n.title}</p>
-                      {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1" />}
-                    </div>
-                    <p className="text-[11px] text-[hsl(var(--muted-foreground))] mt-0.5 line-clamp-2">{n.message}</p>
-                    <span className="text-[10px] text-[hsl(var(--muted-foreground))] mt-1 block">{timeAgo(n.createdAt)}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="py-8 text-center text-xs text-[hsl(var(--muted-foreground))]">No notifications.</div>
-              )}
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         {/* User avatar */}
         {currentUser && (

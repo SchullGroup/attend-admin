@@ -108,7 +108,7 @@ const SECTIONS: NavSection[] = [
       { title: "Create Event",      icon: PlusCircle,   href: "/events/create", clientOnly: true, action: "create_event" },
       { title: "All Events",        icon: CalendarDays, href: "/events" },
       { title: "Live Control Room", icon: Radio,        href: "/events/live",   clientOnly: true, action: "live_control_room" },
-      { title: "QR Check-In",       icon: QrCode,       href: "/events/qr-checkin", clientOnly: true },
+      { title: "QR Check-In",       icon: QrCode,       href: "/events/qr-checkin", clientOnly: true, hiddenForRoles: ["viewer"] },
       { title: "Vote Records",      icon: Vote,         href: "/votes",         clientOnly: true },
     ],
   },
@@ -117,8 +117,8 @@ const SECTIONS: NavSection[] = [
     hiddenForRoles: ["event_manager"],
     items: [
       { title: "Challenges",   icon: Lightbulb, href: "/hackathons" },
-      { title: "Applications", icon: FileApp,   href: "/hackathons/applications", clientOnly: true },
-      { title: "Judging",      icon: Star,      href: "/hackathons/judging",      clientOnly: true },
+      { title: "Applications", icon: FileApp,   href: "/hackathons/applications", clientOnly: true, hiddenForRoles: ["viewer"] },
+      { title: "Judging",      icon: Star,      href: "/hackathons/judging",      clientOnly: true, hiddenForRoles: ["viewer"] },
     ],
   },
   {
@@ -151,8 +151,8 @@ const SECTIONS: NavSection[] = [
     items: [
       { title: "Documents",      icon: FolderOpen, href: "/documents",     judgeHidden: true, clientOnly: true },
       { title: "Analytics",      icon: BarChart3,  href: "/analytics",     judgeHidden: true },
-      { title: "Notifications",  icon: Bell,       href: "/notifications",  judgeHidden: true },
-      { title: "Audit Log",      icon: ScrollText, href: "/audit",          judgeHidden: true, hiddenForRoles: ["event_manager"] },
+      { title: "Notifications",  icon: Bell,       href: "/notifications",  judgeHidden: true, hiddenForRoles: ["viewer"] },
+      { title: "Audit Log",      icon: ScrollText, href: "/audit",          judgeHidden: true, hiddenForRoles: ["event_manager", "viewer"] },
       { title: "Settings",       icon: Settings,   href: "/settings" },
       { title: "Team Members",   icon: Users2,     href: "/settings/team",  clientOnly: true, judgeHidden: true },
     ],

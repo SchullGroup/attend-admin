@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UploadProgress } from "@/components/ui/upload-progress";
-import { formatDate } from "@/lib/utils";
+import { formatDate, resolveRole, isSuperAdminRole } from "@/lib/utils";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -38,8 +38,6 @@ const TYPE_FILTERS = [
   { label: "Certificate",  value: "CERTIFICATE" },
   { label: "Other",        value: "OTHER" },
 ];
-
-const ADMIN_ROLES = new Set(["super_admin", "event_manager", "kyc_officer", "judge"]);
 
 // ─── EventCombobox ─────────────────────────────────────────────────────────────
 
@@ -136,7 +134,13 @@ function EventCombobox({
 
 export default function DocumentsPage() {
   const { data: userResponse } = useGetMe();
-  const isAdmin = !userResponse?.data || ADMIN_ROLES.has(userResponse.data.role?.toLowerCase() ?? "");
+  // Only true platform Super Admin uses the admin document API/UI — every
+  // client-org role (admin, event_manager, viewer, judge, kyc_officer) uses
+  // the client documents API. (Previously this bundled event_manager/
+  // kyc_officer/judge in with super_admin, which 403'd those roles the same
+  // way the earlier "admin" vs "super_admin" collision did elsewhere.)
+  const isAdmin = isSuperAdminRole(resolveRole(userResponse?.data));
+  const isViewer = resolveRole(userResponse?.data) === "viewer";
 
   const [typeFilter,     setTypeFilter]     = useState("");
   const [search,         setSearch]         = useState("");
@@ -205,7 +209,7 @@ export default function DocumentsPage() {
             {isLoading ? "Loading…" : `${docs.length} document${docs.length !== 1 ? "s" : ""}`}
           </p>
         </div>
-        {!isAdmin && (
+        {!isAdmin && !isViewer && (
           <Button className="gap-2" onClick={() => setUploadOpen(true)}>
             <Upload className="h-4 w-4" />
             Upload Document
@@ -428,7 +432,7 @@ export default function DocumentsPage() {
                       >
                         <Download className="h-3.5 w-3.5" />
                       </Button>
-                      {!isAdmin && (
+                      {!isAdmin && !isViewer && (
                         confirmDeleteId === doc.id ? (
                           <div className="flex items-center gap-1">
                             <Button

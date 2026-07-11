@@ -148,7 +148,7 @@ function FilterDropdown({
 // Event table row
 // ---------------------------------------------------------------------------
 
-function EventTableRow({ event, isSuperAdmin }: { event: EventSummaryResponse; isSuperAdmin: boolean }) {
+function EventTableRow({ event, isSuperAdmin, isViewer }: { event: EventSummaryResponse; isSuperAdmin: boolean; isViewer?: boolean }) {
   const isLive      = event.status?.toUpperCase() === "LIVE" || event.live;
   const mod         = getEventModule(event);
   const isAGM       = mod === "AGM";
@@ -211,7 +211,7 @@ function EventTableRow({ event, isSuperAdmin }: { event: EventSummaryResponse; i
               <Eye className="h-3 w-3" /> View
             </Button>
           </Link>
-          {(event.status?.toUpperCase() === "LIVE") && !isSuperAdmin && (
+          {(event.status?.toUpperCase() === "LIVE") && !isSuperAdmin && !isViewer && (
             <Link href="/events/live">
               <Button size="sm" className="h-7 text-xs gap-1 bg-red-600 hover:bg-red-700 text-white">
                 <Radio className="h-3 w-3" /> Live
@@ -239,6 +239,7 @@ export default function EventsPage() {
   
   const isSuperAdmin = normalizedRole === "super_admin";
   const isAdmin      = !currentUser || ADMIN_ROLES.has(normalizedRole);
+  const isViewer     = normalizedRole === "viewer";
 
   const [activeStatus,     setActiveStatus]     = useState("");
   const [activeType,       setActiveType]       = useState<ClientEventTypeFilter>("ALL");
@@ -419,7 +420,7 @@ export default function EventsPage() {
           </thead>
           <tbody>
             {filtered.map((event) => (
-              <EventTableRow key={event.id} event={event} isSuperAdmin={isSuperAdmin} />
+              <EventTableRow key={event.id} event={event} isSuperAdmin={isSuperAdmin} isViewer={isViewer} />
             ))}
           </tbody>
         </table>

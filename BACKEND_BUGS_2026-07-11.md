@@ -62,7 +62,7 @@ For reference/pattern-matching against bug #2 (now fixed): this endpoint previou
 
 ---
 
-## 5. NEW — Team role "Admin" needs the same API access as the org owner (client_admin)
+## 5. Team role "Admin" needs the same API access as the org owner (client_admin) — ✅ FIXED (backend, 2026-07-11)
 
 **Context:** Team Members supports 4 roles: `ADMIN`, `EVENT_MANAGER`, `VIEWER`, `JUDGE`. Product requirement: a team member with role `ADMIN` should get an experience identical to the organisation's owner/`client_admin` — same dashboard, same data, same endpoints. (We had a frontend bug where "Admin" was accidentally being treated as platform "Super Admin" — that's fixed now — but once fixed, several endpoints started failing for Admin-role users, which looks like a **backend-side permission gap**, not a frontend routing issue.)
 
@@ -71,15 +71,19 @@ For reference/pattern-matching against bug #2 (now fixed): this endpoint previou
 - `GET /api/v1/client/organisation/profile` — Platform Settings page loads with every Organisation Info / Branding field blank (request resolves but with no usable data — looks like a silent 403/empty payload rather than a network error)
 - `GET /api/v1/client/challenges` (Innovation Challenges list) — possibly the same gap; shows "No active challenges yet" for an org that should have challenges. Needs confirming — could also just be an org with genuinely zero challenges, but flagging since it matches the same pattern as the two confirmed cases above.
 
-**Ask:** Please confirm whether these three endpoints scope access to the organisation owner specifically (vs. any team member of that organisation), and if so, extend read access (and normal read/write per the role's intended permissions) to the `ADMIN` team role at minimum. `EVENT_MANAGER`/`VIEWER`/`JUDGE` scoping can stay as originally designed — this is specifically about `ADMIN` matching `client_admin`.
+**Root cause (backend):**
+- `OrganisationController` (team members, company profile, branding — everything under `/api/v1/client/organisation`) was locked to `hasAnyRole('CLIENT_ADMIN', 'EVENT_MANAGER', 'VIEWER')` — `ADMIN` was missing from the list entirely, causing a straight 403 before it ever reached the service layer. **Fixed** — `ADMIN` added to the class-level permission.
+- `ClientChallengeController` was locked to `hasRole('CLIENT_ADMIN')` at the class level, with only 5 of its ~18 endpoints individually overridden for `ADMIN` (list, detail, applications, judge panel, leaderboard, export, toggling applications/scoring were all still `CLIENT_ADMIN`-only). This is why the UI showed "No active challenges yet" instead of an error — the FE was swallowing the 403 into an empty state. **Fixed** — class-level rule changed to `hasAnyRole('CLIENT_ADMIN', 'ADMIN')`, redundant per-method overrides removed.
 
-**Also:** please confirm `DELETE /api/v1/client/organisation/team/{id}/revoke` is restricted server-side to the actual org owner only — frontend now also hides the Revoke/Suspend UI for every role except `client_admin`, but that's a client-side convenience, not a security boundary, so the backend should enforce this too.
+**Revoke restriction — confirmed, no change needed:** `CLIENT_ADMIN` is not an assignable team role (`TeamMemberRole` only has `ADMIN`, `EVENT_MANAGER`, `VIEWER`, `JUDGE`); the only code path anywhere that grants `RoleName.CLIENT_ADMIN` is the super-admin service, never through team invites or self-service. So `@PreAuthorize("hasRole('CLIENT_ADMIN')")` on revoke/reactivate/invite is already a hard server-side guarantee — no team member can ever hold that role. Already correct.
 
 ---
 
-## 6. NEW — Notifications for team role "Admin"
+## 6. Notifications for team role "Admin" — ✅ FIXED (backend, 2026-07-11)
 
-**Ask:** Team members with role `ADMIN` should receive notifications the same way the org owner (`client_admin`) does (event reminders, RSVP updates, document uploads, etc. — whatever the org owner currently gets). Please confirm notification generation targets the whole organisation's `ADMIN`-role members, not just the owner account.
+**Root cause:** Three notification triggers (new event registration, hackathon team applications, innovation challenge applications) queried only `RoleName.CLIENT_ADMIN`, so `ADMIN`-role team members never received them. **Fixed** — added `findActiveByStakeholderAndRoleIn` repository query, updated all three call sites to notify both `CLIENT_ADMIN` and `ADMIN`.
+
+**Caveat:** "Document uploads" and "event reminders" aren't implemented as notification triggers anywhere in the backend yet — not an `ADMIN`-specific gap, just not built at all. That would be new work, not a bug fix, if wanted later.
 
 ---
 
@@ -96,3 +100,16 @@ Frontend now hides the genuinely owner-only actions from `EVENT_MANAGER` (Suspen
 **Ask:** Please grant `EVENT_MANAGER` write access to these five actions/endpoints — they're event-management operations the role is meant to perform, distinct from the org-owner-only actions listed above which should stay restricted to `client_admin`.
 
 **Also:** Notifications for `EVENT_MANAGER` should be scoped to events only (RSVP updates, event reminders, resolution activity, document uploads, etc.) — please exclude Innovation Challenge notifications for this role, since that entire feature area is hidden from their dashboard.
+
+---
+
+## 8. NEW — Viewer role should be read-only server-side, not just client-side
+
+**Context:** `VIEWER` is meant to have read + export access to almost everything (Events, Innovation Challenges, Documents, Resolutions/Vote Records, Stakeholders/Expected Attendees) but no write access anywhere. Frontend now hides every write control for `VIEWER` — Audit Log, Notifications, QR Check-In, and Settings are hidden/read-only; Document upload/delete, Resolution add/open/close vote, Agenda add/edit/delete, Expected Attendees import/add/delete/bulk-delete, quorum edit, offline vote entry, share-weighted tallies toggle, and the Innovation Challenge detail page (applications review, judge assignment, scoring) are all hidden for this role. Broadcast and Settings tabs on the event detail page are hidden entirely for `VIEWER`.
+
+**Ask:** Please confirm (or add) server-side enforcement so `VIEWER` gets `403` on all the corresponding write endpoints even if a request is crafted directly (client-side hiding is UX only, not a security boundary). Specifically:
+- All `POST`/`PATCH`/`DELETE` under `/api/v1/client/events/{id}/documents`, `/api/v1/client/events/{id}/expected-attendees`, `/api/v1/client/votes/*` (resolutions, open/close voting, quorum, offline votes, share-weighted tallies), `/api/v1/client/events/{id}/agenda`, `/api/v1/client/challenges/*` (application status, judge assignment, scoring)
+- Status-change endpoints — publish/go-live/cancel, feature/unfeature, Zoom refresh
+- Team management, register management, and broadcast endpoints (already owner/admin/event-manager gated per items 5–7, so `VIEWER` should already fall outside those)
+
+**Also:** Please confirm `VIEWER` still gets read access to everything above (GET endpoints) plus export/download endpoints (CSV export, document download) — the ask is read+export only, not reduced visibility.
