@@ -19,7 +19,8 @@ import {
   type Shareholder,
   type ShareholderUploadItem,
 } from "@/api/registers";
-import { cn, digitsOnly, withIdPrefix } from "@/lib/utils";
+import { cn, digitsOnly, withIdPrefix, resolveRole } from "@/lib/utils";
+import { useGetMe } from "@/api/auth/hooks";
 import Papa from "papaparse";
 
 // ── CSV row type ──────────────────────────────────────────────────────────────
@@ -119,6 +120,12 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
   const bulkAdd = useBulkAddShareholders();
   const update  = useUpdateShareholder();
   const remove  = useDeleteShareholder();
+
+  // Only the organisation's owner (client_admin) may add/upload/edit/delete
+  // shareholders — every other team role (Admin, Event Manager, Viewer,
+  // Judge) gets read-only access to this list.
+  const { data: userResponse } = useGetMe();
+  const isClientAdmin = resolveRole(userResponse?.data) === "client_admin";
 
   const shareholders: Shareholder[] = data?.shareholders ?? [];
 
@@ -266,29 +273,33 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => csvRef.current?.click()}>
-              <Upload className="h-3.5 w-3.5" /> Upload CSV
-            </Button>
-            <input ref={csvRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
-            <Button
-              size="sm"
-              className="gap-1.5"
-              onClick={() => { setShowForm((p) => !p); setTouched(false); setForm(EMPTY_FORM); }}
-            >
-              {showForm ? <><X className="h-3.5 w-3.5" /> Cancel</> : <><UserPlus className="h-3.5 w-3.5" /> Add Manually</>}
-            </Button>
-          </div>
+          {isClientAdmin && (
+            <div className="flex items-center gap-2 shrink-0">
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => csvRef.current?.click()}>
+                <Upload className="h-3.5 w-3.5" /> Upload CSV
+              </Button>
+              <input ref={csvRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
+              <Button
+                size="sm"
+                className="gap-1.5"
+                onClick={() => { setShowForm((p) => !p); setTouched(false); setForm(EMPTY_FORM); }}
+              >
+                {showForm ? <><X className="h-3.5 w-3.5" /> Cancel</> : <><UserPlus className="h-3.5 w-3.5" /> Add Manually</>}
+              </Button>
+            </div>
+          )}
         </div>
 
-        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-3">
-          <span className="font-medium">CSV format: Full Name, CHN, Email, Phone, Units, Status</span>
-          {" "}· CHN is used for upsert deduplication.
-        </p>
+        {isClientAdmin && (
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-3">
+            <span className="font-medium">CSV format: Full Name, CHN, Email, Phone, Units, Status</span>
+            {" "}· CHN is used for upsert deduplication.
+          </p>
+        )}
       </Card>
 
       {/* ── CSV preview ── */}
-      {showCsvPreview && csvRows.length > 0 && (
+      {isClientAdmin && showCsvPreview && csvRows.length > 0 && (
         <Card className="attend-card overflow-hidden">
           <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -365,7 +376,7 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
       )}
 
       {/* ── Manual add form ── */}
-      {showForm && (
+      {isClientAdmin && showForm && (
         <Card className="attend-card p-5">
           <h3 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-4">Add Shareholder</h3>
           <div className="grid grid-cols-2 gap-4 mb-4">
@@ -558,23 +569,25 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                     {s.units != null ? s.units.toLocaleString() : <span className="italic text-[hsl(var(--muted-foreground))]">—</span>}
                   </td>
                   <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-1">
-                      <Button
-                        size="sm" variant="ghost"
-                        className="h-7 w-7 p-0 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/0.06)]"
-                        onClick={() => startEdit(s)}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        size="sm" variant="ghost"
-                        className="h-7 w-7 p-0 text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:bg-red-50"
-                        disabled={remove.isPending}
-                        onClick={() => remove.mutate({ registerId, shareholderId: s.id })}
-                      >
-                        {remove.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                      </Button>
-                    </div>
+                    {isClientAdmin && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-7 w-7 p-0 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/0.06)]"
+                          onClick={() => startEdit(s)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-7 w-7 p-0 text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:bg-red-50"
+                          disabled={remove.isPending}
+                          onClick={() => remove.mutate({ registerId, shareholderId: s.id })}
+                        >
+                          {remove.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </Button>
+                      </div>
+                    )}
                   </td>
                 </tr>
                 );

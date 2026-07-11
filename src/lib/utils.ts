@@ -83,6 +83,32 @@ export function toE164(dialCode: string, localNumber: string): string {
   return digits ? `${dialCode}${digits}` : "";
 }
 
+/**
+ * Wraps an `axios` `onUploadProgress` callback so the UI is only updated a
+ * few times a second instead of on every single progress event. Fast
+ * connections (e.g. localhost) can fire progress events dozens of times per
+ * second for even a small file — each one calling React state setters —
+ * which floods the component (and anything else on the page, like a large
+ * table) with re-renders and makes the whole page feel sluggish/janky during
+ * upload, even though the upload itself is fast. This throttles those calls
+ * to roughly every 120ms while always letting the final 100% through
+ * immediately so the bar doesn't visibly stall right before completion.
+ */
+export function throttledProgress(
+  onProgress: (percent: number) => void,
+  intervalMs = 120
+): (evt: { loaded: number; total?: number }) => void {
+  let last = 0;
+  return (evt) => {
+    if (!evt.total) return;
+    const now = Date.now();
+    const isDone = evt.loaded >= evt.total;
+    if (!isDone && now - last < intervalMs) return;
+    last = now;
+    onProgress(Math.round((evt.loaded / evt.total) * 100));
+  };
+}
+
 export function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);

@@ -19,6 +19,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
+import { throttledProgress } from "@/lib/utils";
 import { ApiResponse } from "@/types/api";
 
 // ---------------------------------------------------------------------------
@@ -225,10 +226,7 @@ export function useUploadGlobalDocument() {
           maxBodyLength:    Infinity,
           maxContentLength: Infinity,
           timeout:          120_000,
-          onUploadProgress: (evt) => {
-            if (!onProgress || !evt.total) return;
-            onProgress(Math.round((evt.loaded / evt.total) * 100));
-          },
+          onUploadProgress: onProgress ? throttledProgress(onProgress) : undefined,
         }
       );
       const uploadData         = uploadRes.data?.data ?? {};

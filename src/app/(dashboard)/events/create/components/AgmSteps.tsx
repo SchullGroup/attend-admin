@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { UploadProgress } from "@/components/ui/upload-progress";
 import { apiClient } from "@/lib/api-client";
-import { cn } from "@/lib/utils";
+import { cn, throttledProgress } from "@/lib/utils";
 import { Toggle, FormatPicker, ReviewRow, OrgChip } from "./shared";
 import type { AgmState } from "./state-hooks";
 
@@ -207,10 +207,7 @@ export function AgmNoticeStep({ s }: { s: AgmState }) {
         maxBodyLength:    Infinity,
         maxContentLength: Infinity,
         timeout:          120_000,
-        onUploadProgress: (evt) => {
-          if (!evt.total) return;
-          setUploadProgress(Math.round((evt.loaded / evt.total) * 100));
-        },
+        onUploadProgress: throttledProgress(setUploadProgress),
       });
       const d = res.data?.data ?? res.data ?? {};
       s.setNoticeUrl(d.fileUrl ?? d.url ?? "");

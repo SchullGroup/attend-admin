@@ -15,6 +15,7 @@ import {
   useDownloadEventDocument,
 } from "@/api/super-admin";
 import { apiClient } from "@/lib/api-client";
+import { throttledProgress } from "@/lib/utils";
 import { toast } from "sonner";
 
 // Allowed document type values from the API
@@ -149,10 +150,7 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false }: Pr
         "/api/v1/upload", form,
         { params: { folder: "documents" }, headers: { "Content-Type": undefined },
           maxBodyLength: Infinity, maxContentLength: Infinity, timeout: 120_000,
-          onUploadProgress: (evt) => {
-            if (!evt.total) return;
-            setUploadProgress(Math.round((evt.loaded / evt.total) * 100));
-          },
+          onUploadProgress: throttledProgress(setUploadProgress),
         }
       );
       const uploadData = uploadRes.data?.data ?? uploadRes.data ?? {};
