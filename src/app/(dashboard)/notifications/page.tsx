@@ -19,9 +19,8 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/ui/Loader";
-import { timeAgo, resolveRole } from "@/lib/utils";
+import { timeAgo, resolveRole, isSuperAdminRole } from "@/lib/utils";
 
-const ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
 const JUDGE_ROLES = new Set(["judge"]);
 
 // Notification type → accent color
@@ -124,7 +123,7 @@ function DetailPanel({
 export default function NotificationsPage() {
   const { data: userResponse, isLoading: userLoading } = useGetMe();
   const role    = resolveRole(userResponse?.data);
-  const isAdmin = !userLoading && ADMIN_ROLES.has(role);
+  const isAdmin = !userLoading && isSuperAdminRole(role);
   const isJudge = !userLoading && JUDGE_ROLES.has(role);
 
   const [filter,   setFilter]   = useState<"all" | "unread">("all");

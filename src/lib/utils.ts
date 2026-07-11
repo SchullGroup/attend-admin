@@ -15,6 +15,26 @@ export function resolveRole(userData: { role?: string; roles?: string[] } | null
   return raw.toLowerCase().replace(/[-\s]+/g, "_");
 }
 
+/**
+ * The ONLY role strings that mean "platform-level Super Admin" (SchullTech
+ * staff, cross-organisation access). Deliberately does NOT include bare
+ * "admin" — that's a client-org team member role (Team Members > role:
+ * "Admin"), which is a distinct, org-scoped role that should get the exact
+ * same dashboard/permissions as "client_admin". Several places in this
+ * codebase used to lump plain "admin" in with "super_admin", which meant a
+ * client team member with the "Admin" role would silently get routed to
+ * super-admin-only API endpoints and see the super-admin nav/dashboard
+ * instead of their own organisation's data. Use this set (or
+ * `isSuperAdminRole`) everywhere a super-admin check is needed instead of
+ * redeclaring a local role set.
+ */
+export const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
+
+/** True only for genuine platform Super Admins — see `SUPER_ADMIN_ROLES` above. */
+export function isSuperAdminRole(role: string | null | undefined): boolean {
+  return SUPER_ADMIN_ROLES.has((role ?? "").toLowerCase().replace(/[-\s]+/g, "_"));
+}
+
 export function formatCurrency(n: number) {
   if (n >= 1_000_000_000) return `₦${(n / 1_000_000_000).toFixed(1)}B`;
   if (n >= 1_000_000) return `₦${(n / 1_000_000).toFixed(1)}M`;

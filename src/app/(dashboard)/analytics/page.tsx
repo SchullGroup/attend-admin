@@ -27,10 +27,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
-import { formatDate, resolveRole } from "@/lib/utils";
+import { formatDate, resolveRole, isSuperAdminRole } from "@/lib/utils";
 import { SuperAdminAnalytics } from "./SuperAdminAnalytics";
-
-const SUPER_ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -672,7 +670,7 @@ function ClientAnalytics() {
 
 export default function AnalyticsPage() {
   const { data: userResponse, isLoading: userLoading } = useGetMe();
-  const isSuperAdmin = SUPER_ADMIN_ROLES.has(resolveRole(userResponse?.data));
+  const isSuperAdmin = isSuperAdminRole(resolveRole(userResponse?.data));
 
   // Wait for role before mounting either analytics component to avoid
   // briefly rendering <ClientAnalytics /> (which fires client API calls

@@ -21,12 +21,7 @@ import {
 } from "@/api/notifications";
 import { useGlobalSearch } from "@/api/super-admin";
 import { useClientSearch, type SearchEvent, type SearchTeamMember, type SearchDocument } from "@/api/client-search";
-import { timeAgo, resolveRole } from "@/lib/utils";
-
-// ---------------------------------------------------------------------------
-// Admin roles set (mirrors events/[id]/page.tsx logic)
-// ---------------------------------------------------------------------------
-const ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
+import { timeAgo, resolveRole, isSuperAdminRole } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Web Audio notification chime
@@ -110,7 +105,7 @@ export function Header() {
   const breadcrumbs = getBreadcrumbs(pathname);
 
   // ── Role detection — must come before hooks that depend on it ─────────────
-  const isAdmin = ADMIN_ROLES.has(resolveRole(currentUser));
+  const isAdmin = isSuperAdminRole(resolveRole(currentUser));
 
   // ── Search state ───────────────────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState("");

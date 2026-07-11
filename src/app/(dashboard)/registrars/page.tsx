@@ -15,8 +15,7 @@ import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
 import { DateCell } from "@/components/ui/date-cell";
 import { useGetMe } from "@/api/auth/hooks";
-
-const SUPER_ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
+import { isSuperAdminRole } from "@/lib/utils";
 
 const STATUS_DOT: Record<string, { dot: string; label: string }> = {
   ACTIVE:    { dot: "#16a34a", label: "Active"    },
@@ -38,7 +37,7 @@ export default function RegistrarsPage() {
 
   const { data: userResponse } = useGetMe();
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
-  const isSuperAdmin   = SUPER_ADMIN_ROLES.has(normalizedRole);
+  const isSuperAdmin   = isSuperAdminRole(normalizedRole);
 
   const statusParam = activeTab === "all" ? "" : activeTab.toUpperCase();
   // Backend endpoint is super-admin only — gate it or a Client Admin gets a

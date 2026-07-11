@@ -48,7 +48,10 @@ function toFormatKey(fmt: string): EventShim["format"] {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin", "event_manager", "kyc_officer", "judge"]);
+// Note: deliberately excludes bare "admin" — that's a client-org team member
+// role (Team Members > role: "Admin"), distinct from platform "super_admin".
+// It must be routed to the client API/UI, not the super-admin one.
+const ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin", "event_manager", "kyc_officer", "judge"]);
 
 function detectIsAdmin(user: { role?: string; roles?: string[] } | null | undefined): boolean {
   if (!user) return false;

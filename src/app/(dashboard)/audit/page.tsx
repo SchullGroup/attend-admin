@@ -13,9 +13,7 @@ import {
   type AuditSeverity,
 } from "@/api/client-audit";
 import { useAdminAuditLogs } from "@/api/super-admin";
-import { resolveRole } from "@/lib/utils";
-
-const SUPER_ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
+import { resolveRole, isSuperAdminRole } from "@/lib/utils";
 
 // ─── Display config ───────────────────────────────────────────────────────────
 
@@ -182,7 +180,7 @@ const PAGE_SIZE = 20;
 
 export default function AuditLogPage() {
   const { data: userResponse, isLoading: userLoading } = useGetMe();
-  const isSuperAdmin = SUPER_ADMIN_ROLES.has(resolveRole(userResponse?.data));
+  const isSuperAdmin = isSuperAdminRole(resolveRole(userResponse?.data));
 
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");

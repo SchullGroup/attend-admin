@@ -24,13 +24,12 @@ import {
   Users2,
   Bell,
 } from "lucide-react";
-import { cn, resolveRole } from "@/lib/utils";
+import { cn, resolveRole, isSuperAdminRole } from "@/lib/utils";
 import { useGetMe, useLogout } from "@/api/auth/hooks";
 import { useClientStakeholder } from "@/api/client-organisation";
 import { usePendingEnrollments } from "@/api/super-admin";
 import Cookies from "js-cookie";
 
-const ADMIN_ROLES  = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
 const JUDGE_ROLES  = new Set(["judge"]);
 
 // ─── RBAC permission engine ──────────────────────────────────────────────────
@@ -67,13 +66,6 @@ function hasAccess(normalizedRole: string, action: PermAction): boolean {
 }
 
 // ─── Normalisation helper ────────────────────────────────────────────────────
-
-// Full set of super-admin role strings (after normalisation)
-const SUPER_ADMIN_ROLE_SET = new Set(["super_admin", "admin", "superadmin"]);
-
-function isSuperAdminRole(normalizedRole: string): boolean {
-  return SUPER_ADMIN_ROLE_SET.has(normalizedRole);
-}
 
 // ─── Nav config ──────────────────────────────────────────────────────────────
 //
@@ -216,7 +208,7 @@ export function Sidebar() {
   const { data: pendingEnrollmentsData } = usePendingEnrollments(0, 1, isSuperAdmin);
 
   // Stakeholder logo — for client users whose avatarUrl is null
-  const { data: stakeholder } = useClientStakeholder({ enabled: !!currentUser && !ADMIN_ROLES.has(resolveRole(currentUser)) });
+  const { data: stakeholder } = useClientStakeholder({ enabled: !!currentUser && !isSuperAdminRole(resolveRole(currentUser)) });
   const pendingCount = pendingEnrollmentsData?.data?.totalCount ?? 0;
 
   const hasToken      = typeof window !== "undefined" && !!Cookies.get("accessToken");
