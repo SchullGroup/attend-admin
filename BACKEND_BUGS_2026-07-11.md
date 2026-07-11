@@ -113,3 +113,17 @@ Frontend now hides the genuinely owner-only actions from `EVENT_MANAGER` (Suspen
 - Team management, register management, and broadcast endpoints (already owner/admin/event-manager gated per items 5–7, so `VIEWER` should already fall outside those)
 
 **Also:** Please confirm `VIEWER` still gets read access to everything above (GET endpoints) plus export/download endpoints (CSV export, document download) — the ask is read+export only, not reduced visibility.
+
+---
+
+## 9. NEW — Judge notifications should cover Innovation Challenge activity
+
+**Context:** Judge has its own dedicated feed (`GET /api/v1/judge/notifications`, `PATCH /api/v1/judge/notifications/{id}/read`) — frontend was actually wired to the generic client-org notification feed by mistake, which we've now fixed (the header now calls the judge-specific endpoint for this role instead).
+
+**Ask:** Please confirm the judge notification feed generates entries for the events that matter to a judge specifically:
+- Assigned to a challenge (judge added to a challenge's panel)
+- Removed/unassigned from a challenge
+- New application received for a challenge the judge is assigned to (or on a track/specialty they cover, if that's how assignment works)
+- Challenge status changes relevant to judging — e.g. scoring opens/closes, applications close, shortlist published
+
+Also please confirm judge notifications are scoped to Innovation Challenges only (no event/AGM/document notifications — those aren't part of the Judge dashboard at all).

@@ -155,9 +155,10 @@ export function useMarkAllNotificationsRead() {
  * @param limit Items per page. Pass 1 when you only need the unread count.
  * @param read  `false` = unread only; omit for all.
  */
-export function useClientNotifications(page = 0, limit = 10, read?: boolean) {
+export function useClientNotifications(page = 0, limit = 10, read?: boolean, enabled = true) {
   return useQuery({
     queryKey: clientNotificationKeys.list(page, limit, read),
+    enabled,
     queryFn: async () => {
       const params: Record<string, string> = {
         page:  page.toString(),

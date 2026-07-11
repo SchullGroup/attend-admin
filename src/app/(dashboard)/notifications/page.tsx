@@ -138,9 +138,10 @@ export default function NotificationsPage() {
   const { mutate: markAdmin } = useMarkNotificationRead();
   const { mutate: markAllAdmin, isPending: markingAllAdmin } = useMarkAllNotificationsRead();
 
-  // Client hooks
+  // Client hooks — every client-org role except Judge (Judge uses its own
+  // dedicated feed below) and Super Admin (uses the admin feed above)
   const { data: clientData, isLoading: clientLoading } = useClientNotifications(
-    page, limit, filter === "unread" ? false : undefined
+    page, limit, filter === "unread" ? false : undefined, !userLoading && !isAdmin && !isJudge
   );
   const { mutate: markClient } = useMarkClientNotificationRead();
   const { mutate: markAllClient, isPending: markingAllClient } = useMarkAllClientNotificationsRead();

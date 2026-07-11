@@ -151,7 +151,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { title: "Documents",      icon: FolderOpen, href: "/documents",     judgeHidden: true, clientOnly: true },
       { title: "Analytics",      icon: BarChart3,  href: "/analytics",     judgeHidden: true },
-      { title: "Notifications",  icon: Bell,       href: "/notifications",  judgeHidden: true, hiddenForRoles: ["viewer"] },
+      { title: "Notifications",  icon: Bell,       href: "/notifications",  hiddenForRoles: ["viewer"] },
       { title: "Audit Log",      icon: ScrollText, href: "/audit",          judgeHidden: true, hiddenForRoles: ["event_manager", "viewer"] },
       { title: "Settings",       icon: Settings,   href: "/settings" },
       { title: "Team Members",   icon: Users2,     href: "/settings/team",  clientOnly: true, judgeHidden: true },

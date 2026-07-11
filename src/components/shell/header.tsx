@@ -19,6 +19,11 @@ import {
   useMarkClientNotificationRead,
   useMarkAllClientNotificationsRead,
 } from "@/api/notifications";
+import {
+  useJudgeNotifications,
+  useMarkJudgeNotificationRead,
+  useMarkAllJudgeNotificationsRead,
+} from "@/api/judge";
 import { useGlobalSearch } from "@/api/super-admin";
 import { useClientSearch, type SearchEvent, type SearchTeamMember, type SearchDocument } from "@/api/client-search";
 import { timeAgo, resolveRole, isSuperAdminRole } from "@/lib/utils";
@@ -107,6 +112,7 @@ export function Header() {
   // ── Role detection — must come before hooks that depend on it ─────────────
   const isAdmin  = isSuperAdminRole(resolveRole(currentUser));
   const isViewer = resolveRole(currentUser) === "viewer";
+  const isJudge  = resolveRole(currentUser) === "judge";
 
   // ── Search state ───────────────────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState("");
@@ -168,29 +174,41 @@ export function Header() {
   const { mutate: markAdminRead } = useMarkNotificationRead();
   const { mutate: markAllAdminRead, isPending: markingAllAdmin } = useMarkAllNotificationsRead();
 
-  // ── Client notifications ───────────────────────────────────────────────────
-  const { data: clientNotifData  } = useClientNotifications(0, 5);
+  // ── Client notifications — every client-org role except Judge (Judge has
+  // its own dedicated /api/v1/judge/notifications feed below) ───────────────
+  const { data: clientNotifData  } = useClientNotifications(0, 5, undefined, !isAdmin && !isJudge);
   const { mutate: markClientRead } = useMarkClientNotificationRead();
   const { mutate: markAllClientRead, isPending: markingAllClient } = useMarkAllClientNotificationsRead();
 
-  const markingAllRead = isAdmin ? markingAllAdmin : markingAllClient;
+  // ── Judge notifications — GET /api/v1/judge/notifications ─────────────────
+  const { data: judgeNotifData  } = useJudgeNotifications(0, 5, undefined, isJudge);
+  const { mutate: markJudgeRead } = useMarkJudgeNotificationRead();
+  const { mutate: markAllJudgeRead, isPending: markingAllJudge } = useMarkAllJudgeNotificationsRead();
+
+  const markingAllRead = isAdmin ? markingAllAdmin : isJudge ? markingAllJudge : markingAllClient;
   function markAllRead() {
-    if (isAdmin) markAllAdminRead();
-    else         markAllClientRead();
+    if (isAdmin)      markAllAdminRead();
+    else if (isJudge) markAllJudgeRead();
+    else              markAllClientRead();
   }
 
   // ── Unified values ─────────────────────────────────────────────────────────
   const unreadCount = isAdmin
     ? (adminUnreadData?.unreadCount ?? (adminUnreadData as any)?.totalUnread ?? 0)
+    : isJudge
+    ? (judgeNotifData?.unreadCount ?? 0)
     : (clientNotifData?.unreadCount ?? 0);
 
   const notifications: any[] = isAdmin
     ? (adminNotifData?.notifications ?? (adminNotifData as any)?.content ?? [])
+    : isJudge
+    ? (judgeNotifData?.notifications ?? [])
     : (clientNotifData?.notifications ?? (clientNotifData as any)?.content ?? []);
 
   function markAsRead(id: string) {
-    if (isAdmin) markAdminRead(id);
-    else         markClientRead(id);
+    if (isAdmin)      markAdminRead(id);
+    else if (isJudge) markJudgeRead(id);
+    else              markClientRead(id);
   }
 
   // ── Notification sound — chime when unread count increases ─────────────────
@@ -220,7 +238,8 @@ export function Header() {
         ))}
       </div>
 
-      {/* ── Global Search ──────────────────────────────────────────────────── */}
+      {/* ── Global Search — hidden for Judge (their view is scoped to assigned challenges only) ── */}
+      {!isJudge && (
       <div ref={searchRef} className="hidden md:flex items-center relative w-full max-w-md">
         <Search className="absolute left-3 h-4 w-4 text-[hsl(var(--muted-foreground))] pointer-events-none z-10" />
         <Input
@@ -409,6 +428,7 @@ export function Header() {
           </div>
         )}
       </div>
+      )}
 
       <div className="flex items-center gap-2 shrink-0">
         {/* Notifications — hidden for Viewer role */}
