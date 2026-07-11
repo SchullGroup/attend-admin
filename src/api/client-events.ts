@@ -149,6 +149,8 @@ export interface UploadDocumentRequest {
   /** Cloudinary public_id returned by the upload proxy */
   cloudinaryPublicId?: string;
   originalFilename:   string;
+  /** File size in bytes — the backend 500s without this (NPE computing sizeLabel). */
+  sizeBytes?:         number;
 }
 
 // Attendees

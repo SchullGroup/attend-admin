@@ -98,13 +98,25 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false }: Pr
     );
     if (alreadyUploaded) return;
     setNoticeRegistered(true);
-    uploadMutation.mutate({
-      eventId,
-      payload: {
-        title: "AGM Notice", documentType: "NOTICE",
-        eventId, fileUrl: agmNoticeUrl, originalFilename: "AGM-Notice.pdf",
-      },
-    });
+    (async () => {
+      // Backend 500s (NPE) without sizeBytes, so grab it via a HEAD request
+      // to the already-uploaded Cloudinary file before registering it.
+      let sizeBytes = 0;
+      try {
+        const head = await fetch(agmNoticeUrl, { method: "HEAD" });
+        const len  = head.headers.get("content-length");
+        if (len) sizeBytes = parseInt(len, 10);
+      } catch { /* fall back to 0 */ }
+
+      uploadMutation.mutate({
+        eventId,
+        payload: {
+          title: "AGM Notice", documentType: "NOTICE",
+          eventId, fileUrl: agmNoticeUrl, originalFilename: "AGM-Notice.pdf",
+          sizeBytes,
+        },
+      });
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agmNoticeUrl, isLoading]);
 
@@ -144,10 +156,11 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false }: Pr
 
       if (!fileUrl) { toast.error("Upload failed — no file URL returned."); return; }
 
-      const docPayload: Record<string, string> = {
+      const docPayload: Record<string, string | number> = {
         title: pendingFile.name.replace(/\.[^.]+$/, ""),
         documentType: docType, eventId, fileUrl,
         originalFilename: pendingFile.name,
+        sizeBytes: pendingFile.size,
       };
       if (cloudinaryPublicId) docPayload.cloudinaryPublicId = cloudinaryPublicId;
       uploadMutation.mutate(
