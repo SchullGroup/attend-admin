@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Radio, Star, Video, ExternalLink, Copy, Check, RefreshCw } from "lucide-react";
+import { Radio, Star, Video, ExternalLink, Copy, Check, RefreshCw, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import {
   useToggleEventFeatured,
   useCreateEventZoomMeeting,
   useUpdateStreamUrl,
+  useRetainEventData,
   type ZoomMeetingDto,
 } from "@/api/client-events";
 
@@ -86,6 +87,8 @@ export function EventSettingsTab({
   const toggleFeaturedMutation = useToggleEventFeatured();
   const zoomMutation           = useCreateEventZoomMeeting();
   const updateStreamMutation   = useUpdateStreamUrl();
+  const retainDataMutation     = useRetainEventData();
+  const [dataRetained, setDataRetained] = useState(false);
 
   function copyJoinUrl() {
     if (!zoomMeeting?.joinUrl) return;
@@ -431,6 +434,37 @@ export function EventSettingsTab({
           ))}
         </div>
       </Card>
+
+      {/* ── Data Retention — only relevant once the event has ended ── */}
+      {["ENDED", "ended"].includes(currentStatus) && (
+        <Card className="attend-card p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-[hsl(var(--foreground))] flex items-center gap-2">
+                <Archive className="h-4 w-4" />
+                Retain Event Data
+              </h2>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1 max-w-md">
+                Ended events are auto-purged after 7 days by default. Retain this event's data to keep it indefinitely.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant={dataRetained ? "default" : "outline"}
+              disabled={retainDataMutation.isPending || dataRetained}
+              className="gap-1.5 min-w-[110px] shrink-0"
+              onClick={() =>
+                retainDataMutation.mutate(eventId, {
+                  onSuccess: () => setDataRetained(true),
+                })
+              }
+            >
+              <Archive className="h-3.5 w-3.5" />
+              {retainDataMutation.isPending ? "…" : dataRetained ? "Retained" : "Retain Data"}
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* ── Danger Zone ── */}
       <Card className="attend-card p-5" style={{ borderColor: "#fecaca" }}>

@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { DOC_TYPES, DOC_TYPE_CONFIG, type DocType } from "@/lib/document-type";
 import { useGetMe } from "@/api/auth/hooks";
+import { useClientEventsDropdown } from "@/api/client-events";
 import { useGlobalDocuments as useAdminGlobalDocuments } from "@/api/super-admin";
 import {
   useGlobalDocuments as useClientGlobalDocuments,
@@ -154,8 +155,13 @@ export default function DocumentsPage() {
   const { data: adminDocsData, isLoading: adminLoading } =
     useAdminGlobalDocuments(search, "", typeFilter, 0, 50);
 
+  // Narrower list, scoped to events that already have documents — used for
+  // the top-of-page filter dropdown only.
   const { data: eventOptions    = [] } = useDocumentEventFilterOptions();
   const { data: registerOptions = [] } = useDocumentRegisterFilterOptions();
+  // Full org event list — used for the Upload dialog's required event
+  // picker, which needs every event (not just ones with existing docs).
+  const { data: allEventOptions = [] } = useClientEventsDropdown();
 
   const deleteMutation   = useDeleteGlobalDocument();
   const downloadMutation = useDownloadGlobalDocument();
@@ -237,7 +243,7 @@ export default function DocumentsPage() {
             <div>
               <Label className="attend-section-title mb-1.5 block">Event</Label>
               <EventCombobox
-                options={eventOptions}
+                options={allEventOptions}
                 value={form.eventId}
                 onChange={(id) => setForm((f) => ({ ...f, eventId: id }))}
               />
@@ -317,9 +323,10 @@ export default function DocumentsPage() {
               onChange={(e) => setEventFilter(e.target.value)}
               className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
             >
-              <option value="">All Events</option>
+              {/* Backend's filter list already includes its own "All Events"
+                  (id: "") entry — don't add a second hardcoded one. */}
               {eventOptions.map((e) => (
-                <option key={e.id} value={e.id}>{e.label}</option>
+                <option key={e.id || "all"} value={e.id}>{e.label}</option>
               ))}
             </select>
           </div>
