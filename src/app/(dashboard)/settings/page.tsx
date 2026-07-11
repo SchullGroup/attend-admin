@@ -346,10 +346,15 @@ export default function SettingsPage() {
   // Role gates
   const isSuperAdmin = normalizedRole === "super_admin";
   const isJudge      = normalizedRole === "judge";
-  // Team-member "Admin" (not the org owner/client_admin) — gets the same
-  // read-only profile view as Judge instead of the full editable
-  // organisation-settings form, since editing org-wide info isn't theirs to do.
-  const isTeamAdmin  = normalizedRole === "admin";
+  // Team-member roles (everyone but the org owner/client_admin and platform
+  // Super Admin) — get the same read-only profile view as Judge instead of
+  // the full editable organisation-settings form, since editing org-wide
+  // info isn't theirs to do.
+  const TEAM_ROLE_LABELS: Record<string, string> = {
+    admin:         "Admin",
+    event_manager: "Event Manager",
+  };
+  const isTeamAdmin  = normalizedRole in TEAM_ROLE_LABELS;
 
   // Integrations state — only mounted for Super Admin
   const [integrations,     setIntegrations]     = useState<Integration[]>(INITIAL_INTEGRATIONS);
@@ -402,7 +407,7 @@ export default function SettingsPage() {
         {(isJudge || isTeamAdmin) && (
           <ProfileSettingsView
             user={userResponse?.data as Record<string, any>}
-            roleLabel={isJudge ? "Judge" : "Admin"}
+            roleLabel={isJudge ? "Judge" : TEAM_ROLE_LABELS[normalizedRole]}
           />
         )}
 

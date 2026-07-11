@@ -48,10 +48,14 @@ function toFormatKey(fmt: string): EventShim["format"] {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-// Note: deliberately excludes bare "admin" — that's a client-org team member
-// role (Team Members > role: "Admin"), distinct from platform "super_admin".
-// It must be routed to the client API/UI, not the super-admin one.
-const ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin", "event_manager", "kyc_officer", "judge"]);
+// Only genuine platform Super Admins hit the /api/v1/admin/* event
+// endpoints. Every client-org role — client_admin, team "admin",
+// event_manager, kyc_officer, judge, viewer — is scoped to a single
+// organisation and must use the /api/v1/client/* endpoints instead.
+// (event_manager/kyc_officer/judge used to be lumped in here, which caused
+// "Event not found" for event_manager: they were being routed to the
+// super-admin event-detail endpoint they have no access to.)
+const ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
 
 function detectIsAdmin(user: { role?: string; roles?: string[] } | null | undefined): boolean {
   if (!user) return false;
@@ -174,6 +178,16 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       (r ?? "").toLowerCase().replace(/[-\s]/g, "_") === "super_admin"
     ));
 
+  // Only the organisation's actual owner may open/close resolution voting —
+  // team roles (Admin, Event Manager, Viewer, Judge) can view resolutions
+  // but shouldn't control the live vote.
+  const isClientAdmin = (currentUser?.role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "client_admin";
+
+  // Event Manager doesn't get the Innovation Challenges section in the
+  // sidebar, so keep the "View Applications" shortcut (which drops them
+  // into that same feature area) hidden here too for consistency.
+  const isEventManager = (currentUser?.role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "event_manager";
+
   const expectedAttendeesCount = expectedAttendeesData?.totalCount ?? 0;
 
   const TABS = [
@@ -221,7 +235,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{event.organiser}</p>
           </div>
           <div className="flex items-center gap-2">
-            {isHACKATHON && !isSuperAdmin && (
+            {isHACKATHON && !isSuperAdmin && !isEventManager && (
               <Link href={`/hackathons/${id}`}>
                 <Button variant="outline" className="gap-2">
                   <FileText className="h-4 w-4" /> View Applications
@@ -266,7 +280,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         />
       )}
       {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} isAdmin={isAdmin} />}
-      {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin} />}
+      {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin} canControlVoting={isClientAdmin} />}
       {tab === "Stakeholders"   && !isSuperAdmin && isAGM   && <EventExpectedAttendeesTab eventId={id} registerId={(apiEvent as any).registerId} />}
       {tab === "Audience Tiers" && !isSuperAdmin && isLAUNCH && <EventLaunchAudienceTab    eventId={id} />}
       {tab === "Waitlist"       && !isSuperAdmin && isLAUNCH && <EventLaunchWaitlistTab    eventId={id} />}

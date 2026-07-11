@@ -45,7 +45,7 @@ type PermAction =
 
 const PERMITTED_ROLES: Record<PermAction, ReadonlySet<string>> = {
   create_event:      new Set(["client_admin", "event_manager"]),
-  live_control_room: new Set(["client_admin"]),
+  live_control_room: new Set(["client_admin", "event_manager"]),
   enrol_register:    new Set(["client_admin"]),
 };
 
@@ -81,6 +81,8 @@ type NavItem = {
   clientOnly?:    boolean;
   judgeHidden?:   boolean;  // hide from JUDGE role
   judgeOnly?:     boolean;  // show ONLY to JUDGE role (within client users)
+  /** Hide from these specific normalised roles, e.g. ["event_manager"]. */
+  hiddenForRoles?: readonly string[];
   action?:        PermAction;
 };
 
@@ -89,6 +91,8 @@ type NavSection = {
   superAdminOnly?: boolean;
   clientOnly?:     boolean;
   judgeHidden?:    boolean;  // hide entire section from JUDGE role
+  /** Hide the entire section from these specific normalised roles. */
+  hiddenForRoles?: readonly string[];
   items:           NavItem[];
 };
 
@@ -110,6 +114,7 @@ const SECTIONS: NavSection[] = [
   },
   {
     label: "Innovation Challenges",
+    hiddenForRoles: ["event_manager"],
     items: [
       { title: "Challenges",   icon: Lightbulb, href: "/hackathons" },
       { title: "Applications", icon: FileApp,   href: "/hackathons/applications", clientOnly: true },
@@ -252,6 +257,7 @@ export function Sidebar() {
           if (section.superAdminOnly && !isSuperAdmin) return null;
           if (section.clientOnly     &&  isSuperAdmin) return null;
           if (section.judgeHidden    &&  isJudge)      return null;
+          if (section.hiddenForRoles?.includes(normalizedRole)) return null;
 
           // Item-level role gates
           const visibleItems = section.items.filter((item) => {
@@ -259,6 +265,7 @@ export function Sidebar() {
             if (item.clientOnly     &&  isSuperAdmin) return false;
             if (item.judgeHidden    &&  isJudge)      return false;
             if (item.judgeOnly      && !isJudge)      return false;
+            if (item.hiddenForRoles?.includes(normalizedRole)) return false;
             // Action gate: only apply for non-super-admin users
             if (item.action && !isSuperAdmin && !hasAccess(normalizedRole, item.action)) return false;
             return true;
