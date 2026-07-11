@@ -589,6 +589,8 @@ export interface AgmConfigRequest {
   /** Cloudinary URL of the uploaded AGM notice PDF */
   agmNoticeUrl?:            string;
   agmNoticeFilename?:       string;
+  /** Size in bytes of the uploaded AGM notice PDF, as returned by /api/v1/upload */
+  agmNoticeSizeBytes?:      number;
   /** Legacy base64 field — prefer agmNoticeUrl */
   agmNoticeBase64?:         string;
   shareholderListBase64?:   string;

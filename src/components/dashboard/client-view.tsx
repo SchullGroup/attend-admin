@@ -105,9 +105,17 @@ export function ClientView({
               <div>
                 {eventsLoading
                   ? <EventRowSkeleton />
-                  : liveEvents.map((event) => <EventRow key={event.id} event={event} />)
+                  : liveEvents.slice(0, 3).map((event) => <EventRow key={event.id} event={event} />)
                 }
               </div>
+              {!eventsLoading && liveEvents.length > 3 && (
+                <Link
+                  href="/events/live"
+                  className="block text-center text-xs font-medium text-red-600 hover:text-red-700 py-2 border-t border-red-200"
+                >
+                  +{liveEvents.length - 3} more live — view Control Room
+                </Link>
+              )}
             </div>
           )}
 

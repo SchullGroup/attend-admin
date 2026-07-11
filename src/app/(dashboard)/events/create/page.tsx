@@ -170,6 +170,7 @@ function CreateEventInner() {
         enableProxyVoting:    agm.proxyEnabled,
         agmNoticeUrl:         agm.noticeUrl  || undefined,
         agmNoticeFilename:    agm.noticeFile || undefined,
+        agmNoticeSizeBytes:   agm.noticeFileSize || undefined,
       } : undefined;
 
       const productLaunchConfig = selectedModule === "LAUNCH" ? {
