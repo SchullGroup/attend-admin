@@ -87,9 +87,10 @@ function normalizeRegisterList(raw: any, page: number, size: number): RegistersL
  * Params: status (PENDING | ACTIVE | SUSPENDED | REJECTED), page, size
  * Response envelope: data.registers[]
  */
-export function useRegisters(status = "", page = 0, size = 50) {
+export function useRegisters(status = "", page = 0, size = 50, enabled = true) {
   return useQuery({
     queryKey: registerKeys.list(status, page, size),
+    enabled,
     queryFn:  async () => {
       const res = await apiClient.get<ApiResponse<any>>(
         "/api/v1/client/registers",

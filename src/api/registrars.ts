@@ -83,6 +83,22 @@ export interface EnrollRegistrarRequest {
   plan:                 string;
   rcNumber:             string | null;   // nullable — send null, not undefined
   industry:             string | null;   // nullable — send null, not undefined
+  /** Not currently collected by the enrol form's own fields — see BACKEND_BUGS. */
+  address?:             string | null;
+  website?:             string | null;
+}
+
+/** Payload for PATCH /api/v1/admin/registrars/{id} — editing an existing registrar's profile. */
+export interface UpdateRegistrarProfileRequest {
+  companyName?:          string;
+  industry?:             string | null;
+  rcNumber?:             string | null;
+  plan?:                 string;
+  address?:              string | null;
+  website?:              string | null;
+  representativeName?:   string;
+  representativeEmail?:  string;
+  representativePhone?:  string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -294,6 +310,41 @@ export function useRegistrarEvents(id: string) {
   });
 }
 
+export interface RegistrarEventsPage {
+  events:      NonNullable<RegistrarDetailResponse["events"]>;
+  totalCount:  number;
+  page:        number;
+  size:        number;
+}
+
+/**
+ * Paginated events associated with a registrar — used by the "view all events"
+ * sub-page so we don't have to render every event inline on the profile.
+ *
+ * API: GET /api/v1/admin/registrars/{id}/events?page=&size=
+ */
+export function useRegistrarEventsPaged(id: string, page = 0, size = 20) {
+  return useQuery({
+    queryKey: [...registrarKeys.events(id), "paged", page, size],
+    queryFn:  async () => {
+      const res = await apiClient.get<ApiResponse<any>>(
+        `/api/v1/admin/registrars/${id}/events`,
+        { params: { page, size } }
+      );
+      const raw = res.data.data;
+      const events = (raw?.events ?? raw?.content ?? raw?.data ?? (Array.isArray(raw) ? raw : [])) as RegistrarEventsPage["events"];
+      return {
+        events,
+        totalCount: raw?.totalCount ?? raw?.totalElements ?? events.length,
+        page:       raw?.page ?? page,
+        size:       raw?.size ?? size,
+      } as RegistrarEventsPage;
+    },
+    enabled:   !!id,
+    staleTime: 60_000,
+  });
+}
+
 /**
  * Pending enrolment queue.
  *
@@ -447,6 +498,35 @@ export function useActivateRegistrar() {
     },
     onError: (error: any) =>
       parseAndToastApiError(error, "Activation failed. Please try again."),
+  });
+}
+
+/**
+ * Edit an existing registrar's profile (company + representative details).
+ *
+ * API: PATCH /api/v1/admin/registrars/{id}
+ * This endpoint didn't exist anywhere in the frontend before — the registrar
+ * detail page only ever displayed these fields read-only. Built following the
+ * same REST shape as the other registrar mutations (suspend/activate/logo);
+ * flagged to backend to confirm/add if it 404s (see BACKEND_BUGS item 12).
+ */
+export function useUpdateRegistrarProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: UpdateRegistrarProfileRequest }) => {
+      const res = await apiClient.patch<ApiResponse<any>>(
+        `/api/v1/admin/registrars/${id}`,
+        data
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: registrarKeys.all });
+      queryClient.invalidateQueries({ queryKey: registrarKeys.detail(id) });
+      popup.success("Saved", "Registrar profile updated successfully.", 2500);
+    },
+    onError: (error: any) =>
+      parseAndToastApiError(error, "Failed to update registrar. Please try again."),
   });
 }
 

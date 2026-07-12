@@ -144,3 +144,40 @@ Also please confirm judge notifications are scoped to Innovation Challenges only
 **Frontend status:** Already correctly wired — `useAdminSummaryStats`, `useAdminTopOrganisers`, `useAdminKycBreakdown`, `useAdminEventFormat`, `useAdminEngagement`, `useAdminAnalyticsEventPerformance` in `src/api/super-admin.ts` all call the endpoints above and parse several reasonable field-name fallbacks (e.g. `totalRegistrations ?? registrations ?? totalParticipants`) so this isn't a response-shape mismatch on our end — the responses appear to be genuinely empty.
 
 **Ask:** Please confirm whether these six endpoints are fully implemented and querying real data, or still stubbed/returning placeholder empty responses. Since `by-type` and `audit-logs` prove the underlying event/RSVP data exists and is queryable, we'd expect at minimum `summary` (event/registration/vote counts) and `event-performance` (per-event RSVP/check-in rows) to return non-empty results from the same dataset. If any of `top-organisers`, `kyc-breakdown`, `event-format`, or `engagement` genuinely have no data yet (e.g. no completed KYC records, no engagement tracking implemented), that's fine — just let us know which of the six fall into "not implemented yet" vs "implemented but broken" so we can prioritize accordingly.
+
+---
+
+## 11. NEW — Registrar detail page: register event counts, representative email, and event format all missing
+
+**Context:** `GET /api/v1/admin/registrars/{id}` (and its `registers`/`events` sub-resources) backs the Super Admin Registrar profile page. Reviewed against a registrar with 15 real events on file:
+
+- **Registers table "Events" column shows `0`** for every register row (e.g. "Crafwell Engineering LTD — Events: 0"), even though the registrar's own Events section confirms 15 events exist. Each object in `registrar.registers[]` (or `GET /api/v1/admin/registrars/{id}/registers`) needs a populated `eventCount` (we also now accept `eventsCount`/`totalEvents`/`numberOfEvents` as fallbacks on the frontend, but none of those are present either) — looks like the per-register event association/count just isn't being computed.
+- **Representative `email` is empty** ("—" shown) for at least one registrar. Frontend reads `contactEmail`, `email`, `repEmail`, and nested `representative.email`/`representative.contactEmail` — none are populated in this case. Please confirm whether this representative genuinely has no email on file, or whether the field is being dropped/not selected in the registrar-detail query.
+- **Events table "Format" column shows `—` for all 15 rows.** Frontend reads `evt.format` (same field name/shape used successfully on the main `/events` list, so this isn't a frontend mapping issue) — the registrar-scoped events endpoint just isn't returning `format` on each event object.
+
+**Frontend status:** Fallback chains widened for register event-count and representative email; a "View all events" sub-page (`/registrars/{id}/events`) was added so we're no longer dumping all events inline — but this needs the endpoint to actually support `page`/`size` query params for real pagination. Right now `GET /api/v1/admin/registrars/{id}/events` appears to always return the full list regardless of params — please confirm/add pagination support (`page`, `size`, returning `totalCount`/`totalElements`) on that endpoint.
+
+**Ask:** Please check (a) per-register event-count population, (b) why representative email is empty for some registrars, (c) `format` on the registrar-scoped events endpoint, and (d) add real pagination to `GET /api/v1/admin/registrars/{id}/events`.
+
+---
+
+## 12. NEW — Super Admin: missing/incorrect endpoints found this pass (Registrars, Events, Dashboard)
+
+Several issues from this review turned out to be the frontend hitting the wrong (org-scoped) endpoint for a platform-admin screen — same root pattern as items 5/6 earlier in this doc. Fixed what we could on our side; flagging the rest.
+
+**a) Attendees tab on Super Admin event detail always showed 0 — FIXED on frontend, please confirm the endpoint exists.**
+`useEventAttendees` (used only for `super_admin`) was calling `GET /api/v1/client/events/{id}/attendees` — an org-scoped endpoint that 403s/returns empty for `super_admin` (no client org). Changed it to call `GET /api/v1/admin/events/{id}/attendees`, mirroring the existing `GET /api/v1/admin/events/{id}/documents` pattern. **Please confirm this admin endpoint exists** (or tell us the correct path if it's named differently) — we can't verify from the frontend alone.
+
+**b) Events page "Organizer" filter always empty for Super Admin — no admin-scoped endpoint exists.**
+The dropdown sourced its options from `GET /api/v1/client/registers`, which is org-scoped and returns nothing for `super_admin`. We've disabled that call for `super_admin` and hidden the Organizer filter for that role (Registrar filter still works, since `GET /api/v1/admin/registrars` is admin-scoped). **Ask:** is there (or could there be) a platform-wide "list all registers/organisations" endpoint for `super_admin`, e.g. `GET /api/v1/admin/registers`, returning `{ id, name, registrarId }` for every register across every registrar? That would let us re-enable a proper cross-org Organizer filter.
+
+**c) Dashboard "Platform Users" — Active/Suspended always showed 0.**
+`GET /api/v1/admin/dashboard` doesn't return `activeUsers`/`suspendedUsers` (confirmed — not a naming mismatch, checked the raw payload). We've added a client-side fallback that counts statuses from the loaded users page, but that's only exact up to however many users we fetch (currently 100) — not a real fix for orgs with more users. **Ask:** please add `activeUsers`/`suspendedUsers` counts to the dashboard-overview response (or to `GET /api/v1/admin/stats`), computed server-side across all users.
+
+**d) Registrar detail page was entirely read-only — no update endpoint existed.**
+There was no way to edit a registrar's company info (name, industry, RC number, plan, address, website) or representative details (name, email, phone) after enrolment — only suspend/activate/reject/logo mutations existed. We've added an Edit modal on the frontend that calls `PATCH /api/v1/admin/registrars/{id}` with any subset of `{ companyName, industry, rcNumber, plan, address, website, representativeName, representativeEmail, representativePhone }`. **Please confirm/add this endpoint** — it doesn't exist in the frontend's prior integration and we're not certain it exists on your side either.
+
+**e) Enrol Registrar form was missing Address/Website fields.**
+The registrar detail page displays `address` and `website` (when present), but the enrol form never collected them — meaning every registrar created through the normal enrolment flow would have those fields permanently blank. Added both fields to the enrol form and started sending them in the `POST /api/v1/admin/registrars/enroll` payload as `address`/`website`. **Please confirm the enroll endpoint accepts these two optional fields** — if it currently ignores unknown JSON keys, no error will surface on our end and the fields just won't persist.
+
+**Also — general ask:** for (a)–(d) above, if any of these admin endpoints don't exist yet, please let us know so we can either wait on them or figure out an interim read-only workaround; we'd rather not guess at endpoint shapes that silently fail.

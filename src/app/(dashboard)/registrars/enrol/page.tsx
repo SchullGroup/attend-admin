@@ -29,6 +29,8 @@ interface EnrolForm {
   industry: string;
   rcNumber: string;
   plan:     string;  // → plan
+  address:  string;
+  website:  string;
   repName:  string;  // → representativeName
   repEmail: string;  // → contactEmail
   repPhone: string;  // → representativePhone
@@ -37,6 +39,7 @@ interface EnrolForm {
 
 const EMPTY_FORM: EnrolForm = {
   name: "", industry: "", rcNumber: "", plan: "STARTER",
+  address: "", website: "",
   repName: "", repEmail: "", repPhone: "", password: "",
 };
 
@@ -95,6 +98,8 @@ export default function EnrolRegistrarPage() {
         // saves consistently no matter how it was typed.
         rcNumber:            withIdPrefix("RC", form.rcNumber) || null,
         industry:            form.industry        || null,
+        address:             form.address.trim()  || null,
+        website:             form.website.trim()  || null,
       },
       {
         onSuccess: () => {
@@ -173,6 +178,28 @@ export default function EnrolRegistrarPage() {
                   className={cn(fieldClass(false), "pl-9")}
                 />
               </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Website</label>
+              <input
+                type="text"
+                value={form.website}
+                onChange={(e) => handleChange("website", e.target.value)}
+                placeholder="e.g. https://dataport.ng"
+                className={fieldClass(false)}
+              />
+            </div>
+
+            <div className="col-span-2 flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Address</label>
+              <input
+                type="text"
+                value={form.address}
+                onChange={(e) => handleChange("address", e.target.value)}
+                placeholder="e.g. 12 Marina Road, Lagos"
+                className={fieldClass(false)}
+              />
             </div>
 
           </div>

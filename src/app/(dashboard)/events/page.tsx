@@ -253,7 +253,11 @@ export default function EventsPage() {
   const { data: adminData,    isLoading: adminLoading  } = useEvents(activeStatus, page, LIMIT, isSuperAdmin);
   const { data: clientData,   isLoading: clientLoading } = useClientEvents(activeType, page, LIMIT);
   const { data: registrarsData                         } = useRegistrars("", 0, 100, isSuperAdmin);
-  const { data: registersData                          } = useRegisters("ACTIVE", 0, 200);
+  // NOTE: /api/v1/client/registers is org-scoped — it 403s / returns nothing for
+  // super_admin (who has no client org). There's currently no platform-wide "list all
+  // registers/organisations" endpoint for super_admin, so this only fires for client roles;
+  // the Organizer dropdown is hidden for super_admin below until that endpoint exists.
+  const { data: registersData                          } = useRegisters("ACTIVE", 0, 200, !isSuperAdmin);
 
   const isLoading = isAdmin ? adminLoading : clientLoading;
 
@@ -339,7 +343,7 @@ export default function EventsPage() {
           />
         </div>
 
-        {/* Registrars + Organizers dropdowns — super admin only */}
+        {/* Registrars dropdown — super admin only */}
         {isSuperAdmin && (
           <>
             <FilterDropdown
@@ -349,14 +353,20 @@ export default function EventsPage() {
               onSelect={(id) => { setRegistrarFilter(id); setPage(0); }}
               icon={Building2}
             />
-            <FilterDropdown
-              label="Organizer"
-              value={organizerFilter}
-              options={organizerOptions}
-              onSelect={(id) => { setOrganizerFilter(id); setPage(0); }}
-              icon={Building2}
-            />
+            {/* Organizer (per-register) filter is disabled for super_admin — the underlying
+                data source (/api/v1/client/registers) is org-scoped and returns nothing for
+                a platform admin. Re-enable once an admin-scoped registers-listing endpoint
+                exists (see BACKEND_BUGS item 12). */}
           </>
+        )}
+        {!isSuperAdmin && organizerOptions.length > 0 && (
+          <FilterDropdown
+            label="Organizer"
+            value={organizerFilter}
+            options={organizerOptions}
+            onSelect={(id) => { setOrganizerFilter(id); setPage(0); }}
+            icon={Building2}
+          />
         )}
 
         {(searchQuery || (isSuperAdmin && (registrarFilter || organizerFilter))) && (

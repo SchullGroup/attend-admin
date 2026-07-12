@@ -70,8 +70,6 @@ export function SuperAdminView({
     ?? 0;
   const totalUsers     = adminDashboard?.totalUsers ?? usersData?.totalElements ?? 0;
   const totalEvents    = adminDashboard?.totalEvents ?? eventsData?.totalElements ?? allEvents.length;
-  const activeUsers    = adminDashboard?.activeUsers ?? 0;
-  const suspendedUsers = adminDashboard?.suspendedUsers ?? 0;
   const kycApproved    = adminDashboard?.kycSummary?.approved ?? adminDashboard?.approvedKyc ?? 0;
   const recentActivity = adminDashboard?.recentActivity ?? adminDashboard?.activityFeed ?? [];
 
@@ -80,6 +78,15 @@ export function SuperAdminView({
     Array.isArray((usersData as any)?.users)   ? (usersData as any).users   :
     Array.isArray(usersData)                    ? usersData as any           :
     [];
+
+  // The dashboard-overview endpoint doesn't return activeUsers/suspendedUsers today —
+  // fall back to counting statuses across the loaded users page. This is exact as long
+  // as the users page fully covers totalUsers (dashboard fetches up to 100 at a time);
+  // for orgs with more users than that, it's a best-effort estimate.
+  const activeUsers    = adminDashboard?.activeUsers
+    ?? (users.length > 0 ? users.filter((u) => u.status === "ACTIVE").length : 0);
+  const suspendedUsers = adminDashboard?.suspendedUsers
+    ?? (users.length > 0 ? users.filter((u) => u.status === "SUSPENDED").length : 0);
 
   // Live events first, then the rest
   const sortedEvents = [

@@ -28,6 +28,8 @@ import { EventStakeholderTab }          from "./components/EventStakeholderTab";
 import { EventExpectedAttendeesTab }   from "./components/EventExpectedAttendeesTab";
 import { EventLaunchAudienceTab }      from "./components/EventLaunchAudienceTab";
 import { EventLaunchWaitlistTab }      from "./components/EventLaunchWaitlistTab";
+import { EventChallengeApplicationsTab } from "./components/EventChallengeApplicationsTab";
+import { EventChallengeJudgesTab }       from "./components/EventChallengeJudgesTab";
 import type { LocalAgendaItem, EventShim } from "./components/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -198,6 +200,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const TABS = [
     "Overview",
     "Attendees",
+    // Innovation Challenge / Hackathon events — surface Applications + Judging
+    // directly on the event detail page for super admin (previously only
+    // reachable via the separate /hackathons/{id} area, which itself only
+    // showed Overview/Leaderboard/Judges — no Applications tab — for this role).
+    ...(isHACKATHON && isSuperAdmin ? ["Applications", "Judging"] : []),
     // Registrar tab only for super admin (overview already shows it for others)
     ...(isSuperAdmin ? ["Registrar"] : []),
     // For AGM + super admin: stop here — Documents and everything after is hidden
@@ -278,6 +285,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {/* ── Tab panels ── */}
       {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} stakeholderLogoUrl={(apiEvent as any).logoUrl ?? (apiEvent as any).registerLogoUrl ?? (apiEvent as any).branding?.logoUrl ?? undefined} expectedAttendeesCount={expectedAttendeesCount} isSuperAdmin={isSuperAdmin} />}
       {tab === "Attendees"          && <EventAttendeesTab   participants={participants} suspendUser={suspendUser} eventId={id} />}
+      {tab === "Applications" && isHACKATHON && isSuperAdmin && <EventChallengeApplicationsTab challengeId={id} />}
+      {tab === "Judging"      && isHACKATHON && isSuperAdmin && <EventChallengeJudgesTab       challengeId={id} />}
       {tab === "Registrar" && isSuperAdmin && (
         <EventStakeholderTab
           stakeholderName={apiEvent.stakeholderName || undefined}

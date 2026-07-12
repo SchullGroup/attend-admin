@@ -899,12 +899,22 @@ export function useEventDetail(id: string, opts?: { enabled?: boolean }) {
   });
 }
 
+/**
+ * Attendees for a platform event — SUPER_ADMIN view.
+ *
+ * API: GET /api/v1/admin/events/{id}/attendees (mirrors the admin documents
+ * endpoint pattern: GET /api/v1/admin/events/{id}/documents). This used to
+ * incorrectly call the org-scoped /api/v1/client/events/{id}/attendees, which
+ * 403s / returns nothing for super_admin (no client org) — that's why the
+ * Attendees tab showed "0 participants" even for events with real RSVPs.
+ * Flagged to backend to confirm this admin endpoint exists (BACKEND_BUGS item 12).
+ */
 export function useEventAttendees(id: string, page = 0, size = 20, kycStatus = "", opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: clientEventKeys.attendees(id, page, size, kycStatus),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<any>>(
-        `/api/v1/client/events/${id}/attendees`,
+        `/api/v1/admin/events/${id}/attendees`,
         { params: { page, size, ...(kycStatus ? { kycStatus } : {}) } }
       );
       return res.data.data;

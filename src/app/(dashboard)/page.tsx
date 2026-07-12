@@ -206,11 +206,11 @@ export default function DashboardPage() {
   // never fire requests that would return 403/500.
   const { data: dashStats,        isLoading: statsLoading  } = useDashboardStats(isSuperAdmin);
   const { data: adminDashboard                             } = useAdminDashboard(isSuperAdmin);
-  const { data: usersData,        isLoading: usersLoading  } = useUsers("", 0, 10, isSuperAdmin);
+  const { data: usersData,        isLoading: usersLoading  } = useUsers("", 0, 100, isSuperAdmin);
   const { data: eventsData,       isLoading: eventsLoading } = useEvents("", 0, 20, isSuperAdmin);
   const { data: publishedData                              } = useEvents("PUBLISHED", 0, 1, isSuperAdmin);
   const { data: registrarsData,   isLoading: regLoading    } = useRegistrars("", 0, 20, isSuperAdmin);
-  const { data: registersData                              } = useRegisters("ACTIVE", 0, 6);
+  const { data: registersData                              } = useRegisters("ACTIVE", 0, 6, !isSuperAdmin);
   const { data: clientEventsData, isLoading: clientLoading } = useClientEvents("ALL", 0, 20);
 
   const isLoading = userLoading || (isAdmin && !isJudge ? eventsLoading : clientLoading);

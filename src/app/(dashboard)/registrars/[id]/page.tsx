@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   ArrowLeft, Building2, Mail, Phone, Hash, Globe,
   CalendarDays, Users, Eye, ClipboardList, MapPin,
-  UserCheck, X,
+  UserCheck, X, Pencil,
 } from "lucide-react";
 import {
   useRegistrarDetail,
@@ -14,8 +14,10 @@ import {
   useActivateRegistrar,
   useSuspendRegistrar,
   useRejectRegistrar,
+  useUpdateRegistrarProfile,
   getRegistrarDisplayName,
   getRegistrarEnrolledAt,
+  type UpdateRegistrarProfileRequest,
 } from "@/api/registrars";
 import { Input } from "@/components/ui/input";
 import { LogoUpload } from "@/components/custom/logo-upload";
@@ -27,6 +29,8 @@ import { ModuleBadge } from "@/components/custom/module-badge";
 import { DateCell } from "@/components/ui/date-cell";
 import { formatDate } from "@/lib/utils";
 import { getEventModule, MODULE_COLORS } from "@/lib/event-module";
+
+const EVENTS_PREVIEW_LIMIT = 6;
 
 const STATUS_DOT: Record<string, { dot: string; label: string }> = {
   ACTIVE:    { dot: "#16a34a", label: "Active"    },
@@ -44,8 +48,11 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
   const activateMutation = useActivateRegistrar();
   const suspendMutation  = useSuspendRegistrar();
   const rejectMutation   = useRejectRegistrar();
+  const updateMutation   = useUpdateRegistrarProfile();
   const [rejectOpen,  setRejectOpen]  = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [editOpen,    setEditOpen]    = useState(false);
+  const [editForm,    setEditForm]    = useState<UpdateRegistrarProfileRequest>({});
 
   if (isLoading) return <Loader variant="page" text="Loading registrar…" />;
 
@@ -70,7 +77,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
   // Handle both flat fields and nested `representative` object from API
   const rep = (registrar as any).representative ?? {};
   const repName  = registrar.representativeName || registrar.repName || rep?.name || rep?.fullName || "—";
-  const repEmail = registrar.contactEmail || registrar.repEmail || rep?.email || rep?.contactEmail || "—";
+  const repEmail = registrar.contactEmail || (registrar as any).email || registrar.repEmail || rep?.email || rep?.contactEmail || "—";
   const repPhone = registrar.representativePhone || registrar.phone || rep?.phone || rep?.phoneNumber || "—";
 
   // Use embedded arrays first; fall back to dedicated sub-resource calls
@@ -123,6 +130,23 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" size="sm" className="gap-1.5"
+            onClick={() => {
+              setEditForm({
+                companyName:         displayName,
+                industry:            registrar.industry ?? "",
+                rcNumber:            registrar.rcNumber ?? "",
+                plan:                registrar.plan ?? "",
+                address:             (registrar as any).address ?? "",
+                website:             (registrar as any).website ?? "",
+                representativeName:  repName !== "—" ? repName : "",
+                representativeEmail: repEmail !== "—" ? repEmail : "",
+                representativePhone: repPhone !== "—" ? repPhone : "",
+              });
+              setEditOpen(true);
+            }}>
+            <Pencil className="h-3.5 w-3.5" /> Edit
+          </Button>
           {isPending && (
             <Button variant="outline" size="sm"
               className="gap-1.5 border-red-200 text-red-600 hover:bg-red-50"
@@ -175,6 +199,76 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                 )}
               >
                 {rejectMutation.isPending ? "Rejecting…" : "Confirm Reject"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit modal ── */}
+      {editOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-[hsl(var(--card))] rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[85vh] overflow-y-auto">
+            <h2 className="text-base font-semibold text-[hsl(var(--foreground))] mb-1">Edit Registrar</h2>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mb-4">
+              Update organisation and representative details.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 mb-2">
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Company Name</label>
+                <Input value={editForm.companyName ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, companyName: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Industry</label>
+                <Input value={editForm.industry ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, industry: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Plan</label>
+                <Input value={editForm.plan ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, plan: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">RC Number</label>
+                <Input value={editForm.rcNumber ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, rcNumber: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Website</label>
+                <Input value={editForm.website ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, website: e.target.value }))} placeholder="https://…" />
+              </div>
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Address</label>
+                <Input value={editForm.address ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="border-t border-[hsl(var(--border))] my-3" />
+            <h3 className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-2">Representative</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Name</label>
+                <Input value={editForm.representativeName ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, representativeName: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Email</label>
+                <Input type="email" value={editForm.representativeEmail ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, representativeEmail: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Phone</label>
+                <Input value={editForm.representativePhone ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, representativePhone: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>Cancel</Button>
+              <Button
+                size="sm"
+                disabled={updateMutation.isPending}
+                onClick={() => updateMutation.mutate(
+                  { id, data: editForm },
+                  { onSuccess: () => setEditOpen(false) }
+                )}
+              >
+                {updateMutation.isPending ? "Saving…" : "Save Changes"}
               </Button>
             </div>
           </div>
@@ -304,7 +398,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                         <StatusBadge status={(reg.status ?? "").toLowerCase()} />
                       </td>
                       <td className="px-5 py-3 text-sm font-medium tabular-nums text-center">
-                        {reg.eventCount ?? 0}
+                        {reg.eventCount ?? (reg as any).eventsCount ?? (reg as any).totalEvents ?? (reg as any).numberOfEvents ?? 0}
                       </td>
                       <td className="px-5 py-3">
                         <DateCell value={reg.enrolledAt} />
@@ -402,7 +496,14 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
           <Card className="attend-card overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border)/0.6)]">
               <h2 className="font-semibold text-[hsl(var(--foreground))]">Events</h2>
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">{events.length} total</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-[hsl(var(--muted-foreground))]">{registrar.eventsCount ?? events.length} total</span>
+                {events.length > EVENTS_PREVIEW_LIMIT && (
+                  <Link href={`/registrars/${id}/events`} className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline">
+                    View all
+                  </Link>
+                )}
+              </div>
             </div>
             {events.length === 0 ? (
               <div className="py-10 text-center">
@@ -422,7 +523,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                   </tr>
                 </thead>
                 <tbody>
-                  {(events as any[]).map((evt) => {
+                  {(events as any[]).slice(0, EVENTS_PREVIEW_LIMIT).map((evt) => {
                     const mod      = getEventModule({ eventType: evt.eventType });
                     const dotColor = MODULE_COLORS[mod];
                     return (
@@ -466,6 +567,13 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                   })}
                 </tbody>
               </table>
+            )}
+            {events.length > EVENTS_PREVIEW_LIMIT && (
+              <div className="px-5 py-3 border-t border-[hsl(var(--border)/0.6)] text-center">
+                <Link href={`/registrars/${id}/events`} className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline">
+                  View all {registrar.eventsCount ?? events.length} events
+                </Link>
+              </div>
             )}
           </Card>
         </div>
