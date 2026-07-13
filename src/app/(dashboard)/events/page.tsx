@@ -7,7 +7,7 @@ import {
 import { useEvents } from "@/api/super-admin";
 import { useClientEvents, type ClientEventTypeFilter } from "@/api/client-events";
 import { useGetMe } from "@/api/auth/hooks";
-import { useRegistrars } from "@/api/registrars";
+import { useRegistrars, useRegistrarRegisters } from "@/api/registrars";
 import { useRegisters } from "@/api/registers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -247,6 +247,10 @@ export default function EventsPage() {
   const [page,             setPage]             = useState(0);
   const [registrarFilter,  setRegistrarFilter]  = useState("");
   const [organizerFilter,  setOrganizerFilter]  = useState("");
+  // Register filter — scoped to whichever registrar is selected above. Uses the
+  // same GET /api/v1/admin/registrars/{id}/registers endpoint as the registrar
+  // detail page, so it's real data (not the empty client-scoped Organizer dropdown).
+  const [registerFilter,   setRegisterFilter]   = useState("");
 
   // These two hit super-admin-only backend endpoints — must stay gated behind
   // isSuperAdmin, or a Client Admin gets a 403 firing on every page load.
@@ -258,6 +262,7 @@ export default function EventsPage() {
   // registers/organisations" endpoint for super_admin, so this only fires for client roles;
   // the Organizer dropdown is hidden for super_admin below until that endpoint exists.
   const { data: registersData                          } = useRegisters("ACTIVE", 0, 200, !isSuperAdmin);
+  const { data: registrarRegistersData                 } = useRegistrarRegisters(registrarFilter);
 
   const isLoading = isAdmin ? adminLoading : clientLoading;
 
@@ -297,11 +302,16 @@ export default function EventsPage() {
     id:   r.id,
     name: r.name || (r as any).companyName || r.id,
   }));
+  const registerOptions = (registrarRegistersData ?? []).map((r) => ({
+    id:   r.id,
+    name: r.name || r.id,
+  }));
 
-  // Client-side filtering by search + registrar + organizer
+  // Client-side filtering by search + registrar + organizer + register
   const filtered = events.filter((e) => {
     if (searchQuery.trim() && !e.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (organizerFilter && (e as any).registerId !== organizerFilter) return false;
+    if (registerFilter && (e as any).registerId !== registerFilter) return false;
     if (registrarFilter) {
       const reg = registrarOptions.find((r) => r.id === registrarFilter);
       if (reg && !(e.organizerName ?? e.registerName ?? "").toLowerCase().includes(reg.name.toLowerCase())) return false;
@@ -350,13 +360,23 @@ export default function EventsPage() {
               label="Registrar"
               value={registrarFilter}
               options={registrarOptions}
-              onSelect={(id) => { setRegistrarFilter(id); setPage(0); }}
+              onSelect={(id) => { setRegistrarFilter(id); setRegisterFilter(""); setPage(0); }}
               icon={Building2}
             />
-            {/* Organizer (per-register) filter is disabled for super_admin — the underlying
-                data source (/api/v1/client/registers) is org-scoped and returns nothing for
-                a platform admin. Re-enable once an admin-scoped registers-listing endpoint
-                exists (see BACKEND_BUGS item 12). */}
+            {/* Cascading Register filter — only shows once a Registrar is picked,
+                scoped to that registrar's own registers (real data via
+                GET /api/v1/admin/registrars/{id}/registers). Distinct from the
+                cross-org "Organizer" dropdown below, which has no admin-scoped
+                data source yet (see BACKEND_BUGS item 12). */}
+            {registrarFilter && (
+              <FilterDropdown
+                label="Register"
+                value={registerFilter}
+                options={registerOptions}
+                onSelect={(id) => { setRegisterFilter(id); setPage(0); }}
+                icon={Building2}
+              />
+            )}
           </>
         )}
         {!isSuperAdmin && organizerOptions.length > 0 && (
@@ -369,10 +389,10 @@ export default function EventsPage() {
           />
         )}
 
-        {(searchQuery || (isSuperAdmin && (registrarFilter || organizerFilter))) && (
+        {(searchQuery || (isSuperAdmin && (registrarFilter || organizerFilter || registerFilter))) && (
           <button
             type="button"
-            onClick={() => { setRegistrarFilter(""); setOrganizerFilter(""); setSearchQuery(""); setPage(0); }}
+            onClick={() => { setRegistrarFilter(""); setOrganizerFilter(""); setRegisterFilter(""); setSearchQuery(""); setPage(0); }}
             className="text-xs text-[hsl(var(--primary))] hover:underline"
           >
             Clear filters

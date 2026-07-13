@@ -115,6 +115,30 @@ export interface EventPerformanceItem {
   fillRate:       number;
   checkedInCount: number;
   checkInRate:    number;
+  /** Optional — same as the admin `event-performance` shape; not confirmed present
+   *  on the client-scoped endpoint yet. See BACKEND_BUGS item 13c. */
+  avgWatchMinutes?: number;
+  qaResponses?:     number;
+  pollResponses?:   number;  // legacy/fallback field name
+}
+
+/** GET /analytics/event-format — distribution of events by format */
+export interface EventFormatItem {
+  format: string;
+  count:  number;
+  color?: string;
+}
+
+export interface EventFormatResponse {
+  formats: EventFormatItem[];
+}
+
+/** GET /analytics/engagement — org-wide engagement metrics */
+export interface EngagementMetrics {
+  avgWatchTimeMinutes: number;
+  pollResponseRate:    number;
+  qaParticipationRate: number;
+  documentDownloads:   number;
 }
 
 export interface EventPerformanceResponse {
@@ -175,6 +199,8 @@ export const clientAnalyticsKeys = {
                       ["clientAnalytics", "performance", { page, size }] as const,
   checkInOverview:  ["clientAnalytics", "checkInOverview"] as const,
   monthlyTrend:     ["clientAnalytics", "monthlyTrend"] as const,
+  eventFormat:      ["clientAnalytics", "eventFormat"] as const,
+  engagement:       ["clientAnalytics", "engagement"] as const,
   exportRegs:       (eventId: string, from?: string, to?: string) =>
                       ["clientAnalytics", "exportRegs", { eventId, from, to }] as const,
 };
@@ -324,6 +350,54 @@ export function useAnalyticsCheckInOverview() {
     },
     staleTime: 60_000,
     retry: false,   // don't retry if the endpoint doesn't exist
+  });
+}
+
+/**
+ * GET /analytics/event-format — distribution of this org's events by format
+ * (virtual / hybrid / in-person). New — see BACKEND_BUGS item 13c, which
+ * asked backend to add a client-scoped equivalent of the admin-only
+ * event-format endpoint. `retry:false` since this may 404 until it exists.
+ */
+export function useAnalyticsEventFormat() {
+  return useQuery({
+    queryKey: clientAnalyticsKeys.eventFormat,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<any>>(
+        "/api/v1/client/analytics/event-format"
+      );
+      const raw: any = res.data.data ?? res.data;
+      const formats: EventFormatItem[] =
+        raw?.formats ?? raw?.eventFormats ?? raw?.distribution ?? (Array.isArray(raw) ? raw : []);
+      return { formats } as EventFormatResponse;
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+/**
+ * GET /analytics/engagement — org-wide engagement metrics (watch time, poll/Q&A
+ * rates, document downloads). New — see BACKEND_BUGS item 13c. `retry:false`
+ * since this may 404 until backend adds the client-scoped equivalent.
+ */
+export function useAnalyticsEngagement() {
+  return useQuery({
+    queryKey: clientAnalyticsKeys.engagement,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<any>>(
+        "/api/v1/client/analytics/engagement"
+      );
+      const d: any = res.data.data ?? res.data;
+      return {
+        avgWatchTimeMinutes: d?.avgWatchTimeMinutes ?? d?.avgWatchTime    ?? d?.averageWatchTime ?? 0,
+        pollResponseRate:    d?.pollResponseRate    ?? d?.pollRate       ?? d?.pollResponsePct   ?? 0,
+        qaParticipationRate: d?.qaParticipationRate ?? d?.qaRate         ?? d?.qaParticipation   ?? 0,
+        documentDownloads:   d?.documentDownloads   ?? d?.totalDownloads ?? d?.downloads         ?? 0,
+      } as EngagementMetrics;
+    },
+    staleTime: 60_000,
+    retry: false,
   });
 }
 

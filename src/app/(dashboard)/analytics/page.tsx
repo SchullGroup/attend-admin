@@ -10,6 +10,9 @@ import {
   BarChart2,
   UserCheck,
   Download,
+  Eye,
+  Activity,
+  MessageSquare,
 } from "lucide-react";
 import {
   useAnalyticsStats,
@@ -19,6 +22,8 @@ import {
   useAnalyticsEventPerformance,
   useAnalyticsCheckInOverview,
   useAnalyticsMonthlyTrend,
+  useAnalyticsEventFormat,
+  useAnalyticsEngagement,
   useExportRegistrations,
   extractStat,
 } from "@/api/client-analytics";
@@ -39,6 +44,15 @@ const TYPE_FALLBACK_COLORS: Record<string, string> = {
   LAUNCH:    "#ea6c00",
   HACKATHON: "#7c22c9",
   GENERAL:   "#2563eb",
+};
+
+const FORMAT_COLORS: Record<string, string> = {
+  virtual:    "#2563eb",
+  hybrid:     "#7c22c9",
+  "in-person":"#16a34a",
+  VIRTUAL:    "#2563eb",
+  HYBRID:     "#7c22c9",
+  IN_PERSON:  "#16a34a",
 };
 
 function typeColor(item: { eventType?: string; type?: string; color?: string }): string {
@@ -195,6 +209,8 @@ function ClientAnalytics() {
   const { data: performance,  isLoading: perfLoading,  isError: perfError,  error: perfErrorObj  } = useAnalyticsEventPerformance(perfPage, perfSize);
   const { data: checkInData,  isLoading: checkInLoading  } = useAnalyticsCheckInOverview();
   const { data: trendData,    isLoading: trendLoading, isError: trendError, error: trendErrorObj } = useAnalyticsMonthlyTrend();
+  const { data: formatData,   isLoading: formatLoading   } = useAnalyticsEventFormat();
+  const { data: engagement,   isLoading: engageLoading   } = useAnalyticsEngagement();
 
   const loading = statsLoading || byTypeLoading || rsvpsLoading || fillLoading || perfLoading || trendLoading;
   if (loading) return <Loader variant="page" text="Loading Analytics…" />;
@@ -214,6 +230,10 @@ function ClientAnalytics() {
 
   // --- Fill rate — per-event array from API ---
   const fillEvents  = fillRate?.fillRateOverview ?? [];
+
+  // --- Event Format Distribution ---
+  const formats    = formatData?.formats ?? [];
+  const maxFormat  = Math.max(...formats.map((f) => f.count), 1);
 
   // --- Stats ---
   const evStat  = extractStat(stats?.totalEvents);
@@ -658,6 +678,185 @@ function ClientAnalytics() {
           </div>
         )}
       </Card>
+      {/* Event Format Distribution */}
+      <Card className="attend-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
+          <h2 className="font-semibold text-[hsl(var(--foreground))]">Event Format Distribution</h2>
+        </div>
+        {formatLoading ? <Loader variant="inline" /> : (
+          <div className="px-5 py-4">
+            {formats.length === 0 && (
+              <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">No format data yet.</p>
+            )}
+            <div className="flex flex-col gap-4">
+              {formats.map((item) => {
+                const color = item.color ?? FORMAT_COLORS[item.format] ?? FORMAT_COLORS[item.format.toUpperCase()] ?? "#374151";
+                const pct   = maxFormat > 0 ? Math.round((item.count / maxFormat) * 100) : 0;
+                return (
+                  <div key={item.format}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="text-sm font-medium text-[hsl(var(--foreground))] capitalize">
+                          {item.format.toLowerCase().replace("_", "-")}
+                        </span>
+                      </div>
+                      <span className="text-sm font-bold tabular-nums" style={{ color }}>{item.count}</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${pct}%`, backgroundColor: color }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Engagement Metrics */}
+      <Card className="attend-card p-5">
+        <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">Engagement Metrics</h2>
+        {engageLoading ? <Loader variant="inline" /> : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+            {[
+              {
+                label:    "Avg Watch Time",
+                value:    `${engagement?.avgWatchTimeMinutes ?? 0} min`,
+                sub:      "per attendee",
+                icon:     Eye,
+                color:    "#2563eb",
+              },
+              {
+                label:    "Poll Response Rate",
+                value:    `${engagement?.pollResponseRate ?? 0}%`,
+                sub:      "of active polls",
+                icon:     Activity,
+                color:    "#7c22c9",
+              },
+              {
+                label:    "Q&A Participation",
+                value:    `${engagement?.qaParticipationRate ?? 0}%`,
+                sub:      "of attendees",
+                icon:     MessageSquare,
+                color:    "#0891b2",
+              },
+              {
+                label:    "Document Downloads",
+                value:    (engagement?.documentDownloads ?? 0).toLocaleString(),
+                sub:      "total downloads",
+                icon:     Download,
+                color:    "#d97706",
+              },
+            ].map(({ label, value, sub, icon: Icon, color }) => (
+              <div key={label} className="rounded-xl p-4 border border-[hsl(var(--border))]" style={{ backgroundColor: color + "08" }}>
+                <div className="h-8 w-8 rounded-lg flex items-center justify-center mb-3" style={{ backgroundColor: color + "18" }}>
+                  <Icon className="h-4 w-4" style={{ color }} />
+                </div>
+                <div className="text-2xl font-bold tabular-nums" style={{ color }}>{value}</div>
+                <div className="text-xs font-medium text-[hsl(var(--foreground))] mt-0.5">{label}</div>
+                <div className="text-[11px] text-[hsl(var(--muted-foreground))] mt-0.5">{sub}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Per-Event Breakdown */}
+      <Card className="attend-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
+          <h2 className="font-semibold text-[hsl(var(--foreground))]">Per-Event Breakdown</h2>
+          <span className="text-xs text-[hsl(var(--muted-foreground))]">{totalPerf.toLocaleString()} events</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px]">
+            <thead>
+              <tr className="attend-table-header">
+                <th className="px-5 py-3 text-left">Event</th>
+                <th className="px-5 py-3 text-right">RSVPs</th>
+                <th className="px-5 py-3 text-right">Attended</th>
+                <th className="px-5 py-3 text-right">Attendance Rate</th>
+                <th className="px-5 py-3 text-right">Avg Watch</th>
+                <th className="px-5 py-3 text-right">Q&amp;A Responses</th>
+              </tr>
+            </thead>
+            <tbody>
+              {perfEvents.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
+                    No events yet.
+                  </td>
+                </tr>
+              )}
+              {perfEvents.map((ev) => {
+                const title = ev.eventTitle ?? ev.title ?? "—";
+                const evId  = ev.eventId ?? ev.id;
+                const rsvpCount = ev.rsvpCount ?? 0;
+                const checkedIn = ev.checkedInCount ?? 0;
+                const attendRate = ev.checkInRate != null
+                  ? Math.round(ev.checkInRate > 1 ? ev.checkInRate : ev.checkInRate * 100)
+                  : rsvpCount > 0 ? Math.round((checkedIn / rsvpCount) * 100) : 0;
+                return (
+                  <tr key={evId} className="attend-table-row">
+                    <td className="px-5 py-3">
+                      <p className="text-sm font-medium text-[hsl(var(--foreground))] max-w-[280px] truncate">
+                        {title}
+                      </p>
+                    </td>
+                    <td className="px-5 py-3 text-sm tabular-nums text-right text-[hsl(var(--muted-foreground))]">
+                      {rsvpCount.toLocaleString()}
+                    </td>
+                    <td className="px-5 py-3 text-sm tabular-nums text-right text-[hsl(var(--muted-foreground))]">
+                      {checkedIn.toLocaleString()}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <span className={`text-sm font-semibold tabular-nums ${
+                        attendRate >= 70 ? "text-green-600" : attendRate >= 40 ? "text-amber-600" : "text-red-500"
+                      }`}>{attendRate}%</span>
+                    </td>
+                    <td className="px-5 py-3 text-sm tabular-nums text-right text-[hsl(var(--muted-foreground))]">
+                      {ev.avgWatchMinutes != null ? `${ev.avgWatchMinutes} min` : "—"}
+                    </td>
+                    <td className="px-5 py-3 text-sm tabular-nums text-right text-[hsl(var(--muted-foreground))]">
+                      {(ev.qaResponses ?? ev.pollResponses) != null ? (ev.qaResponses ?? ev.pollResponses)!.toLocaleString() : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {totalPages > 1 && (
+          <div className="px-5 py-3 border-t border-[hsl(var(--border))] flex items-center justify-between">
+            <span className="text-xs text-[hsl(var(--muted-foreground))]">
+              Page {perfPage + 1} of {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <button
+                disabled={perfPage === 0}
+                onClick={() => setPerfPage((p) => p - 1)}
+                className="h-7 w-7 rounded-lg border border-[hsl(var(--border))] flex items-center justify-center disabled:opacity-40 hover:bg-[hsl(var(--muted))]"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <button
+                disabled={perfPage >= totalPages - 1}
+                onClick={() => setPerfPage((p) => p + 1)}
+                className="h-7 w-7 rounded-lg border border-[hsl(var(--border))] flex items-center justify-center disabled:opacity-40 hover:bg-[hsl(var(--muted))]"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </Card>
+
       {/* Export Registrations */}
       <ExportRegistrationsPanel events={perfEvents} />
     </div>

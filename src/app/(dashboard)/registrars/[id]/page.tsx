@@ -27,8 +27,22 @@ import { Loader } from "@/components/ui/Loader";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { ModuleBadge } from "@/components/custom/module-badge";
 import { DateCell } from "@/components/ui/date-cell";
-import { formatDate } from "@/lib/utils";
+import { CustomSelect } from "@/components/custom/custom-select";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { formatDate, digitsOnly, withIdPrefix } from "@/lib/utils";
 import { getEventModule, MODULE_COLORS } from "@/lib/event-module";
+
+const PLAN_OPTIONS = [
+  { label: "Starter",    value: "STARTER"    },
+  { label: "Growth",     value: "GROWTH"     },
+  { label: "Enterprise", value: "ENTERPRISE" },
+];
+
+const INDUSTRY_OPTIONS = [
+  "Financial Services", "Banking & Finance", "Insurance", "Oil & Gas", "FMCG",
+  "Telecommunications", "Technology / Fintech", "Healthcare", "Real Estate",
+  "Manufacturing", "Agriculture", "Education", "Other",
+];
 
 const EVENTS_PREVIEW_LIMIT = 6;
 
@@ -221,15 +235,36 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Industry</label>
-                <Input value={editForm.industry ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, industry: e.target.value }))} />
+                <CustomSelect
+                  value={editForm.industry ?? ""}
+                  onChange={(v) => setEditForm((f) => ({ ...f, industry: v }))}
+                  placeholder="Select industry…"
+                  options={INDUSTRY_OPTIONS.map((i) => ({ label: i, value: i }))}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Plan</label>
-                <Input value={editForm.plan ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, plan: e.target.value }))} />
+                <CustomSelect
+                  value={editForm.plan ?? ""}
+                  onChange={(v) => setEditForm((f) => ({ ...f, plan: v }))}
+                  placeholder="Select plan…"
+                  options={PLAN_OPTIONS}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">RC Number</label>
-                <Input value={editForm.rcNumber ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, rcNumber: e.target.value }))} />
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[hsl(var(--muted-foreground))] pointer-events-none">
+                    RC
+                  </span>
+                  <Input
+                    inputMode="numeric"
+                    value={digitsOnly((editForm.rcNumber ?? "").replace(/^RC/i, ""))}
+                    onChange={(e) => setEditForm((f) => ({ ...f, rcNumber: withIdPrefix("RC", digitsOnly(e.target.value)) }))}
+                    placeholder="287640"
+                    className="pl-9"
+                  />
+                </div>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Website</label>
@@ -254,7 +289,10 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Phone</label>
-                <Input value={editForm.representativePhone ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, representativePhone: e.target.value }))} />
+                <PhoneInput
+                  value={editForm.representativePhone ?? ""}
+                  onChange={(e164) => setEditForm((f) => ({ ...f, representativePhone: e164 }))}
+                />
               </div>
             </div>
 

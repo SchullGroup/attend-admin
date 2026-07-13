@@ -207,9 +207,13 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     ...(isHACKATHON && isSuperAdmin ? ["Applications", "Judging"] : []),
     // Registrar tab only for super admin (overview already shows it for others)
     ...(isSuperAdmin ? ["Registrar"] : []),
-    // For AGM + super admin: stop here — Documents and everything after is hidden
+    // Documents should always be visible, regardless of role or module — it was
+    // previously bundled into the AGM+super-admin exclusion below and got hidden
+    // along with the AGM-voting-specific tabs by mistake.
+    "Documents",
+    // For AGM + super admin: stop here — the AGM-voting tabs below stay hidden
+    // (super admin gets Overview/Attendees/Registrar/Documents only for AGMs)
     ...(isSuperAdmin && isAGM ? [] : [
-      "Documents",
       ...(isAGM && !isSuperAdmin ? ["Resolutions", "Stakeholders"] : isAGM ? ["Resolutions"] : []),
       ...(!isSuperAdmin && isLAUNCH ? ["Audience Tiers", "Waitlist"] : []),
       // Broadcast is a write operation — hidden for super admin and Viewer (read-only)
