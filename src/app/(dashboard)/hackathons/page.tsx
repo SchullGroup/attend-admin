@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Lightbulb, ArrowRight, Trophy, Users, FileText, ChevronRight, Search, Star,
+  Lightbulb, ArrowRight, Trophy, Users, FileText, ChevronRight, ChevronLeft, Search, Star,
 } from "lucide-react";
 import { useClientChallenges } from "@/api/client-challenges";
 import { useAdminChallenges } from "@/api/admin-challenges";
@@ -178,10 +178,13 @@ function JudgeChallengesView() {
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
+const CHALLENGES_PAGE_SIZE = 10;
+
 export default function HackathonsPage() {
   const router = useRouter();
   const [search,    setSearch]    = useState("");
   const [statusTab, setStatusTab] = useState("");
+  const [page,      setPage]      = useState(0);
 
   const { data: userResponse } = useGetMe();
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
@@ -193,8 +196,8 @@ export default function HackathonsPage() {
   // scoring) for this role instead of being blocked from entry entirely.
 
   // Always call these — hooks must not be conditional
-  const { data: clientData, isLoading: clientLoading, isFetching: clientFetching, isError: clientError } = useClientChallenges(search, statusTab, 0, 50);
-  const { data: adminData,  isLoading: adminLoading,  isFetching: adminFetching, isError: adminErrorFlag  } = useAdminChallenges(search, "", statusTab, 0, 50);
+  const { data: clientData, isLoading: clientLoading, isFetching: clientFetching, isError: clientError } = useClientChallenges(search, statusTab, page, CHALLENGES_PAGE_SIZE);
+  const { data: adminData,  isLoading: adminLoading,  isFetching: adminFetching, isError: adminErrorFlag  } = useAdminChallenges(search, "", statusTab, page, CHALLENGES_PAGE_SIZE);
 
   // Judge gets its own view
   if (isJudge) return <JudgeChallengesView />;
@@ -207,11 +210,15 @@ export default function HackathonsPage() {
   if (isLoading) return <Loader variant="page" text="Loading Challenges…" />;
 
   const summary    = data?.summary;
-  const allChallenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; applicationCount?: number; shortlistedTeams?: number; shortlistedCount?: number; status?: string }>;
-  const challenges = statusTab
-    ? allChallenges.filter((c) => c.status?.toUpperCase() === statusTab.toUpperCase())
-    : allChallenges;
+  const challenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; applicationCount?: number; shortlistedTeams?: number; shortlistedCount?: number; status?: string }>;
+  // Server already filters by status (both hooks are passed statusTab) and paginates —
+  // no client-side re-filtering, otherwise "totalCount" and the rendered rows fall out of sync.
+  const totalCount = data?.totalCount ?? challenges.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / CHALLENGES_PAGE_SIZE));
   const featured   = challenges.find((c) => c.status?.toUpperCase() === "LIVE") ?? challenges[0] ?? null;
+
+  function handleSearchChange(v: string) { setSearch(v); setPage(0); }
+  function handleStatusChange(v: string) { setStatusTab(v); setPage(0); }
 
   return (
     <div className="flex flex-col gap-6">
@@ -289,7 +296,7 @@ export default function HackathonsPage() {
           <Input
             placeholder="Search challenges…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="pl-9 h-9"
           />
         </div>
@@ -297,7 +304,7 @@ export default function HackathonsPage() {
           {STATUS_FILTERS.map((f) => (
             <button
               key={f.value}
-              onClick={() => setStatusTab(f.value)}
+              onClick={() => handleStatusChange(f.value)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                 statusTab === f.value
                   ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
@@ -369,6 +376,25 @@ export default function HackathonsPage() {
         </table>
         {challenges.length === 0 && (
           <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">No challenges found.</div>
+        )}
+        {challenges.length > 0 && totalPages > 1 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-[hsl(var(--border)/0.6)]">
+            <span className="text-xs text-[hsl(var(--muted-foreground))]">
+              Page {page + 1} of {totalPages} · {totalCount} total
+            </span>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="h-7 gap-1 text-xs"
+                disabled={page === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                <ChevronLeft className="h-3.5 w-3.5" /> Prev
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 gap-1 text-xs"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}>
+                Next <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
         )}
       </Card>
     </div>

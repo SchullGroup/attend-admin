@@ -117,8 +117,8 @@ const SECTIONS: NavSection[] = [
     hiddenForRoles: ["event_manager"],
     items: [
       { title: "Challenges",   icon: Lightbulb, href: "/hackathons" },
-      { title: "Applications", icon: FileApp,   href: "/hackathons/applications", clientOnly: true },
-      { title: "Judging",      icon: Star,      href: "/hackathons/judging",      clientOnly: true },
+      { title: "Applications", icon: FileApp,   href: "/hackathons/applications" },
+      { title: "Judging",      icon: Star,      href: "/hackathons/judging"      },
     ],
   },
   {

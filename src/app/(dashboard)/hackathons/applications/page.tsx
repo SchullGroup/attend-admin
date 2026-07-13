@@ -22,6 +22,8 @@ import {
   useJudgeChallengeApplications,
   useJudgeApplication,
 } from "@/api/judge";
+import { useAdminChallenges } from "@/api/admin-challenges";
+import { EventChallengeApplicationsTab } from "../../events/[id]/components/EventChallengeApplicationsTab";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -1068,8 +1070,9 @@ export default function ApplicationsPage() {
 
   const { data: userResponse } = useGetMe();
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
-  const isJudge  = normalizedRole === "judge";
-  const isViewer = normalizedRole === "viewer";
+  const isJudge      = normalizedRole === "judge";
+  const isViewer     = normalizedRole === "viewer";
+  const isSuperAdmin = normalizedRole === "super_admin";
 
   const { data, isLoading } = useClientChallenges("", "", 0, 100);
   const challenges = data?.challenges ?? [];
@@ -1077,7 +1080,8 @@ export default function ApplicationsPage() {
 
   const selectedChallenge = challenges.find((c) => c.id === selectedChallengeId);
 
-  if (isJudge) return <JudgeApplicationsView />;
+  if (isJudge)      return <JudgeApplicationsView />;
+  if (isSuperAdmin) return <SuperAdminApplicationsView />;
 
   if (isLoading) return <Loader variant="page" text="Loading Applications…" />;
 
@@ -1237,6 +1241,148 @@ export default function ApplicationsPage() {
           </tbody>
         </table>
         {filtered.length === 0 && (
+          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            {search ? "No challenges match your search." : "No challenges found."}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Super admin applications view — platform-wide challenge picker + read-only
+// applications table (GET /api/v1/admin/challenges, GET /api/v1/admin/challenges/{id}/applications).
+// This used to be entirely hidden from Super Admin in the sidebar; the previous
+// "Applications" nav item was clientOnly and there was no admin-scoped view.
+// ---------------------------------------------------------------------------
+function SuperAdminApplicationsView() {
+  const router = useRouter();
+  const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
+  const [search,              setSearch]              = useState("");
+
+  const { data, isLoading } = useAdminChallenges(search, "", "", 0, 100);
+  const challenges = data?.challenges ?? [];
+  const summary    = data?.summary;
+
+  const selectedChallenge = challenges.find((c) => c.id === selectedChallengeId);
+
+  if (isLoading) return <Loader variant="page" text="Loading Applications…" />;
+
+  if (selectedChallengeId) {
+    return (
+      <div className="flex flex-col gap-5">
+        <div>
+          <button
+            onClick={() => setSelectedChallengeId(null)}
+            className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-4 transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> All Challenges
+          </button>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{selectedChallenge?.title}</h1>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
+                {selectedChallenge?.organiserName} · {formatDate(selectedChallenge?.date ?? "")} · Applications
+              </p>
+            </div>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => router.push(`/hackathons/${selectedChallengeId}`)}>
+              Open Challenge <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+        <EventChallengeApplicationsTab challengeId={selectedChallengeId} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Applications</h1>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+          Review applications across all challenges, platform-wide
+        </p>
+      </div>
+
+      {summary && (
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { label: "Total Applications", value: summary.totalApplications,                        icon: FileText,  color: "#7c22c9" },
+            { label: "Active Challenges",  value: summary.activeChallenges,                         icon: Lightbulb, color: "#0891b2" },
+            { label: "Shortlisted",        value: summary.shortlisted ?? summary.teamsToScore ?? 0, icon: Trophy,    color: "#d97706" },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <Card key={label} className="attend-card p-4 flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: color + "18" }}>
+                <Icon className="h-4 w-4" style={{ color }} />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-[hsl(var(--foreground))]">{value}</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">{label}</p>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <div className="relative max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+        <Input placeholder="Search challenges…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9" />
+      </div>
+
+      <Card className="attend-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
+          <h2 className="font-semibold text-[hsl(var(--foreground))]">Select a Challenge</h2>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">Click a challenge to review its applications</p>
+        </div>
+        <table className="w-full">
+          <thead>
+            <tr className="attend-table-header">
+              <th className="px-5 py-3 text-left">Challenge</th>
+              <th className="px-5 py-3 text-left">Date</th>
+              <th className="px-5 py-3 text-left">Shortlisted</th>
+              <th className="px-5 py-3 text-left">Status</th>
+              <th className="px-5 py-3 text-right"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {challenges.map((c) => {
+              const s = c.status?.toUpperCase();
+              const style = s === "LIVE"      ? { bg: "#16a34a18", color: "#16a34a" }
+                : s === "PUBLISHED"           ? { bg: "#0891b218", color: "#0891b2" }
+                : s === "ENDED"              ? { bg: "#6b728018", color: "#6b7280" }
+                : { bg: "#7c22c918", color: "#7c22c9" };
+              return (
+                <tr key={c.id} className="attend-table-row cursor-pointer" onClick={() => setSelectedChallengeId(c.id)}>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#7c22c918" }}>
+                        <Lightbulb className="h-4 w-4" style={{ color: "#7c22c9" }} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[240px]">{c.title}</p>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">{c.organiserName}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4 text-sm text-[hsl(var(--foreground))]">{formatDate(c.date)}</td>
+                  <td className="px-5 py-4 text-sm font-semibold tabular-nums">{c.shortlistedTeams ?? 0}</td>
+                  <td className="px-5 py-4">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.color }}>
+                      {c.status}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 text-right">
+                    <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={(e) => { e.stopPropagation(); setSelectedChallengeId(c.id); }}>
+                      View Applications <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {challenges.length === 0 && (
           <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
             {search ? "No challenges match your search." : "No challenges found."}
           </div>
