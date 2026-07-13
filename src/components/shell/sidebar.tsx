@@ -24,13 +24,12 @@ import {
   Users2,
   Bell,
 } from "lucide-react";
-import { cn, resolveRole } from "@/lib/utils";
+import { cn, resolveRole, isSuperAdminRole } from "@/lib/utils";
 import { useGetMe, useLogout } from "@/api/auth/hooks";
 import { useClientStakeholder } from "@/api/client-organisation";
 import { usePendingEnrollments } from "@/api/super-admin";
 import Cookies from "js-cookie";
 
-const ADMIN_ROLES  = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
 const JUDGE_ROLES  = new Set(["judge"]);
 
 // ─── RBAC permission engine ──────────────────────────────────────────────────
@@ -46,7 +45,7 @@ type PermAction =
 
 const PERMITTED_ROLES: Record<PermAction, ReadonlySet<string>> = {
   create_event:      new Set(["client_admin", "event_manager"]),
-  live_control_room: new Set(["client_admin"]),
+  live_control_room: new Set(["client_admin", "event_manager"]),
   enrol_register:    new Set(["client_admin"]),
 };
 
@@ -68,13 +67,6 @@ function hasAccess(normalizedRole: string, action: PermAction): boolean {
 
 // ─── Normalisation helper ────────────────────────────────────────────────────
 
-// Full set of super-admin role strings (after normalisation)
-const SUPER_ADMIN_ROLE_SET = new Set(["super_admin", "admin", "superadmin"]);
-
-function isSuperAdminRole(normalizedRole: string): boolean {
-  return SUPER_ADMIN_ROLE_SET.has(normalizedRole);
-}
-
 // ─── Nav config ──────────────────────────────────────────────────────────────
 //
 // `superAdminOnly` — section/item hidden unless role is super_admin
@@ -89,6 +81,8 @@ type NavItem = {
   clientOnly?:    boolean;
   judgeHidden?:   boolean;  // hide from JUDGE role
   judgeOnly?:     boolean;  // show ONLY to JUDGE role (within client users)
+  /** Hide from these specific normalised roles, e.g. ["event_manager"]. */
+  hiddenForRoles?: readonly string[];
   action?:        PermAction;
 };
 
@@ -97,6 +91,8 @@ type NavSection = {
   superAdminOnly?: boolean;
   clientOnly?:     boolean;
   judgeHidden?:    boolean;  // hide entire section from JUDGE role
+  /** Hide the entire section from these specific normalised roles. */
+  hiddenForRoles?: readonly string[];
   items:           NavItem[];
 };
 
@@ -112,16 +108,17 @@ const SECTIONS: NavSection[] = [
       { title: "Create Event",      icon: PlusCircle,   href: "/events/create", clientOnly: true, action: "create_event" },
       { title: "All Events",        icon: CalendarDays, href: "/events" },
       { title: "Live Control Room", icon: Radio,        href: "/events/live",   clientOnly: true, action: "live_control_room" },
-      { title: "QR Check-In",       icon: QrCode,       href: "/events/qr-checkin", clientOnly: true },
+      { title: "QR Check-In",       icon: QrCode,       href: "/events/qr-checkin", clientOnly: true, hiddenForRoles: ["viewer"] },
       { title: "Vote Records",      icon: Vote,         href: "/votes",         clientOnly: true },
     ],
   },
   {
     label: "Innovation Challenges",
+    hiddenForRoles: ["event_manager"],
     items: [
       { title: "Challenges",   icon: Lightbulb, href: "/hackathons" },
-      { title: "Applications", icon: FileApp,   href: "/hackathons/applications", clientOnly: true },
-      { title: "Judging",      icon: Star,      href: "/hackathons/judging",      clientOnly: true },
+      { title: "Applications", icon: FileApp,   href: "/hackathons/applications" },
+      { title: "Judging",      icon: Star,      href: "/hackathons/judging"      },
     ],
   },
   {
@@ -152,10 +149,10 @@ const SECTIONS: NavSection[] = [
   {
     label: "System",
     items: [
-      { title: "Documents",      icon: FolderOpen, href: "/documents",     judgeHidden: true, clientOnly: true },
+      { title: "Documents",      icon: FolderOpen, href: "/documents",     judgeHidden: true },
       { title: "Analytics",      icon: BarChart3,  href: "/analytics",     judgeHidden: true },
-      { title: "Notifications",  icon: Bell,       href: "/notifications",  judgeHidden: true },
-      { title: "Audit Log",      icon: ScrollText, href: "/audit",          judgeHidden: true },
+      { title: "Notifications",  icon: Bell,       href: "/notifications",  hiddenForRoles: ["viewer"] },
+      { title: "Audit Log",      icon: ScrollText, href: "/audit",          judgeHidden: true, hiddenForRoles: ["event_manager", "viewer"] },
       { title: "Settings",       icon: Settings,   href: "/settings" },
       { title: "Team Members",   icon: Users2,     href: "/settings/team",  clientOnly: true, judgeHidden: true },
     ],
@@ -216,7 +213,7 @@ export function Sidebar() {
   const { data: pendingEnrollmentsData } = usePendingEnrollments(0, 1, isSuperAdmin);
 
   // Stakeholder logo — for client users whose avatarUrl is null
-  const { data: stakeholder } = useClientStakeholder({ enabled: !!currentUser && !ADMIN_ROLES.has(resolveRole(currentUser)) });
+  const { data: stakeholder } = useClientStakeholder({ enabled: !!currentUser && !isSuperAdminRole(resolveRole(currentUser)) });
   const pendingCount = pendingEnrollmentsData?.data?.totalCount ?? 0;
 
   const hasToken      = typeof window !== "undefined" && !!Cookies.get("accessToken");
@@ -260,6 +257,7 @@ export function Sidebar() {
           if (section.superAdminOnly && !isSuperAdmin) return null;
           if (section.clientOnly     &&  isSuperAdmin) return null;
           if (section.judgeHidden    &&  isJudge)      return null;
+          if (section.hiddenForRoles?.includes(normalizedRole)) return null;
 
           // Item-level role gates
           const visibleItems = section.items.filter((item) => {
@@ -267,6 +265,7 @@ export function Sidebar() {
             if (item.clientOnly     &&  isSuperAdmin) return false;
             if (item.judgeHidden    &&  isJudge)      return false;
             if (item.judgeOnly      && !isJudge)      return false;
+            if (item.hiddenForRoles?.includes(normalizedRole)) return false;
             // Action gate: only apply for non-super-admin users
             if (item.action && !isSuperAdmin && !hasAccess(normalizedRole, item.action)) return false;
             return true;

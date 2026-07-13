@@ -13,6 +13,8 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
+import Cookies from "js-cookie";
 import { apiClient } from "@/lib/api-client";
 import { ApiResponse } from "@/types/api";
 
@@ -264,14 +266,32 @@ export function useAnalyticsMonthlyTrend() {
   });
 }
 
-/** GET /analytics/event-performance — paginated event performance table */
+/**
+ * GET /analytics/event-performance — paginated event performance table.
+ *
+ * Routed through our own Next.js server (/api/reports/event-summary)
+ * instead of calling the external API directly from the browser — the
+ * literal string "event-performance" gets silently killed by ad/privacy
+ * blocker extensions (net::ERR_BLOCKED_BY_CLIENT, 0 bytes, request never
+ * sent) because it matches common analytics-tracker filter rules. Every
+ * other /analytics/* endpoint here is unaffected; this is the only name
+ * that collides. See src/app/api/reports/event-summary/route.ts.
+ */
 export function useAnalyticsEventPerformance(page = 0, size = 10) {
   return useQuery({
     queryKey: clientAnalyticsKeys.performance(page, size),
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<any>>(
-        "/api/v1/client/analytics/event-performance",
-        { params: { page, size } }
+      // Plain axios (no baseURL) so this resolves same-origin against our
+      // own Next.js server rather than apiClient's external baseURL — same
+      // trick refreshAccessToken() uses in lib/api-client.ts. Auth header
+      // is attached manually since this bypasses apiClient's interceptor.
+      const token = Cookies.get("accessToken");
+      const res = await axios.get<ApiResponse<any>>(
+        "/api/reports/event-summary",
+        {
+          params:  { page, size },
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        }
       );
       const raw: any = res.data.data ?? res.data;
       const events: EventPerformanceItem[] = (raw?.events ?? raw?.content ?? []).map(

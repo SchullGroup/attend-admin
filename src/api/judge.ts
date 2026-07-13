@@ -414,3 +414,30 @@ export function useMarkJudgeNotificationRead() {
     onError: (error: any) => parseAndToastApiError(error, "Failed to mark notification as read."),
   });
 }
+
+/**
+ * Mark every unread judge notification as read.
+ * Same "no bulk endpoint" workaround as the admin/client equivalents.
+ */
+export function useMarkAllJudgeNotificationsRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const listRes = await apiClient.get<ApiResponse<JudgeNotificationListResponse>>(
+        "/api/v1/judge/notifications",
+        { params: { page: 0, limit: 500, read: false } }
+      );
+      const raw = (listRes.data.data ?? listRes.data) as any;
+      const unread: JudgeNotificationItem[] = raw?.notifications ?? raw?.content ?? [];
+      await Promise.allSettled(
+        unread.map((n) => apiClient.patch(`/api/v1/judge/notifications/${n.id}/read`))
+      );
+      return unread.length;
+    },
+    onSuccess: (count: number) => {
+      queryClient.invalidateQueries({ queryKey: judgeNotificationKeys.all });
+      if (count > 0) popup.success("All Caught Up", `${count} notification${count !== 1 ? "s" : ""} marked as read.`, 2000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to mark all notifications as read."),
+  });
+}

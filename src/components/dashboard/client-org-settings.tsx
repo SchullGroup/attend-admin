@@ -2,13 +2,14 @@
 
 import { useRef, useState, useEffect } from "react";
 import {
-  Upload, Building2, Globe, Mail, Phone, Hash, Briefcase,
-  Loader2, Check, X, Palette,
+  Upload, Building2, Globe, Mail, Hash, Briefcase,
+  Loader2, Check, X, Palette, AlertTriangle,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { PhoneInput } from "@/components/ui/phone-input";
 import {
   useOrganisationProfile,
   useUploadOrgLogo,
@@ -68,10 +69,27 @@ function Field({
   );
 }
 
+// ─── Permission-error notice ───────────────────────────────────────────────────
+// Shown when the profile fetch fails — most commonly a 403 for team-member
+// roles other than the organisation owner. Without this, the form below just
+// renders with every field blank, which looks like a data bug rather than a
+// permissions one.
+function PermissionErrorNotice({ what }: { what: string }) {
+  return (
+    <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+      <p className="text-xs text-amber-800">
+        Couldn't load {what}. This can happen if your account role doesn't have access to this yet
+        — contact your Client Admin or Attend support if this keeps happening.
+      </p>
+    </div>
+  );
+}
+
 // ─── Organisation Info Card ────────────────────────────────────────────────────
 
 function OrgInfoCard() {
-  const { data: profile, isLoading } = useOrganisationProfile();
+  const { data: profile, isLoading, isError } = useOrganisationProfile();
   const updateInfo = useUpdateOrganisationInfo();
 
   const info = profile?.organisationInfo;
@@ -130,22 +148,31 @@ function OrgInfoCard() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {isLoading
-          ? [...Array(6)].map((_, i) => <FieldSkeleton key={i} />)
-          : (
-            <>
-              {/* Read-only fields */}
-              <Field id="companyName"  label="Company Name"  value={info?.companyName}  icon={Building2} readOnly />
-              <Field id="industry"     label="Industry"      value={info?.industry}     icon={Briefcase} readOnly />
-              <Field id="rcNumber"     label="RC Number"     value={info?.rcNumber}     icon={Hash}      readOnly />
-              <Field id="contactEmail" label="Contact Email" value={info?.contactEmail} icon={Mail}      readOnly type="email" />
-              {/* Editable fields */}
-              <Field id="phone"   label="Phone"   value={phone}   onChange={setPhone}   icon={Phone} type="tel" placeholder="+234 800 000 0000" />
-              <Field id="website" label="Website" value={website} onChange={setWebsite} icon={Globe} type="url" placeholder="https://company.com" />
-            </>
-          )}
-      </div>
+      {isError ? (
+        <PermissionErrorNotice what="your organisation's profile" />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {isLoading
+            ? [...Array(6)].map((_, i) => <FieldSkeleton key={i} />)
+            : (
+              <>
+                {/* Read-only fields */}
+                <Field id="companyName"  label="Company Name"  value={info?.companyName}  icon={Building2} readOnly />
+                <Field id="industry"     label="Industry"      value={info?.industry}     icon={Briefcase} readOnly />
+                <Field id="rcNumber"     label="RC Number"     value={info?.rcNumber}     icon={Hash}      readOnly />
+                <Field id="contactEmail" label="Contact Email" value={info?.contactEmail} icon={Mail}      readOnly type="email" />
+                {/* Editable fields */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="phone" className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                    Phone
+                  </Label>
+                  <PhoneInput value={phone} onChange={setPhone} />
+                </div>
+                <Field id="website" label="Website" value={website} onChange={setWebsite} icon={Globe} type="url" placeholder="https://company.com" />
+              </>
+            )}
+        </div>
+      )}
     </Card>
   );
 }
@@ -156,7 +183,7 @@ function BrandingCard() {
   const fileRef        = useRef<HTMLInputElement>(null);
   const colorInputRef  = useRef<HTMLInputElement>(null);
 
-  const { data: profile, isLoading } = useOrganisationProfile();
+  const { data: profile, isLoading, isError } = useOrganisationProfile();
   const uploadLogo     = useUploadOrgLogo();
   const updateColor    = useUpdateBrandingColor();
 
@@ -198,6 +225,9 @@ function BrandingCard() {
         <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">Logo, brand colour, and display initials</p>
       </div>
 
+      {isError ? (
+        <PermissionErrorNotice what="your organisation's branding" />
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* Logo upload */}
@@ -330,6 +360,7 @@ function BrandingCard() {
           </div>
         </div>
       </div>
+      )}
     </Card>
   );
 }

@@ -87,9 +87,10 @@ function normalizeRegisterList(raw: any, page: number, size: number): RegistersL
  * Params: status (PENDING | ACTIVE | SUSPENDED | REJECTED), page, size
  * Response envelope: data.registers[]
  */
-export function useRegisters(status = "", page = 0, size = 50) {
+export function useRegisters(status = "", page = 0, size = 50, enabled = true) {
   return useQuery({
     queryKey: registerKeys.list(status, page, size),
+    enabled,
     queryFn:  async () => {
       const res = await apiClient.get<ApiResponse<any>>(
         "/api/v1/client/registers",
@@ -444,6 +445,43 @@ export function useBulkAddShareholders() {
       popup.success("Shareholders Imported", `${count} shareholders added successfully.`, 3000);
     },
     onError: (error: any) => parseAndToastApiError(error, "Bulk import failed."),
+  });
+}
+
+/** Shape accepted by PATCH .../shareholders/{shareholderId} — all fields optional, send only what changed. */
+export interface ShareholderUpdatePayload {
+  fullName?: string;
+  chn?:      string;
+  email?:    string;
+  phone?:    string;
+  units?:    number;
+  status?:   "ACTIVE" | "INACTIVE";
+}
+
+export function useUpdateShareholder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      registerId,
+      shareholderId,
+      updates,
+    }: {
+      registerId:    string;
+      shareholderId: string;
+      updates:       ShareholderUpdatePayload;
+    }) => {
+      const res = await apiClient.patch<ApiResponse<Shareholder>>(
+        `/api/v1/client/registers/${registerId}/shareholders/${shareholderId}`,
+        updates
+      );
+      return (res.data.data ?? (res.data as any)) as Shareholder;
+    },
+    onSuccess: (_, { registerId }) => {
+      queryClient.invalidateQueries({ queryKey: shareholderKeys.list(registerId) });
+      popup.success("Shareholder Updated", "Changes have been saved.", 2500);
+    },
+    // 409 = CHN collision with another shareholder in the same register
+    onError: (error: any) => parseAndToastApiError(error, "Failed to update shareholder."),
   });
 }
 

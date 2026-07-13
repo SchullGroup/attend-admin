@@ -148,7 +148,7 @@ function FilterDropdown({
 // Event table row
 // ---------------------------------------------------------------------------
 
-function EventTableRow({ event, isSuperAdmin }: { event: EventSummaryResponse; isSuperAdmin: boolean }) {
+function EventTableRow({ event, isSuperAdmin, isViewer }: { event: EventSummaryResponse; isSuperAdmin: boolean; isViewer?: boolean }) {
   const isLive      = event.status?.toUpperCase() === "LIVE" || event.live;
   const mod         = getEventModule(event);
   const isAGM       = mod === "AGM";
@@ -211,7 +211,7 @@ function EventTableRow({ event, isSuperAdmin }: { event: EventSummaryResponse; i
               <Eye className="h-3 w-3" /> View
             </Button>
           </Link>
-          {(event.status?.toUpperCase() === "LIVE") && !isSuperAdmin && (
+          {(event.status?.toUpperCase() === "LIVE") && !isSuperAdmin && !isViewer && (
             <Link href="/events/live">
               <Button size="sm" className="h-7 text-xs gap-1 bg-red-600 hover:bg-red-700 text-white">
                 <Radio className="h-3 w-3" /> Live
@@ -239,6 +239,7 @@ export default function EventsPage() {
   
   const isSuperAdmin = normalizedRole === "super_admin";
   const isAdmin      = !currentUser || ADMIN_ROLES.has(normalizedRole);
+  const isViewer     = normalizedRole === "viewer";
 
   const [activeStatus,     setActiveStatus]     = useState("");
   const [activeType,       setActiveType]       = useState<ClientEventTypeFilter>("ALL");
@@ -252,7 +253,11 @@ export default function EventsPage() {
   const { data: adminData,    isLoading: adminLoading  } = useEvents(activeStatus, page, LIMIT, isSuperAdmin);
   const { data: clientData,   isLoading: clientLoading } = useClientEvents(activeType, page, LIMIT);
   const { data: registrarsData                         } = useRegistrars("", 0, 100, isSuperAdmin);
-  const { data: registersData                          } = useRegisters("ACTIVE", 0, 200);
+  // NOTE: /api/v1/client/registers is org-scoped — it 403s / returns nothing for
+  // super_admin (who has no client org). There's currently no platform-wide "list all
+  // registers/organisations" endpoint for super_admin, so this only fires for client roles;
+  // the Organizer dropdown is hidden for super_admin below until that endpoint exists.
+  const { data: registersData                          } = useRegisters("ACTIVE", 0, 200, !isSuperAdmin);
 
   const isLoading = isAdmin ? adminLoading : clientLoading;
 
@@ -318,7 +323,7 @@ export default function EventsPage() {
               : `${totalCount} total event${totalCount !== 1 ? "s" : ""} in your organisation`}
           </p>
         </div>
-        {!isSuperAdmin && (
+        {!isSuperAdmin && !isViewer && (
           <Link href="/events/create">
             <Button size="sm" className="gap-1.5">Create Event</Button>
           </Link>
@@ -338,7 +343,7 @@ export default function EventsPage() {
           />
         </div>
 
-        {/* Registrars + Organizers dropdowns — super admin only */}
+        {/* Registrars dropdown — super admin only */}
         {isSuperAdmin && (
           <>
             <FilterDropdown
@@ -348,14 +353,20 @@ export default function EventsPage() {
               onSelect={(id) => { setRegistrarFilter(id); setPage(0); }}
               icon={Building2}
             />
-            <FilterDropdown
-              label="Organizer"
-              value={organizerFilter}
-              options={organizerOptions}
-              onSelect={(id) => { setOrganizerFilter(id); setPage(0); }}
-              icon={Building2}
-            />
+            {/* Organizer (per-register) filter is disabled for super_admin — the underlying
+                data source (/api/v1/client/registers) is org-scoped and returns nothing for
+                a platform admin. Re-enable once an admin-scoped registers-listing endpoint
+                exists (see BACKEND_BUGS item 12). */}
           </>
+        )}
+        {!isSuperAdmin && organizerOptions.length > 0 && (
+          <FilterDropdown
+            label="Organizer"
+            value={organizerFilter}
+            options={organizerOptions}
+            onSelect={(id) => { setOrganizerFilter(id); setPage(0); }}
+            icon={Building2}
+          />
         )}
 
         {(searchQuery || (isSuperAdmin && (registrarFilter || organizerFilter))) && (
@@ -419,7 +430,7 @@ export default function EventsPage() {
           </thead>
           <tbody>
             {filtered.map((event) => (
-              <EventTableRow key={event.id} event={event} isSuperAdmin={isSuperAdmin} />
+              <EventTableRow key={event.id} event={event} isSuperAdmin={isSuperAdmin} isViewer={isViewer} />
             ))}
           </tbody>
         </table>

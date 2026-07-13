@@ -53,6 +53,8 @@ interface Props {
   setAgendaItems: React.Dispatch<React.SetStateAction<LocalAgendaItem[]>>;
   /** When true, all write actions (add, edit, delete) are hidden */
   isSuperAdmin?:  boolean;
+  /** Only the org owner (client_admin) may open/close resolution voting. Defaults to false — pass explicitly. */
+  canControlVoting?: boolean;
 }
 
 function Label({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -81,6 +83,7 @@ function VoteBar({ label, value, total, color }: { label: string; value: number;
 
 export function EventResolutionsTab({
   eventId, isAGM, agmResolutions = [], agendaItems, setAgendaItems, isSuperAdmin = false,
+  canControlVoting = false,
 }: Props) {
 
   // ── Live resolution data ──────────────────────────────────────────────────
@@ -298,8 +301,8 @@ export function EventResolutionsTab({
                     </div>
                   </div>
 
-                  {/* Open / Close vote buttons */}
-                  {!isSuperAdmin && (
+                  {/* Open / Close vote buttons — org owner (client_admin) only */}
+                  {!isSuperAdmin && canControlVoting && (
                     <div className="shrink-0">
                       {isPending && (
                         <Button

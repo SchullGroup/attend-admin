@@ -1,11 +1,13 @@
 "use client";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Upload, ShieldCheck, Plus, Trash2, Check, Monitor, MapPin, Clock, Video } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { UploadProgress } from "@/components/ui/upload-progress";
 import { apiClient } from "@/lib/api-client";
-import { cn } from "@/lib/utils";
+import { cn, throttledProgress } from "@/lib/utils";
 import { Toggle, FormatPicker, ReviewRow, OrgChip } from "./shared";
 import type { AgmState } from "./state-hooks";
 
@@ -187,12 +189,15 @@ export function AgmAgendaStep({ s }: { s: AgmState }) {
 // ─── Step 2 — Notice ─────────────────────────────────────────────────────────
 
 export function AgmNoticeStep({ s }: { s: AgmState }) {
+  const [uploadProgress, setUploadProgress] = useState(0);
+
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     s.setNoticeFile(file.name);
     s.setNoticeFileSize(file.size);
     s.setNoticeUploading(true);
+    setUploadProgress(0);
     try {
       const form = new FormData();
       form.append("file", file);
@@ -202,6 +207,7 @@ export function AgmNoticeStep({ s }: { s: AgmState }) {
         maxBodyLength:    Infinity,
         maxContentLength: Infinity,
         timeout:          120_000,
+        onUploadProgress: throttledProgress(setUploadProgress),
       });
       const d = res.data?.data ?? res.data ?? {};
       s.setNoticeUrl(d.fileUrl ?? d.url ?? "");
@@ -215,6 +221,7 @@ export function AgmNoticeStep({ s }: { s: AgmState }) {
       s.setNoticeUrl("");
     } finally {
       s.setNoticeUploading(false);
+      setUploadProgress(0);
     }
     e.target.value = "";
   }
@@ -240,8 +247,11 @@ export function AgmNoticeStep({ s }: { s: AgmState }) {
       )}>
         <Upload className={cn("h-8 w-8 mb-3", uploaded ? "text-[hsl(var(--primary))]" : "text-[hsl(var(--muted-foreground))]")} />
         {s.noticeUploading ? (
-          <><p className="text-sm font-semibold text-[hsl(var(--foreground))]">Uploading…</p>
-            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">{s.noticeFile}</p></>
+          <>
+            <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Uploading… {uploadProgress}%</p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1 mb-3">{s.noticeFile}</p>
+            <UploadProgress percent={uploadProgress} hideHeader className="w-full max-w-xs" />
+          </>
         ) : uploaded ? (
           <><p className="text-sm font-semibold text-[hsl(var(--primary))]">{s.noticeFile}</p>
             <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">{formatBytes(s.noticeFileSize)} · Click to replace</p>

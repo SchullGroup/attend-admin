@@ -33,7 +33,12 @@ export function ClientView({
   liveEvents,
 }: ClientViewProps) {
   const { data: orgProfile } = useOrganisationProfile();
-  const orgName = orgProfile?.organisationInfo?.companyName ?? currentUser?.fullName ?? "Admin";
+  // Greet the actual logged-in person, not the organisation — "Welcome back,
+  // Meristem Registrars LTD" reads like the org itself is logged in, which
+  // is especially confusing for team members (Event Manager, Admin, etc.)
+  // who aren't the org owner. Fall back to the org name only if we don't
+  // have a personal name to show.
+  const displayName = currentUser?.fullName || orgProfile?.organisationInfo?.companyName || "Admin";
 
   const dateStr = new Date().toLocaleDateString("en-NG", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const timeStr = new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" });
@@ -49,7 +54,7 @@ export function ClientView({
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
-            Welcome back, {orgName}.
+            Welcome back, {displayName}.
           </h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
             {dateStr} · {timeStr}
@@ -105,9 +110,17 @@ export function ClientView({
               <div>
                 {eventsLoading
                   ? <EventRowSkeleton />
-                  : liveEvents.map((event) => <EventRow key={event.id} event={event} />)
+                  : liveEvents.slice(0, 3).map((event) => <EventRow key={event.id} event={event} />)
                 }
               </div>
+              {!eventsLoading && liveEvents.length > 3 && (
+                <Link
+                  href="/events/live"
+                  className="block text-center text-xs font-medium text-red-600 hover:text-red-700 py-2 border-t border-red-200"
+                >
+                  +{liveEvents.length - 3} more live — view Control Room
+                </Link>
+              )}
             </div>
           )}
 

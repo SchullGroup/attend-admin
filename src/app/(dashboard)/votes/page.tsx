@@ -19,9 +19,15 @@ const STATUS_FILTERS = [
 
 function statusStyle(s: string) {
   const u = s?.toUpperCase();
-  if (u === "LIVE")     return { bg: "#dcfce7", color: "#16a34a" };
-  if (u === "UPCOMING") return { bg: "#dbeafe", color: "#2563eb" };
-  if (u === "PAST")     return { bg: "#f3f4f6", color: "#6b7280" };
+  // Each status gets its own color — DRAFT, ENDED, and CANCELLED used to
+  // all fall through to the same amber default, making them impossible to
+  // tell apart at a glance.
+  if (u === "LIVE")      return { bg: "#dcfce7", color: "#16a34a" }; // green
+  if (u === "UPCOMING")  return { bg: "#dbeafe", color: "#2563eb" }; // blue
+  if (u === "PAST")      return { bg: "#f3f4f6", color: "#6b7280" }; // gray
+  if (u === "ENDED")     return { bg: "#f3f4f6", color: "#6b7280" }; // gray (same family as PAST)
+  if (u === "CANCELLED") return { bg: "#fee2e2", color: "#dc2626" }; // red
+  if (u === "DRAFT")     return { bg: "#fef3c7", color: "#b45309" }; // amber
   return { bg: "#fef3c7", color: "#b45309" };
 }
 

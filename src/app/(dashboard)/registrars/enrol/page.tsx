@@ -5,7 +5,8 @@ import { useEnrollRegistrar } from "@/api/registrars";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CustomSelect } from "@/components/custom/custom-select";
-import { cn } from "@/lib/utils";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { cn, digitsOnly, withIdPrefix } from "@/lib/utils";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 
@@ -28,6 +29,8 @@ interface EnrolForm {
   industry: string;
   rcNumber: string;
   plan:     string;  // → plan
+  address:  string;
+  website:  string;
   repName:  string;  // → representativeName
   repEmail: string;  // → contactEmail
   repPhone: string;  // → representativePhone
@@ -36,6 +39,7 @@ interface EnrolForm {
 
 const EMPTY_FORM: EnrolForm = {
   name: "", industry: "", rcNumber: "", plan: "STARTER",
+  address: "", website: "",
   repName: "", repEmail: "", repPhone: "", password: "",
 };
 
@@ -87,11 +91,15 @@ export default function EnrolRegistrarPage() {
         companyName:         form.name.trim(),
         representativeName:  form.repName.trim(),
         representativeEmail: form.repEmail.trim(),
-        representativePhone: form.repPhone.trim() || undefined,
+        representativePhone: form.repPhone || undefined,
         password:            form.password.trim(),
         plan:                form.plan,
-        rcNumber:            form.rcNumber.trim() || null,
+        // Digits-only from the input — "RC" prefixed here so it always
+        // saves consistently no matter how it was typed.
+        rcNumber:            withIdPrefix("RC", form.rcNumber) || null,
         industry:            form.industry        || null,
+        address:             form.address.trim()  || null,
+        website:             form.website.trim()  || null,
       },
       {
         onSuccess: () => {
@@ -157,11 +165,39 @@ export default function EnrolRegistrarPage() {
 
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">RC Number</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[hsl(var(--muted-foreground))] pointer-events-none">
+                  RC
+                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={form.rcNumber}
+                  onChange={(e) => handleChange("rcNumber", digitsOnly(e.target.value))}
+                  placeholder="287640"
+                  className={cn(fieldClass(false), "pl-9")}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Website</label>
               <input
                 type="text"
-                value={form.rcNumber}
-                onChange={(e) => handleChange("rcNumber", e.target.value)}
-                placeholder="e.g. RC 287640"
+                value={form.website}
+                onChange={(e) => handleChange("website", e.target.value)}
+                placeholder="e.g. https://dataport.ng"
+                className={fieldClass(false)}
+              />
+            </div>
+
+            <div className="col-span-2 flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Address</label>
+              <input
+                type="text"
+                value={form.address}
+                onChange={(e) => handleChange("address", e.target.value)}
+                placeholder="e.g. 12 Marina Road, Lagos"
                 className={fieldClass(false)}
               />
             </div>
@@ -205,12 +241,9 @@ export default function EnrolRegistrarPage() {
 
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Representative Phone</label>
-              <input
-                type="tel"
+              <PhoneInput
                 value={form.repPhone}
-                onChange={(e) => handleChange("repPhone", e.target.value)}
-                placeholder="e.g. 08023456789"
-                className={fieldClass(false)}
+                onChange={(e164) => handleChange("repPhone", e164)}
               />
             </div>
 

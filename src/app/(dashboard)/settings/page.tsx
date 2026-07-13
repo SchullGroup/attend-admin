@@ -29,9 +29,15 @@ function normaliseRole(raw: string | undefined | null): string {
   return (raw ?? "").toLowerCase().replace(/[-\s]+/g, "_");
 }
 
-// ─── Judge Profile view ────────────────────────────────────────────────────
+// ─── Read-only profile view — used by Judge and (team member) Admin ───────
+//
+// Both roles get a simple "My Profile" card instead of the full editable
+// organisation-settings form: Admin is a team member of the org (not the
+// owner), so editing org-wide branding/RC number/etc. doesn't belong to
+// them any more than it does to a Judge — this mirrors that pattern instead
+// of showing a broken/blank edit form.
 
-function JudgeSettingsView({ user }: { user: Record<string, any> }) {
+function ProfileSettingsView({ user, roleLabel }: { user: Record<string, any>; roleLabel: string }) {
   const { data: stakeholder } = useClientStakeholder();
   const storedLogoUrl = typeof window !== "undefined" ? (localStorage.getItem("userLogoUrl") ?? null) : null;
   const orgLogoUrl = user?.avatarUrl || user?.logoUrl || storedLogoUrl || stakeholder?.logoUrl || null;
@@ -39,7 +45,7 @@ function JudgeSettingsView({ user }: { user: Record<string, any> }) {
   const fields = [
     { label: "Full Name",     value: user?.fullName ?? user?.name ?? "—" },
     { label: "Email",         value: user?.email ?? "—" },
-    { label: "Role",          value: "Judge" },
+    { label: "Role",          value: roleLabel },
     { label: "Organisation",  value: user?.organisation ?? user?.organizationName ?? user?.companyName ?? stakeholder?.name ?? "—" },
   ];
 
@@ -340,6 +346,16 @@ export default function SettingsPage() {
   // Role gates
   const isSuperAdmin = normalizedRole === "super_admin";
   const isJudge      = normalizedRole === "judge";
+  // Team-member roles (everyone but the org owner/client_admin and platform
+  // Super Admin) — get the same read-only profile view as Judge instead of
+  // the full editable organisation-settings form, since editing org-wide
+  // info isn't theirs to do.
+  const TEAM_ROLE_LABELS: Record<string, string> = {
+    admin:         "Admin",
+    event_manager: "Event Manager",
+    viewer:        "Viewer",
+  };
+  const isTeamAdmin  = normalizedRole in TEAM_ROLE_LABELS;
 
   // Integrations state — only mounted for Super Admin
   const [integrations,     setIntegrations]     = useState<Integration[]>(INITIAL_INTEGRATIONS);
@@ -378,7 +394,7 @@ export default function SettingsPage() {
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
           {isSuperAdmin
             ? "Global platform configuration — read-only system view"
-            : isJudge
+            : isJudge || isTeamAdmin
             ? "View your profile and manage your account security"
             : "Manage your organisation profile, branding, and account security"}
         </p>
@@ -387,17 +403,20 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-5">
 
         {/* ══════════════════════════════════════════════════════════════════
-            JUDGE VIEW — read-only profile + change password
+            JUDGE / TEAM-ADMIN VIEW — read-only profile + change password
             ══════════════════════════════════════════════════════════════════ */}
-        {isJudge && (
-          <JudgeSettingsView user={userResponse?.data as Record<string, any>} />
+        {(isJudge || isTeamAdmin) && (
+          <ProfileSettingsView
+            user={userResponse?.data as Record<string, any>}
+            roleLabel={isJudge ? "Judge" : TEAM_ROLE_LABELS[normalizedRole]}
+          />
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            NON-SUPER-ADMIN, NON-JUDGE VIEW
-            Covers: client_admin, event_manager, viewer, kyc_officer, etc.
+            OWNER VIEW — client_admin, event_manager, viewer, kyc_officer, etc.
+            (Everyone except Super Admin, Judge, and team-member Admin.)
             ══════════════════════════════════════════════════════════════════ */}
-        {!isSuperAdmin && !isJudge && (
+        {!isSuperAdmin && !isJudge && !isTeamAdmin && (
           <>
             {/* Organisation profile + logo upload */}
             <ClientOrgSettings />

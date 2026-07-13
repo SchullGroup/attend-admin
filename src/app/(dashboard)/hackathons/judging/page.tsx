@@ -5,27 +5,20 @@ import {
   Trophy, ArrowLeft, ChevronRight, Search, Lightbulb,
   Star, UserCheck, Plus, Trash2, CheckCircle2, MessageSquare,
   ExternalLink, FileText, Video, Code, Globe, Link2, Users, ClipboardList, Eye,
-  Shuffle,
 } from "lucide-react";
 import {
   useClientChallenges,
   useClientChallengeLeaderboard,
   useClientChallengeDetail,
   useClientChallengeJudges,
-  useClientChallengeApplications,
   useGetJudgePool,
   useAddJudgeToPool,
   useAssignJudge,
   useRemoveJudge,
   useRemoveJudgeFromPool,
-  useApplicationJudgeAssignments,
-  useBulkAssignJudges,
-  useAutoDistributeJudges,
-  useAddCoJudge,
-  useRemoveCoJudge,
-  type ApplicationItem,
   type JudgeItem,
 } from "@/api/client-challenges";
+import { AssignmentsSection } from "../components/AssignmentsSection";
 import {
   useJudgeChallenges,
   useJudgeChallengeApplications,
@@ -36,6 +29,8 @@ import {
   type SubmitScoreResponse,
 } from "@/api/judge";
 import { useGetMe } from "@/api/auth/hooks";
+import { useAdminChallenges } from "@/api/admin-challenges";
+import { EventChallengeJudgesTab } from "../../events/[id]/components/EventChallengeJudgesTab";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -162,7 +157,7 @@ function LeaderboardPanel({ challengeId }: { challengeId: string }) {
 // ---------------------------------------------------------------------------
 type JudgePanelFormTab = "pool" | "new";
 
-function JudgesPanel({ challengeId }: { challengeId: string }) {
+function JudgesPanel({ challengeId, readOnly = false }: { challengeId: string; readOnly?: boolean }) {
   const { data: challenge } = useClientChallengeDetail(challengeId);
   const { data: panel,  isLoading: judgesLoading } = useClientChallengeJudges(challengeId);
   const judges = panel?.judges ?? [];
@@ -229,12 +224,14 @@ function JudgesPanel({ challengeId }: { challengeId: string }) {
             Scoring is averaged across all assigned judges
           </p>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={openForm}>
-          <Plus className="h-3.5 w-3.5" /> Assign Judge
-        </Button>
+        {!readOnly && (
+          <Button size="sm" className="gap-1.5" onClick={openForm}>
+            <Plus className="h-3.5 w-3.5" /> Assign Judge
+          </Button>
+        )}
       </div>
 
-      {showForm && (
+      {!readOnly && showForm && (
         <Card className="attend-card p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-[hsl(var(--foreground))]">Assign Judge to Challenge</h3>
@@ -394,14 +391,16 @@ function JudgesPanel({ challengeId }: { challengeId: string }) {
                     </div>
                   </td>
                   <td className="px-5 py-3 text-right">
-                    <Button
-                      size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
-                      disabled={unassignJudge.isPending}
-                      onClick={() => unassignJudge.mutate({ challengeId, judgeId: j.id })}
-                      title="Unassign from challenge"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    {!readOnly && (
+                      <Button
+                        size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
+                        disabled={unassignJudge.isPending}
+                        onClick={() => unassignJudge.mutate({ challengeId, judgeId: j.id })}
+                        title="Unassign from challenge"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -422,444 +421,20 @@ function JudgesPanel({ challengeId }: { challengeId: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// App Assignment Manager (expanded row — load-on-demand)
-// ---------------------------------------------------------------------------
-
-function AppAssignmentManager({
-  challengeId,
-  applicationId,
-  judges,
-}: {
-  challengeId:   string;
-  applicationId: string;
-  judges:        JudgeItem[];
-}) {
-  const { data, isLoading } = useApplicationJudgeAssignments(challengeId, applicationId);
-  const addCoJudge    = useAddCoJudge();
-  const removeCoJudge = useRemoveCoJudge();
-  const [selectedJudgeId, setSelectedJudgeId] = useState("");
-
-  const assignments = data?.judges ?? [];
-  const assignedIds = new Set(assignments.map((j) => j.judgeId));
-  const available   = judges.filter((j) => !assignedIds.has(j.id));
-
-  function handleAddCoJudge() {
-    if (!selectedJudgeId) return;
-    addCoJudge.mutate(
-      { challengeId, applicationId, judgeId: selectedJudgeId },
-      { onSuccess: () => setSelectedJudgeId("") }
-    );
-  }
-
-  if (isLoading) return <Loader variant="inline" text="Loading judge assignments…" />;
-
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-[10px] font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
-        Assigned Judges
-      </p>
-
-      {assignments.length === 0 ? (
-        <p className="text-xs text-[hsl(var(--muted-foreground))]">
-          No judges assigned yet. Use <strong>Bulk Assign</strong> above, or add a co-judge below.
-        </p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {assignments.map((j) => {
-            const name      = j.judgeName || j.name || "Judge";
-            const isPrimary = j.role === "PRIMARY";
-            return (
-              <div
-                key={j.judgeId}
-                className="flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-full text-xs font-medium"
-                style={{
-                  backgroundColor: isPrimary ? "#7c22c918" : "#f8fafc",
-                  color:           isPrimary ? "#7c22c9"   : "#475569",
-                  border:          isPrimary ? "1px solid #e9d5ff" : "1px solid #e2e8f0",
-                }}
-              >
-                <div
-                  className="h-4 w-4 rounded-full flex items-center justify-center text-[8px] font-bold shrink-0"
-                  style={{
-                    backgroundColor: isPrimary ? "#7c22c930" : "#e2e8f0",
-                    color:           isPrimary ? "#7c22c9"   : "#64748b",
-                  }}
-                >
-                  {name.slice(0, 1).toUpperCase()}
-                </div>
-                <span>{name}</span>
-                <span className="opacity-50 text-[10px]">{isPrimary ? "Primary" : "Co-Judge"}</span>
-                {!isPrimary && (
-                  <button
-                    onClick={() =>
-                      removeCoJudge.mutate({ challengeId, applicationId, judgeId: j.judgeId })
-                    }
-                    disabled={removeCoJudge.isPending}
-                    className="ml-0.5 w-4 h-4 flex items-center justify-center rounded-full hover:bg-red-100 hover:text-red-600 transition-colors"
-                    title="Remove co-judge"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Add co-judge */}
-      {judges.length > 0 && available.length > 0 && (
-        <div className="flex items-center gap-2 pt-1">
-          <Plus className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))] shrink-0" />
-          <select
-            value={selectedJudgeId}
-            onChange={(e) => setSelectedJudgeId(e.target.value)}
-            className="h-8 text-xs rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2.5 text-[hsl(var(--foreground))] min-w-[180px]"
-          >
-            <option value="">Add co-judge…</option>
-            {available.map((j) => (
-              <option key={j.id} value={j.id}>{j.name}</option>
-            ))}
-          </select>
-          <Button
-            size="sm" className="h-8 text-xs px-3"
-            disabled={!selectedJudgeId || addCoJudge.isPending}
-            onClick={handleAddCoJudge}
-          >
-            {addCoJudge.isPending ? "Adding…" : "Add Co-Judge"}
-          </Button>
-        </div>
-      )}
-
-      {judges.length === 0 && (
-        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-          Assign judges to this challenge first (Judges tab), then manage co-judges here.
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Assignments panel
-// ---------------------------------------------------------------------------
-
-function AssignmentsPanel({ challengeId }: { challengeId: string }) {
-  const { data: appsData,    isLoading: appsLoading } = useClientChallengeApplications(challengeId, "", "", 0, 200);
-  const { data: judgePanel }                          = useClientChallengeJudges(challengeId);
-  const { data: detail }                              = useClientChallengeDetail(challengeId);
-  const bulkAssign     = useBulkAssignJudges();
-  const autoDistribute = useAutoDistributeJudges();
-
-  const [isBulkMode,            setIsBulkMode]            = useState(false);
-  const [bulkJudgeId,           setBulkJudgeId]           = useState("");
-  const [selectedAppIds,        setSelectedAppIds]        = useState<Set<string>>(new Set());
-  const [expandedAppId,         setExpandedAppId]         = useState<string | null>(null);
-  const [showAutoDistribute,    setShowAutoDistribute]    = useState(false);
-  const [autoTrack,             setAutoTrack]             = useState("");
-  const [confirmAutoDistribute, setConfirmAutoDistribute] = useState(false);
-
-  const apps   = appsData?.applications ?? [];
-  const judges = judgePanel?.judges     ?? [];
-  const tracks: string[] =
-    detail?.tracks ?? (Array.from(new Set(apps.map((a) => a.track).filter(Boolean))) as string[]);
-
-  const allSelected = apps.length > 0 && selectedAppIds.size === apps.length;
-
-  function toggleAll() {
-    setSelectedAppIds(allSelected ? new Set() : new Set(apps.map((a) => a.id)));
-  }
-
-  function toggleApp(id: string) {
-    setSelectedAppIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  function handleBulkAssign() {
-    if (!bulkJudgeId || selectedAppIds.size === 0) return;
-    bulkAssign.mutate(
-      {
-        challengeId,
-        assignments: Array.from(selectedAppIds).map((applicationId) => ({
-          applicationId,
-          judgeId: bulkJudgeId,
-        })),
-      },
-      {
-        onSuccess: () => {
-          setIsBulkMode(false);
-          setSelectedAppIds(new Set());
-          setBulkJudgeId("");
-        },
-      }
-    );
-  }
-
-  function handleAutoDistribute() {
-    autoDistribute.mutate(
-      { challengeId, track: autoTrack || undefined },
-      {
-        onSuccess: () => {
-          setShowAutoDistribute(false);
-          setConfirmAutoDistribute(false);
-          setAutoTrack("");
-        },
-      }
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-5">
-      {/* ── Header ── */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="font-semibold text-[hsl(var(--foreground))]">Application Assignments</h2>
-          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 max-w-sm">
-            Assign judges to specific applications. Until assigned, each judge sees all applications.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            size="sm" variant="outline" className="gap-1.5"
-            onClick={() => {
-              setShowAutoDistribute((v) => !v);
-              setIsBulkMode(false);
-              setExpandedAppId(null);
-              setConfirmAutoDistribute(false);
-            }}
-          >
-            <Shuffle className="h-3.5 w-3.5" /> Auto-Distribute
-          </Button>
-          <Button
-            size="sm"
-            variant={isBulkMode ? "outline" : "default"}
-            className="gap-1.5"
-            onClick={() => {
-              setIsBulkMode((v) => !v);
-              setShowAutoDistribute(false);
-              setExpandedAppId(null);
-              setSelectedAppIds(new Set());
-            }}
-          >
-            <ClipboardList className="h-3.5 w-3.5" /> {isBulkMode ? "Cancel" : "Bulk Assign"}
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Auto-distribute panel ── */}
-      {showAutoDistribute && (
-        <Card className="attend-card p-5">
-          <h3 className="font-semibold text-[hsl(var(--foreground))] mb-1">Auto-Distribute Applications</h3>
-          <p className="text-xs text-[hsl(var(--muted-foreground))] mb-4">
-            Distribute applications evenly across all assigned judges using round-robin.
-            Existing assignments will be overwritten.
-          </p>
-          <div className="flex items-end gap-3 flex-wrap">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Track (optional)</label>
-              <select
-                value={autoTrack}
-                onChange={(e) => { setAutoTrack(e.target.value); setConfirmAutoDistribute(false); }}
-                className="h-9 text-sm rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 min-w-[160px] text-[hsl(var(--foreground))]"
-              >
-                <option value="">All tracks</option>
-                {tracks.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-
-            {!confirmAutoDistribute ? (
-              <>
-                <Button size="sm" onClick={() => setConfirmAutoDistribute(true)}>
-                  Distribute Now
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setShowAutoDistribute(false)}>
-                  Cancel
-                </Button>
-              </>
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                <p className="text-xs font-semibold text-amber-600">
-                  This will redistribute {autoTrack ? `"${autoTrack}" track` : "all"} applications — are you sure?
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    className="bg-amber-600 hover:bg-amber-700"
-                    disabled={autoDistribute.isPending}
-                    onClick={handleAutoDistribute}
-                  >
-                    {autoDistribute.isPending ? "Distributing…" : "Yes, Distribute"}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => setConfirmAutoDistribute(false)}>
-                    Back
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
-
-      {/* ── Bulk assign bar ── */}
-      {isBulkMode && (
-        <Card className="attend-card p-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-sm font-medium text-[hsl(var(--foreground))]">
-              {selectedAppIds.size === 0
-                ? "Select applications below"
-                : `${selectedAppIds.size} application${selectedAppIds.size !== 1 ? "s" : ""} selected`}
-            </span>
-            <select
-              value={bulkJudgeId}
-              onChange={(e) => setBulkJudgeId(e.target.value)}
-              className="h-9 text-sm rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 min-w-[200px] text-[hsl(var(--foreground))]"
-            >
-              <option value="">Select judge to assign…</option>
-              {judges.map((j) => <option key={j.id} value={j.id}>{j.name}</option>)}
-            </select>
-            <Button
-              size="sm"
-              disabled={!bulkJudgeId || selectedAppIds.size === 0 || bulkAssign.isPending}
-              onClick={handleBulkAssign}
-            >
-              {bulkAssign.isPending ? "Assigning…" : "Assign to Selected"}
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {/* ── Applications table ── */}
-      {appsLoading ? (
-        <Loader variant="inline" text="Loading applications…" />
-      ) : (
-        <Card className="attend-card overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="attend-table-header">
-                {isBulkMode && (
-                  <th className="pl-5 pr-2 py-3 w-10">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleAll}
-                      className="rounded h-4 w-4 cursor-pointer"
-                    />
-                  </th>
-                )}
-                <th className="px-5 py-3 text-left">Team</th>
-                <th className="px-5 py-3 text-left">Track</th>
-                <th className="px-5 py-3 text-left">Status</th>
-                <th className="px-5 py-3 text-right"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {apps.map((app) => (
-                <React.Fragment key={app.id}>
-                  <tr
-                    className={`attend-table-row ${isBulkMode ? "cursor-pointer select-none" : ""} ${selectedAppIds.has(app.id) ? "bg-[#7c22c908]" : ""}`}
-                    onClick={isBulkMode ? () => toggleApp(app.id) : undefined}
-                  >
-                    {isBulkMode && (
-                      <td className="pl-5 pr-2 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedAppIds.has(app.id)}
-                          onChange={() => toggleApp(app.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="rounded h-4 w-4 cursor-pointer"
-                        />
-                      </td>
-                    )}
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                          style={{ backgroundColor: app.teamInitialColor || "#7c22c9" }}
-                        >
-                          {app.teamInitial || app.teamName?.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{app.teamName}</p>
-                          {app.ideaTitle && (
-                            <p className="text-xs text-[hsl(var(--muted-foreground))] truncate max-w-[200px]">
-                              {app.ideaTitle}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3">
-                      {app.track ? (
-                        <span
-                          className="text-xs rounded-full px-2.5 py-0.5 font-medium"
-                          style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}
-                        >
-                          {app.track}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-[hsl(var(--muted-foreground))]">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">{statusChip(app.status)}</td>
-                    <td className="px-5 py-3 text-right">
-                      {!isBulkMode && (
-                        <Button
-                          size="sm" variant="ghost" className="h-7 text-xs gap-1.5 px-2"
-                          onClick={() =>
-                            setExpandedAppId((prev) => (prev === app.id ? null : app.id))
-                          }
-                        >
-                          <UserCheck className="h-3.5 w-3.5" />
-                          {expandedAppId === app.id ? "Close" : "Judges"}
-                          <ChevronRight
-                            className={`h-3 w-3 transition-transform ${expandedAppId === app.id ? "rotate-90" : ""}`}
-                          />
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-
-                  {/* Expanded row — shows assignments + co-judge form */}
-                  {!isBulkMode && expandedAppId === app.id && (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="px-5 py-4 border-b border-[hsl(var(--border))]"
-                        style={{ backgroundColor: "hsl(var(--muted) / 0.25)" }}
-                      >
-                        <AppAssignmentManager
-                          challengeId={challengeId}
-                          applicationId={app.id}
-                          judges={judges}
-                        />
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-          {apps.length === 0 && (
-            <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
-              No applications found.
-            </div>
-          )}
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Challenge judging view
 // ---------------------------------------------------------------------------
 type JudgingTab = "Leaderboard" | "Judges" | "Assignments";
 
-function ChallengeJudging({ challengeId }: { challengeId: string }) {
+function ChallengeJudging({ challengeId, readOnly = false }: { challengeId: string; readOnly?: boolean }) {
   const [tab, setTab] = useState<JudgingTab>("Leaderboard");
+
+  // Fetched here (not inside AssignmentsSection) so the same judges/tracks
+  // data feeding the Judges tab also feeds Assignments — keeps this page
+  // in sync with the challenge detail page's Judges tab, which renders the
+  // exact same <AssignmentsSection>.
+  const { data: challenge }   = useClientChallengeDetail(challengeId);
+  const { data: judgePanel }  = useClientChallengeJudges(challengeId);
+  const judges = judgePanel?.judges ?? [];
 
   const TABS: { key: JudgingTab; icon: React.ElementType; label: string }[] = [
     { key: "Leaderboard",  icon: Trophy,       label: "Leaderboard"  },
@@ -886,8 +461,15 @@ function ChallengeJudging({ challengeId }: { challengeId: string }) {
       </div>
 
       {tab === "Leaderboard" && <LeaderboardPanel  challengeId={challengeId} />}
-      {tab === "Judges"      && <JudgesPanel        challengeId={challengeId} />}
-      {tab === "Assignments" && <AssignmentsPanel   challengeId={challengeId} />}
+      {tab === "Judges"      && <JudgesPanel        challengeId={challengeId} readOnly={readOnly} />}
+      {tab === "Assignments" && (
+        <AssignmentsSection
+          challengeId={challengeId}
+          judges={judges}
+          tracks={challenge?.tracks ?? []}
+          readOnly={readOnly}
+        />
+      )}
     </div>
   );
 }
@@ -1430,7 +1012,11 @@ function JudgeApplicationsList({
   const { data, isLoading } = useJudgeChallengeApplications(challengeId, activeStatus, activeTrack, 0, 100);
   const apps  = data?.applications ?? [];
   const tabs  = data?.tabs         ?? [];
-  const tracks = Array.from(new Set(apps.map((a) => a.track).filter(Boolean)));
+
+  // Track options must stay independent of the active track filter — see
+  // matching fix in hackathons/[challengeId]/page.tsx's ApplicationsTab.
+  const { data: allTracksData } = useJudgeChallengeApplications(challengeId, activeStatus, "", 0, 100);
+  const tracks = Array.from(new Set((allTracksData?.applications ?? []).map((a) => a.track).filter(Boolean)));
 
   if (isLoading) return <Loader variant="inline" text="Loading applications…" />;
 
@@ -1851,16 +1437,172 @@ function JudgeJudgingPage() {
 export default function JudgingPage() {
   const { data: userResponse } = useGetMe();
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
-  const isJudge = JUDGE_ROLES.has(normalizedRole);
+  const isJudge      = JUDGE_ROLES.has(normalizedRole);
+  const isSuperAdmin = normalizedRole === "super_admin";
 
-  if (isJudge) return <JudgeJudgingPage />;
-  return <ClientJudgingView />;
+  if (isJudge)      return <JudgeJudgingPage />;
+  if (isSuperAdmin) return <SuperAdminJudgingView />;
+  return <ClientJudgingView isViewer={normalizedRole === "viewer"} />;
+}
+
+// ---------------------------------------------------------------------------
+// Super admin judging view — platform-wide challenge picker + read-only judge
+// panel (GET /api/v1/admin/challenges, GET /api/v1/admin/challenges/{id}/judges).
+// This used to be entirely hidden from Super Admin in the sidebar; the previous
+// "Judging" nav item was clientOnly and there was no admin-scoped judging view.
+// ---------------------------------------------------------------------------
+function SuperAdminJudgingView() {
+  const router = useRouter();
+  const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
+  const [search,              setSearch]              = useState("");
+
+  const { data, isLoading } = useAdminChallenges(search, "", "", 0, 100);
+  const challenges = data?.challenges ?? [];
+  const summary    = data?.summary;
+
+  const selectedChallenge = challenges.find((c) => c.id === selectedChallengeId);
+
+  if (isLoading) return <Loader variant="page" text="Loading Judging…" />;
+
+  if (selectedChallengeId) {
+    return (
+      <div className="flex flex-col gap-5">
+        <div>
+          <button
+            onClick={() => setSelectedChallengeId(null)}
+            className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-4 transition-colors"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> All Challenges
+          </button>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{selectedChallenge?.title}</h1>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
+                {selectedChallenge?.organiserName} · {formatDate(selectedChallenge?.date ?? "")} · Judging Panel
+              </p>
+            </div>
+            <Button
+              variant="outline" size="sm" className="gap-1.5"
+              onClick={() => router.push(`/hackathons/${selectedChallengeId}`)}
+            >
+              Open Challenge <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+        <EventChallengeJudgesTab challengeId={selectedChallengeId} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Judging</h1>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+          Select a challenge to view its judge panel
+        </p>
+      </div>
+
+      {summary && (
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { label: "Active Challenges",  value: summary.activeChallenges,  icon: Lightbulb, color: "#7c22c9" },
+            { label: "Total Applications", value: summary.totalApplications, icon: FileText,  color: "#0891b2" },
+            { label: "Shortlisted",        value: summary.shortlisted ?? summary.teamsToScore ?? 0, icon: Trophy, color: "#d97706" },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <Card key={label} className="attend-card p-4 flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: color + "18" }}>
+                <Icon className="h-4 w-4" style={{ color }} />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-[hsl(var(--foreground))]">{value ?? 0}</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">{label}</p>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <div className="relative max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+        <Input
+          placeholder="Search challenges…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9 h-9"
+        />
+      </div>
+
+      <Card className="attend-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
+          <h2 className="font-semibold text-[hsl(var(--foreground))]">Select a Challenge</h2>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">Click to view its judge panel</p>
+        </div>
+        <table className="w-full">
+          <thead>
+            <tr className="attend-table-header">
+              <th className="px-5 py-3 text-left">Challenge</th>
+              <th className="px-5 py-3 text-left">Date</th>
+              <th className="px-5 py-3 text-left">Shortlisted</th>
+              <th className="px-5 py-3 text-left">Status</th>
+              <th className="px-5 py-3 text-right"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {challenges.map((c) => {
+              const s = c.status?.toUpperCase();
+              const style = s === "LIVE" ? { bg: "#16a34a18", color: "#16a34a" }
+                : s === "PUBLISHED"      ? { bg: "#0891b218", color: "#0891b2" }
+                : s === "ENDED"          ? { bg: "#6b728018", color: "#6b7280" }
+                : { bg: "#7c22c918", color: "#7c22c9" };
+              return (
+                <tr
+                  key={c.id}
+                  className="attend-table-row cursor-pointer"
+                  onClick={() => setSelectedChallengeId(c.id)}
+                >
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#7c22c918" }}>
+                        <Lightbulb className="h-4 w-4" style={{ color: "#7c22c9" }} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[240px]">{c.title}</p>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">{c.organiserName}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-5 py-4 text-sm text-[hsl(var(--foreground))]">{formatDate(c.date)}</td>
+                  <td className="px-5 py-4 text-sm font-semibold tabular-nums">{c.shortlistedTeams ?? 0}</td>
+                  <td className="px-5 py-4">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.color }}>
+                      {c.status}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 text-right">
+                    <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={(e) => { e.stopPropagation(); setSelectedChallengeId(c.id); }}>
+                      Open <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {challenges.length === 0 && (
+          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            {search ? "No challenges match your search." : "No challenges found."}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Client / admin judging view
 // ---------------------------------------------------------------------------
-function ClientJudgingView() {
+function ClientJudgingView({ isViewer = false }: { isViewer?: boolean }) {
   const router = useRouter();
   const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
   const [search,              setSearch]              = useState("");
@@ -1899,7 +1641,7 @@ function ClientJudgingView() {
             </Button>
           </div>
         </div>
-        <ChallengeJudging challengeId={selectedChallengeId} />
+        <ChallengeJudging challengeId={selectedChallengeId} readOnly={isViewer} />
       </div>
     );
   }

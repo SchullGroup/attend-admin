@@ -3,21 +3,24 @@
 import { useState, useRef } from "react";
 import {
   Users, UserPlus, Upload, Trash2, Hash, Mail,
-  Check, X, FileText, AlertCircle, Loader2,
+  Check, X, FileText, AlertCircle, Loader2, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/ui/phone-input";
 import {
   useRegisterShareholders,
   useAddShareholder,
   useBulkAddShareholders,
+  useUpdateShareholder,
   useDeleteShareholder,
   type Shareholder,
   type ShareholderUploadItem,
 } from "@/api/registers";
-import { cn } from "@/lib/utils";
+import { cn, digitsOnly, withIdPrefix, resolveRole } from "@/lib/utils";
+import { useGetMe } from "@/api/auth/hooks";
 import Papa from "papaparse";
 
 // ── CSV row type ──────────────────────────────────────────────────────────────
@@ -48,14 +51,29 @@ function mapCsvRow(raw: Record<string, string>): CsvRow {
     fullName = [first, last].filter(Boolean).join(" ");
   }
 
-  const email    = norm["email"]    ?? norm["emailaddress"] ?? norm["mail"] ?? "";
-  const phone    = norm["phone"]    ?? norm["phonenumber"]  ?? norm["mobile"] ?? norm["tel"] ?? "";
-  const chn      = norm["chn"]      ?? norm["holdernumber"] ?? norm["shareholderno"] ?? norm["ref"] ?? "";
-  const unitsRaw = norm["units"]    ?? norm["shares"]       ?? norm["shareunits"] ?? "";
-  const units    = unitsRaw ? Number(unitsRaw.replace(/,/g, "")) : undefined;
+  const email     = norm["email"]    ?? norm["emailaddress"] ?? norm["mail"] ?? "";
+  const phoneRaw  = norm["phone"]    ?? norm["phonenumber"]  ?? norm["mobile"] ?? norm["tel"] ?? "";
+  const chnRaw    = norm["chn"]      ?? norm["holdernumber"] ?? norm["shareholderno"] ?? norm["ref"] ?? "";
+  const unitsRaw  = norm["units"]    ?? norm["shares"]       ?? norm["shareunits"] ?? "";
+  const units     = unitsRaw ? Number(unitsRaw.replace(/,/g, "")) : undefined;
   const rawStatus = (norm["status"] ?? "").toUpperCase();
   const status: "ACTIVE" | "INACTIVE" | undefined =
     rawStatus === "INACTIVE" ? "INACTIVE" : rawStatus === "ACTIVE" ? "ACTIVE" : undefined;
+
+  // Whatever a person typed in the CSV — "chn123", "CHN 123", "Chn-123",
+  // just "123" — always saves as "CHN123". digitsOnly strips the letters
+  // entirely so casing/spelling in the source file can't matter.
+  const chn = withIdPrefix("CHN", chnRaw);
+
+  // Phone: always save with an explicit country code. If the CSV value
+  // already starts with "+", trust it as-is (person may be entering a
+  // non-Nigerian number); otherwise assume Nigeria and prepend +234,
+  // stripping a leading 0 (common local format: "0801...").
+  const phone = phoneRaw
+    ? (phoneRaw.trim().startsWith("+")
+        ? `+${digitsOnly(phoneRaw)}`
+        : `+234${digitsOnly(phoneRaw).replace(/^0+/, "")}`)
+    : "";
 
   const missingEmail = !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const missingName  = !fullName;
@@ -100,7 +118,14 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
   const { data, isLoading } = useRegisterShareholders(registerId);
   const addOne  = useAddShareholder();
   const bulkAdd = useBulkAddShareholders();
+  const update  = useUpdateShareholder();
   const remove  = useDeleteShareholder();
+
+  // Only the organisation's owner (client_admin) may add/upload/edit/delete
+  // shareholders — every other team role (Admin, Event Manager, Viewer,
+  // Judge) gets read-only access to this list.
+  const { data: userResponse } = useGetMe();
+  const isClientAdmin = resolveRole(userResponse?.data) === "client_admin";
 
   const shareholders: Shareholder[] = data?.shareholders ?? [];
 
@@ -108,6 +133,44 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
   const [showForm,  setShowForm]  = useState(false);
   const [form,      setForm]      = useState<AddForm>(EMPTY_FORM);
   const [touched,   setTouched]   = useState(false);
+
+  // Inline edit
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm,  setEditForm]  = useState<AddForm>(EMPTY_FORM);
+
+  function startEdit(s: Shareholder) {
+    setEditingId(s.id);
+    setEditForm({
+      fullName: displayName(s) === "—" ? "" : displayName(s),
+      email:    s.email ?? "",
+      phone:    s.phone ?? "",
+      chn:      digitsOnly(s.chn ?? ""),
+      units:    s.units != null ? String(s.units) : "",
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditForm(EMPTY_FORM);
+  }
+
+  function saveEdit() {
+    if (!editingId) return;
+    update.mutate(
+      {
+        registerId,
+        shareholderId: editingId,
+        updates: {
+          fullName: editForm.fullName.trim(),
+          email:    editForm.email.trim().toLowerCase(),
+          phone:    editForm.phone || undefined,
+          chn:      withIdPrefix("CHN", editForm.chn) || undefined,
+          units:    editForm.units ? Number(editForm.units) : undefined,
+        },
+      },
+      { onSuccess: () => cancelEdit() }
+    );
+  }
 
   // CSV import
   const [csvRows,        setCsvRows]        = useState<CsvRow[]>([]);
@@ -134,8 +197,11 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
         shareholder: {
           fullName: form.fullName.trim(),
           email:    form.email.trim().toLowerCase(),
-          phone:    form.phone.trim()  || undefined,
-          chn:      form.chn.trim()    || undefined,
+          // form.phone is already a full E.164 string from PhoneInput;
+          // form.chn is digits-only from the input — prefix applied here so
+          // it always saves as "CHN..." no matter how it was typed.
+          phone:    form.phone || undefined,
+          chn:      withIdPrefix("CHN", form.chn) || undefined,
           units:    form.units ? Number(form.units) : undefined,
           status:   "ACTIVE",
         },
@@ -207,29 +273,33 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => csvRef.current?.click()}>
-              <Upload className="h-3.5 w-3.5" /> Upload CSV
-            </Button>
-            <input ref={csvRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
-            <Button
-              size="sm"
-              className="gap-1.5"
-              onClick={() => { setShowForm((p) => !p); setTouched(false); setForm(EMPTY_FORM); }}
-            >
-              {showForm ? <><X className="h-3.5 w-3.5" /> Cancel</> : <><UserPlus className="h-3.5 w-3.5" /> Add Manually</>}
-            </Button>
-          </div>
+          {isClientAdmin && (
+            <div className="flex items-center gap-2 shrink-0">
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => csvRef.current?.click()}>
+                <Upload className="h-3.5 w-3.5" /> Upload CSV
+              </Button>
+              <input ref={csvRef} type="file" accept=".csv" className="hidden" onChange={handleCsvFile} />
+              <Button
+                size="sm"
+                className="gap-1.5"
+                onClick={() => { setShowForm((p) => !p); setTouched(false); setForm(EMPTY_FORM); }}
+              >
+                {showForm ? <><X className="h-3.5 w-3.5" /> Cancel</> : <><UserPlus className="h-3.5 w-3.5" /> Add Manually</>}
+              </Button>
+            </div>
+          )}
         </div>
 
-        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-3">
-          <span className="font-medium">CSV format: Full Name, CHN, Email, Phone, Units, Status</span>
-          {" "}· CHN is used for upsert deduplication.
-        </p>
+        {isClientAdmin && (
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-3">
+            <span className="font-medium">CSV format: Full Name, CHN, Email, Phone, Units, Status</span>
+            {" "}· CHN is used for upsert deduplication.
+          </p>
+        )}
       </Card>
 
       {/* ── CSV preview ── */}
-      {showCsvPreview && csvRows.length > 0 && (
+      {isClientAdmin && showCsvPreview && csvRows.length > 0 && (
         <Card className="attend-card overflow-hidden">
           <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -306,7 +376,7 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
       )}
 
       {/* ── Manual add form ── */}
-      {showForm && (
+      {isClientAdmin && showForm && (
         <Card className="attend-card p-5">
           <h3 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-4">Add Shareholder</h3>
           <div className="grid grid-cols-2 gap-4 mb-4">
@@ -341,10 +411,9 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
               <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
                 Phone <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span>
               </Label>
-              <Input
-                type="tel" value={form.phone}
-                onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-                placeholder="+234 801 234 5678"
+              <PhoneInput
+                value={form.phone}
+                onChange={(e164) => setForm((p) => ({ ...p, phone: e164 }))}
               />
             </div>
             <div className="space-y-1.5">
@@ -352,13 +421,18 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                 CHN <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span>
               </Label>
               <div className="relative">
+                <span className="absolute left-9 top-1/2 -translate-y-1/2 text-xs font-semibold text-[hsl(var(--muted-foreground))] pointer-events-none">
+                  CHN
+                </span>
                 <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
                 <Input
                   value={form.chn}
-                  onChange={(e) => setForm((p) => ({ ...p, chn: e.target.value }))}
-                  placeholder="CHN123456789" className="pl-9"
+                  onChange={(e) => setForm((p) => ({ ...p, chn: digitsOnly(e.target.value) }))}
+                  placeholder="123456789" className="pl-16"
+                  inputMode="numeric"
                 />
               </div>
+              <p className="text-[11px] text-[hsl(var(--muted-foreground))]">Numbers only — "CHN" is added automatically.</p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
@@ -405,11 +479,71 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                 <th className="px-5 py-3 text-left hidden sm:table-cell">Phone</th>
                 <th className="px-5 py-3 text-left">CHN</th>
                 <th className="px-5 py-3 text-right">Units</th>
-                <th className="px-5 py-3 w-12" />
+                <th className="px-5 py-3 w-20" />
               </tr>
             </thead>
             <tbody className="divide-y divide-[hsl(var(--border))]">
-              {shareholders.map((s) => (
+              {shareholders.map((s) => {
+                if (editingId === s.id) {
+                  return (
+                    <tr key={s.id} className="attend-table-row bg-[hsl(var(--primary)/0.03)]">
+                      <td className="px-5 py-3" colSpan={5}>
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">
+                          <div className="sm:col-span-1">
+                            <Label className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Name</Label>
+                            <Input
+                              value={editForm.fullName}
+                              onChange={(e) => setEditForm((p) => ({ ...p, fullName: e.target.value }))}
+                              className="h-8 text-sm mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Email</Label>
+                            <Input
+                              type="email" value={editForm.email}
+                              onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))}
+                              className="h-8 text-sm mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Phone</Label>
+                            <PhoneInput
+                              value={editForm.phone}
+                              onChange={(e164) => setEditForm((p) => ({ ...p, phone: e164 }))}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">CHN</Label>
+                            <Input
+                              value={editForm.chn}
+                              onChange={(e) => setEditForm((p) => ({ ...p, chn: digitsOnly(e.target.value) }))}
+                              inputMode="numeric"
+                              className="h-8 text-sm mt-1 font-mono"
+                            />
+                          </div>
+                          <div className="flex items-end gap-1.5">
+                            <div className="flex-1">
+                              <Label className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Units</Label>
+                              <Input
+                                type="number" min={0} value={editForm.units}
+                                onChange={(e) => setEditForm((p) => ({ ...p, units: e.target.value }))}
+                                className="h-8 text-sm mt-1"
+                              />
+                            </div>
+                            <Button size="sm" className="h-8 px-2" disabled={update.isPending} onClick={saveEdit}>
+                              {update.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-8 px-2" onClick={cancelEdit}>
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+                return (
                 <tr key={s.id} className="attend-table-row">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2.5">
@@ -435,17 +569,29 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                     {s.units != null ? s.units.toLocaleString() : <span className="italic text-[hsl(var(--muted-foreground))]">—</span>}
                   </td>
                   <td className="px-5 py-3.5">
-                    <Button
-                      size="sm" variant="ghost"
-                      className="h-7 w-7 p-0 text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:bg-red-50"
-                      disabled={remove.isPending}
-                      onClick={() => remove.mutate({ registerId, shareholderId: s.id })}
-                    >
-                      {remove.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                    </Button>
+                    {isClientAdmin && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-7 w-7 p-0 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/0.06)]"
+                          onClick={() => startEdit(s)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-7 w-7 p-0 text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:bg-red-50"
+                          disabled={remove.isPending}
+                          onClick={() => remove.mutate({ registerId, shareholderId: s.id })}
+                        >
+                          {remove.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </Button>
+                      </div>
+                    )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}

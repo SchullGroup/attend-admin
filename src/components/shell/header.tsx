@@ -14,17 +14,19 @@ import { useClientStakeholder } from "@/api/client-organisation";
 import {
   useAdminNotifications,
   useMarkNotificationRead,
+  useMarkAllNotificationsRead,
   useClientNotifications,
   useMarkClientNotificationRead,
+  useMarkAllClientNotificationsRead,
 } from "@/api/notifications";
+import {
+  useJudgeNotifications,
+  useMarkJudgeNotificationRead,
+  useMarkAllJudgeNotificationsRead,
+} from "@/api/judge";
 import { useGlobalSearch } from "@/api/super-admin";
 import { useClientSearch, type SearchEvent, type SearchTeamMember, type SearchDocument } from "@/api/client-search";
-import { timeAgo, resolveRole } from "@/lib/utils";
-
-// ---------------------------------------------------------------------------
-// Admin roles set (mirrors events/[id]/page.tsx logic)
-// ---------------------------------------------------------------------------
-const ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
+import { timeAgo, resolveRole, isSuperAdminRole } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Web Audio notification chime
@@ -108,7 +110,9 @@ export function Header() {
   const breadcrumbs = getBreadcrumbs(pathname);
 
   // ── Role detection — must come before hooks that depend on it ─────────────
-  const isAdmin = ADMIN_ROLES.has(resolveRole(currentUser));
+  const isAdmin  = isSuperAdminRole(resolveRole(currentUser));
+  const isViewer = resolveRole(currentUser) === "viewer";
+  const isJudge  = resolveRole(currentUser) === "judge";
 
   // ── Search state ───────────────────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState("");
@@ -168,23 +172,43 @@ export function Header() {
   const { data: adminUnreadData } = useAdminNotifications(0, 1, false, isAdmin);
   const { data: adminNotifData  } = useAdminNotifications(0, 5, undefined, isAdmin);
   const { mutate: markAdminRead } = useMarkNotificationRead();
+  const { mutate: markAllAdminRead, isPending: markingAllAdmin } = useMarkAllNotificationsRead();
 
-  // ── Client notifications ───────────────────────────────────────────────────
-  const { data: clientNotifData  } = useClientNotifications(0, 5);
+  // ── Client notifications — every client-org role except Judge (Judge has
+  // its own dedicated /api/v1/judge/notifications feed below) ───────────────
+  const { data: clientNotifData  } = useClientNotifications(0, 5, undefined, !isAdmin && !isJudge);
   const { mutate: markClientRead } = useMarkClientNotificationRead();
+  const { mutate: markAllClientRead, isPending: markingAllClient } = useMarkAllClientNotificationsRead();
+
+  // ── Judge notifications — GET /api/v1/judge/notifications ─────────────────
+  const { data: judgeNotifData  } = useJudgeNotifications(0, 5, undefined, isJudge);
+  const { mutate: markJudgeRead } = useMarkJudgeNotificationRead();
+  const { mutate: markAllJudgeRead, isPending: markingAllJudge } = useMarkAllJudgeNotificationsRead();
+
+  const markingAllRead = isAdmin ? markingAllAdmin : isJudge ? markingAllJudge : markingAllClient;
+  function markAllRead() {
+    if (isAdmin)      markAllAdminRead();
+    else if (isJudge) markAllJudgeRead();
+    else              markAllClientRead();
+  }
 
   // ── Unified values ─────────────────────────────────────────────────────────
   const unreadCount = isAdmin
     ? (adminUnreadData?.unreadCount ?? (adminUnreadData as any)?.totalUnread ?? 0)
+    : isJudge
+    ? (judgeNotifData?.unreadCount ?? 0)
     : (clientNotifData?.unreadCount ?? 0);
 
   const notifications: any[] = isAdmin
     ? (adminNotifData?.notifications ?? (adminNotifData as any)?.content ?? [])
+    : isJudge
+    ? (judgeNotifData?.notifications ?? [])
     : (clientNotifData?.notifications ?? (clientNotifData as any)?.content ?? []);
 
   function markAsRead(id: string) {
-    if (isAdmin) markAdminRead(id);
-    else         markClientRead(id);
+    if (isAdmin)      markAdminRead(id);
+    else if (isJudge) markJudgeRead(id);
+    else              markClientRead(id);
   }
 
   // ── Notification sound — chime when unread count increases ─────────────────
@@ -214,7 +238,8 @@ export function Header() {
         ))}
       </div>
 
-      {/* ── Global Search ──────────────────────────────────────────────────── */}
+      {/* ── Global Search — hidden for Judge (their view is scoped to assigned challenges only) ── */}
+      {!isJudge && (
       <div ref={searchRef} className="hidden md:flex items-center relative w-full max-w-md">
         <Search className="absolute left-3 h-4 w-4 text-[hsl(var(--muted-foreground))] pointer-events-none z-10" />
         <Input
@@ -403,47 +428,61 @@ export function Header() {
           </div>
         )}
       </div>
+      )}
 
       <div className="flex items-center gap-2 shrink-0">
-        {/* Notifications */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="h-8 w-8 rounded-lg flex items-center justify-center text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors relative">
-              <Bell className="h-4 w-4" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
-              )}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] flex items-center justify-between">
-              <span className="font-semibold text-sm">Notifications</span>
-              {unreadCount > 0 && (
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">{unreadCount} new</span>
-              )}
-            </div>
-            <div className="max-h-64 overflow-y-auto divide-y divide-[hsl(var(--border))]">
-              {notifications.length > 0 ? (
-                notifications.map((n: any) => (
-                  <div
-                    key={n.id}
-                    onClick={() => { if (!n.read) markAsRead(n.id as string); }}
-                    className={`p-3 cursor-pointer hover:bg-[hsl(var(--muted)/0.4)] transition-colors ${!n.read ? "bg-[hsl(var(--primary)/0.03)]" : ""}`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={`text-xs ${!n.read ? "font-semibold text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))]"}`}>{n.title}</p>
-                      {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1" />}
+        {/* Notifications — hidden for Viewer role */}
+        {!isViewer && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="h-8 w-8 rounded-lg flex items-center justify-center text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors relative">
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white animate-pulse" />
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] flex items-center justify-between">
+                <span className="font-semibold text-sm">Notifications</span>
+                <div className="flex items-center gap-2">
+                  {unreadCount > 0 && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">{unreadCount} new</span>
+                  )}
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllRead}
+                      disabled={markingAllRead}
+                      className="text-[11px] font-medium text-[hsl(var(--primary))] hover:underline disabled:opacity-50"
+                    >
+                      {markingAllRead ? "Marking…" : "Mark all read"}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="max-h-64 overflow-y-auto divide-y divide-[hsl(var(--border))]">
+                {notifications.length > 0 ? (
+                  notifications.map((n: any) => (
+                    <div
+                      key={n.id}
+                      onClick={() => { if (!n.read) markAsRead(n.id as string); }}
+                      className={`p-3 cursor-pointer hover:bg-[hsl(var(--muted)/0.4)] transition-colors ${!n.read ? "bg-[hsl(var(--primary)/0.03)]" : ""}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={`text-xs ${!n.read ? "font-semibold text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))]"}`}>{n.title}</p>
+                        {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1" />}
+                      </div>
+                      <p className="text-[11px] text-[hsl(var(--muted-foreground))] mt-0.5 line-clamp-2">{n.message}</p>
+                      <span className="text-[10px] text-[hsl(var(--muted-foreground))] mt-1 block">{timeAgo(n.createdAt)}</span>
                     </div>
-                    <p className="text-[11px] text-[hsl(var(--muted-foreground))] mt-0.5 line-clamp-2">{n.message}</p>
-                    <span className="text-[10px] text-[hsl(var(--muted-foreground))] mt-1 block">{timeAgo(n.createdAt)}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="py-8 text-center text-xs text-[hsl(var(--muted-foreground))]">No notifications.</div>
-              )}
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
+                  ))
+                ) : (
+                  <div className="py-8 text-center text-xs text-[hsl(var(--muted-foreground))]">No notifications.</div>
+                )}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         {/* User avatar */}
         {currentUser && (

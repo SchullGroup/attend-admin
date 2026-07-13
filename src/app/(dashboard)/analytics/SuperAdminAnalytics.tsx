@@ -131,7 +131,6 @@ export function SuperAdminAnalytics() {
 
   // ── Compute max for bar scaling ──────────────────────────────────────────
   const maxOrg    = Math.max(...topOrgs.map(o => o.eventCount), 1);
-  const maxModule = Math.max(...byType.map(m => m.eventCount), 1);
   const kycTotal  = kycData.reduce((s, i) => s + i.count, 0);
   const maxFormat = Math.max(...formats.map(f => f.count), 1);
 
@@ -240,40 +239,38 @@ export function SuperAdminAnalytics() {
             <h2 className="font-semibold text-[hsl(var(--foreground))]">Events by Module</h2>
           </div>
           {byTypeLoading ? <Loader variant="inline" /> : (
-            <div className="px-5 py-4 flex flex-col gap-3">
-              {byType.length === 0 && (
-                <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">No data yet.</p>
-              )}
-              {byType.map((item) => {
-                const color = item.color ?? MODULE_COLORS[item.type] ?? "#374151";
-                const label = MODULE_LABELS[item.type] ?? item.type;
-                const pct   = maxModule > 0 ? Math.round((item.eventCount / maxModule) * 100) : 0;
-                return (
-                  <div key={item.type}>
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
-                          style={{ backgroundColor: color + "1a", color }}
-                        >
-                          {label}
-                        </span>
+            byType.length === 0 ? (
+              <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-8">No data yet.</p>
+            ) : (
+              <div className="p-5 grid grid-cols-2 gap-3">
+                {byType.map((item) => {
+                  const color = item.color ?? MODULE_COLORS[item.type] ?? "#374151";
+                  const label = MODULE_LABELS[item.type] ?? item.type;
+                  return (
+                    <div
+                      key={item.type}
+                      className="rounded-xl p-4 border border-[hsl(var(--border))]"
+                      style={{ backgroundColor: color + "0d" }}
+                    >
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold mb-3"
+                        style={{ backgroundColor: color + "1a", color }}
+                      >
+                        {label}
+                      </span>
+                      <div className="text-2xl font-bold tabular-nums" style={{ color }}>
+                        {item.eventCount}
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-[hsl(var(--muted-foreground))]">
-                        <span><strong className="text-[hsl(var(--foreground))] font-bold" style={{ color }}>{item.eventCount}</strong> Events</span>
-                        <span>{item.totalRsvps.toLocaleString()} Total RSVPs</span>
+                      <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">Events</div>
+                      <div className="text-lg font-bold tabular-nums text-[hsl(var(--foreground))] mt-3">
+                        {item.totalRsvps.toLocaleString()}
                       </div>
+                      <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">Total RSVPs</div>
                     </div>
-                    <div className="h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{ width: `${pct}%`, backgroundColor: color }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )
           )}
         </Card>
       </div>

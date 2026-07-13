@@ -20,7 +20,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { UserPlus, Users2, RotateCcw, ShieldOff } from "lucide-react";
-import { formatDate } from "@/lib/utils";
+import { formatDate, resolveRole } from "@/lib/utils";
+import { useGetMe } from "@/api/auth/hooks";
 
 // ─── Style maps ──────────────────────────────────────────────────────────────
 
@@ -78,6 +79,12 @@ export default function TeamPage() {
   const revokeMutation     = useRevokeTeamMember();
   const reactivateMutation = useReactivateTeamMember();
 
+  // Only the organisation's actual Client Admin (owner) may revoke another
+  // team member's access — every other role (Admin, Event Manager, Viewer,
+  // Judge) can view the team list but shouldn't see the revoke control.
+  const { data: userResponse } = useGetMe();
+  const isClientAdmin = resolveRole(userResponse?.data) === "client_admin";
+
   const [inviteOpen,    setInviteOpen]    = useState(false);
   const [firstName,     setFirstName]     = useState("");
   const [lastName,      setLastName]      = useState("");
@@ -132,16 +139,18 @@ export default function TeamPage() {
         )}
         <td className={`px-5 py-3 text-right${isRevoked ? " col-span-2" : ""}`}>
           {isRevoked ? (
-            <Button
-              size="sm" variant="outline"
-              className="gap-1.5 text-green-700 border-green-300 hover:bg-green-50"
-              disabled={reactivateMutation.isPending}
-              onClick={() => reactivateMutation.mutate(member.id)}
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              {reactivateMutation.isPending ? "Restoring…" : "Reactivate"}
-            </Button>
-          ) : confirmId === member.id ? (
+            isClientAdmin && (
+              <Button
+                size="sm" variant="outline"
+                className="gap-1.5 text-green-700 border-green-300 hover:bg-green-50"
+                disabled={reactivateMutation.isPending}
+                onClick={() => reactivateMutation.mutate(member.id)}
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                {reactivateMutation.isPending ? "Restoring…" : "Reactivate"}
+              </Button>
+            )
+          ) : !isClientAdmin ? null : confirmId === member.id ? (
             <div className="flex items-center justify-end gap-2">
               <span className="text-xs text-[hsl(var(--muted-foreground))]">Remove access?</span>
               <Button
@@ -184,6 +193,7 @@ export default function TeamPage() {
           </p>
         </div>
 
+        {isClientAdmin && (
         <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2"><UserPlus className="h-4 w-4" /> Invite Member</Button>
@@ -226,6 +236,7 @@ export default function TeamPage() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {/* Active members */}
@@ -250,9 +261,11 @@ export default function TeamPage() {
                 <Users2 className="h-10 w-10 mx-auto mb-3 text-[hsl(var(--muted-foreground))] opacity-30" />
                 <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-1">No active members</p>
                 <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3">Invite colleagues to manage the platform together.</p>
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setInviteOpen(true)}>
-                  <UserPlus className="h-3.5 w-3.5" /> Invite someone
-                </Button>
+                {isClientAdmin && (
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setInviteOpen(true)}>
+                    <UserPlus className="h-3.5 w-3.5" /> Invite someone
+                  </Button>
+                )}
               </td></tr>
             ) : (
               active.map((m) => <MemberRow key={m.id} member={m} />)

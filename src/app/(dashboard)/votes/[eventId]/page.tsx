@@ -21,7 +21,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
-import { formatDate } from "@/lib/utils";
+import { formatDate, resolveRole } from "@/lib/utils";
+import { useGetMe } from "@/api/auth/hooks";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -127,10 +128,12 @@ function ResolutionCard({
   res,
   eventId,
   isLive,
+  readOnly = false,
 }: {
   res: ResolutionResult;
   eventId: string;
   isLive: boolean;
+  readOnly?: boolean;
 }) {
   const [expanded,     setExpanded]     = useState(false);
   const [showOffline,  setShowOffline]  = useState(false);
@@ -308,28 +311,37 @@ function ResolutionCard({
                 </p>
               </div>
             </div>
-            <Button
-              size="sm" variant="outline" className="gap-1.5 h-8"
-              disabled={isOpen || shareWeightedTallies.isPending}
-              onClick={() =>
-                shareWeightedTallies.mutate({
-                  eventId,
-                  resolutionId: res.id,
-                  enabled: !res.shareWeightedTalliesEnabled,
-                })
-              }
-            >
-              {isOpen
-                ? <Lock className="h-3.5 w-3.5" />
-                : res.shareWeightedTalliesEnabled
+            {readOnly ? (
+              <span className="inline-flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))]">
+                {res.shareWeightedTalliesEnabled
                   ? <ToggleRight className="h-4 w-4 text-green-600" />
                   : <ToggleLeft className="h-4 w-4" />}
-              {res.shareWeightedTalliesEnabled ? "On" : "Off"}
-            </Button>
+                {res.shareWeightedTalliesEnabled ? "On" : "Off"}
+              </span>
+            ) : (
+              <Button
+                size="sm" variant="outline" className="gap-1.5 h-8"
+                disabled={isOpen || shareWeightedTallies.isPending}
+                onClick={() =>
+                  shareWeightedTallies.mutate({
+                    eventId,
+                    resolutionId: res.id,
+                    enabled: !res.shareWeightedTalliesEnabled,
+                  })
+                }
+              >
+                {isOpen
+                  ? <Lock className="h-3.5 w-3.5" />
+                  : res.shareWeightedTalliesEnabled
+                    ? <ToggleRight className="h-4 w-4 text-green-600" />
+                    : <ToggleLeft className="h-4 w-4" />}
+                {res.shareWeightedTalliesEnabled ? "On" : "Off"}
+              </Button>
+            )}
           </div>
 
-          {/* Open / Close controls (only for LIVE events) */}
-          {isLive && (
+          {/* Open / Close controls (only for LIVE events) — hidden for Viewer (read-only) */}
+          {isLive && !readOnly && (
             <div className="mt-4 pt-4 border-t border-[hsl(var(--border))] flex items-center gap-3 flex-wrap">
               {!isOpen ? (
                 <>
@@ -371,14 +383,16 @@ function ResolutionCard({
             </div>
           )}
 
-          {/* Offline vote entry */}
-          <button
-            className="mt-4 text-xs text-[hsl(var(--primary))] underline underline-offset-2"
-            onClick={() => setShowOffline((v) => !v)}
-          >
-            {showOffline ? "Hide" : "Enter in-room votes…"}
-          </button>
-          {showOffline && (
+          {/* Offline vote entry — hidden for Viewer (read-only) */}
+          {!readOnly && (
+            <button
+              className="mt-4 text-xs text-[hsl(var(--primary))] underline underline-offset-2"
+              onClick={() => setShowOffline((v) => !v)}
+            >
+              {showOffline ? "Hide" : "Enter in-room votes…"}
+            </button>
+          )}
+          {!readOnly && showOffline && (
             <OfflineVoteForm
               eventId={eventId}
               resolutionId={res.id}
@@ -519,6 +533,11 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
   const { refetch: fetchExport }    = useExportResolutions(eventId);
   const setQuorum                   = useSetQuorum();
 
+  // Viewer role — read-only vote records. No quorum edit, add resolution,
+  // open/close vote, offline vote entry, or share-weighted tallies toggle.
+  const { data: userResponse } = useGetMe();
+  const isViewer = resolveRole(userResponse?.data) === "viewer";
+
   async function handleExport() {
     setExporting(true);
     try {
@@ -613,7 +632,7 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
         <Card className="attend-card p-5">
           <div className="flex items-center justify-between mb-1">
             <div className="text-xs text-[hsl(var(--muted-foreground))]">Quorum</div>
-            {!editingQuorum && !quorumLocked && (
+            {!editingQuorum && !quorumLocked && !isViewer && (
               <button
                 onClick={startEditQuorum}
                 className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
@@ -669,14 +688,14 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
           <h2 className="text-sm font-semibold text-[hsl(var(--foreground))]">
             Resolutions ({resolutions.length})
           </h2>
-          {!showAddForm && (
+          {!showAddForm && !isViewer && (
             <Button size="sm" variant="outline" onClick={() => setShowAddForm(true)}>
               <PlusCircle className="h-3.5 w-3.5 mr-1.5" /> Add Resolution
             </Button>
           )}
         </div>
 
-        {showAddForm && (
+        {!isViewer && showAddForm && (
           <div className="mb-3">
             <AddResolutionForm eventId={eventId} onDone={() => setShowAddForm(false)} />
           </div>
@@ -689,7 +708,7 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
             </div>
           ) : (
             resolutions.map((r) => (
-              <ResolutionCard key={r.id} res={r} eventId={eventId} isLive={isLive} />
+              <ResolutionCard key={r.id} res={r} eventId={eventId} isLive={isLive} readOnly={isViewer} />
             ))
           )}
         </div>

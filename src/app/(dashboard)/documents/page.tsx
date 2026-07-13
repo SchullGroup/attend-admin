@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { DOC_TYPES, DOC_TYPE_CONFIG, type DocType } from "@/lib/document-type";
 import { useGetMe } from "@/api/auth/hooks";
+import { useClientEventsDropdown } from "@/api/client-events";
 import { useGlobalDocuments as useAdminGlobalDocuments } from "@/api/super-admin";
 import {
   useGlobalDocuments as useClientGlobalDocuments,
@@ -19,7 +20,8 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatDate } from "@/lib/utils";
+import { UploadProgress } from "@/components/ui/upload-progress";
+import { formatDate, resolveRole, isSuperAdminRole } from "@/lib/utils";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -36,8 +38,6 @@ const TYPE_FILTERS = [
   { label: "Certificate",  value: "CERTIFICATE" },
   { label: "Other",        value: "OTHER" },
 ];
-
-const ADMIN_ROLES = new Set(["super_admin", "event_manager", "kyc_officer", "judge"]);
 
 // ─── EventCombobox ─────────────────────────────────────────────────────────────
 
@@ -134,7 +134,13 @@ function EventCombobox({
 
 export default function DocumentsPage() {
   const { data: userResponse } = useGetMe();
-  const isAdmin = !userResponse?.data || ADMIN_ROLES.has(userResponse.data.role?.toLowerCase() ?? "");
+  // Only true platform Super Admin uses the admin document API/UI — every
+  // client-org role (admin, event_manager, viewer, judge, kyc_officer) uses
+  // the client documents API. (Previously this bundled event_manager/
+  // kyc_officer/judge in with super_admin, which 403'd those roles the same
+  // way the earlier "admin" vs "super_admin" collision did elsewhere.)
+  const isAdmin = isSuperAdminRole(resolveRole(userResponse?.data));
+  const isViewer = resolveRole(userResponse?.data) === "viewer";
 
   const [typeFilter,     setTypeFilter]     = useState("");
   const [search,         setSearch]         = useState("");
@@ -144,6 +150,7 @@ export default function DocumentsPage() {
   const [form,           setForm]           = useState({ title: "", type: "NOTICE" as DocType, eventId: "" });
   const [selectedFile,   setSelectedFile]   = useState<File | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Client document hooks
@@ -154,8 +161,14 @@ export default function DocumentsPage() {
   const { data: adminDocsData, isLoading: adminLoading } =
     useAdminGlobalDocuments(search, "", typeFilter, 0, 50);
 
-  const { data: eventOptions    = [] } = useDocumentEventFilterOptions();
-  const { data: registerOptions = [] } = useDocumentRegisterFilterOptions();
+  // Narrower list, scoped to events that already have documents — used for
+  // the top-of-page filter dropdown only. Client-org-only endpoints — don't
+  // fire them for Super Admin, which uses the admin document API instead.
+  const { data: eventOptions    = [] } = useDocumentEventFilterOptions(!isAdmin);
+  const { data: registerOptions = [] } = useDocumentRegisterFilterOptions(!isAdmin);
+  // Full org event list — used for the Upload dialog's required event
+  // picker, which needs every event (not just ones with existing docs).
+  const { data: allEventOptions = [] } = useClientEventsDropdown(!isAdmin);
 
   const deleteMutation   = useDeleteGlobalDocument();
   const downloadMutation = useDownloadGlobalDocument();
@@ -170,14 +183,20 @@ export default function DocumentsPage() {
 
   function handleUpload() {
     if (!form.title || !form.eventId || !selectedFile) return;
+    setUploadProgress(0);
     uploadMutation.mutate(
-      { file: selectedFile, title: form.title, documentType: form.type, eventId: form.eventId },
+      {
+        file: selectedFile, title: form.title, documentType: form.type, eventId: form.eventId,
+        onProgress: setUploadProgress,
+      },
       {
         onSuccess: () => {
           setUploadOpen(false);
           setForm({ title: "", type: "NOTICE", eventId: "" });
           setSelectedFile(null);
+          setUploadProgress(0);
         },
+        onError: () => setUploadProgress(0),
       }
     );
   }
@@ -191,7 +210,7 @@ export default function DocumentsPage() {
             {isLoading ? "Loading…" : `${docs.length} document${docs.length !== 1 ? "s" : ""}`}
           </p>
         </div>
-        {!isAdmin && (
+        {!isAdmin && !isViewer && (
           <Button className="gap-2" onClick={() => setUploadOpen(true)}>
             <Upload className="h-4 w-4" />
             Upload Document
@@ -237,7 +256,7 @@ export default function DocumentsPage() {
             <div>
               <Label className="attend-section-title mb-1.5 block">Event</Label>
               <EventCombobox
-                options={eventOptions}
+                options={allEventOptions}
                 value={form.eventId}
                 onChange={(id) => setForm((f) => ({ ...f, eventId: id }))}
               />
@@ -266,14 +285,18 @@ export default function DocumentsPage() {
               </div>
             </div>
 
+            {uploadMutation.isPending && (
+              <UploadProgress percent={uploadProgress} label={`Uploading ${selectedFile?.name ?? ""}…`} />
+            )}
+
             <div className="flex gap-2 justify-end pt-1">
-              <Button variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>
+              <Button variant="outline" disabled={uploadMutation.isPending} onClick={() => setUploadOpen(false)}>Cancel</Button>
               <Button
                 disabled={!form.title || !form.eventId || !selectedFile || uploadMutation.isPending}
                 onClick={handleUpload}
                 className="gap-2"
               >
-                {uploadMutation.isPending ? "Uploading…" : <><Send className="h-4 w-4" /> Upload</>}
+                {uploadMutation.isPending ? `Uploading… ${uploadProgress}%` : <><Send className="h-4 w-4" /> Upload</>}
               </Button>
             </div>
           </div>
@@ -317,9 +340,10 @@ export default function DocumentsPage() {
               onChange={(e) => setEventFilter(e.target.value)}
               className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
             >
-              <option value="">All Events</option>
+              {/* Backend's filter list already includes its own "All Events"
+                  (id: "") entry — don't add a second hardcoded one. */}
               {eventOptions.map((e) => (
-                <option key={e.id} value={e.id}>{e.label}</option>
+                <option key={e.id || "all"} value={e.id}>{e.label}</option>
               ))}
             </select>
           </div>
@@ -391,7 +415,8 @@ export default function DocumentsPage() {
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1.5">
                       <Button
-                        size="sm" variant="outline" className="h-7 text-xs gap-1"
+                        size="sm" variant="outline" className="h-7 w-7 p-0"
+                        title="Download"
                         disabled={downloadMutation.isPending}
                         onClick={() => {
                           if (doc.fileUrl) {
@@ -406,9 +431,9 @@ export default function DocumentsPage() {
                           }
                         }}
                       >
-                        <Download className="h-3 w-3" /> Download
+                        <Download className="h-3.5 w-3.5" />
                       </Button>
-                      {!isAdmin && (
+                      {!isAdmin && !isViewer && (
                         confirmDeleteId === doc.id ? (
                           <div className="flex items-center gap-1">
                             <Button

@@ -19,6 +19,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
+import { throttledProgress } from "@/lib/utils";
 import { ApiResponse } from "@/types/api";
 
 // ---------------------------------------------------------------------------
@@ -59,6 +60,8 @@ export interface UploadGlobalDocumentRequest {
   fileUrl:             string;  // Cloudinary URL from /api/v1/upload
   cloudinaryPublicId?: string;
   originalFilename:    string;
+  /** File size in bytes — the backend 500s without this on some endpoints, and sizeLabel is blank ("0 B") without it. */
+  sizeBytes?:          number;
 }
 
 export interface DocumentEventFilterOption {
@@ -123,9 +126,10 @@ export function useGlobalDocuments(
 }
 
 /** Dropdown options for the event filter on the document list. */
-export function useDocumentEventFilterOptions() {
+export function useDocumentEventFilterOptions(enabled = true) {
   return useQuery({
     queryKey: clientDocumentKeys.filterEvents,
+    enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<DocumentFilterEventsResponse>>(
         "/api/v1/client/documents/filters/events"
@@ -137,9 +141,10 @@ export function useDocumentEventFilterOptions() {
 }
 
 /** Dropdown options for the register (organiser) filter on the document list. */
-export function useDocumentRegisterFilterOptions() {
+export function useDocumentRegisterFilterOptions(enabled = true) {
   return useQuery({
     queryKey: clientDocumentKeys.filterRegisters,
+    enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<DocumentFilterEventsResponse>>(
         "/api/v1/client/documents/filters/registers"
@@ -200,11 +205,14 @@ export function useUploadGlobalDocument() {
       title,
       documentType,
       eventId,
+      onProgress,
     }: {
       file:         File;
       title:        string;
       documentType: string;
       eventId:      string;
+      /** Called with 0–100 as the file uploads, for a progress bar in the UI. */
+      onProgress?:  (percent: number) => void;
     }) => {
       // Step 1 — upload file to Cloudinary via backend proxy
       // Do NOT set Content-Type manually: the browser must set it with the multipart boundary.
@@ -220,6 +228,7 @@ export function useUploadGlobalDocument() {
           maxBodyLength:    Infinity,
           maxContentLength: Infinity,
           timeout:          120_000,
+          onUploadProgress: onProgress ? throttledProgress(onProgress) : undefined,
         }
       );
       const uploadData         = uploadRes.data?.data ?? {};
@@ -243,6 +252,7 @@ export function useUploadGlobalDocument() {
         eventId,
         fileUrl,
         originalFilename: file.name,
+        sizeBytes: file.size,
         ...(cloudinaryPublicId ? { cloudinaryPublicId } : {}),
       };
       const res = await apiClient.post<ApiResponse<GlobalDocumentItem>>(
@@ -307,7 +317,7 @@ export function useUploadCloudinaryDocument() {
       // 3. Register the document in the vault
       const docRes = await apiClient.post<ApiResponse<GlobalDocumentItem>>(
         "/api/v1/client/documents",
-        { title, documentType, eventId, fileUrl, cloudinaryPublicId, originalFilename }
+        { title, documentType, eventId, fileUrl, cloudinaryPublicId, originalFilename, sizeBytes: blob.size }
       );
       return docRes.data.data;
     },

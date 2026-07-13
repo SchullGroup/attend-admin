@@ -28,6 +28,8 @@ import { EventStakeholderTab }          from "./components/EventStakeholderTab";
 import { EventExpectedAttendeesTab }   from "./components/EventExpectedAttendeesTab";
 import { EventLaunchAudienceTab }      from "./components/EventLaunchAudienceTab";
 import { EventLaunchWaitlistTab }      from "./components/EventLaunchWaitlistTab";
+import { EventChallengeApplicationsTab } from "./components/EventChallengeApplicationsTab";
+import { EventChallengeJudgesTab }       from "./components/EventChallengeJudgesTab";
 import type { LocalAgendaItem, EventShim } from "./components/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -48,7 +50,14 @@ function toFormatKey(fmt: string): EventShim["format"] {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin", "event_manager", "kyc_officer", "judge"]);
+// Only genuine platform Super Admins hit the /api/v1/admin/* event
+// endpoints. Every client-org role — client_admin, team "admin",
+// event_manager, kyc_officer, judge, viewer — is scoped to a single
+// organisation and must use the /api/v1/client/* endpoints instead.
+// (event_manager/kyc_officer/judge used to be lumped in here, which caused
+// "Event not found" for event_manager: they were being routed to the
+// super-admin event-detail endpoint they have no access to.)
+const ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
 
 function detectIsAdmin(user: { role?: string; roles?: string[] } | null | undefined): boolean {
   if (!user) return false;
@@ -171,11 +180,31 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       (r ?? "").toLowerCase().replace(/[-\s]/g, "_") === "super_admin"
     ));
 
+  // Only the organisation's actual owner may open/close resolution voting —
+  // team roles (Admin, Event Manager, Viewer, Judge) can view resolutions
+  // but shouldn't control the live vote.
+  const isClientAdmin = (currentUser?.role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "client_admin";
+
+  // Event Manager doesn't get the Innovation Challenges section in the
+  // sidebar, so keep the "View Applications" shortcut (which drops them
+  // into that same feature area) hidden here too for consistency.
+  const isEventManager = (currentUser?.role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "event_manager";
+
+  // Viewer role — read-only access to all events. No write actions anywhere:
+  // no add/edit/delete resolutions or agenda, no vote control, no broadcast,
+  // no settings/status/zoom/feature changes, no attendee import/add/delete.
+  const isViewer = (currentUser?.role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "viewer";
+
   const expectedAttendeesCount = expectedAttendeesData?.totalCount ?? 0;
 
   const TABS = [
     "Overview",
     "Attendees",
+    // Innovation Challenge / Hackathon events — surface Applications + Judging
+    // directly on the event detail page for super admin (previously only
+    // reachable via the separate /hackathons/{id} area, which itself only
+    // showed Overview/Leaderboard/Judges — no Applications tab — for this role).
+    ...(isHACKATHON && isSuperAdmin ? ["Applications", "Judging"] : []),
     // Registrar tab only for super admin (overview already shows it for others)
     ...(isSuperAdmin ? ["Registrar"] : []),
     // For AGM + super admin: stop here — Documents and everything after is hidden
@@ -183,11 +212,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       "Documents",
       ...(isAGM && !isSuperAdmin ? ["Resolutions", "Stakeholders"] : isAGM ? ["Resolutions"] : []),
       ...(!isSuperAdmin && isLAUNCH ? ["Audience Tiers", "Waitlist"] : []),
-      // Broadcast is a write operation — hidden for super admin (read-only)
-      ...(!isSuperAdmin ? ["Broadcast"] : []),
+      // Broadcast is a write operation — hidden for super admin and Viewer (read-only)
+      ...(!isSuperAdmin && !isViewer ? ["Broadcast"] : []),
       ...(isAGM ? ["Vote Results", "Post-AGM"] : []),
-      // Super admin is read-only for events — no settings/mutations
-      ...(!isSuperAdmin ? ["Settings"] : []),
+      // Super admin and Viewer are read-only for events — no settings/mutations
+      ...(!isSuperAdmin && !isViewer ? ["Settings"] : []),
     ]),
   ];
 
@@ -218,14 +247,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{event.organiser}</p>
           </div>
           <div className="flex items-center gap-2">
-            {isHACKATHON && !isSuperAdmin && (
+            {isHACKATHON && !isSuperAdmin && !isEventManager && !isViewer && (
               <Link href={`/hackathons/${id}`}>
                 <Button variant="outline" className="gap-2">
                   <FileText className="h-4 w-4" /> View Applications
                 </Button>
               </Link>
             )}
-            {currentStatus === "live" && !isSuperAdmin && (
+            {currentStatus === "live" && !isSuperAdmin && !isViewer && (
               <Link href={`/events/live?eventId=${id}`}>
                 <Button className="gap-2 bg-red-600 hover:bg-red-700 text-white">
                   <Radio className="h-4 w-4" /> Control Room
@@ -256,15 +285,17 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {/* ── Tab panels ── */}
       {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} stakeholderLogoUrl={(apiEvent as any).logoUrl ?? (apiEvent as any).registerLogoUrl ?? (apiEvent as any).branding?.logoUrl ?? undefined} expectedAttendeesCount={expectedAttendeesCount} isSuperAdmin={isSuperAdmin} />}
       {tab === "Attendees"          && <EventAttendeesTab   participants={participants} suspendUser={suspendUser} eventId={id} />}
+      {tab === "Applications" && isHACKATHON && isSuperAdmin && <EventChallengeApplicationsTab challengeId={id} />}
+      {tab === "Judging"      && isHACKATHON && isSuperAdmin && <EventChallengeJudgesTab       challengeId={id} />}
       {tab === "Registrar" && isSuperAdmin && (
         <EventStakeholderTab
           stakeholderName={apiEvent.stakeholderName || undefined}
           stakeholderData={apiEvent as any}
         />
       )}
-      {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} isAdmin={isAdmin} />}
-      {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin} />}
-      {tab === "Stakeholders"   && !isSuperAdmin && isAGM   && <EventExpectedAttendeesTab eventId={id} registerId={(apiEvent as any).registerId} />}
+      {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} isAdmin={isAdmin} readOnly={isViewer} />}
+      {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin || isViewer} canControlVoting={isClientAdmin} />}
+      {tab === "Stakeholders"   && !isSuperAdmin && isAGM   && <EventExpectedAttendeesTab eventId={id} registerId={(apiEvent as any).registerId} readOnly={isViewer} />}
       {tab === "Audience Tiers" && !isSuperAdmin && isLAUNCH && <EventLaunchAudienceTab    eventId={id} />}
       {tab === "Waitlist"       && !isSuperAdmin && isLAUNCH && <EventLaunchWaitlistTab    eventId={id} />}
       {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab eventId={id} />}

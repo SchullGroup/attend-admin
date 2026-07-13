@@ -27,10 +27,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
-import { formatDate, resolveRole } from "@/lib/utils";
+import { formatDate, resolveRole, isSuperAdminRole } from "@/lib/utils";
 import { SuperAdminAnalytics } from "./SuperAdminAnalytics";
-
-const SUPER_ADMIN_ROLES = new Set(["super_admin", "admin", "superadmin", "super-admin"]);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -455,14 +453,22 @@ function ClientAnalytics() {
           {checkInEvents.length > 0 ? (
             <div className="flex flex-col gap-3 overflow-y-auto max-h-[240px]">
               {checkInEvents.map((ev) => {
-                const pct = Math.min(Math.round(ev.checkInRate ?? 0), 100);
+                // Backend's check-in-overview endpoint doesn't always send
+                // totalRsvps/checkInRate under those exact names — fall back
+                // to common aliases seen on other analytics endpoints, then
+                // 0, so we never render a blank "0/ · 0%" row.
+                const evAny       = ev as any;
+                const checkedIn   = ev.checkedIn  ?? evAny.checkedInCount ?? 0;
+                const totalRsvps  = ev.totalRsvps ?? evAny.rsvpCount ?? evAny.registrations ?? evAny.totalRegistrations ?? 0;
+                const rate        = ev.checkInRate ?? (totalRsvps > 0 ? (checkedIn / totalRsvps) * 100 : 0);
+                const pct = Math.min(Math.round(rate), 100);
                 const color = fillRateColor(pct);
                 return (
                   <div key={ev.eventId}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-medium text-[hsl(var(--foreground))] truncate max-w-[60%]">{ev.eventTitle}</span>
                       <span className="text-xs tabular-nums text-[hsl(var(--muted-foreground))]">
-                        {ev.checkedIn}/{ev.totalRsvps} · {pct}%
+                        {checkedIn}/{totalRsvps} · {pct}%
                       </span>
                     </div>
                     <div className="h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
@@ -664,7 +670,7 @@ function ClientAnalytics() {
 
 export default function AnalyticsPage() {
   const { data: userResponse, isLoading: userLoading } = useGetMe();
-  const isSuperAdmin = SUPER_ADMIN_ROLES.has(resolveRole(userResponse?.data));
+  const isSuperAdmin = isSuperAdminRole(resolveRole(userResponse?.data));
 
   // Wait for role before mounting either analytics component to avoid
   // briefly rendering <ClientAnalytics /> (which fires client API calls
