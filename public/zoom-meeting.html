@@ -98,6 +98,25 @@
     })();
   </script>
 
+  <script>
+    // Zoom's toolbar menus (More, reactions, etc.) move focus into the
+    // menu when they open. The browser then scrolls EVERY ancestor
+    // scroller — including the parent dashboard page hosting this iframe —
+    // to reveal the newly focused element, which yanked the whole page to
+    // the top on every "More" click. Defaulting programmatic focus() to
+    // preventScroll stops that; must run before the SDK bundle loads.
+    (function () {
+      var origFocus = HTMLElement.prototype.focus;
+      HTMLElement.prototype.focus = function (opts) {
+        try {
+          origFocus.call(this, Object.assign({ preventScroll: true }, opts || {}));
+        } catch (_) {
+          origFocus.call(this);
+        }
+      };
+    })();
+  </script>
+
   <script src="https://source.zoom.us/6.2.0/lib/vendor/react.min.js"></script>
   <script src="https://source.zoom.us/6.2.0/lib/vendor/react-dom.min.js"></script>
   <script src="https://source.zoom.us/6.2.0/lib/vendor/redux.min.js"></script>
