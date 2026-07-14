@@ -796,14 +796,13 @@ function ClientAnalytics() {
                 <th className="px-5 py-3 text-right">RSVPs</th>
                 <th className="px-5 py-3 text-right">Attended</th>
                 <th className="px-5 py-3 text-right">Attendance Rate</th>
-                <th className="px-5 py-3 text-right">Avg Watch</th>
                 <th className="px-5 py-3 text-right">Q&amp;A Responses</th>
               </tr>
             </thead>
             <tbody>
               {perfEvents.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
+                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
                     No events yet.
                   </td>
                 </tr>
@@ -833,9 +832,6 @@ function ClientAnalytics() {
                       <span className={`text-sm font-semibold tabular-nums ${
                         attendRate >= 70 ? "text-green-600" : attendRate >= 40 ? "text-amber-600" : "text-red-500"
                       }`}>{attendRate}%</span>
-                    </td>
-                    <td className="px-5 py-3 text-sm tabular-nums text-right text-[hsl(var(--muted-foreground))]">
-                      {ev.avgWatchMinutes != null ? `${ev.avgWatchMinutes} min` : "—"}
                     </td>
                     <td className="px-5 py-3 text-sm tabular-nums text-right text-[hsl(var(--muted-foreground))]">
                       {(ev.qaResponses ?? ev.pollResponses) != null ? (ev.qaResponses ?? ev.pollResponses)!.toLocaleString() : "—"}

@@ -5,16 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
 import { Radio, UserCheck, ChevronRight, Pencil } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useLiveRoomDetail,
   useLiveAttendance,
   useApproveQuestion,
   useRejectQuestion,
   useAnswerQuestion,
+  liveKeys,
   type LiveQuestion,
 } from "@/api/client-live";
 import { useLiveWebSocket, type LiveWsMessage } from "@/hooks/use-live-websocket";
-import { useClientEventDetail, useUpdateStreamUrl, type ZoomMeetingDto } from "@/api/client-events";
+import { useClientEventDetail, useUpdateStreamUrl, clientEventKeys, type ZoomMeetingDto } from "@/api/client-events";
 import { useGetMe } from "@/api/auth/hooks";
 import type { ZoomEmbedHandle } from "@/components/zoom-embed";
 import { eventColor, formatTime, initials, playChime } from "./helpers";
@@ -39,6 +41,7 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
   // Floating Q&A toasts overlaid on the Zoom panel
   const [zoomToasts, setZoomToasts] = useState<{ id: string; name: string; text: string }[]>([]);
 
+  const queryClient = useQueryClient();
   const { data: room, isLoading } = useLiveRoomDetail(eventId);
   // Prefer zoom meeting data from the live-room snapshot (no extra network call).
   // Fall back to the full event detail only when the live snapshot doesn't include it.
@@ -196,6 +199,15 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
           hostName={hostName}
           zoomEmbedRef={zoomEmbedRef}
           zoomToasts={zoomToasts}
+          // The backend may ROTATE the meeting (new meetingId/joinUrl) when
+          // the embed refreshes an expired ZAK. Invalidate everything holding
+          // zoomMeeting/streamUrl so the card header, joinUrl and attendee
+          // link reflect the meeting the host actually joined — previously
+          // this drift was only resolved by a full page reload.
+          onMeetingRefreshed={() => {
+            queryClient.invalidateQueries({ queryKey: liveKeys.detail(eventId) });
+            queryClient.invalidateQueries({ queryKey: clientEventKeys.detail(eventId) });
+          }}
         />
       )}
 

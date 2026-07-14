@@ -1,63 +1,20 @@
-import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
+import { NextResponse } from "next/server";
 
 /**
- * POST /api/zoom/enable-waiting-room
- * Body: { meetingId: string }
+ * ⚠️ DEAD ROUTE — kept only for reference, returns 410 Gone.
  *
- * Patches the Zoom meeting to enable waiting room so the host can
- * see and admit participants from the embedded SDK.
+ * This route PATCHed the meeting to enable the waiting room, authenticated
+ * as a Zoom **JWT App** (self-signed HS256 JWT from ZOOM_SDK_KEY/SECRET).
+ * Zoom discontinued JWT apps in September 2023, so the call can only 401
+ * now. No frontend code ever called this route.
+ *
+ * Waiting-room settings should be set by the backend when it creates the
+ * meeting (Server-to-Server OAuth), e.g. `settings.waiting_room: true` in
+ * the create-meeting payload.
  */
-function makeZoomApiJwt(apiKey: string, apiSecret: string): string {
-  const iat = Math.floor(Date.now() / 1000);
-  const exp = iat + 120;
-  const header  = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
-  const payload = Buffer.from(JSON.stringify({ iss: apiKey, exp })).toString("base64url");
-  const sig     = crypto.createHmac("sha256", apiSecret).update(`${header}.${payload}`).digest("base64url");
-  return `${header}.${payload}.${sig}`;
-}
-
-export async function POST(req: NextRequest) {
-  const apiKey    = process.env.ZOOM_SDK_KEY;
-  const apiSecret = process.env.ZOOM_SDK_SECRET;
-
-  if (!apiKey || !apiSecret) {
-    return NextResponse.json({ error: "Zoom credentials not configured." }, { status: 503 });
-  }
-
-  let body: { meetingId?: string };
-  try { body = await req.json(); } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-
-  const { meetingId } = body;
-  if (!meetingId) {
-    return NextResponse.json({ error: "meetingId is required" }, { status: 400 });
-  }
-
-  try {
-    const jwt = makeZoomApiJwt(apiKey, apiSecret);
-
-    const res = await fetch(`https://api.zoom.us/v2/meetings/${meetingId}`, {
-      method:  "PATCH",
-      headers: { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
-      body:    JSON.stringify({ settings: { waiting_room: true } }),
-    });
-
-    // 204 = success, no body
-    if (res.status === 204 || res.ok) {
-      return NextResponse.json({ ok: true });
-    }
-
-    const data = await res.json().catch(() => ({}));
-    return NextResponse.json(
-      { error: (data as any)?.message ?? `Zoom API error ${res.status}` },
-      { status: res.status }
-    );
-  } catch (e: unknown) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Failed to enable waiting room" },
-      { status: 500 }
-    );
-  }
+export async function POST() {
+  return NextResponse.json(
+    { error: "Gone: this route relied on Zoom JWT apps, discontinued by Zoom in 2023. Set waiting_room in the backend's create-meeting payload instead." },
+    { status: 410 }
+  );
 }

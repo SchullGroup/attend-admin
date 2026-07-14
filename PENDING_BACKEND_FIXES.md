@@ -7,31 +7,62 @@ This file lists **only what's still open** as of 2026-07-14 — fixed/shipped it
 
 ---
 
+## ⚠️ Backend response (2026-07-14) — `staging` is 102 commits behind `dev`
+
+Backend flagged that `origin/staging` is 102 commits behind `dev` (their own backend repo), and the missing commits include the entire Register/Registrar feature (`09f7af7`), the entire Challenge/Hackathon admin feature (`6b15d41`, `0294519`), and all five rounds of analytics fixes from tickets #10–#15 (`f4c0dd5` through `a1314c6`). If the app we've been testing against is served from `staging`, **items 1, 1b, 2, and 2b below are very likely already fixed in `dev`** and just never reached the environment we tested — backend re-verified the exact code paths for each and found the logic already matches what we asked for. Getting `dev` merged into `staging` and redeployed is on backend's own side to sort out — flagging it here for visibility, not as an action item for us.
+
+Full per-item outcomes from this response:
+
+- **1 (Registrar detail data gaps)** — all three confirmed already correct in `dev`: `eventCount` per register computed live via `eventRepository.countByRegister(r)`; `representativeEmail` correctly mapped from `Stakeholder.representativeEmail` when set; `GET /api/v1/admin/registrars/{id}/events` genuinely paginated server-side (`PageRequest.of(page, size)`, respects `page`/`size`). **One separate, real (non-deployment) data gap:** `representativeEmail` was added to the `Stakeholder` entity partway through backend's work — any registrar enrolled *before* that column existed has `representativeEmail: null` in the DB permanently, with no automatic historical backfill. New enrollments capture it correctly. Existing registrars can be manually backfilled via the `PATCH /api/v1/admin/registrars/{id}` endpoint we already integrated (the registrar Edit modal).
+
+- **1b (RSVP=0 / register filter)** — confirmed already correct in `dev`: each event row's `registrationCount` computed via `registrationRepository.countByEvent(e)`, `registerId` via `e.getRegister().getId()`. **Additional detail not previously known:** the platform-wide `GET /api/v1/admin/events` endpoint's `EventSummaryResponse` now includes **both** `registerId` *and* `registerName` (we'd only been told about `registerId` before) — worth widening our fallback chain on the main Events page too, not just the registrar-scoped pages, once this is confirmed live. Backend's explicit ask: **if we retest against `dev`/latest and RSVPs are still `0`, send the raw JSON response for one event** so they can compare field-by-field — that would be a genuinely new signal, not deployment lag.
+
+- **2 (Shortlisted mismatch)** — confirmed `GET /api/v1/admin/challenges` computes `shortlistedCount`/`shortlistedTeams` live per request via `applicationRepository.countByEventAndStatus(event, SHORTLISTED)`, not a cached/denormalized counter — nothing to go stale. The entire challenge-management feature is among the commits missing from `staging`, consistent with this reappearing there.
+
+- **2b (Open Challenge 404)** — backend specifically checked for an ID-space mismatch (since that was the real root cause behind 1b previously) and it doesn't reproduce: `GET /api/v1/admin/challenges` (list) and `GET /api/v1/admin/challenges/{id}` (detail) use the same `Event.id` and the same `ChallengeSpecification` type filter (`INNOVATION_CHALLENGE`, `HACKATHON`). An id from the list will always resolve on the detail endpoint in current source. If `staging` predates the challenge feature entirely, hitting this route there 404s regardless of id — indistinguishable from "Challenge not found" on our end.
+
+- **3 (Avg Watch column)** — confirmed genuinely never implemented: no join/leave timestamp tracking exists anywhere in the schema for virtual attendees, not a partial/broken feature returning null. Real watch-time tracking would need new session start/end events from the video layer — a real feature to scope separately if wanted, not a bug fix. **We've dropped the column from Client Admin's Per-Event Breakdown table accordingly.**
+
+- **4 (`*Change` fields null)** — backend re-verified `getAnalyticsSummary`'s comparison logic is structurally identical to the client-scoped `getStats` logic that's confirmed returning real values (both compare last-7-days vs. the 7 days before that, `null` only when the prior-week bucket is empty) — no code-level bug found by inspection alone. Backend added a diagnostic log line (`Analytics summary week-over-week diag: ...`) to `getAnalyticsSummary` that dumps the raw this-week/prior-week counts for all four metrics on every call, since they don't have access to our live database to check actual row timestamps. **Our next step:** hit `GET /api/v1/admin/analytics/summary` once against latest `dev` (not stale `staging`), then pull that log line from the server logs and send it back — determines whether prior-week counts are genuinely zero platform-wide (making `null` correct) or something else is wrong.
+
+- **5 (Event Format Distribution)** — **real bug found and fixed**, independent of the deployment-lag issue (would've stayed broken even on a fresh `dev` deploy). Both endpoints were returning the raw Java enum name (`"HYBRID"`, `"IN_PERSON"`, `"VIRTUAL"` — uppercase) instead of the lowercase values (`hybrid`/`in_person`/`virtual`) our spec asked for and our label-mapping expects. Counts were being computed correctly the whole time; the casing mismatch just meant every lookup silently failed to match, so the widget always fell through to "No format data yet." Fixed server-side, no frontend change needed (frontend already expects lowercase).
+
+**Backend's own verification (compile/wiring only, not live-data correctness — they don't have access to our staging/production DB):**
+```
+mvn -q -o compile                      → EXIT=0
+mvn test -Dtest=EventApplicationTests  → EXIT=0 (Spring context boots cleanly)
+```
+
+---
+
 ## Needs code fix
 
-### 1. Registrar detail page: data gaps
+### 1. Registrar detail page: data gaps — backend confirms fixed in `dev`; one real data gap remains
 **Endpoint:** `GET /api/v1/admin/registrars/{id}` and sub-resources
-- Registers table "Events" column always shows `0` per register — `eventCount` (or any alias) isn't populated.
-- Representative `email` empty for at least one registrar — unclear if genuinely missing or dropped from the query.
-- `GET /api/v1/admin/registrars/{id}/events` doesn't appear to support real pagination (`page`/`size` ignored, always returns the full list).
+- Registers table "Events" column showing `0` per register, pagination on `.../events` — backend confirms both work correctly in current `dev` source (see deployment-lag note above). Awaiting re-test against confirmed-current code.
+- Representative `email` empty for some registrars — **confirmed as a real, permanent data gap, not a bug:** `representativeEmail` was added to the `Stakeholder` entity partway through backend's work, so any registrar enrolled *before* that column existed has `null` forever with no auto-backfill. **Action for us:** existing registrars missing this field can be manually backfilled through the registrar Edit modal we already built (`PATCH /api/v1/admin/registrars/{id}`) — this isn't something to keep waiting on backend for.
 
 *(Format column is now confirmed working — resolved, removed from this list.)*
 
-### 1b. REOPENED — RSVP count still `0` for every event, register filter still returns 0 results
+### 1b. RSVP count `0` / register filter returns 0 results — backend confirms fixed in `dev`
 **Endpoint:** `GET /api/v1/admin/registrars/{id}` and `GET /api/v1/admin/registrars/{id}/events`
-Backend's 2026-07-14 response marked this fixed (item 14b/f — `registrationCount`/`registerId` added, confirmed same ID space as the standalone registers endpoint). Re-verified live on 2026-07-14 against "Meristem Registrars LTD" and **it does not reproduce as fixed**: every event row on both the registrar detail page and the `/registrars/{id}/events` sub-page still shows RSVPs = `0`, and selecting a register from the Register filter dropdown still returns no matching events. Frontend's fallback chain (`registrationCount ?? rsvpCount ?? registrationsCount ?? totalRsvps ?? rsvps ?? 0`) already tries every reasonable field-name alias, so this isn't a naming mismatch on our end. As a partial mitigation we've widened the register filter to also match on `registerName` (case-insensitive) instead of only `registerId`, and added a Register column to both event tables so the actual `registerName` value being returned (if any) is now visible for debugging — but the RSVP count itself has no client-side workaround. **Ask:** please re-check with this specific registrar/account whether `registrationCount` and a matching `registerId` are actually present in the live response, since the fix doesn't appear to be reflected yet.
+Re-verified live on 2026-07-14 against "Meristem Registrars LTD" and it did not reproduce as fixed at the time (RSVPs = `0` everywhere, register filter matched nothing) — backend's response attributes this to the `staging`/`dev` deployment lag described above, and re-confirmed line-by-line that `registrationCount` (via `registrationRepository.countByEvent(e)`) and `registerId` (via `e.getRegister().getId()`) are both genuinely populated in current source, not defaulted to 0.
 
-### 2. Applications "Shortlisted" count mismatch — RECONFIRMED with fresh reproduction
+**New detail from this response:** the platform-wide `GET /api/v1/admin/events` endpoint's `EventSummaryResponse` now also includes `registerName` alongside `registerId` (previously we only knew about `registerId`) — worth widening the fallback/display logic on the main Events page to use `registerName` the same way we already do on the registrar-scoped pages, once confirmed live.
+
+**Ask (from backend):** if we retest against `dev`/latest and RSVPs are *still* `0`, send the raw JSON response for one event — that would indicate a genuinely new, different bug rather than deployment lag.
+
+### 2. Applications "Shortlisted" count mismatch — backend confirms fixed in `dev`
 **Endpoint:** `GET /api/v1/admin/challenges` (list)
-Re-verified live on 2026-07-14: "Crafwell Innovation Challenge 2026" has **7/7 applications with status `Shortlisted`** (confirmed by opening the challenge and viewing every row in the Applications table). The challenge-selection table on `/hackathons/applications` still shows **Shortlisted: 0** for this same challenge. Frontend already reads `c.shortlistedCount ?? c.shortlistedTeams ?? 0` (both aliases backend has mentioned), so this isn't a naming issue — the list endpoint's per-challenge shortlisted count field is returning `0`/absent while the actual application statuses say otherwise. **Ask:** please confirm `GET /api/v1/admin/challenges` computes this count from live `ChallengeApplication.status = SHORTLISTED` rows rather than a stale/cached counter.
+Reproduced live on 2026-07-14: "Crafwell Innovation Challenge 2026" had 7/7 applications with status `Shortlisted`, but the challenge-selection table showed **Shortlisted: 0** for the same challenge. Backend confirmed `GET /api/v1/admin/challenges` computes this count live per request via `applicationRepository.countByEventAndStatus(event, SHORTLISTED)` — not a cached/stale counter, nothing to go stale. The entire challenge-management feature is among the commits missing from `staging` (see deployment-lag note above), which lines up with why this reappeared. Awaiting re-test against confirmed-current code.
 
-### 2b. NEW — "Open Challenge" from the Applications view 404s ("Challenge not found")
+### 2b. "Open Challenge" from the Applications view 404s ("Challenge not found") — backend confirms fixed in `dev`
 **Endpoint:** `GET /api/v1/admin/challenges/{challengeId}`
-From `/hackathons/applications`, selecting a challenge and clicking "Open Challenge" navigates to `/hackathons/{challengeId}` using the exact same `id` shown in the challenge list/applications view — but the detail page renders "Challenge not found." Frontend now distinguishes a genuine empty response from an actual request error (shows the HTTP status if the request errored) so this will be easier to diagnose next time it happens, but as of this report we don't have the live status code. **Ask:** please check whether `GET /api/v1/admin/challenges/{id}` works for the same `id` values returned by the list endpoint `GET /api/v1/admin/challenges` — if the two endpoints use different ID spaces (similar to the registerId issue in 1b), that would explain this.
+From `/hackathons/applications`, selecting a challenge and clicking "Open Challenge" navigated to `/hackathons/{challengeId}` using the exact same `id` shown in the list/applications view, but the detail page rendered "Challenge not found." Frontend now distinguishes a genuine empty response from an actual request error (shows the HTTP status if the request errored) for easier diagnosis next time. Backend specifically checked for an ID-space mismatch between the list and detail endpoints (the actual root cause of a similar bug in 1b previously) — confirmed it does **not** reproduce: both endpoints use the same `Event.id` and the same `ChallengeSpecification` type filter. If `staging` predates the challenge feature entirely, hitting this route there 404s regardless of id, which looks identical to "Challenge not found" from our side. Awaiting re-test against confirmed-current code.
 
-### 3. "Avg Watch" column always blank
+### 3. "Avg Watch" column always blank — ✅ RESOLVED (2026-07-14)
 **Endpoint:** Per-Event Breakdown row field `avgWatchMinutes`, both admin and client `event-performance`
-Never populated on any event, on either Super Admin or Client Admin. Needs a decision: implement watch-time tracking, or confirm it's not built yet so the frontend can drop the column instead of showing a permanent "—".
+Backend confirmed there's no join/leave timestamp tracking anywhere in the schema — this was never wired up, not a partial bug. Column dropped from the Client Admin Per-Event Breakdown table (`analytics/page.tsx`) rather than showing a permanent "—". Real watch-time tracking would be new feature work if wanted later, not a bug fix.
 
 ### 4. Week-over-week `*Change` fields stay `null` even with sufficient history
 **Endpoint:** `GET /api/v1/admin/analytics/summary`
@@ -39,15 +70,25 @@ Confirmed via raw response: `eventsHosted: 18` (clear history exists) but all fo
 
 **Confirmed frontend is not the problem:** `StatCard` in `SuperAdminAnalytics.tsx` already renders the trend badge whenever `change !== undefined` — no code change needed there. This is proven working end-to-end on the *client-scoped* `GET /api/v1/client/analytics/stats` equivalent, which does return real `change` values (`+14%`, `-5.3%`, etc.) and displays correctly. The admin `summary` endpoint specifically is the one still stuck on `null` — same rendering code, same wiring, different backend endpoint's data.
 
-### 5. Event Format Distribution — confirmed still broken on both Super Admin and Client Admin, needs real implementation
-**Endpoints:** `GET /api/v1/admin/analytics/event-format`, `GET /api/v1/client/analytics/event-format`
-Re-confirmed on 2026-07-14: still shows "No format data yet" on the Super Admin Analytics page (screenshot taken on the live `/analytics` page, KYC Verification Breakdown on the same row renders real data from the same account, so this isn't a general analytics outage). The prior theory that this was just the "Last 30 Days" default range hiding out-of-window events did not hold up.
+**2026-07-14 update:** backend added a diagnostic log line (`Analytics summary week-over-week diag: ...`) to `getAnalyticsSummary` that dumps real this-week/prior-week counts on every call — no code-level bug found in the comparison logic itself, it's structurally identical to the working client-scoped version. **Next step (us):** hit `GET /api/v1/admin/analytics/summary` against `dev` and pull that log line — determines whether `null` is legitimately correct (empty prior-week bucket) or something else is wrong.
 
-**Ask:** please implement (or fix) both endpoints to return a real aggregation of this org's (client) / the platform's (admin) events grouped by their `format` field, with counts for exactly the three values the event model already uses: `hybrid`, `in_person`, `virtual` (frontend will map these to "Hybrid" / "In Person" / "Virtual" labels). Response shape frontend already expects:
-```json
-{ "data": { "formats": [ { "format": "hybrid", "count": 4, "color": "#..." }, { "format": "virtual", "count": 6 }, { "format": "in_person", "count": 2 } ] } }
-```
-(`color` optional — frontend has its own fallback palette.) Since `GET /api/v1/admin/events` and the client Events page both already show real, populated `format` values per event, this should be a straightforward group-by/count over existing data, not new data collection.
+### 5. Event Format Distribution — ✅ RESOLVED (2026-07-14), needs live re-verification
+**Endpoints:** `GET /api/v1/admin/analytics/event-format`, `GET /api/v1/client/analytics/event-format`
+Root cause found: both endpoints were returning the raw Java enum name (`"HYBRID"`, `"IN_PERSON"`, `"VIRTUAL"` — uppercase) instead of lowercase (`hybrid`/`in_person`/`virtual`). Counts were being computed correctly all along — the casing mismatch against our label-mapping table meant every lookup silently failed, so the widget always fell through to "No format data yet." Fixed server-side to lowercase the format value on both endpoints. No frontend change needed (already expects lowercase). **Needs a live check once deployed** to close out for real.
+
+---
+
+### 7. NEW (2026-07-14) — `POST /events/{id}/zoom` must be idempotent (root cause of host/attendee meeting split)
+
+**Endpoint:** `POST /api/v1/client/events/{eventId}/zoom`
+
+Confirmed behavior: calling this endpoint for an event that already has a Zoom meeting **creates a brand-new meeting** (new meetingId/joinUrl) instead of returning the existing one with a fresh ZAK. The frontend calls it mid-event to refresh the host's expired ZAK (ZAKs live ~2 h), so every refresh rotates the meeting.
+
+The attendee app does pick up the fresh joinUrl (streamUrl is rewritten on rotation), so new/re-joining attendees land in the new meeting. The split came from the admin frontend pinning the host to the OLD meetingNumber on refresh — host stranded in a meeting attendees were no longer joining, staring at an empty room while attendees queued in a waiting room the host couldn't see. That pinning is now fixed frontend-side (the embed adopts the rotated meeting), but rotation still hurts: attendees **already connected** when it rotates are left behind in the old meeting until they manually re-join, and any previously shared/calendar join links go dead.
+
+**Ask:** when the event already has a Zoom meeting, return the SAME meeting (same meetingId/joinUrl/password) with a freshly generated `startUrl`/ZAK. Only create a new meeting when none exists. If the old meeting is somehow unusable, end it via the S2S OAuth app before creating a replacement, and update the event's streamUrl atomically.
+
+Also worth owning server-side (the frontend's JWT-app routes for these are dead — Zoom killed JWT apps in 2023): force-ending stale meetings, and setting `settings.waiting_room` at meeting creation.
 
 ---
 
@@ -63,14 +104,15 @@ Confirmed missing `activeUsers`/`suspendedUsers` — not a naming mismatch. Fron
 
 | # | Item | Type | Priority |
 |---|------|------|----------|
-| 1 | Registrar detail: event counts, rep email, pagination | Bug | Medium |
-| 1b | RSVP=0 + register filter still broken despite claimed fix | Bug — reopened, needs re-check | **High** |
-| 2 | Shortlisted count mismatch | Bug — reconfirmed with fresh repro | Medium |
-| 2b | "Open Challenge" 404s from Applications view | Bug — new | Medium |
-| 3 | Avg Watch column always blank | Bug or not-implemented | Low |
-| 4 | Week-over-week `*Change` stuck at `null` (admin only — client works) | Bug | **High** |
-| 5 | Event Format Distribution empty on both admin + client endpoints | Bug — needs real implementation | **High** |
+| 1 | Registrar detail: event counts, pagination — backend confirms fixed in `dev`; rep-email gap is real (old rows only, backfillable via Edit modal) | Bug — awaiting re-test | Medium |
+| 1b | RSVP=0 + register filter — backend confirms fixed in `dev`; send raw JSON if still `0` on retest | Bug — awaiting re-test | **High** |
+| 2 | Shortlisted count mismatch — backend confirms fixed in `dev` | Bug — awaiting re-test | Medium |
+| 2b | "Open Challenge" 404s — backend confirms fixed in `dev` | Bug — awaiting re-test | Medium |
+| 3 | Avg Watch column always blank | ✅ Resolved — column dropped (never implemented, confirmed) | Done |
+| 4 | Week-over-week `*Change` stuck at `null` (admin only — client works) | Bug — diagnostic logging added, needs one live check | **High** |
+| 5 | Event Format Distribution empty on both admin + client endpoints | ✅ Fixed (lowercase enum bug) — needs live re-verification | Done (verify) |
 | 6 | Dashboard active/suspended user counts | Bug | Medium |
+| 7 | `POST /zoom` rotates meeting instead of refreshing ZAK | Bug — root cause of live-event waiting-room split | **High** |
 | F1 | Live event polls (non-AGM) | New feature | High |
 | F2 | Press Kit tab (Product Launch) | New feature | High |
 | F3 | Resources tab (Innovation Challenge) | New feature | Medium |
