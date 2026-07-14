@@ -211,7 +211,13 @@ function ClientAnalytics() {
   const { data: formatData,   isLoading: formatLoading   } = useAnalyticsEventFormat();
   const { data: engagement,   isLoading: engageLoading   } = useAnalyticsEngagement();
 
-  const loading = statsLoading || byTypeLoading || rsvpsLoading || fillLoading || perfLoading || trendLoading;
+  // NOTE: perfLoading is deliberately excluded here. Including it meant that
+  // every time the Per-Event Breakdown table's page changed, React Query's
+  // isLoading flipped back to true for that query, which tripped this
+  // top-level gate and replaced the *entire* analytics page with a full-page
+  // loader — i.e. paginating one table appeared to "reload the whole page".
+  // Per-table loading is now handled locally where the table renders.
+  const loading = statsLoading || byTypeLoading || rsvpsLoading || fillLoading || trendLoading;
   if (loading) return <Loader variant="page" text="Loading Analytics…" />;
 
   // --- By Type --- exclude HACKATHON (covered by Innovation Challenges)

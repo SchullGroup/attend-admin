@@ -341,6 +341,11 @@ export function useAnalyticsEventPerformance(page = 0, size = 10) {
       } as EventPerformanceResponse;
     },
     staleTime: 60_000,
+    // Keep showing the previous page's rows while the next page loads,
+    // instead of flipping isLoading back to true on every page change —
+    // that was tripping the analytics page's top-level full-page loader
+    // gate (see ClientAnalytics in analytics/page.tsx).
+    placeholderData: (prev) => prev,
   });
 }
 

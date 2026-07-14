@@ -243,3 +243,18 @@ On `/registrars/{id}/events` for "Meristem Registrars LTD", selecting the regist
 
 **g) Event ordering on the registrar "All Events" page looks inconsistent with scheduled date — worth double-checking `createdAt` values.**
 Now that events are sorted by `createdAt` (per 14e), the resulting order doesn't track the scheduled `date` column at all (e.g. a 12 Jul event appears above a 25 Jul event, then another 12 Jul event, etc. — no obvious pattern). This is *expected* if `createdAt` genuinely differs from `date` per event (i.e. sorting by creation time is working exactly as designed, just not visually intuitive against the Date column) — but if `createdAt` is actually missing/null across the board and every event is silently falling back to `date`, the resulting order should track `date` and clearly isn't. **Ask:** please confirm whether `createdAt` is populated and reasonably distinct per event on this endpoint, so we know whether what we're seeing is correct-but-surprising or actually broken.
+
+---
+
+## 15. NEW — Client Admin analytics: Event Format Distribution still empty, Engagement Metrics inconsistent with Per-Event Breakdown
+
+**Context:** Confirmed via the "Meristem Registrars LTD" client_admin account, after the client-scoped `event-format` endpoint (added per item 13c/14) was wired into the new Client Admin analytics widgets.
+
+**a) Event Format Distribution still shows "No format data yet" for Client Admin too.**
+Same symptom as item 14a (Super Admin), now reproduced on the client-scoped endpoint as well: `GET /api/v1/client/analytics/event-format` returns empty even though this org's own events clearly have a populated `format` field elsewhere (Hybrid/Virtual shown on the Events page for the same 15 events). `useAnalyticsEventFormat()` parsing in `src/api/client-analytics.ts` already tries `formats`/`eventFormats`/`distribution`/array-fallback, so this isn't a frontend field-name issue. **Ask:** same root-cause check as 14a — please confirm whether this endpoint (client and admin versions both) is aggregating over the correct field, since real format data visibly exists on the same events.
+
+**b) Engagement Metrics (Avg Watch Time, Q&A Participation, Document Downloads) all show 0/0%/0 — but Per-Event Breakdown shows real Q&A activity for at least one event.**
+"How Zoom Works" shows **2** Q&A Responses in the Per-Event Breakdown table on the same page, yet the Engagement Metrics card directly above it shows Q&A Participation as **0%**. If Q&A responses are being recorded per-event, the org-wide Q&A Participation metric should reflect that. **Ask:** please confirm `GET /api/v1/client/analytics/engagement` is querying the same underlying Q&A/EventQuestion data as `event-performance`'s `qaResponses` field — right now they appear to disagree. (Also still unconfirmed whether this client-scoped `engagement` endpoint exists at all yet — see item 14c; `retry:false` still set on our end.)
+
+**c) "Avg Watch" column is always "—" on Per-Event Breakdown, for every event, on both Super Admin and Client Admin.**
+`avgWatchMinutes` never appears to be populated on any event row we've seen. **Ask:** please confirm whether average watch time is tracked at all yet, or if this is simply not implemented — if not implemented, we can drop the column rather than show a permanent "—".

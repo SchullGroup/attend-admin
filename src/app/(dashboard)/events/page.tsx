@@ -36,12 +36,14 @@ const ADMIN_STATUS_TABS = [
   { label: "Ended",     value: "ENDED"     },
 ];
 
+// "Hackathon" removed — redundant with "Innovation" and not backed by a
+// distinctly-integrated endpoint on the client Events list (Innovation
+// Challenges have their own dedicated section in the sidebar).
 const CLIENT_TYPE_TABS: Array<{ label: string; value: ClientEventTypeFilter }> = [
   { label: "All Events",  value: "ALL"        },
   { label: "AGM",         value: "AGM"        },
   { label: "Launch",      value: "LAUNCH"     },
   { label: "Innovation",  value: "INNOVATION" },
-  { label: "Hackathon",   value: "HACKATHON"  },
   { label: "General",     value: "GENERAL"    },
 ];
 
