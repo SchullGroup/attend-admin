@@ -588,7 +588,12 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                           {formatDate(evt.date)}
                         </td>
                         <td className="px-5 py-3 text-sm font-medium tabular-nums">
-                          {(evt.registrationCount ?? 0).toLocaleString()}
+                          {/* Embedded registrar.events[] objects use a different field
+                              name than the flat /api/v1/admin/events list (which natively
+                              returns registrationCount) — widen the fallback chain the
+                              same way we did for register eventCount (see BACKEND_BUGS
+                              item 11). */}
+                          {(evt.registrationCount ?? evt.rsvpCount ?? evt.registrationsCount ?? evt.totalRsvps ?? evt.rsvps ?? 0).toLocaleString()}
                         </td>
                         <td className="px-5 py-3">
                           <StatusBadge status={(evt.status ?? "").toLowerCase()} />

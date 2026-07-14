@@ -45,6 +45,15 @@ const CLIENT_TYPE_TABS: Array<{ label: string; value: ClientEventTypeFilter }> =
   { label: "General",     value: "GENERAL"    },
 ];
 
+// Event Type filter for the Super Admin (platform-wide) view — matches the
+// raw eventType values returned by GET /api/v1/admin/events.
+const ADMIN_EVENT_TYPE_OPTIONS = [
+  { id: "AGM_EGM",              name: "AGM / EGM"             },
+  { id: "PRODUCT_LAUNCH",       name: "Product Launch"        },
+  { id: "HACKATHON",            name: "Innovation Challenge"  },
+  { id: "GENERAL_EVENT",        name: "General"               },
+];
+
 const FORMAT_ICON: Record<string, React.ElementType> = {
   VIRTUAL:   Monitor,
   HYBRID:    Users2,
@@ -251,6 +260,8 @@ export default function EventsPage() {
   // same GET /api/v1/admin/registrars/{id}/registers endpoint as the registrar
   // detail page, so it's real data (not the empty client-scoped Organizer dropdown).
   const [registerFilter,   setRegisterFilter]   = useState("");
+  // Event Type filter — super admin only (client admin already has CLIENT_TYPE_TABS).
+  const [adminTypeFilter,  setAdminTypeFilter]  = useState("");
 
   // These two hit super-admin-only backend endpoints — must stay gated behind
   // isSuperAdmin, or a Client Admin gets a 403 firing on every page load.
@@ -307,17 +318,34 @@ export default function EventsPage() {
     name: r.name || r.id,
   }));
 
-  // Client-side filtering by search + registrar + organizer + register
-  const filtered = events.filter((e) => {
-    if (searchQuery.trim() && !e.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    if (organizerFilter && (e as any).registerId !== organizerFilter) return false;
-    if (registerFilter && (e as any).registerId !== registerFilter) return false;
-    if (registrarFilter) {
-      const reg = registrarOptions.find((r) => r.id === registrarFilter);
-      if (reg && !(e.organizerName ?? e.registerName ?? "").toLowerCase().includes(reg.name.toLowerCase())) return false;
-    }
-    return true;
-  });
+  // Client-side filtering by search + registrar + organizer + register + event type,
+  // then sorted by creation time (newest first) — falls back to scheduled `date`
+  // when `createdAt` isn't present on a given event object.
+  const filtered = events
+    .filter((e) => {
+      if (searchQuery.trim() && !e.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      if (organizerFilter && (e as any).registerId !== organizerFilter) return false;
+      if (registerFilter && (e as any).registerId !== registerFilter) return false;
+      if (adminTypeFilter && (e.eventType ?? "").toUpperCase() !== adminTypeFilter) return false;
+      if (registrarFilter) {
+        const reg = registrarOptions.find((r) => r.id === registrarFilter);
+        // Prefer a direct registrarId match when the backend provides one;
+        // fall back to matching the registrar's name against the event's
+        // organizer/register name (fragile, but the only signal we had before).
+        const eAny = e as any;
+        if (eAny.registrarId) {
+          if (eAny.registrarId !== registrarFilter) return false;
+        } else if (reg && !(e.organizerName ?? e.registerName ?? "").toLowerCase().includes(reg.name.toLowerCase())) {
+          return false;
+        }
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const at = new Date((a as any).createdAt ?? a.date ?? 0).getTime();
+      const bt = new Date((b as any).createdAt ?? b.date ?? 0).getTime();
+      return bt - at;
+    });
 
   if (isLoading) return <Loader variant="page" text="Loading Events…" />;
 
@@ -377,6 +405,12 @@ export default function EventsPage() {
                 icon={Building2}
               />
             )}
+            <FilterDropdown
+              label="Event Type"
+              value={adminTypeFilter}
+              options={ADMIN_EVENT_TYPE_OPTIONS}
+              onSelect={(id) => { setAdminTypeFilter(id); setPage(0); }}
+            />
           </>
         )}
         {!isSuperAdmin && organizerOptions.length > 0 && (
@@ -389,10 +423,10 @@ export default function EventsPage() {
           />
         )}
 
-        {(searchQuery || (isSuperAdmin && (registrarFilter || organizerFilter || registerFilter))) && (
+        {(searchQuery || (isSuperAdmin && (registrarFilter || organizerFilter || registerFilter || adminTypeFilter))) && (
           <button
             type="button"
-            onClick={() => { setRegistrarFilter(""); setOrganizerFilter(""); setRegisterFilter(""); setSearchQuery(""); setPage(0); }}
+            onClick={() => { setRegistrarFilter(""); setOrganizerFilter(""); setRegisterFilter(""); setAdminTypeFilter(""); setSearchQuery(""); setPage(0); }}
             className="text-xs text-[hsl(var(--primary))] hover:underline"
           >
             Clear filters

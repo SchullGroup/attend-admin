@@ -233,6 +233,12 @@ export interface RegistrarDetailResponse {
     status:     string;
     format:     string;
     registrationCount?: number;
+    // Extra fields not guaranteed by every backend shape but read defensively
+    // (as `any`) where present — register filter + created-time ordering.
+    registerId?:   string;
+    registerName?: string;
+    createdAt?:    string;
+    rsvpCount?:    number;
   }>;
   registersCount?: number;
   eventsCount?:    number;
