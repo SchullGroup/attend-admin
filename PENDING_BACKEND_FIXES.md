@@ -71,3 +71,74 @@ Confirmed missing `activeUsers`/`suspendedUsers` — not a naming mismatch. Fron
 | 4 | Week-over-week `*Change` stuck at `null` (admin only — client works) | Bug | **High** |
 | 5 | Event Format Distribution empty on both admin + client endpoints | Bug — needs real implementation | **High** |
 | 6 | Dashboard active/suspended user counts | Bug | Medium |
+| F1 | Live event polls (non-AGM) | New feature | High |
+| F2 | Press Kit tab (Product Launch) | New feature | High |
+| F3 | Resources tab (Innovation Challenge) | New feature | Medium |
+
+---
+
+## NEW FEATURE REQUESTS (not bugs — net-new backend work)
+
+General note across all three below: CRUD endpoints are **client-admin only**. Super admin gets **read-only** access (view/monitor across orgs, no create/edit/delete). Participant-facing endpoints (vote, view released press kit, view resources) are a **separate consumer** — the mobile/attendee app team will pick those up directly; we're listing them here so backend knows they're needed, but this dashboard won't call them itself.
+
+### F1. Live event polls — for non-AGM live events (Launch, General, Innovation Challenge), client admin only
+
+AGM already has real voting (resolutions). This is a **separate, lighter-weight polling feature** for the live-session experience on other event types — think the attached YouTube-live-poll reference screenshot ("How would you rate today's session so far? Excellent / Good / Fair / Poor").
+
+**Reuse existing infra:** there's already a working STOMP/SockJS connection in `use-live-websocket.ts`, subscribed to `/topic/live.{eventId}` for Q&A (`QUESTION_SUBMITTED`, `QUESTION_MODERATED`, `QUESTION_ANSWERED` message types). Please extend the **same topic** with new message types rather than standing up a separate socket:
+- `POLL_OPENED` — `{ pollId, question, options: [{id, label}], type: "SINGLE_CHOICE", closesAt?: ISO timestamp | null }`
+- `POLL_RESULTS_UPDATED` — `{ pollId, results: [{optionId, votes, percentage}], totalVotes }` (pushed on every new vote, live)
+- `POLL_CLOSED` — `{ pollId, finalResults: [...] }`
+
+**Rules confirmed with product:**
+- One vote per participant per poll — server tracks voter identity and rejects a second vote (409), same pattern as AGM resolution voting.
+- Results broadcast live to all connected participants as votes come in (not admin-only).
+- Only **one poll open at a time** per event — creating a new poll while one is still open should be rejected (409) until the current one is closed.
+- A poll can be closed either manually (admin action) or automatically at a `closesAt` time limit if one was set at creation — "flexible till closed."
+
+**REST endpoints needed (client admin):**
+- `POST /api/v1/client/events/{eventId}/polls` — create + open a poll: `{ question, options: string[], closesAt?: ISO }`
+- `PATCH /api/v1/client/events/{eventId}/polls/{pollId}/close` — manually close
+- `GET /api/v1/client/events/{eventId}/polls` — list (history + live results for the currently open one, if any)
+- `DELETE /api/v1/client/events/{eventId}/polls/{pollId}` — remove a poll (e.g. created by mistake, not yet opened to votes)
+
+**Participant-side (for the mobile app team, not this dashboard):**
+- `POST /api/v1/participant/events/{eventId}/polls/{pollId}/vote` — `{ optionId }`, one-vote-per-participant enforced server-side
+- Participants receive `POLL_OPENED` / `POLL_RESULTS_UPDATED` / `POLL_CLOSED` via the same websocket subscription
+
+**Frontend work (once endpoints exist):** add a "Polls" tab to the Live Control Room (client admin only) — create-poll form, live results bar chart driven by the websocket, manual "Close Poll" button. Super admin gets a read-only results view.
+
+### F2. Press Kit tab — Product Launch events, client admin only
+
+New tab on Product Launch events (both the admin's event detail page and the attendee-facing live event view) for distributing embargoed press materials. Reference screenshot: a "Digital Press Kit" list with per-document "Released 10:02 AM" / "Embargoed" states and a "Release All" button.
+
+**REST endpoints needed (client admin CRUD):**
+- `POST /api/v1/client/events/{eventId}/press-kit` — upload a document: `{ title, file (multipart or base64, matching the existing AGM Notice upload pattern), releaseMode: "MANUAL" | "SCHEDULED", releaseAt?: ISO (required if SCHEDULED) }`
+- `PATCH /api/v1/client/events/{eventId}/press-kit/{docId}` — update metadata / change embargo time before release
+- `PATCH /api/v1/client/events/{eventId}/press-kit/{docId}/release` — manual release (sets `released: true`, `releasedAt: now`)
+- `PATCH /api/v1/client/events/{eventId}/press-kit/release-all` — bulk release everything still embargoed
+- `DELETE /api/v1/client/events/{eventId}/press-kit/{docId}`
+- `GET /api/v1/client/events/{eventId}/press-kit` — list, admin view includes embargoed + released items with full status
+
+**Participant-side (mobile app team):**
+- `GET /api/v1/participant/events/{eventId}/press-kit` — returns **only released** documents (embargoed ones simply excluded from this response, not just hidden client-side)
+- Ideally a notification/websocket push when a new document is released, so attendees don't have to poll — up to backend team whether this piggybacks on the existing notification service or the live websocket topic.
+
+**Frontend work (once endpoints exist):** new "Press Kit" tab on the Launch event detail page — upload dropzone, per-document embargo toggle (manual vs scheduled date/time picker), status chips, "Release All" button. Super admin: read-only.
+
+### F3. Resources tab — Innovation Challenge events, client admin only
+
+New tab on Innovation Challenge events for reference materials (rulebook PDFs, guides, links to external docs/APIs, workshop video links) — reference screenshot shows a categorized list (Getting Started / Technical Resources / Workshops) mixing PDF, Doc, Link, and Video types.
+
+**REST endpoints needed (client admin CRUD):**
+- `POST /api/v1/client/challenges/{challengeId}/resources` — add a resource: `{ title, description, category, type: "PDF" | "DOC" | "LINK" | "VIDEO", file? (for PDF/DOC uploads), externalUrl? (for LINK/VIDEO) }`
+- `PATCH /api/v1/client/challenges/{challengeId}/resources/{resourceId}`
+- `DELETE /api/v1/client/challenges/{challengeId}/resources/{resourceId}`
+- `GET /api/v1/client/challenges/{challengeId}/resources` — list, grouped/groupable by `category`
+
+**Notification requirement:** when a client admin adds a new resource at any point (including after the challenge has started), every participant on that challenge (applicants/team members) should get an in-app notification, similar to the existing challenge-application notification triggers already covered under item 9 in `BACKEND_BUGS_2026-07-11.md` — please wire a new "New resource added" trigger into that same notification service rather than building a separate one.
+
+**Participant-side (mobile app team):**
+- `GET /api/v1/participant/challenges/{challengeId}/resources`
+
+**Frontend work (once endpoints exist):** new "Resources" tab on the Innovation Challenge detail page — upload/add-link form, category grouping, edit/delete per resource. Super admin: read-only.
