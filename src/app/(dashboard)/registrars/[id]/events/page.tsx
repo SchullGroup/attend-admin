@@ -42,19 +42,32 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
   const rawEvents   = usingPaged ? (pagedData?.events ?? []) : embeddedEvents;
 
   const registerOptions = (registersData ?? []).map((r) => ({ id: r.id, name: r.name }));
+  const selectedRegisterName = registerOptions.find((r) => r.id === registerFilter)?.name;
 
   // Filter by register + event type, then sort by creation time (newest first) —
   // falls back to `date` when `createdAt` isn't present on a given event object.
+  //
+  // Register match tries `registerId` first, but also falls back to matching
+  // `registerName` (case-insensitive) against the selected register's name —
+  // backend has previously reported registerId as being in a different ID
+  // space on this embedded array than the standalone registers endpoint
+  // (BACKEND_BUGS item 14f), so an exact-id match alone can silently return
+  // zero results even when the register genuinely has events.
   const filteredEvents = useMemo(() => {
     let list = rawEvents as any[];
-    if (registerFilter) list = list.filter((e) => e.registerId === registerFilter);
+    if (registerFilter) {
+      list = list.filter((e) =>
+        e.registerId === registerFilter ||
+        (selectedRegisterName && (e.registerName ?? "").toLowerCase() === selectedRegisterName.toLowerCase())
+      );
+    }
     if (typeFilter)     list = list.filter((e) => (e.eventType ?? "").toUpperCase() === typeFilter);
     return [...list].sort((a, b) => {
       const at = new Date(a.createdAt ?? a.date ?? 0).getTime();
       const bt = new Date(b.createdAt ?? b.date ?? 0).getTime();
       return bt - at;
     });
-  }, [rawEvents, registerFilter, typeFilter]);
+  }, [rawEvents, registerFilter, typeFilter, selectedRegisterName]);
 
   // When using the (unfiltered) paged branch, keep server pagination; once a
   // client-side filter is active, or we're on the embedded-array fallback,
@@ -125,6 +138,7 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
               <thead>
                 <tr className="attend-table-header">
                   <th className="px-5 py-3 text-left">Event</th>
+                  <th className="px-5 py-3 text-left">Register</th>
                   <th className="px-5 py-3 text-left">Format</th>
                   <th className="px-5 py-3 text-left">Date</th>
                   <th className="px-5 py-3 text-left">RSVPs</th>
@@ -149,6 +163,9 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
                             </p>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                        {evt.registerName ?? "—"}
                       </td>
                       <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
                         {evt.format

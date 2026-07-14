@@ -258,3 +258,58 @@ Same symptom as item 14a (Super Admin), now reproduced on the client-scoped endp
 
 **c) "Avg Watch" column is always "—" on Per-Event Breakdown, for every event, on both Super Admin and Client Admin.**
 `avgWatchMinutes` never appears to be populated on any event row we've seen. **Ask:** please confirm whether average watch time is tracked at all yet, or if this is simply not implemented — if not implemented, we can drop the column rather than show a permanent "—".
+
+**d) Week-over-week % change indicators missing on Client Admin analytics stat cards.**
+Item 13b added `registrationsChange`/`eventsHostedChange`/`docsChange`/`votesCastChange` to `GET /api/v1/admin/analytics/summary` (Super Admin only) and confirmed by backend in the 2026-07-13 response — those now display correctly on `SuperAdminAnalytics.tsx`. The Client Admin analytics stat cards (Total Events, Total Attendees, Avg Fill Rate, Documents Published, backed by `GET /api/v1/client/analytics/stats`) never had this at all — neither the frontend parsing nor the UI supported a `change` field on this endpoint. We've now added the frontend support defensively (`extractStat()` in `src/api/client-analytics.ts` reads an optional `change`/`changePercent` per stat, and `StatCard` in `analytics/page.tsx` renders the trend arrow + % when present) so it'll display automatically once available. **Ask:** please add the same week-over-week `change`/`changePercent` fields (per stat: `totalEvents`, `totalAttendees`, `avgFillRate`, `documentsPublished`) to the client-scoped `GET /api/v1/client/analytics/stats` endpoint, matching the semantics already implemented for the admin summary endpoint (this week vs. the prior 7 days, `null`/omitted when there's no prior-week data).
+
+**e) `GET /api/v1/admin/analytics/summary` — `*Change` fields are `null` and stay `null` even after creating a new event.**
+Confirmed via raw response (Super Admin, "Last 30 Days" range):
+```json
+{
+  "data": {
+    "totalRegistrations": 12, "eventsHosted": 18, "docsDistributed": 9, "votesCast": 2,
+    "registrationsChange": null, "eventsHostedChange": null, "docsChange": null, "votesCastChange": null
+  },
+  "message": "Analytics summary retrieved.", "status": true
+}
+```
+All four `*Change` fields are `null`, which per item 13b's own spec is supposed to mean "no prior-week data to compare against." We initially assumed this was expected for a low-activity test account and asked the user to create a new event and re-check — **after creating a new event, the fields are still `null`**. Since `eventsHosted` is already `18` (i.e. there's clearly *some* history on this account, spanning back to at least 2026-07-10 based on earlier event dates we've seen), it's not obvious why there'd be no comparable prior-7-day window at all. **Ask:** please check whether the week-over-week comparison logic is actually computing a value under real conditions, or if it's unconditionally returning `null` regardless of data volume (i.e. not implemented yet vs. a genuine "insufficient history" case). If it needs a specific amount of historical data before it activates, please let us know the exact condition so we can reproduce a state where it should populate.
+
+---
+
+## 16. NEW — Custom shareholder CSV upload: required column schema is undocumented
+
+**Context:** Wired up the "Custom shareholder list" CSV upload in the AGM creation wizard's Shareholders & Voting step (`shareholderListBase64`/`shareholderListFilename` on `agmConfig`, per item 10's original scope). On first real submit attempt, the create-event call was rejected with:
+
+```
+Shareholder CSV is missing required column: sharecount
+```
+
+We have no documentation anywhere (no OpenAPI/Swagger spec in the repo, no prior ticket) of what column headers the shareholder CSV import actually requires — the frontend's placeholder hint text had been guessing "Name, Email, Phone, ShareCount" (title case) since the dropzone was originally scaffolded. We've since updated the hint to lowercase `name, email, sharecount` (with `phone` marked optional) based on the one error message we've seen, and added a client-side check that blocks upload with an inline error if a CSV's header row is missing `name`, `email`, or `sharecount` (case-insensitive, punctuation-stripped) — so users get instant feedback instead of a failed submit at the end of the wizard.
+
+**Ask:** please confirm the full, authoritative list of required and optional column headers (exact casing/spelling) for the shareholder CSV import endpoint, and whether `.xlsx` uploads are held to the same column schema (we can't validate xlsx headers client-side without adding a parsing library, so today those go straight to the backend unchecked). If there's a header-matching flexibility built in (e.g. case-insensitive, alternate names like `shares`/`shareCount`), let us know so we can relax or drop our client-side check accordingly rather than duplicating slightly-wrong logic.
+
+---
+
+## Backend response (2026-07-14) — items 13b/15d, 15b, 14a/f, 14c, 14b/e/g — status update
+
+**15d — `GET /api/v1/client/analytics/stats` now returns `change` on all four stat cards.** Confirmed live:
+```json
+{
+  "totalEvents": { "count": 12, "color": "green", "change": 20.0 },
+  "totalAttendees": { "count": 340, "color": "blue", "change": -5.3 },
+  "avgFillRate": { "percentage": 68, "color": "orange", "change": 4.2 },
+  "documentsPublished": { "count": 7, "color": "purple", "change": null }
+}
+```
+Computed this-week vs. prior-7-days, per-stat windowing matches the semantics already documented for the admin summary endpoint (`totalEvents.change` by event date, `totalAttendees.change`/`documentsPublished.change` by `createdAt`). `change: null` means "no comparison available," not 0% — confirmed our `extractStat()`'s `??` chain already turns `null` into `undefined` correctly, so `StatCard` already skips the badge in that case with no code change needed. **✅ Resolved — FE comments updated, no logic change required.**
+
+**15b — `GET /api/v1/client/analytics/engagement` — `avgWatchTime`/`pollResponseRate` confirmed legitimately `null`.** Same root cause as the admin endpoint (no watch-time/polling infrastructure exists yet) — not a bug, our earlier correction (no polling feature anywhere in the product) was right. Removed the stale `retry:false` from `useAnalyticsEngagement()` now that the endpoint is confirmed to exist and respond normally. **✅ Resolved.**
+
+**14a — Event Format Distribution empty: likely explained by date-range scoping, not a data bug.** Backend confirmed the query logic itself is correct, but flagged an asymmetry: `GET /api/v1/admin/analytics/event-format` supports `?range=`, while the client-scoped version doesn't (and never has — confirmed intentional, since the Client Admin analytics page has no date-range selector at all and always requests all-time data). On Super Admin, `SuperAdminAnalytics.tsx` defaults its period filter to **"Last 30 Days"** — if the test events' dates fall outside that window, `event-format` would correctly return empty for that range while other unscoped widgets still show full data. This matches the symptom exactly. **Ask for user:** please switch the Super Admin analytics period selector to "All Time" and confirm whether Event Format Distribution then populates — if so, this is expected filtering behavior, not a bug, and item 14a can be closed.
+
+**14c — `shortlistedTeams` field added alongside `shortlistedCount`.** Confirmed — and turns out our FE was already reading both defensively (`c.shortlistedCount ?? c.shortlistedTeams`) across every Hackathons/Judging page from earlier defensive-parsing work, so this now resolves automatically with no FE change needed. **✅ Resolved.**
+
+**14b/f — `registrationCount`/`registerId` added to registrar-scoped `EventSummary`.** Confirmed both fields now present, `registerId` confirmed to be the same ID space as `/api/v1/admin/registrars/{id}/registers`. Our existing fallback chain already prioritizes `registrationCount` first, so the Register filter and RSVP display on the registrar Events pages should now work correctly against live data — please re-verify on your end since we can't inspect the live network response ourselves. **✅ Resolved (pending user re-verification).**
+
+**14e/g — `createdAt` added to the flat `GET /api/v1/admin/events` list (previously only on the registrar-scoped array).** Confirmed intentional insertion-order semantics, not calendar order — "12 Jul, then 25 Jul, then 12 Jul again" when sorted by `createdAt` is expected once both timestamps are visible side by side. **✅ Resolved — no bug, working as designed.**

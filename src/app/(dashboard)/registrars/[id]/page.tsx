@@ -419,11 +419,15 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                     <th className="px-5 py-3 text-left">Organisation</th>
                     <th className="px-5 py-3 text-left">Industry</th>
                     <th className="px-5 py-3 text-left">Status</th>
-                    <th className="px-5 py-3 text-left">Events</th>
                     <th className="px-5 py-3 text-left">Enrolled</th>
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Event counts intentionally not shown here — this field
+                      was never populated by the backend (always 0, see
+                      PENDING_BACKEND_FIXES item 1). Which register organised
+                      an event is now shown per-row in the Events table below
+                      instead, via the new "Register" column. */}
                   {(registers as any[]).map((reg) => (
                     <tr key={reg.id} className="attend-table-row">
                       <td className="px-5 py-3">
@@ -434,9 +438,6 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                       </td>
                       <td className="px-5 py-3">
                         <StatusBadge status={(reg.status ?? "").toLowerCase()} />
-                      </td>
-                      <td className="px-5 py-3 text-sm font-medium tabular-nums text-center">
-                        {reg.eventCount ?? (reg as any).eventsCount ?? (reg as any).totalEvents ?? (reg as any).numberOfEvents ?? 0}
                       </td>
                       <td className="px-5 py-3">
                         <DateCell value={reg.enrolledAt} />
@@ -553,6 +554,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                 <thead>
                   <tr className="attend-table-header">
                     <th className="px-5 py-3 text-left">Event</th>
+                    <th className="px-5 py-3 text-left">Register</th>
                     <th className="px-5 py-3 text-left">Format</th>
                     <th className="px-5 py-3 text-left">Date</th>
                     <th className="px-5 py-3 text-left">RSVPs</th>
@@ -577,6 +579,9 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                               </p>
                             </div>
                           </div>
+                        </td>
+                        <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                          {evt.registerName ?? "—"}
                         </td>
                         <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
                           {evt.format

@@ -26,6 +26,18 @@ function maskValue(val?: string) {
   return val.length > 6 ? val.slice(0, 3) + " **** " + val.slice(-3) : val;
 }
 
+// Prefer real browser back-navigation so a user who arrived here from an
+// event's Attendees tab (or anywhere else) returns to that exact tab/scroll
+// state, instead of always being dumped on the platform-wide "All Users"
+// list regardless of where they came from.
+function handleBack(router: ReturnType<typeof useRouter>) {
+  if (typeof window !== "undefined" && window.history.length > 1) {
+    router.back();
+  } else {
+    router.push("/participants");
+  }
+}
+
 export default function ParticipantDetailPage({
   params,
 }: {
@@ -60,7 +72,7 @@ export default function ParticipantDetailPage({
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
           This user may not exist or has been removed.
         </p>
-        <Button variant="outline" className="mt-4 gap-2" onClick={() => router.push("/participants")}>
+        <Button variant="outline" className="mt-4 gap-2" onClick={() => handleBack(router)}>
           <ArrowLeft className="h-4 w-4" /> Back to Users
         </Button>
       </div>
@@ -109,11 +121,11 @@ export default function ParticipantDetailPage({
       {isMutating && <Loader variant="overlay" text="Processing…" />}
 
       <button
-        onClick={() => router.push("/participants")}
+        onClick={() => handleBack(router)}
         className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-5 transition-colors"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        All Users
+        Back
       </button>
 
       <div className="grid grid-cols-3 gap-5">

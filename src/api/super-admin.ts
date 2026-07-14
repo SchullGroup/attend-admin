@@ -810,7 +810,7 @@ export function useAdminEngagement(range?: string) {
       const d = (res.data.data ?? res.data) as any;
       return {
         avgWatchTimeMinutes: d?.avgWatchTimeMinutes ?? d?.avgWatchTime    ?? d?.averageWatchTime ?? 0,
-        qaParticipationRate: d?.qaParticipationRate ?? d?.qaRate           ?? d?.qaParticipation ?? 0,
+        qaParticipationRate: d?.qaParticipationRate ?? d?.qnaParticipation ?? d?.qaRate ?? d?.qaParticipation ?? 0,
         documentDownloads:   d?.documentDownloads   ?? d?.totalDownloads   ?? d?.downloads       ?? 0,
       } as AdminEngagementMetrics;
     },

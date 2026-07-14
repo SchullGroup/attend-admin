@@ -1681,17 +1681,33 @@ export default function ChallengeDetailPage({
   const [adminTab,  setAdminTab]  = useState<AdminTab>("Overview");
 
   // Always call both hooks (rules of hooks); enable based on role
-  const { data: clientChallenge, isLoading: clientLoading } = useClientChallengeDetail(challengeId);
-  const { data: adminChallenge,  isLoading: adminLoading  } = useAdminChallengeDetail(challengeId);
+  const { data: clientChallenge, isLoading: clientLoading, isError: clientErrored, error: clientErr } = useClientChallengeDetail(challengeId);
+  const { data: adminChallenge,  isLoading: adminLoading,  isError: adminErrored,  error: adminErr  } = useAdminChallengeDetail(challengeId);
 
   const challenge = isSuperAdmin ? adminChallenge  : clientChallenge;
   const isLoading = isSuperAdmin ? adminLoading    : clientLoading;
+  const isErrored = isSuperAdmin ? adminErrored    : clientErrored;
+  const loadError = isSuperAdmin ? adminErr        : clientErr;
 
   if (isLoading) return <Loader variant="page" text="Loading Challenge…" />;
   if (!challenge) {
+    // Distinguish a genuine "doesn't exist" from a request that actually
+    // failed (403/500/network) — the two were previously collapsed into the
+    // same generic "Challenge not found" message, which made a real backend
+    // error on this endpoint indistinguishable from a bad/stale ID.
+    const status = (loadError as any)?.response?.status;
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="text-lg font-semibold text-[hsl(var(--foreground))]">Challenge not found</p>
+        <p className="text-lg font-semibold text-[hsl(var(--foreground))]">
+          {isErrored ? "Couldn't load this challenge" : "Challenge not found"}
+        </p>
+        {isErrored && (
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1 max-w-sm">
+            {status
+              ? `Request failed with status ${status}. This may be a temporary backend issue — please try again.`
+              : "The request failed unexpectedly. Please try again."}
+          </p>
+        )}
         <Button variant="outline" className="mt-4 gap-2" onClick={() => router.push("/hackathons")}>
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>

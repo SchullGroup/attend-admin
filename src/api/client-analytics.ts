@@ -25,13 +25,25 @@ import { ApiResponse } from "@/types/api";
 /** A stat field may come back as a plain number OR { count, color } OR { percentage, color }. */
 export type StatField =
   | number
-  | { count?: number; percentage?: number; color?: string };
+  | { count?: number; percentage?: number; color?: string; change?: number; changePercent?: number };
 
-export function extractStat(val: StatField | undefined): { value: number; color?: string } {
+/**
+ * `change` — signed week-over-week percentage (this week vs. the prior 7
+ * days). Confirmed live on `/analytics/stats` by backend (BACKEND_BUGS item
+ * 15d) — `null` means no prior-week data to compare against, not "0%
+ * change", so we only render the trend badge when `change` is a number
+ * (the `??` chain below naturally turns `null` into `undefined`, which the
+ * `StatCard` UI treats as "don't render").
+ */
+export function extractStat(val: StatField | undefined): { value: number; color?: string; change?: number } {
   if (val == null) return { value: 0 };
   if (typeof val === "number") return { value: val };
-  const v = val as { count?: number; percentage?: number; color?: string };
-  return { value: v.count ?? v.percentage ?? 0, color: v.color ?? undefined };
+  const v = val as { count?: number; percentage?: number; color?: string; change?: number; changePercent?: number };
+  return {
+    value:  v.count ?? v.percentage ?? 0,
+    color:  v.color ?? undefined,
+    change: v.change ?? v.changePercent ?? undefined,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -40,10 +52,10 @@ export function extractStat(val: StatField | undefined): { value: number; color?
 
 /** GET /analytics/stats */
 export interface AnalyticsStatsResponse {
-  totalEvents:         { count: number;      color?: string };
-  totalAttendees:      { count: number;      color?: string };
-  avgFillRate:         { percentage: number; color?: string };
-  documentsPublished:  { count: number;      color?: string };
+  totalEvents:         { count: number;      color?: string; change?: number; changePercent?: number };
+  totalAttendees:      { count: number;      color?: string; change?: number; changePercent?: number };
+  avgFillRate:         { percentage: number; color?: string; change?: number; changePercent?: number };
+  documentsPublished:  { count: number;      color?: string; change?: number; changePercent?: number };
   // legacy aliases the API may also return
   totalRsvps?:         StatField;
   totalDocuments?:     StatField;
@@ -387,9 +399,11 @@ export function useAnalyticsEventFormat() {
 
 /**
  * GET /analytics/engagement — org-wide engagement metrics (watch time, Q&A
- * participation, document downloads). Not yet confirmed by backend — only
- * the event-format client endpoint was confirmed added (BACKEND_BUGS item 13c
- * follow-up needed for this one). `retry:false` since this may still 404.
+ * participation, document downloads), scoped to the caller's stakeholder.
+ * Confirmed live by backend (BACKEND_BUGS item 15b) — `avgWatchTime` is
+ * confirmed to legitimately return `null` (no watch-time tracking infra
+ * exists yet, same as the admin endpoint), so it's read defensively as 0
+ * here until the UI is updated to distinguish "not tracked" from "zero".
  */
 export function useAnalyticsEngagement() {
   return useQuery({
@@ -401,12 +415,11 @@ export function useAnalyticsEngagement() {
       const d: any = res.data.data ?? res.data;
       return {
         avgWatchTimeMinutes: d?.avgWatchTimeMinutes ?? d?.avgWatchTime    ?? d?.averageWatchTime ?? 0,
-        qaParticipationRate: d?.qaParticipationRate ?? d?.qaRate         ?? d?.qaParticipation   ?? 0,
+        qaParticipationRate: d?.qaParticipationRate ?? d?.qnaParticipation ?? d?.qaRate ?? d?.qaParticipation ?? 0,
         documentDownloads:   d?.documentDownloads   ?? d?.totalDownloads ?? d?.downloads         ?? 0,
       } as EngagementMetrics;
     },
     staleTime: 60_000,
-    retry: false,
   });
 }
 

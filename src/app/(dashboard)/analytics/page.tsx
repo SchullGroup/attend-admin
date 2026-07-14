@@ -5,6 +5,7 @@ import {
   Users,
   FileText,
   TrendingUp,
+  TrendingDown,
   ChevronLeft,
   ChevronRight,
   BarChart2,
@@ -86,9 +87,9 @@ function fillRateColor(rate: number): string {
 // ---------------------------------------------------------------------------
 
 function StatCard({
-  title, value, subtitle, icon: Icon, accent,
+  title, value, subtitle, icon: Icon, accent, change,
 }: {
-  title: string; value: string | number; subtitle: string; icon: any; accent: string;
+  title: string; value: string | number; subtitle: string; icon: any; accent: string; change?: number;
 }) {
   return (
     <Card className="attend-card p-5">
@@ -99,6 +100,14 @@ function StatCard({
         >
           <Icon className="h-4 w-4" style={{ color: accent }} />
         </div>
+        {change !== undefined && (
+          <div className={`flex items-center gap-0.5 text-xs font-semibold ${change >= 0 ? "text-green-600" : "text-red-500"}`}>
+            {change >= 0
+              ? <TrendingUp className="h-3 w-3" />
+              : <TrendingDown className="h-3 w-3" />}
+            {Math.abs(change)}%
+          </div>
+        )}
       </div>
       <div className="text-2xl font-bold tabular-nums text-[hsl(var(--foreground))] mb-0.5">
         {typeof value === "number" ? value.toLocaleString() : value}
@@ -254,6 +263,7 @@ function ClientAnalytics() {
       subtitle: "All events on the platform",
       icon:     CalendarDays,
       accent:   evStat.color ?? "#374151",
+      change:   evStat.change,
     },
     {
       title:    "Total Attendees",
@@ -261,6 +271,7 @@ function ClientAnalytics() {
       subtitle: "Across all events",
       icon:     Users,
       accent:   attStat.color ?? "#2563eb",
+      change:   attStat.change,
     },
     {
       title:    "Avg Fill Rate",
@@ -268,6 +279,7 @@ function ClientAnalytics() {
       subtitle: "Average capacity utilisation",
       icon:     TrendingUp,
       accent:   frRaw.color ?? "#16a34a",
+      change:   frRaw.change,
     },
     {
       title:    "Documents Published",
@@ -275,6 +287,7 @@ function ClientAnalytics() {
       subtitle: "Files shared across events",
       icon:     FileText,
       accent:   docStat.color ?? "#9333ea",
+      change:   docStat.change,
     },
   ];
 
