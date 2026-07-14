@@ -138,7 +138,6 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
               <thead>
                 <tr className="attend-table-header">
                   <th className="px-5 py-3 text-left">Event</th>
-                  <th className="px-5 py-3 text-left">Register</th>
                   <th className="px-5 py-3 text-left">Format</th>
                   <th className="px-5 py-3 text-left">Date</th>
                   <th className="px-5 py-3 text-left">RSVPs</th>
@@ -161,11 +160,11 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
                             <p className="text-sm font-medium text-[hsl(var(--foreground))] mt-0.5 truncate max-w-[240px]">
                               {evt.title}
                             </p>
+                            <p className="text-xs text-[hsl(var(--muted-foreground))] truncate max-w-[240px]">
+                              {evt.registerName ?? "—"}
+                            </p>
                           </div>
                         </div>
-                      </td>
-                      <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-                        {evt.registerName ?? "—"}
                       </td>
                       <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
                         {evt.format
