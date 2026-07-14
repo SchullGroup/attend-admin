@@ -507,9 +507,9 @@ export function useAdminAnalyticsStats() {
 
 /**
  * GET /api/v1/admin/analytics/by-type
- * @param range Optional date-range code sent as `?range=` — "30d" | "90d" | "12m" | "all".
- * Not confirmed to be supported server-side yet; see BACKEND_BUGS. Omitted from the
- * request when undefined so existing (unscoped) behaviour is unaffected.
+ * @param range Date-range code sent as `?range=` — "30d" | "90d" | "12m" | "all".
+ * Confirmed live by backend across all admin analytics endpoints (BACKEND_BUGS
+ * item 13a). Omitted from the request when undefined (defaults server-side to "all").
  */
 export function useAdminAnalyticsByType(range?: string) {
   return useQuery({
@@ -672,9 +672,13 @@ export interface EventFormatItem {
   color?: string;
 }
 
+/**
+ * No `pollResponseRate` field — backend confirmed there is no polling feature
+ * anywhere in the product (no Poll entity, no response tracking of any kind).
+ * Q&A is the only live-session engagement feature.
+ */
 export interface AdminEngagementMetrics {
   avgWatchTimeMinutes:  number;
-  pollResponseRate:     number;
   qaParticipationRate:  number;
   documentDownloads:    number;
   [key: string]: any;
@@ -682,7 +686,11 @@ export interface AdminEngagementMetrics {
 
 /**
  * GET /api/v1/admin/analytics/summary
- * Summary stat cards at the top of the analytics page.
+ * Summary stat cards at the top of the analytics page. Backend confirmed
+ * week-over-week `*Change` percentages (registrationsChange, eventsHostedChange,
+ * docsChange, votesCastChange) — always last-7-days-vs-prior-7-days regardless
+ * of the `range` filter; `null` when there's no prior-week data to compare
+ * against. See BACKEND_BUGS item 13b.
  */
 export function useAdminSummaryStats(range?: string) {
   return useQuery({
@@ -802,7 +810,6 @@ export function useAdminEngagement(range?: string) {
       const d = (res.data.data ?? res.data) as any;
       return {
         avgWatchTimeMinutes: d?.avgWatchTimeMinutes ?? d?.avgWatchTime    ?? d?.averageWatchTime ?? 0,
-        pollResponseRate:    d?.pollResponseRate    ?? d?.pollRate         ?? d?.pollResponsePct ?? 0,
         qaParticipationRate: d?.qaParticipationRate ?? d?.qaRate           ?? d?.qaParticipation ?? 0,
         documentDownloads:   d?.documentDownloads   ?? d?.totalDownloads   ?? d?.downloads       ?? 0,
       } as AdminEngagementMetrics;

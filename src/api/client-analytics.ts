@@ -115,11 +115,13 @@ export interface EventPerformanceItem {
   fillRate:       number;
   checkedInCount: number;
   checkInRate:    number;
-  /** Optional — same as the admin `event-performance` shape; not confirmed present
-   *  on the client-scoped endpoint yet. See BACKEND_BUGS item 13c. */
+  /** Same as the admin `event-performance` shape. `qaResponses` is a real,
+   *  confirmed count of EventQuestion rows per event — backend confirmed
+   *  `pollResponses` never existed as a field; kept only as a fallback for
+   *  older cached/mocked shapes. See BACKEND_BUGS item 13d. */
   avgWatchMinutes?: number;
   qaResponses?:     number;
-  pollResponses?:   number;  // legacy/fallback field name
+  pollResponses?:   number;  // legacy/fallback field name — never actually populated
 }
 
 /** GET /analytics/event-format — distribution of events by format */
@@ -133,10 +135,14 @@ export interface EventFormatResponse {
   formats: EventFormatItem[];
 }
 
-/** GET /analytics/engagement — org-wide engagement metrics */
+/**
+ * GET /analytics/engagement — org-wide engagement metrics.
+ * No `pollResponseRate` field — backend confirmed there is no polling
+ * feature anywhere in the product (no Poll entity, no response tracking).
+ * Q&A is the only live-session engagement feature.
+ */
 export interface EngagementMetrics {
   avgWatchTimeMinutes: number;
-  pollResponseRate:    number;
   qaParticipationRate: number;
   documentDownloads:   number;
 }
@@ -355,9 +361,8 @@ export function useAnalyticsCheckInOverview() {
 
 /**
  * GET /analytics/event-format — distribution of this org's events by format
- * (virtual / hybrid / in-person). New — see BACKEND_BUGS item 13c, which
- * asked backend to add a client-scoped equivalent of the admin-only
- * event-format endpoint. `retry:false` since this may 404 until it exists.
+ * (virtual / hybrid / in-person). Confirmed live by backend — see
+ * BACKEND_BUGS item 13c. Scoped to the caller's own stakeholder.
  */
 export function useAnalyticsEventFormat() {
   return useQuery({
@@ -372,14 +377,14 @@ export function useAnalyticsEventFormat() {
       return { formats } as EventFormatResponse;
     },
     staleTime: 60_000,
-    retry: false,
   });
 }
 
 /**
- * GET /analytics/engagement — org-wide engagement metrics (watch time, poll/Q&A
- * rates, document downloads). New — see BACKEND_BUGS item 13c. `retry:false`
- * since this may 404 until backend adds the client-scoped equivalent.
+ * GET /analytics/engagement — org-wide engagement metrics (watch time, Q&A
+ * participation, document downloads). Not yet confirmed by backend — only
+ * the event-format client endpoint was confirmed added (BACKEND_BUGS item 13c
+ * follow-up needed for this one). `retry:false` since this may still 404.
  */
 export function useAnalyticsEngagement() {
   return useQuery({
@@ -391,7 +396,6 @@ export function useAnalyticsEngagement() {
       const d: any = res.data.data ?? res.data;
       return {
         avgWatchTimeMinutes: d?.avgWatchTimeMinutes ?? d?.avgWatchTime    ?? d?.averageWatchTime ?? 0,
-        pollResponseRate:    d?.pollResponseRate    ?? d?.pollRate       ?? d?.pollResponsePct   ?? 0,
         qaParticipationRate: d?.qaParticipationRate ?? d?.qaRate         ?? d?.qaParticipation   ?? 0,
         documentDownloads:   d?.documentDownloads   ?? d?.totalDownloads ?? d?.downloads         ?? 0,
       } as EngagementMetrics;

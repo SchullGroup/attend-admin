@@ -11,7 +11,6 @@ import {
   UserCheck,
   Download,
   Eye,
-  Activity,
   MessageSquare,
 } from "lucide-react";
 import {
@@ -721,10 +720,13 @@ function ClientAnalytics() {
       </Card>
 
       {/* Engagement Metrics */}
+      {/* Note: no "Poll Response Rate" card here — backend confirmed there is no
+          polling feature anywhere in the product (no Poll entity, no response
+          tracking of any kind). Q&A is the only live-session engagement feature. */}
       <Card className="attend-card p-5">
         <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">Engagement Metrics</h2>
         {engageLoading ? <Loader variant="inline" /> : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             {[
               {
                 label:    "Avg Watch Time",
@@ -732,13 +734,6 @@ function ClientAnalytics() {
                 sub:      "per attendee",
                 icon:     Eye,
                 color:    "#2563eb",
-              },
-              {
-                label:    "Poll Response Rate",
-                value:    `${engagement?.pollResponseRate ?? 0}%`,
-                sub:      "of active polls",
-                icon:     Activity,
-                color:    "#7c22c9",
               },
               {
                 label:    "Q&A Participation",

@@ -8,6 +8,7 @@ import {
   useAdminSummaryStats,
   useAdminTopOrganisers,
   useAdminKycBreakdown,
+  useAdminEventFormat,
   useAdminAnalyticsByType,
   useAdminAuditLogs,
 } from "@/api/super-admin";
@@ -52,6 +53,15 @@ const MODULE_COLORS: Record<string, string> = {
   HACKATHON:            "#0891b2",
   GENERAL:              "#16a34a",
   GENERAL_EVENT:        "#16a34a",
+};
+
+const FORMAT_COLORS: Record<string, string> = {
+  virtual:    "#2563eb",
+  hybrid:     "#7c22c9",
+  "in-person":"#16a34a",
+  VIRTUAL:    "#2563eb",
+  HYBRID:     "#7c22c9",
+  IN_PERSON:  "#16a34a",
 };
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
@@ -113,6 +123,7 @@ export function SuperAdminAnalytics() {
   const { data: topOrgs = [], isLoading: topOrgsLoading  } = useAdminTopOrganisers(5, range);
   const { data: byType = [],  isLoading: byTypeLoading   } = useAdminAnalyticsByType(range);
   const { data: kycData = [], isLoading: kycLoading      } = useAdminKycBreakdown(range);
+  const { data: formats = [], isLoading: formatLoading   } = useAdminEventFormat(range);
   const { data: auditData,    isLoading: auditLoading    } = useAdminAuditLogs({ page: 0, size: 10 }, true);
 
   const auditLogs  = auditData?.logs   ?? [];
@@ -122,6 +133,7 @@ export function SuperAdminAnalytics() {
   // ── Compute max for bar scaling ──────────────────────────────────────────
   const maxOrg    = Math.max(...topOrgs.map(o => o.eventCount), 1);
   const kycTotal  = kycData.reduce((s, i) => s + i.count, 0);
+  const maxFormat = Math.max(...formats.map(f => f.count), 1);
 
   return (
     <div className="flex flex-col gap-6">
@@ -266,43 +278,88 @@ export function SuperAdminAnalytics() {
         </Card>
       </div>
 
-      {/* ── Row 3: KYC Breakdown ─────────────────────────────────────────── */}
-      {/* KYC Verification Breakdown */}
-      <Card className="attend-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
-          <h2 className="font-semibold text-[hsl(var(--foreground))]">KYC Verification Breakdown</h2>
-        </div>
-        {kycLoading ? <Loader variant="inline" /> : (
-          <div className="px-5 py-4 flex flex-col gap-3">
-            {kycData.length === 0 && (
-              <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">No KYC data yet.</p>
-            )}
-            {kycData.map((item) => {
-              const pct = item.percentage > 0
-                ? item.percentage
-                : kycTotal > 0 ? Math.round((item.count / kycTotal) * 100) : 0;
-              const color = item.color ?? "#374151";
-              return (
-                <div key={item.label}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm font-medium text-[hsl(var(--foreground))]">{item.label}</span>
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className="tabular-nums font-semibold" style={{ color }}>{item.count}</span>
-                      <span className="text-xs text-[hsl(var(--muted-foreground))] w-8 text-right">{pct}%</span>
+      {/* ── Row 3: KYC Breakdown + Event Format ──────────────────────────── */}
+      <div className="grid grid-cols-2 gap-5">
+
+        {/* KYC Verification Breakdown */}
+        <Card className="attend-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
+            <h2 className="font-semibold text-[hsl(var(--foreground))]">KYC Verification Breakdown</h2>
+          </div>
+          {kycLoading ? <Loader variant="inline" /> : (
+            <div className="px-5 py-4 flex flex-col gap-3">
+              {kycData.length === 0 && (
+                <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">No KYC data yet.</p>
+              )}
+              {kycData.map((item) => {
+                const pct = item.percentage > 0
+                  ? item.percentage
+                  : kycTotal > 0 ? Math.round((item.count / kycTotal) * 100) : 0;
+                const color = item.color ?? "#374151";
+                return (
+                  <div key={item.label}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm font-medium text-[hsl(var(--foreground))]">{item.label}</span>
+                      <div className="flex items-center gap-3 text-sm">
+                        <span className="tabular-nums font-semibold" style={{ color }}>{item.count}</span>
+                        <span className="text-xs text-[hsl(var(--muted-foreground))] w-8 text-right">{pct}%</span>
+                      </div>
+                    </div>
+                    <div className="h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${pct}%`, backgroundColor: color }}
+                      />
                     </div>
                   </div>
-                  <div className="h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{ width: `${pct}%`, backgroundColor: color }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
+        {/* Event Format Distribution — platform-wide rollup */}
+        <Card className="attend-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
+            <h2 className="font-semibold text-[hsl(var(--foreground))]">Event Format Distribution</h2>
           </div>
-        )}
-      </Card>
+          {formatLoading ? <Loader variant="inline" /> : (
+            <div className="px-5 py-4">
+              {formats.length === 0 && (
+                <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">No format data yet.</p>
+              )}
+              <div className="flex flex-col gap-4">
+                {formats.map((item) => {
+                  const color = item.color ?? FORMAT_COLORS[item.format] ?? FORMAT_COLORS[item.format.toUpperCase()] ?? "#374151";
+                  const pct   = maxFormat > 0 ? Math.round((item.count / maxFormat) * 100) : 0;
+                  return (
+                    <div key={item.format}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="h-2.5 w-2.5 rounded-full shrink-0"
+                            style={{ backgroundColor: color }}
+                          />
+                          <span className="text-sm font-medium text-[hsl(var(--foreground))] capitalize">
+                            {item.format.toLowerCase().replace("_", "-")}
+                          </span>
+                        </div>
+                        <span className="text-sm font-bold tabular-nums" style={{ color }}>{item.count}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${pct}%`, backgroundColor: color }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
 
       {/* ── Row 6: Recent Activity Log ───────────────────────────────────── */}
       <Card className="attend-card overflow-hidden">
