@@ -15,7 +15,7 @@ import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
 import { DateCell } from "@/components/ui/date-cell";
 import { useGetMe } from "@/api/auth/hooks";
-import { isSuperAdminRole } from "@/lib/utils";
+import { isSuperAdminRole, formatRcNumber } from "@/lib/utils";
 
 const STATUS_DOT: Record<string, { dot: string; label: string }> = {
   ACTIVE:    { dot: "#16a34a", label: "Active"    },
@@ -147,7 +147,7 @@ export default function RegistrarsPage() {
                       <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate" title={getDisplayName(r)}>{getDisplayName(r)}</p>
                       <p className="text-xs text-[hsl(var(--muted-foreground))] truncate" title={r.industry ?? "—"}>{r.industry ?? "—"}</p>
                     </td>
-                    <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{r.rcNumber ?? "—"}</td>
+                    <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{r.rcNumber ? formatRcNumber(r.rcNumber) : "—"}</td>
                     <td className="px-5 py-3">
                       {r.plan
                         ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">{r.plan.toUpperCase()}</span>

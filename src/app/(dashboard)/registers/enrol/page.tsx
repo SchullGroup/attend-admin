@@ -112,7 +112,7 @@ export default function EnrolRegisterPage() {
       // so it always saves consistently no matter how it was typed.
       // form.representativePhone is already a full E.164 string from
       // PhoneInput.
-      rcNumber:            withIdPrefix("RC", form.rcNumber) || null,
+      rcNumber:            withIdPrefix("RC", form.rcNumber, { space: true }) || null,
       industry:            form.industry                   || null,
       representativeName:  form.representativeName.trim()  || undefined,
       representativePhone: form.representativePhone         || undefined,

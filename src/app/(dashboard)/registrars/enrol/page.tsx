@@ -96,7 +96,7 @@ export default function EnrolRegistrarPage() {
         plan:                form.plan,
         // Digits-only from the input — "RC" prefixed here so it always
         // saves consistently no matter how it was typed.
-        rcNumber:            withIdPrefix("RC", form.rcNumber) || null,
+        rcNumber:            withIdPrefix("RC", form.rcNumber, { space: true }) || null,
         industry:            form.industry        || null,
         address:             form.address.trim()  || null,
         website:             form.website.trim()  || null,

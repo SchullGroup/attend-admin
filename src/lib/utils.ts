@@ -65,10 +65,28 @@ export function digitsOnly(value: string): string {
  * Prepend a fixed, uppercase prefix to a digits-only ID number for the
  * payload — e.g. withIdPrefix("CHN", "1234567892") -> "CHN1234567892".
  * Returns "" for an empty value so optional fields stay optional.
+ *
+ * Pass `{ space: true }` to insert a space between the prefix and the
+ * digits instead — e.g. withIdPrefix("RC", "2345678", { space: true })
+ * -> "RC 2345678". Used for RC Number fields, which should read "RC 123"
+ * rather than "RC123"; other prefixes (e.g. "CHN") keep the no-space form
+ * by default since that's the format already in use for those IDs.
  */
-export function withIdPrefix(prefix: string, rawDigits: string): string {
+export function withIdPrefix(prefix: string, rawDigits: string, opts?: { space?: boolean }): string {
   const clean = digitsOnly(rawDigits);
-  return clean ? `${prefix.toUpperCase()}${clean}` : "";
+  if (!clean) return "";
+  return `${prefix.toUpperCase()}${opts?.space ? " " : ""}${clean}`;
+}
+
+/**
+ * Display-time formatter for RC Number values that inserts a space after
+ * "RC" if one isn't already there — so legacy values saved before the
+ * space format was introduced (e.g. "RC2345678") still render as
+ * "RC 2345678" instead of needing a data migration.
+ */
+export function formatRcNumber(value?: string | null): string {
+  if (!value) return "";
+  return value.replace(/^RC\s*/i, "RC ");
 }
 
 /**

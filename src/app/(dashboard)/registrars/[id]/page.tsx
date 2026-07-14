@@ -29,7 +29,7 @@ import { ModuleBadge } from "@/components/custom/module-badge";
 import { DateCell } from "@/components/ui/date-cell";
 import { CustomSelect } from "@/components/custom/custom-select";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { formatDate, digitsOnly, withIdPrefix } from "@/lib/utils";
+import { formatDate, digitsOnly, withIdPrefix, formatRcNumber } from "@/lib/utils";
 import { getEventModule, MODULE_COLORS } from "@/lib/event-module";
 
 const PLAN_OPTIONS = [
@@ -260,7 +260,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                   <Input
                     inputMode="numeric"
                     value={digitsOnly((editForm.rcNumber ?? "").replace(/^RC/i, ""))}
-                    onChange={(e) => setEditForm((f) => ({ ...f, rcNumber: withIdPrefix("RC", digitsOnly(e.target.value)) }))}
+                    onChange={(e) => setEditForm((f) => ({ ...f, rcNumber: withIdPrefix("RC", digitsOnly(e.target.value), { space: true }) }))}
                     placeholder="287640"
                     className="pl-9"
                   />
@@ -324,7 +324,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
             <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">Organisation</h2>
             <div className="flex flex-col gap-3">
               {([
-                { icon: Hash,      label: "RC Number", value: registrar.rcNumber ?? "—"  },
+                { icon: Hash,      label: "RC Number", value: registrar.rcNumber ? formatRcNumber(registrar.rcNumber) : "—"  },
                 { icon: Globe,     label: "Industry",  value: registrar.industry  ?? "—" },
                 { icon: Building2, label: "Plan",      value: registrar.plan      ?? "—" },
                 { icon: MapPin,    label: "Address",   value: (registrar as any).address  ?? null },
