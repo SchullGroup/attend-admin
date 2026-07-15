@@ -77,16 +77,23 @@ function FilterDropdown({
   options,
   onSelect,
   icon: Icon,
+  searchable = false,
 }: {
   label: string;
   value: string;
   options: { id: string; name: string }[];
   onSelect: (id: string) => void;
   icon?: React.ElementType;
+  /** Shows a text filter box above the list — useful for long, cross-org option lists. */
+  searchable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.id === value);
+  const visibleOptions = searchable && query.trim()
+    ? options.filter((o) => o.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
 
   useEffect(() => {
     function outside(e: MouseEvent) {
@@ -94,6 +101,10 @@ function FilterDropdown({
     }
     if (open) document.addEventListener("mousedown", outside);
     return () => document.removeEventListener("mousedown", outside);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) setQuery("");
   }, [open]);
 
   return (
@@ -114,7 +125,18 @@ function FilterDropdown({
       </button>
 
       {open && (
-        <div className="absolute z-50 top-[calc(100%+4px)] left-0 min-w-[200px] max-w-[260px] rounded-xl border border-[hsl(var(--border))] bg-white shadow-lg overflow-hidden">
+        <div className="absolute z-50 top-[calc(100%+4px)] left-0 min-w-[220px] max-w-[280px] rounded-xl border border-[hsl(var(--border))] bg-white shadow-lg overflow-hidden">
+          {searchable && (
+            <div className="p-2 border-b border-[hsl(var(--border)/0.5)]">
+              <Input
+                autoFocus
+                placeholder={`Search ${label.toLowerCase()}s…`}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+          )}
           {/* Clear option */}
           <button
             type="button"
@@ -129,7 +151,7 @@ function FilterDropdown({
           </button>
           <div className="border-t border-[hsl(var(--border)/0.5)]" />
           <div className="max-h-52 overflow-y-auto">
-            {options.map((o) => (
+            {visibleOptions.map((o) => (
               <button
                 key={o.id}
                 type="button"
@@ -145,7 +167,7 @@ function FilterDropdown({
                 <span className="truncate">{o.name}</span>
               </button>
             ))}
-            {options.length === 0 && (
+            {visibleOptions.length === 0 && (
               <p className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">No options</p>
             )}
           </div>

@@ -248,8 +248,13 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
             ? errMessage
             : (() => { try { return JSON.stringify(errMessage); } catch { return "Failed to join Zoom meeting"; } })();
 
-          // Error 200 = ZAK expired. Silently refresh and retry once.
-          if (typeof msg === "string" && msg.includes("200") && eventId && !forceRefresh) {
+          // ZAK expired/invalid — reported as code 200 by the old component
+          // view and code 3265 ("Token error") by the client view.
+          // Silently refresh and retry once.
+          const isTokenError =
+            typeof msg === "string" &&
+            (/\b(200|3265)\b/.test(msg) || /token error/i.test(msg));
+          if (isTokenError && eventId && !forceRefresh) {
             handleLaunch(true);
             return;
           }
@@ -392,9 +397,9 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
           <div>
             <p className="text-sm font-semibold text-white mb-1">Failed to join meeting</p>
             <p className="text-xs text-gray-400 max-w-xs">{errMsg}</p>
-            {errMsg.includes("200") && (
+            {(errMsg.includes("200") || errMsg.includes("3265") || /token/i.test(errMsg)) && (
               <p className="text-xs text-amber-400 max-w-xs mt-2">
-                Host token expired. Go to Event Settings → Refresh Meeting Token, then try again.
+                Host token expired or invalid. Click Try again — a fresh token will be fetched automatically.
               </p>
             )}
             {errMsg.includes("3000") && (
@@ -407,7 +412,18 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
             )}
           </div>
           <div className="flex flex-col items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setStatus("idle"); setErrMsg(""); }}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // On token errors, retry WITH a forced refresh — going back
+                // to idle and relaunching would reuse the same stale ZAK.
+                const tokenErr = /\b(200|3265)\b/.test(errMsg) || /token/i.test(errMsg);
+                setErrMsg("");
+                if (tokenErr && eventId) handleLaunch(true);
+                else setStatus("idle");
+              }}
+            >
               Try again
             </Button>
           </div>

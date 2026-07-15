@@ -114,6 +114,7 @@ export const registrarKeys = {
   detail:    (id: string) => ["registrar", id] as const,
   registers: (id: string) => ["registrar", id, "registers"] as const,
   events:    (id: string) => ["registrar", id, "events"] as const,
+  allRegisters: ["registrars", "allRegisters"] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -292,6 +293,39 @@ export function useRegistrarRegisters(id: string) {
       return (raw?.registers ?? raw?.content ?? raw?.data ?? (Array.isArray(raw) ? raw : [])) as RegistrarDetailResponse["registers"];
     },
     enabled:   !!id,
+    staleTime: 60_000,
+  });
+}
+
+/** One row returned by GET /api/v1/admin/registers (platform-wide). */
+export interface AdminRegisterOption {
+  id:          string;
+  name:        string;
+  registrarId: string;
+}
+
+/**
+ * Every register (organisation) across every registrar on the platform —
+ * for a true cross-org register filter, no need to first pick a Registrar.
+ * Replaces the old cascading Registrar→Register two-step filter on the
+ * Events page (super admin only).
+ *
+ * API: GET /api/v1/admin/registers (no query params)
+ */
+export function useAdminAllRegisters(enabled = true) {
+  return useQuery({
+    queryKey: registrarKeys.allRegisters,
+    enabled,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<any>>("/api/v1/admin/registers");
+      const raw = res.data.data;
+      const list = (raw?.registers ?? raw?.content ?? raw?.data ?? (Array.isArray(raw) ? raw : [])) as any[];
+      return list.map((r) => ({
+        id:          r.id,
+        name:        r.name ?? r.companyName ?? r.id,
+        registrarId: r.registrarId ?? r.registrar?.id ?? "",
+      })) as AdminRegisterOption[];
+    },
     staleTime: 60_000,
   });
 }
