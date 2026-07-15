@@ -37,10 +37,20 @@ Backend has **zero** Meeting SDK signature code and no SDK key/secret configured
 
 ### New FE work unblocked — F1/F2/F3 endpoints are live on staging
 Backend built all three (client-admin CRUD + super-admin read-only + participant endpoints). **Ask backend to resend the full endpoint list doc.** Then build:
-- **Polls tab** in Live Control Room — create form, live results via existing `/topic/live.{eventId}` websocket (`POLL_OPENED`/`POLL_RESULTS_UPDATED`/`POLL_CLOSED`), close button.
-- **Press Kit tab** on Product Launch event detail — dropzone, embargo toggles, release/release-all, status chips.
-- **Resources tab** on Innovation Challenge detail — add/upload form, category grouping, edit/delete.
+- **Polls tab** — ✅ BUILT (2026-07-15): `PollsPanel` in the Live Control Room (`src/api/client-polls.ts`, websocket types extended). Client admin: create/close/delete + live results; super admin: read-only via `/admin/events/{id}/polls`. Needs live testing against staging.
+- **Press Kit tab** — ✅ BUILT (2026-07-15): `EventPressKitTab` on Launch event detail (`src/api/client-press-kit.ts`). Upload w/ manual/scheduled embargo, release one/all, inline embargo-time edit, delete; super admin + Viewer read-only. Needs live testing (esp. whether the POST accepts the fileUrl-from-`/api/v1/upload` pattern).
+- **Resources tab** — ✅ BUILT (2026-07-15): `ResourcesTab` on challenge detail (`src/api/client-challenge-resources.ts`). LINK/VIDEO urls + PDF/DOC uploads, category grouping w/ suggestions, delete; super admin + Viewer read-only. Needs live testing.
 - Also now possible: **cross-org register filter** on the Events page — `GET /admin/registers` exists, returns `{ registers: [{ id, name, registrarId }] }`.
+
+### ✅ RESOLVED (2026-07-15, same evening) — O1 regression: host token couldn't start the meeting
+
+Backend fixed the token issuance; fresh joins work. **Residual, expected:** events from the pre-idempotency era whose stored meetingId points at a meeting deleted during the old rotation churn still fail with token error 3265 — those meetings no longer exist on Zoom's side, so no token can start them. FE now surfaces a **"Replace Meeting (new link)"** button on token-error screens that calls `POST /zoom?forceNew=true` — one click per affected old event, done. Original regression notes kept below for history.
+
+### ~~🔴 NEW (2026-07-15 evening) — O1 regression: host token can't start the meeting~~
+
+Live repro right after the idempotency deploy: host join fails with **"Not support start meeting via tokens (code 200)"** — including after the automatic refresh-and-retry, so the freshly issued token fails too. That Zoom error means the ZAK doesn't match the meeting's host (or isn't a real ZAK). Likely cause: the idempotent path returns the ORIGINAL meeting but issues the fresh ZAK for a different user (e.g. `users/me` under the S2S app) than the user the meeting was created for — pre-fix this never surfaced because each refresh created a brand-new meeting owned by the same user as the token.
+
+**Ask:** issue the fresh ZAK for the meeting's actual host — `GET /v2/users/{meetingHostUserId}/token?type=zak` via the S2S app — and put the same token in both `hostZak` and the regenerated `startUrl`. FE currently works around by preferring the `startUrl` zak param over `hostZak`; if the startUrl token is also wrong, joins are fully broken until this is fixed.
 
 ### One new clarifying question for backend (minor)
 `GET /votes/{eventId}/results` — confirmed `quorumPercentage` is the **configured threshold**. The FE has also been displaying that field as the **achieved** quorum % (big number on the vote page). Is there a separate achieved-attendance-percentage field, or only threshold + `quorumMet`? If only threshold, we'll relabel the UI.

@@ -28,6 +28,7 @@ import {
   type SubmissionRequirements,
 } from "@/api/client-challenges";
 import { AssignmentsSection } from "../components/AssignmentsSection";
+import { ResourcesTab } from "./ResourcesTab";
 import {
   useAdminChallengeDetail,
   useAdminChallengeJudges,
@@ -1656,8 +1657,8 @@ function AdminLeaderboardTab({ challengeId }: { challengeId: string }) {
 // ---------------------------------------------------------------------------
 const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
 
-const CLIENT_TABS  = ["Overview", "Applications", "Leaderboard", "Judges", "Settings"] as const;
-const ADMIN_TABS   = ["Overview", "Leaderboard", "Judges"] as const;
+const CLIENT_TABS  = ["Overview", "Applications", "Leaderboard", "Judges", "Resources", "Settings"] as const;
+const ADMIN_TABS   = ["Overview", "Leaderboard", "Judges", "Resources"] as const;
 type ClientTab = typeof CLIENT_TABS[number];
 type AdminTab  = typeof ADMIN_TABS[number];
 
@@ -1798,12 +1799,14 @@ export default function ChallengeDetailPage({
       {isSuperAdmin && tab === "Overview"    && <OverviewTab          challengeId={challengeId} />}
       {isSuperAdmin && tab === "Leaderboard" && <AdminLeaderboardTab  challengeId={challengeId} />}
       {isSuperAdmin && tab === "Judges"      && <AdminJudgesTab       challengeId={challengeId} />}
+      {isSuperAdmin && tab === "Resources"   && <ResourcesTab challengeId={challengeId} readOnly isSuperAdmin />}
 
       {/* Tab panels — client admin */}
       {!isSuperAdmin && tab === "Overview"     && <OverviewTab     challengeId={challengeId} readOnly={isViewer} />}
       {!isSuperAdmin && tab === "Applications" && <ApplicationsTab challengeId={challengeId} readOnly={isViewer} />}
       {!isSuperAdmin && tab === "Leaderboard"  && <LeaderboardTab  challengeId={challengeId} />}
       {!isSuperAdmin && tab === "Judges"       && <JudgesTab       challengeId={challengeId} readOnly={isViewer} />}
+      {!isSuperAdmin && tab === "Resources"    && <ResourcesTab    challengeId={challengeId} readOnly={isViewer} isSuperAdmin={false} />}
       {!isSuperAdmin && !isViewer && tab === "Settings" && <SettingsTab challengeId={challengeId} />}
     </div>
   );

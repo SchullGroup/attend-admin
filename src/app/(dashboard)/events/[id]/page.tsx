@@ -30,6 +30,7 @@ import { EventLaunchAudienceTab }      from "./components/EventLaunchAudienceTab
 import { EventLaunchWaitlistTab }      from "./components/EventLaunchWaitlistTab";
 import { EventChallengeApplicationsTab } from "./components/EventChallengeApplicationsTab";
 import { EventChallengeJudgesTab }       from "./components/EventChallengeJudgesTab";
+import { EventPressKitTab }              from "./components/EventPressKitTab";
 import type { LocalAgendaItem, EventShim } from "./components/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -234,6 +235,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     ...(isSuperAdmin && isAGM ? [] : [
       ...(isAGM && !isSuperAdmin ? ["Resolutions", "Stakeholders"] : isAGM ? ["Resolutions"] : []),
       ...(!isSuperAdmin && isLAUNCH ? ["Audience Tiers", "Waitlist"] : []),
+      // Press Kit (F2) — Product Launch events. Client admin: full CRUD;
+      // super admin + Viewer: read-only (super admin reads /admin endpoint).
+      ...(isLAUNCH ? ["Press Kit"] : []),
       // Broadcast is a write operation — hidden for super admin and Viewer (read-only)
       ...(!isSuperAdmin && !isViewer ? ["Broadcast"] : []),
       ...(isAGM ? ["Vote Results", "Post-AGM"] : []),
@@ -320,6 +324,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {tab === "Stakeholders"   && !isSuperAdmin && isAGM   && <EventExpectedAttendeesTab eventId={id} registerId={(apiEvent as any).registerId} readOnly={isViewer} />}
       {tab === "Audience Tiers" && !isSuperAdmin && isLAUNCH && <EventLaunchAudienceTab    eventId={id} />}
       {tab === "Waitlist"       && !isSuperAdmin && isLAUNCH && <EventLaunchWaitlistTab    eventId={id} />}
+      {tab === "Press Kit"      && isLAUNCH && <EventPressKitTab eventId={id} readOnly={isSuperAdmin || isViewer} isSuperAdmin={isSuperAdmin} />}
       {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab eventId={id} />}
       {tab === "Vote Results"       && isAGM && <EventVoteResultsTab voteResults={voteResultsData} />}
       {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} voteResults={voteResultsData} participants={participants} eventId={id} />}

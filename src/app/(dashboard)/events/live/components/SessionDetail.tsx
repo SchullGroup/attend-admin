@@ -18,6 +18,8 @@ import {
 import { useLiveWebSocket, type LiveWsMessage } from "@/hooks/use-live-websocket";
 import { useClientEventDetail, useUpdateStreamUrl, clientEventKeys, type ZoomMeetingDto } from "@/api/client-events";
 import { useGetMe } from "@/api/auth/hooks";
+import { useEventPolls, useAdminEventPolls } from "@/api/client-polls";
+import { resolveRole, isSuperAdminRole } from "@/lib/utils";
 import type { ZoomEmbedHandle } from "@/components/zoom-embed";
 import { eventColor, formatTime, initials, playChime } from "./helpers";
 import { parseStreamUrl } from "./stream-helpers";
@@ -25,6 +27,7 @@ import { LiveHeaderCard } from "./LiveHeaderCard";
 import { ZoomMeetingCard } from "./ZoomMeetingCard";
 import { StreamPreviewCard } from "./StreamPreviewCard";
 import { ResolutionsPanel } from "./ResolutionsPanel";
+import { PollsPanel, type PollWsMessage } from "./PollsPanel";
 import { QAPanel } from "./QAPanel";
 
 export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: () => void }) {
@@ -58,6 +61,15 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
   const updateStreamUrlMutation    = useUpdateStreamUrl();
   const { data: meData           } = useGetMe();
   const hostName = meData?.data?.fullName ?? meData?.data?.firstName ?? "Host";
+  const isSuperAdmin = isSuperAdminRole(resolveRole(meData?.data));
+
+  // ── Live polls (F1) — super admin reads the /admin endpoint, read-only ──
+  const clientPolls = useEventPolls(eventId, { enabled: !isSuperAdmin });
+  const adminPolls  = useAdminEventPolls(eventId, { enabled: isSuperAdmin });
+  const pollsQuery  = isSuperAdmin ? adminPolls : clientPolls;
+  // Latest POLL_* websocket message, seq-stamped so PollsPanel never misses repeats
+  const [pollWsMessage, setPollWsMessage] = useState<{ seq: number; msg: PollWsMessage } | null>(null);
+  const pollWsSeq = useRef(0);
 
   // Seed local questions from server snapshot (merge so WS additions aren't lost)
   useEffect(() => {
@@ -99,6 +111,13 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
       setQuestions((prev) =>
         prev.map((q) => q.id === questionId ? { ...q, status, answer, answeredBy, answeredAt } : q)
       );
+    } else if (
+      msg.type === "POLL_OPENED" ||
+      msg.type === "POLL_RESULTS_UPDATED" ||
+      msg.type === "POLL_CLOSED"
+    ) {
+      pollWsSeq.current += 1;
+      setPollWsMessage({ seq: pollWsSeq.current, msg });
     }
   });
 
@@ -228,9 +247,16 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
 
       {/* Content grid */}
       <div className="grid grid-cols-3 gap-5">
-        {/* Left: Resolutions */}
-        <div className="col-span-2">
+        {/* Left: Resolutions + Live Polls */}
+        <div className="col-span-2 flex flex-col gap-5">
           <ResolutionsPanel resolutions={room.resolutions} color={color} eventId={eventId} />
+          <PollsPanel
+            eventId={eventId}
+            polls={pollsQuery.data}
+            isLoading={pollsQuery.isLoading}
+            readOnly={isSuperAdmin}
+            wsMessage={pollWsMessage}
+          />
         </div>
 
         {/* Right: Q&A + Attendance */}

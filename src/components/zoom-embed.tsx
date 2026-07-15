@@ -164,7 +164,7 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
     }
   }
 
-  const handleLaunch = useCallback(async (forceRefresh = false) => {
+  const handleLaunch = useCallback(async (forceRefresh = false, forceNew = false) => {
     if (!resolved || !iframeRef.current) return;
     setStatus("loading");
     setErrMsg("");
@@ -179,12 +179,14 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
       let joinPassword = resolved.password;
       let joinZak      = resolved.zak;
 
-      if (eventId && (forceRefresh || !joinZak || zakLooksExpired(joinZak))) {
+      if (eventId && (forceRefresh || forceNew || !joinZak || zakLooksExpired(joinZak))) {
         try {
           const refreshRes = await fetch("/api/zoom/refresh-meeting", {
             method:  "POST",
             headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ eventId }),
+            // forceNew: replace a meeting that no longer exists on Zoom's
+            // side (deleted/expired) — ends it and creates a fresh one.
+            body:    JSON.stringify({ eventId, ...(forceNew ? { forceNew: true } : {}) }),
           });
           if (refreshRes.ok) {
             const meeting = await refreshRes.json() as RefreshedZoomMeeting;
@@ -195,16 +197,22 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
             // else could reach. Adopting is correct either way.
             if (meeting.meetingId) joinNumber = String(meeting.meetingId);
             if (typeof meeting.password === "string") joinPassword = meeting.password;
-            // Fresh ZAK: prefer the dedicated hostZak field (new), fall
-            // back to extracting it from startUrl's query params (old).
-            if (meeting.hostZak) {
-              joinZak = meeting.hostZak;
-            } else if (meeting.startUrl) {
+            // Fresh ZAK: prefer the one inside startUrl — that URL is what
+            // Zoom itself generated for this meeting's host, so its zak
+            // param is guaranteed to match the meeting. The dedicated
+            // hostZak field (added with the 2026-07-15 idempotency fix) is
+            // only a fallback: joins with it failed with "Not support start
+            // meeting via tokens (200)", which indicates it's issued for a
+            // different user than the meeting's host (logged as a backend
+            // bug in PENDING_BACKEND_FIXES.md).
+            let adoptedZak = "";
+            if (meeting.startUrl) {
               try {
-                const freshZak = new URL(meeting.startUrl).searchParams.get("zak");
-                if (freshZak) joinZak = freshZak;
+                adoptedZak = new URL(meeting.startUrl).searchParams.get("zak") ?? "";
               } catch { /* ignore malformed url */ }
             }
+            if (!adoptedZak && meeting.hostZak) adoptedZak = meeting.hostZak;
+            if (adoptedZak) joinZak = adoptedZak;
             onMeetingRefreshed?.(meeting);
           } else {
             const errBody = await refreshRes.json().catch(() => ({})) as { error?: string };
@@ -403,9 +411,19 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
           <div>
             <p className="text-sm font-semibold text-white mb-1">Failed to join meeting</p>
             <p className="text-xs text-gray-400 max-w-xs">{errMsg}</p>
-            {(errMsg.includes("200") || errMsg.includes("3265") || /token/i.test(errMsg)) && (
+            {/not support start meeting/i.test(errMsg) ? (
               <p className="text-xs text-amber-400 max-w-xs mt-2">
-                Host token expired or invalid. Click Try again — a fresh token will be fetched automatically.
+                The host token doesn&apos;t match this meeting&apos;s host — a backend token issue,
+                not something a retry fixes. Flag to the backend team (see PENDING_BACKEND_FIXES.md,
+                Zoom hostZak item).
+              </p>
+            ) : (errMsg.includes("200") || errMsg.includes("3265") || /token/i.test(errMsg)) && (
+              <p className="text-xs text-amber-400 max-w-xs mt-2">
+                Host token expired or invalid. Try again fetches a fresh token; if it keeps
+                failing, this event&apos;s meeting may no longer exist on Zoom (common for
+                events created before the 2026-07-15 backend fix) — use Replace Meeting to
+                end it and generate a new one. Attendees get the new link automatically;
+                any previously shared links go dead.
               </p>
             )}
             {errMsg.includes("3000") && (
@@ -432,6 +450,18 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
             >
               Try again
             </Button>
+            {eventId && (/\b(200|3265)\b/.test(errMsg) || /token|not support start meeting/i.test(errMsg)) && (
+              <Button
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={() => {
+                  setErrMsg("");
+                  handleLaunch(true, true);
+                }}
+              >
+                Replace Meeting (new link)
+              </Button>
+            )}
           </div>
         </div>
       )}
