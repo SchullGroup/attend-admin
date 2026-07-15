@@ -78,6 +78,9 @@ export interface RefreshedZoomMeeting {
   password?:  string;
   joinUrl?:   string;
   startUrl?:  string;
+  /** Fresh host ZAK — returned directly since the backend's 2026-07-15
+   *  idempotency fix (before that it only travelled inside startUrl). */
+  hostZak?:   string;
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -100,17 +103,18 @@ interface ZoomEmbedProps {
   zak?:           string;
   /**
    * When provided, the component calls /api/zoom/refresh-meeting before a
-   * host join whenever the ZAK is missing or expired. NOTE: the backend may
-   * ROTATE the meeting (new meetingId/joinUrl) on refresh, so refresh is
-   * deliberately avoided while the current ZAK is still valid — refreshing
-   * mid-event would strand attendees in the old meeting.
+   * host join whenever the ZAK is missing or expired. Since the backend's
+   * 2026-07-15 idempotency fix this returns the SAME meeting with a fresh
+   * ZAK; we still only refresh when needed and still adopt whatever meeting
+   * identity comes back, as a belt-and-braces guard for older backends
+   * (which rotated the meeting on every refresh).
    */
   eventId?:       string;
   /**
-   * Called after /api/zoom/refresh-meeting returns. Because the backend can
-   * rotate the meeting on refresh, parents should invalidate any cached
-   * queries holding zoomMeeting/streamUrl so the UI (meeting #, joinUrl)
-   * matches the meeting the host actually joined.
+   * Called after /api/zoom/refresh-meeting returns. Parents should
+   * invalidate cached queries holding zoomMeeting/streamUrl so the UI stays
+   * in sync (a no-op now that the backend returns the same meeting; matters
+   * against older backends that rotated it).
    */
   onMeetingRefreshed?: (meeting: RefreshedZoomMeeting) => void;
 
@@ -184,16 +188,18 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
           });
           if (refreshRes.ok) {
             const meeting = await refreshRes.json() as RefreshedZoomMeeting;
-            // ADOPT the refreshed meeting identity. The backend rotates the
-            // meeting on refresh and rewrites the attendee-facing streamUrl
-            // to the new joinUrl — so the refreshed meeting is the one
-            // attendees will be in. Pinning the OLD meetingNumber here (the
-            // previous behavior) put the host in a meeting nobody else could
-            // reach, with attendees stuck in a waiting room the host
-            // couldn't see until a full page reload.
+            // ADOPT the refreshed meeting identity. Idempotent backends
+            // (2026-07-15+) return the same meeting so this is a no-op;
+            // older backends rotated the meeting on refresh, and pinning
+            // the OLD meetingNumber stranded the host in a meeting nobody
+            // else could reach. Adopting is correct either way.
             if (meeting.meetingId) joinNumber = String(meeting.meetingId);
             if (typeof meeting.password === "string") joinPassword = meeting.password;
-            if (meeting.startUrl) {
+            // Fresh ZAK: prefer the dedicated hostZak field (new), fall
+            // back to extracting it from startUrl's query params (old).
+            if (meeting.hostZak) {
+              joinZak = meeting.hostZak;
+            } else if (meeting.startUrl) {
               try {
                 const freshZak = new URL(meeting.startUrl).searchParams.get("zak");
                 if (freshZak) joinZak = freshZak;

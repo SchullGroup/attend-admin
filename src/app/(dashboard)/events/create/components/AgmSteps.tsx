@@ -345,13 +345,16 @@ export function AgmResolutionsStep({ s, showErrors = false }: { s: AgmState; sho
 
 const MAX_SHAREHOLDER_LIST_BYTES = 10 * 1_024 * 1_024; // 10 MB
 
-// Backend requires these exact (lowercase) column headers on the shareholder
-// CSV — confirmed via the API's rejection message: "Shareholder CSV is
-// missing required column: sharecount". Only "sharecount" has been directly
-// confirmed as required by a live error; name/email are included here too
-// since they're the other columns the UI has always advertised, but if the
-// backend accepts a CSV without one of those it just won't get flagged.
-const REQUIRED_SHAREHOLDER_CSV_COLUMNS = ["name", "email", "sharecount"];
+// Authoritative schema from backend (2026-07-15 status doc): required columns
+// are `fullName` and `chn`; `email`, `phone`, `units`, `status` are optional.
+// (Our earlier guess of name/email/sharecount — inferred from one old error
+// message — was wrong and blocked valid files.) Keys below are the NORMALIZED
+// forms (lowercased, punctuation stripped) matched against headers; `display`
+// is the canonical casing shown in error messages and the dropzone hint.
+const REQUIRED_SHAREHOLDER_CSV_COLUMNS = [
+  { key: "fullname", display: "fullName" },
+  { key: "chn",      display: "chn" },
+];
 
 function formatBytes(b: number) {
   if (b === 0) return "0 B";
@@ -366,7 +369,9 @@ function formatBytes(b: number) {
 // immediate, specific error instead of waiting on a backend round-trip.
 function findMissingCsvColumns(headerLine: string): string[] {
   const headers = headerLine.split(",").map((h) => h.trim().toLowerCase().replace(/[^a-z0-9]/g, ""));
-  return REQUIRED_SHAREHOLDER_CSV_COLUMNS.filter((col) => !headers.includes(col));
+  return REQUIRED_SHAREHOLDER_CSV_COLUMNS
+    .filter((col) => !headers.includes(col.key))
+    .map((col) => col.display);
 }
 
 export function AgmShareholdersStep({ s }: { s: AgmState }) {
@@ -387,9 +392,9 @@ export function AgmShareholdersStep({ s }: { s: AgmState }) {
       return;
     }
 
-    // For CSVs, check the header row up front so a missing column (e.g. the
-    // "sharecount" the backend requires) is caught before submit rather than
-    // surfacing as a generic API error at the very end of the wizard.
+    // For CSVs, check the header row up front so a missing required column
+    // (fullName / chn) is caught before submit rather than surfacing as a
+    // generic API error at the very end of the wizard.
     if (/\.csv$/i.test(file.name)) {
       try {
         const headerLine = await new Promise<string>((resolve, reject) => {
@@ -484,7 +489,7 @@ export function AgmShareholdersStep({ s }: { s: AgmState }) {
               ) : (
                 <>
                   <p className="text-sm font-medium text-[hsl(var(--foreground))]">Upload shareholder list</p>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">CSV with columns: name, email, sharecount (phone optional)</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">CSV with columns: fullName, chn (required) · email, phone, units, status (optional)</p>
                 </>
               )}
               <input

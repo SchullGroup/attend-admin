@@ -10,17 +10,17 @@ Participants join the event's Zoom meeting **as attendees (role 0)** from inside
 What you already have available per event:
 
 - `streamUrl` from the participant API — for Zoom events this is the meeting **joinUrl**, e.g. `https://zoom.us/j/82194621056?pwd=abc123`. This is your single source of Zoom data: parse the meeting number from the `/j/{number}` path segment and the password from the `pwd` query param. (Admin reference: `parseZoomUrl()` in `src/components/zoom-embed.tsx`.)
-- A backend **signature endpoint** that issues Zoom Meeting SDK signatures. Request **role 0** for participants. Never put the SDK client secret in the web bundle or the app binary — the signature must always come from a server.
+- ⚠️ **CORRECTION (2026-07-15): the backend does NOT yet have a signature endpoint** — backend confirmed zero Meeting SDK signature code exists on their side (an earlier version of this doc assumed otherwise). Until backend ships one, the **web** team can do what the admin app does: host the signature route in your own Next.js server (`src/app/api/zoom/signature/route.ts` in attend-admin is a working reference — ~50 lines, HS256 JWT) with the Meeting SDK key/secret in server env only. The **mobile** team has no server, so the app embed is **hard-blocked on the backend endpoint** (creds + spec handoff is in progress — tracked in `PENDING_BACKEND_FIXES.md`). Request **role 0** for participants. Never put the SDK secret in a web bundle or app binary.
 - Participants do **not** need a ZAK token. ZAK is host-only; it's how the admin embed claims host rights. Attendee join = meeting number + password + role-0 signature + display name.
 
-## 2. Critical shared behavior: fetch fresh, retry once
+## 2. Shared behavior: fetch fresh, retry once
 
-The backend currently **rotates the Zoom meeting** (new meetingId + joinUrl) in some flows — a fix to make this idempotent is pending with the backend team. Until it lands, build both clients to:
+**Update 2026-07-15: the meeting-rotation bug is fixed** — the backend's `POST /zoom` is now idempotent (same meeting + fresh host token every call), so `streamUrl` no longer changes underneath attendees in normal operation. Still build both clients to:
 
-1. Fetch `streamUrl` **immediately before** joining — never join from a cached/stale value.
-2. If the join fails with "meeting not found / invalid / ended", re-fetch `streamUrl` once and retry with the fresh values before showing an error.
+1. Fetch `streamUrl` **immediately before** joining — never join from a long-cached value.
+2. If the join fails with "meeting not found / invalid / ended", re-fetch `streamUrl` once and retry before showing an error.
 
-This one pattern absorbs the rotation problem almost entirely on the attendee side.
+It's cheap insurance: an admin can still deliberately replace a broken meeting (`?forceNew=true`), and the pattern makes that seamless for attendees too.
 
 Waiting room: attendees may land in a waiting room rather than straight in the meeting. Both the Zoom web Client View and the native SDKs render the "waiting for the host to let you in" screen automatically — you don't build anything, but don't treat that state as a failure or timeout. The host sees and admits them from the admin embed.
 
@@ -74,8 +74,8 @@ What this implies for an Expo project:
 6. App: mic/camera permission prompts appear at the right moment; join works on physical iOS and Android devices (simulators lie about media).
 7. Reload/kill the app or tab mid-meeting and rejoin — expect your previous session to linger as a ghost participant for a minute or two; make sure rejoin still works.
 
-## 7. Open backend dependencies (also tracked in attend-admin's `PENDING_BACKEND_FIXES.md`, item 7)
+## 7. Backend dependencies — status as of 2026-07-15
 
-1. **`POST /events/{id}/zoom` idempotency** — stop rotating the meeting on refresh; return the same meeting with a fresh host ZAK. Until fixed, §2's fetch-fresh-and-retry is mandatory on your side, and attendees already in a rotated-away meeting must manually rejoin.
-2. **Waiting room at creation** — `settings.waiting_room: true` should be set by the backend when creating meetings (there is no working client-side path to set it).
-3. **Native SDK JWT variant** on the signature endpoint, if it doesn't support it yet (see §4).
+1. **`POST /events/{id}/zoom` idempotency** — ✅ FIXED. Same meeting + fresh ZAK on every call; rotation only via explicit `?forceNew=true`.
+2. **Waiting room at creation** — ✅ was never broken; `settings.waiting_room: true` is set by the backend at creation.
+3. **Signature endpoint (web role-0 + native JWT variant)** — 🔲 OPEN, and bigger than previously thought: no signature endpoint exists at all backend-side. Mobile embed is hard-blocked on it; web can self-host in the interim (see §1 correction). Backend needs a Meeting SDK app key/secret plus the token-shape spec — handoff tracked in attend-admin's `PENDING_BACKEND_FIXES.md`.
