@@ -22,6 +22,8 @@ import { useEventPolls, useAdminEventPolls } from "@/api/client-polls";
 import { resolveRole, isSuperAdminRole } from "@/lib/utils";
 import type { ZoomEmbedHandle } from "@/components/zoom-embed";
 import { eventColor, formatTime, initials, playChime } from "./helpers";
+import { toEventModule } from "@/lib/event-module";
+import { EventPressKitTab } from "../../[id]/components/EventPressKitTab";
 import { parseStreamUrl } from "./stream-helpers";
 import { LiveHeaderCard } from "./LiveHeaderCard";
 import { ZoomMeetingCard } from "./ZoomMeetingCard";
@@ -63,9 +65,12 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
   const hostName = meData?.data?.fullName ?? meData?.data?.firstName ?? "Host";
   const isSuperAdmin = isSuperAdminRole(resolveRole(meData?.data));
 
-  // ── Live polls (F1) — super admin reads the /admin endpoint, read-only ──
-  const clientPolls = useEventPolls(eventId, { enabled: !isSuperAdmin });
-  const adminPolls  = useAdminEventPolls(eventId, { enabled: isSuperAdmin });
+  // ── Live polls (F1) — super admin reads the /admin endpoint, read-only.
+  // Polls don't exist for AGM events (resolutions/voting instead), so the
+  // queries are disabled there once the room snapshot tells us the type.
+  const liveIsAGM = toEventModule(room?.eventType) === "AGM";
+  const clientPolls = useEventPolls(eventId, { enabled: !isSuperAdmin && !liveIsAGM });
+  const adminPolls  = useAdminEventPolls(eventId, { enabled: isSuperAdmin && !liveIsAGM });
   const pollsQuery  = isSuperAdmin ? adminPolls : clientPolls;
   // Latest POLL_* websocket message, seq-stamped so PollsPanel never misses repeats
   const [pollWsMessage, setPollWsMessage] = useState<{ seq: number; msg: PollWsMessage } | null>(null);
@@ -157,6 +162,9 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
   }
 
   const color           = eventColor(room.eventType);
+  const module          = toEventModule(room.eventType);
+  const isAGM           = module === "AGM";
+  const isLaunch        = module === "LAUNCH";
   const recentAtt       = attendance.length > 0 ? attendance : (room.recentAttendance ?? []);
   const isStreaming     = room.format?.toLowerCase() !== "in_person";
   const hasZoomMeeting  = !!zoomMeeting?.meetingId;
@@ -247,16 +255,27 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
 
       {/* Content grid */}
       <div className="grid grid-cols-3 gap-5">
-        {/* Left: Resolutions + Live Polls */}
+        {/* Left: Resolutions + Live Polls + Press Kit */}
         <div className="col-span-2 flex flex-col gap-5">
           <ResolutionsPanel resolutions={room.resolutions} color={color} eventId={eventId} />
-          <PollsPanel
-            eventId={eventId}
-            polls={pollsQuery.data}
-            isLoading={pollsQuery.isLoading}
-            readOnly={isSuperAdmin}
-            wsMessage={pollWsMessage}
-          />
+          {/* Polls (F1) are for non-AGM live events — AGM engagement is
+              resolutions/voting, so the panel is hidden there. */}
+          {!isAGM && (
+            <PollsPanel
+              eventId={eventId}
+              polls={pollsQuery.data}
+              isLoading={pollsQuery.isLoading}
+              readOnly={isSuperAdmin}
+              wsMessage={pollWsMessage}
+            />
+          )}
+          {/* Press Kit (F2) — surfaced in the live room for Product Launch
+              events so embargoed docs can be released mid-event without
+              leaving the control room. Same component as the event-detail
+              tab; release/release-all/edit all work here. */}
+          {isLaunch && (
+            <EventPressKitTab eventId={eventId} readOnly={isSuperAdmin} isSuperAdmin={isSuperAdmin} />
+          )}
         </div>
 
         {/* Right: Q&A + Attendance */}
