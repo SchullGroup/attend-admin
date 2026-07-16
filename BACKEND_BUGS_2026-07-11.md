@@ -168,8 +168,8 @@ Several issues from this review turned out to be the frontend hitting the wrong 
 **a) Attendees tab on Super Admin event detail always showed 0 — FIXED on frontend, please confirm the endpoint exists.**
 `useEventAttendees` (used only for `super_admin`) was calling `GET /api/v1/client/events/{id}/attendees` — an org-scoped endpoint that 403s/returns empty for `super_admin` (no client org). Changed it to call `GET /api/v1/admin/events/{id}/attendees`, mirroring the existing `GET /api/v1/admin/events/{id}/documents` pattern. **Please confirm this admin endpoint exists** (or tell us the correct path if it's named differently) — we can't verify from the frontend alone.
 
-**b) Events page "Organizer" filter always empty for Super Admin — no admin-scoped endpoint exists.**
-The dropdown sourced its options from `GET /api/v1/client/registers`, which is org-scoped and returns nothing for `super_admin`. We've disabled that call for `super_admin` and hidden the Organizer filter for that role (Registrar filter still works, since `GET /api/v1/admin/registrars` is admin-scoped). **Ask:** is there (or could there be) a platform-wide "list all registers/organisations" endpoint for `super_admin`, e.g. `GET /api/v1/admin/registers`, returning `{ id, name, registrarId }` for every register across every registrar? That would let us re-enable a proper cross-org Organizer filter.
+**b) Events page "Organizer" filter always empty for Super Admin — PARTIALLY FIXED on frontend.**
+The dropdown sourced its options from `GET /api/v1/client/registers`, which is org-scoped and returns nothing for `super_admin`. We've disabled that call for `super_admin` and hidden the Organizer filter for that role. In its place, we added a **cascading Register filter**: pick a Registrar first, then a second dropdown scoped to that registrar's own registers via the existing `GET /api/v1/admin/registrars/{id}/registers` endpoint. This covers the common case (drill into one registrar's registers) but there's still no way to filter/search registers across *all* registrars at once. **Ask (still open):** is there (or could there be) a platform-wide "list all registers/organisations" endpoint for `super_admin`, e.g. `GET /api/v1/admin/registers`, returning `{ id, name, registrarId }` for every register across every registrar? That would let us add a true cross-org filter alongside the per-registrar one.
 
 **c) Dashboard "Platform Users" — Active/Suspended always showed 0.**
 `GET /api/v1/admin/dashboard` doesn't return `activeUsers`/`suspendedUsers` (confirmed — not a naming mismatch, checked the raw payload). We've added a client-side fallback that counts statuses from the loaded users page, but that's only exact up to however many users we fetch (currently 100) — not a real fix for orgs with more users. **Ask:** please add `activeUsers`/`suspendedUsers` counts to the dashboard-overview response (or to `GET /api/v1/admin/stats`), computed server-side across all users.
@@ -181,3 +181,135 @@ There was no way to edit a registrar's company info (name, industry, RC number, 
 The registrar detail page displays `address` and `website` (when present), but the enrol form never collected them — meaning every registrar created through the normal enrolment flow would have those fields permanently blank. Added both fields to the enrol form and started sending them in the `POST /api/v1/admin/registrars/enroll` payload as `address`/`website`. **Please confirm the enroll endpoint accepts these two optional fields** — if it currently ignores unknown JSON keys, no error will surface on our end and the fields just won't persist.
 
 **Also — general ask:** for (a)–(d) above, if any of these admin endpoints don't exist yet, please let us know so we can either wait on them or figure out an interim read-only workaround; we'd rather not guess at endpoint shapes that silently fail.
+
+---
+
+## 13. NEW — Analytics: date-range filter, week-over-week %, scope of Event Format/Per-Event widgets, Q&A field naming
+
+**Context:** Analytics data is now populated (thanks — `by-type` and `audit-logs` plus the rest look real). Follow-up items from reviewing the populated dashboard:
+
+**a) Date-range dropdown ("Last 30 Days / 90 Days / 12 Months / All Time") was decorative — now wired, needs backend support confirmed.**
+The selector already existed in the UI but wasn't connected to anything — every analytics call ignored it and always returned whatever the backend's default window is. We've now wired the selected period through to every analytics hook (`summary`, `top-organisers`, `by-type`, `kyc-breakdown`, `event-format`, `engagement`, `event-performance`) as a `?range=` query param with values `30d` | `90d` | `12m` | `all`. **Please confirm whether `/api/v1/admin/analytics/*` endpoints already support a range param — if so, what's the actual param name/values (we guessed `range`/`30d` etc. — happy to change to match) — and if not, please add support so the date filter is functional instead of cosmetic.**
+
+**b) Week-over-week percentage change on summary cards.**
+The summary cards (Total Registrations, Docs Distributed) already had optional `registrationsChange`/`docsChange` fields wired on the frontend with a trend arrow + %, but the endpoint never returns them so the indicators never show. We've added the same wiring for Events Hosted and Votes Cast (`eventsHostedChange`, `votesCastChange`). **Ask:** please add all four `*Change` fields to `GET /api/v1/admin/analytics/summary`, specifically as **week-over-week** percentage change (this week vs. the prior 7 days), not just "vs prior period" — that's the comparison the product wants surfaced here.
+
+**c) "Event Format Distribution" and "Per-Event Breakdown" should exist for Client Admin, not (or not only) Super Admin.**
+Both currently only exist as `super_admin`-scoped platform-wide widgets (`GET /api/v1/admin/analytics/event-format`, `GET /api/v1/admin/analytics/event-performance`). Per product direction, these are actually more useful scoped to a single organisation's own events — a Client Admin should be able to see their own event format mix and per-event RSVP/attendance breakdown on their own analytics page. **Ask:** please create client-scoped equivalents (e.g. `GET /api/v1/client/analytics/event-format`, `GET /api/v1/client/analytics/event-performance`) so we can add these to the Client Admin analytics view. Happy to keep or drop the Super Admin versions depending on whether platform-wide rollups are still wanted there.
+
+**d) "Poll Responses" column on Per-Event Breakdown — likely mislabeled.**
+The platform's live-session engagement feature is Q&A (see `client-live.ts` / live session Q&A panel) — there's no evidence of a separate per-event "polls" feature anywhere else in the product. We suspect the `pollResponses` field on `event-performance` rows is actually meant to represent Q&A engagement for that event, so we've relabeled the column to "Q&A Responses" on the frontend and now read `qaResponses` first, falling back to `pollResponses` for backward compatibility. **Please confirm:** should this field be renamed to `qaResponses` server-side, or is there a genuinely separate polls feature we're not aware of that should stay distinct from Q&A? (Note: the separate "Poll Response Rate" card in Engagement Metrics is untouched — that one does appear to map to a real, distinct polls feature used during live sessions.)
+
+**e) General ask — confirm all Innovation Challenge data is live/real, no stubs.**
+We audited the frontend and confirmed there's no mock or hardcoded data anywhere in the Innovation Challenges area (Challenges list, Applications, Judging, Leaderboard, Judge assignment) — everything is wired to `client-challenges.ts` / `admin-challenges.ts` / `judge.ts` hooks hitting real endpoints. If any of those endpoints are still returning stubbed/placeholder data on your side, please let us know which ones so we can flag it clearly instead of it looking like a frontend bug.
+
+---
+
+### Backend response (2026-07-13) — ✅ (a), (b), (d), (e) FIXED · (c) PARTIALLY FIXED
+
+**a) Date-range filter — ✅ FIXED.** `?range=30d|90d|12m|all` (default `all`) now supported on all seven admin analytics endpoints, exactly the param name/values we guessed: `summary`, `top-organisers`, `by-type`, `kyc-breakdown`, `event-format`, `engagement`, `event-performance`. Filter basis: registrations/documents/votes/users by `createdAt`; events by their scheduled date. One documented exception: `documentDownloads` in `engagement` is always all-time — `downloadCount` is a running counter with no per-download timestamp in the schema, so there's nothing to filter by. **FE status:** already wired (see `range` param on all `useAdmin*` hooks in `src/api/super-admin.ts`) — no further change needed, comments updated to drop the "unconfirmed" caveats.
+
+**b) Week-over-week % change — ✅ FIXED.** `GET /api/v1/admin/analytics/summary` now returns `registrationsChange`, `eventsHostedChange`, `docsChange`, `votesCastChange` — signed percentages (e.g. `12.5`, `-8.3`), always last-7-days vs. the 7 before that (independent of `?range=`, per our ask), or `null` when there's no prior-week data to compare against. **FE status:** already wired — all four StatCards on `SuperAdminAnalytics.tsx` display the `change` prop.
+
+**c) Client-scoped Event Format / Per-Event Breakdown — PARTIALLY FIXED.** `event-performance` already existed client-side and is unchanged. New: `GET /api/v1/client/analytics/event-format` → `{ data: { formats: [{ format, count }] } }`, scoped to the caller's own stakeholder. Both super-admin platform-wide versions kept, per our "happy to keep both" note. **`GET /api/v1/client/analytics/engagement` was not mentioned as added** — still treating that one as open/unconfirmed on our side (`retry:false`, no caveat removed) until backend confirms. **FE status:** `useAnalyticsEventFormat()` wired and confirmed live; `useAnalyticsEngagement()` still flagged as unconfirmed in code comments.
+
+**d) `pollResponses` → `qaResponses` — ✅ CONFIRMED & FIXED.** Backend checked the codebase directly: `pollResponses` never existed anywhere — it was always returning `undefined` regardless of naming, and there is no separate per-event polls feature. Renamed/added as `qaResponses`, backed by a real count of `EventQuestion` rows per event, on both the super-admin and client-scoped `event-performance` endpoints. `pollResponses` kept only as a legacy fallback field name in FE types (never actually populated).
+
+**Correction to our own prior note:** we previously said "the separate 'Poll Response Rate' card in Engagement Metrics... does appear to map to a real, distinct polls feature." **This was wrong.** Backend confirmed there is **no polling feature or infrastructure anywhere in this schema** — no `Poll` entity, no response tracking, nothing. Q&A is the only live-session engagement feature that exists. **FE status:** removed the "Poll Response Rate" card entirely from Engagement Metrics (both the Client Admin build and anywhere it would've shown up going forward) — `pollResponseRate` dropped from `AdminEngagementMetrics` and `EngagementMetrics` types.
+
+**e) Innovation Challenge stub audit — ✅ CLEAN.** Backend went through `ClientChallengeService`, `JudgeService`, and `ChallengeAdminService` looking for TODO/mock/placeholder/hardcoded-return patterns. Found nothing — every endpoint including the leaderboard genuinely queries `JudgingScoreRepository`/`ChallengeApplicationRepository`/etc. and computes live results. No stubs anywhere in this area. No FE action needed.
+
+---
+
+## 14. NEW — Event Format Distribution still empty despite events having populated `format` field; RSVP/applications data gaps found this pass
+
+**a) `GET /api/v1/admin/analytics/event-format` still returns "No format data yet" — but the underlying data clearly exists.**
+`GET /api/v1/admin/events` returns `format` populated on essentially every event row (`Hybrid`, `Virtual`, etc. — confirmed visually on the All Events page, e.g. 15+ events all showing a real format value). The analytics `event-format` endpoint returning empty is therefore not a "no data yet" situation — it's an aggregation that isn't querying/grouping by the same `format` field the events themselves already have. We re-verified `useAdminEventFormat()`'s parsing in `src/api/super-admin.ts` (tries `formats`, `eventFormats`, `distribution`, and a first-array fallback) and it's already maximally defensive, so this isn't a frontend field-name mismatch. **Ask:** please check whether this endpoint is aggregating over the wrong table/field, or is simply not implemented yet (stub returning empty array regardless of input).
+
+**b) Registrar Events tables showed RSVPs = 0 for every event — FIXED on frontend, likely a field-name mismatch.**
+Both the registrar detail page's inline Events table and the `/registrars/{id}/events` "view all" page were reading only `evt.registrationCount`, which is the field name used by the flat `GET /api/v1/admin/events` list — but the *embedded* `events[]` array inside `GET /api/v1/admin/registrars/{id}` (and its `/events` sub-resource) appears to use a different field name, since real events with confirmed RSVPs elsewhere (e.g. "Crafwell Innovation Challenge 2026" — 4 RSVPs on the main Events list) showed `0` here. Widened the fallback chain (`registrationCount ?? rsvpCount ?? registrationsCount ?? totalRsvps ?? rsvps ?? 0`) as a stopgap. **Ask:** please confirm the actual field name returned in the registrar-scoped events array so we can drop the guesswork, and ideally align it with `registrationCount` to match the platform-wide endpoint.
+
+**c) Applications "Shortlisted" count mismatch between summary and per-challenge row.**
+On `/hackathons/applications` (Super Admin), the top summary card showed "Shortlisted: 7" but the per-challenge table row for the only active challenge showed "Shortlisted: 0" — for the same underlying data. This suggests `GET /api/v1/admin/challenges` (list endpoint, used for the per-challenge row's `shortlistedTeams` field) and whatever powers the summary stat aren't reading from the same source. **Ask:** please confirm `shortlistedTeams` is populated correctly per-challenge in the list response.
+
+**d) Defensive fallback added to `useAdminChallengeApplications` — please confirm response shape.**
+This hook previously assumed `GET /api/v1/admin/challenges/{id}/applications` always returns exactly `{ content, totalElements, totalPages }` with no fallback (unlike every other list hook in the codebase, which normalises multiple possible shapes). Widened it to also accept `applications`/`items` as the array key and `totalCount` as a count alias, purely as a defensive safety net — we don't have live confirmation this endpoint was actually returning a different shape, just tightening it to match our established pattern. **Ask:** no action needed unless you're aware this endpoint's shape differs from `{ content, totalElements, totalPages }`.
+
+**e) Register + Event Type filters added; events now sorted by creation time.**
+Added a Register filter and Event Type filter to the registrar "All Events" sub-page and the platform-wide Events page, and changed both to sort by `createdAt` (falling back to scheduled `date` when `createdAt` isn't present on a given event object — **please confirm whether `createdAt` is actually returned** on `GET /api/v1/admin/events` and the registrar-scoped events array, since we're not certain it's there). Also added Registrar + cascading Register filters to the Document Vault page (Super Admin), filtered client-side using `GlobalDocumentItem.registerId` since the admin documents endpoint has no registrar/register query params — confirming that's fine, or let us know if you'd rather we pass `registrarId`/`registerId` server-side once supported.
+
+**f) Confirmed with reproduction — the registrar-scoped Register filter (added in 14e) returns 0 results for a register with real events.**
+On `/registrars/{id}/events` for "Meristem Registrars LTD", selecting the register "Crafwell Engineering LTD" from the new Register filter dropdown returns "0 total / No events created yet" — but that register has confirmed real events elsewhere (e.g. it appears as the organiser on multiple live/published events on the Dashboard's Platform Events feed and the main Events list). This confirms the theory in 14b: the embedded `registrar.events[]` array's `registerId` field (or whatever field is actually present) doesn't match the `id` returned by `GET /api/v1/admin/registrars/{id}/registers` for the same register, so our client-side `e.registerId === registerFilter` match never succeeds. **Ask:** please confirm (1) whether `registerId` is present at all on each object in the registrar-scoped events array, (2) if present, whether it's the same ID space as the standalone registers endpoint, and (3) share the actual field name if it's something else (e.g. `organiserId`, `stakeholderId`). We're not able to fix this further from the frontend without that confirmation — happy to update the match logic once we know the real field name.
+
+**g) Event ordering on the registrar "All Events" page looks inconsistent with scheduled date — worth double-checking `createdAt` values.**
+Now that events are sorted by `createdAt` (per 14e), the resulting order doesn't track the scheduled `date` column at all (e.g. a 12 Jul event appears above a 25 Jul event, then another 12 Jul event, etc. — no obvious pattern). This is *expected* if `createdAt` genuinely differs from `date` per event (i.e. sorting by creation time is working exactly as designed, just not visually intuitive against the Date column) — but if `createdAt` is actually missing/null across the board and every event is silently falling back to `date`, the resulting order should track `date` and clearly isn't. **Ask:** please confirm whether `createdAt` is populated and reasonably distinct per event on this endpoint, so we know whether what we're seeing is correct-but-surprising or actually broken.
+
+---
+
+## 15. NEW — Client Admin analytics: Event Format Distribution still empty, Engagement Metrics inconsistent with Per-Event Breakdown
+
+**Context:** Confirmed via the "Meristem Registrars LTD" client_admin account, after the client-scoped `event-format` endpoint (added per item 13c/14) was wired into the new Client Admin analytics widgets.
+
+**a) Event Format Distribution still shows "No format data yet" for Client Admin too.**
+Same symptom as item 14a (Super Admin), now reproduced on the client-scoped endpoint as well: `GET /api/v1/client/analytics/event-format` returns empty even though this org's own events clearly have a populated `format` field elsewhere (Hybrid/Virtual shown on the Events page for the same 15 events). `useAnalyticsEventFormat()` parsing in `src/api/client-analytics.ts` already tries `formats`/`eventFormats`/`distribution`/array-fallback, so this isn't a frontend field-name issue. **Ask:** same root-cause check as 14a — please confirm whether this endpoint (client and admin versions both) is aggregating over the correct field, since real format data visibly exists on the same events.
+
+**b) Engagement Metrics (Avg Watch Time, Q&A Participation, Document Downloads) all show 0/0%/0 — but Per-Event Breakdown shows real Q&A activity for at least one event.**
+"How Zoom Works" shows **2** Q&A Responses in the Per-Event Breakdown table on the same page, yet the Engagement Metrics card directly above it shows Q&A Participation as **0%**. If Q&A responses are being recorded per-event, the org-wide Q&A Participation metric should reflect that. **Ask:** please confirm `GET /api/v1/client/analytics/engagement` is querying the same underlying Q&A/EventQuestion data as `event-performance`'s `qaResponses` field — right now they appear to disagree. (Also still unconfirmed whether this client-scoped `engagement` endpoint exists at all yet — see item 14c; `retry:false` still set on our end.)
+
+**c) "Avg Watch" column is always "—" on Per-Event Breakdown, for every event, on both Super Admin and Client Admin.**
+`avgWatchMinutes` never appears to be populated on any event row we've seen. **Ask:** please confirm whether average watch time is tracked at all yet, or if this is simply not implemented — if not implemented, we can drop the column rather than show a permanent "—".
+
+**d) Week-over-week % change indicators missing on Client Admin analytics stat cards.**
+Item 13b added `registrationsChange`/`eventsHostedChange`/`docsChange`/`votesCastChange` to `GET /api/v1/admin/analytics/summary` (Super Admin only) and confirmed by backend in the 2026-07-13 response — those now display correctly on `SuperAdminAnalytics.tsx`. The Client Admin analytics stat cards (Total Events, Total Attendees, Avg Fill Rate, Documents Published, backed by `GET /api/v1/client/analytics/stats`) never had this at all — neither the frontend parsing nor the UI supported a `change` field on this endpoint. We've now added the frontend support defensively (`extractStat()` in `src/api/client-analytics.ts` reads an optional `change`/`changePercent` per stat, and `StatCard` in `analytics/page.tsx` renders the trend arrow + % when present) so it'll display automatically once available. **Ask:** please add the same week-over-week `change`/`changePercent` fields (per stat: `totalEvents`, `totalAttendees`, `avgFillRate`, `documentsPublished`) to the client-scoped `GET /api/v1/client/analytics/stats` endpoint, matching the semantics already implemented for the admin summary endpoint (this week vs. the prior 7 days, `null`/omitted when there's no prior-week data).
+
+**e) `GET /api/v1/admin/analytics/summary` — `*Change` fields are `null` and stay `null` even after creating a new event.**
+Confirmed via raw response (Super Admin, "Last 30 Days" range):
+```json
+{
+  "data": {
+    "totalRegistrations": 12, "eventsHosted": 18, "docsDistributed": 9, "votesCast": 2,
+    "registrationsChange": null, "eventsHostedChange": null, "docsChange": null, "votesCastChange": null
+  },
+  "message": "Analytics summary retrieved.", "status": true
+}
+```
+All four `*Change` fields are `null`, which per item 13b's own spec is supposed to mean "no prior-week data to compare against." We initially assumed this was expected for a low-activity test account and asked the user to create a new event and re-check — **after creating a new event, the fields are still `null`**. Since `eventsHosted` is already `18` (i.e. there's clearly *some* history on this account, spanning back to at least 2026-07-10 based on earlier event dates we've seen), it's not obvious why there'd be no comparable prior-7-day window at all. **Ask:** please check whether the week-over-week comparison logic is actually computing a value under real conditions, or if it's unconditionally returning `null` regardless of data volume (i.e. not implemented yet vs. a genuine "insufficient history" case). If it needs a specific amount of historical data before it activates, please let us know the exact condition so we can reproduce a state where it should populate.
+
+---
+
+## 16. NEW — Custom shareholder CSV upload: required column schema is undocumented
+
+**Context:** Wired up the "Custom shareholder list" CSV upload in the AGM creation wizard's Shareholders & Voting step (`shareholderListBase64`/`shareholderListFilename` on `agmConfig`, per item 10's original scope). On first real submit attempt, the create-event call was rejected with:
+
+```
+Shareholder CSV is missing required column: sharecount
+```
+
+We have no documentation anywhere (no OpenAPI/Swagger spec in the repo, no prior ticket) of what column headers the shareholder CSV import actually requires — the frontend's placeholder hint text had been guessing "Name, Email, Phone, ShareCount" (title case) since the dropzone was originally scaffolded. We've since updated the hint to lowercase `name, email, sharecount` (with `phone` marked optional) based on the one error message we've seen, and added a client-side check that blocks upload with an inline error if a CSV's header row is missing `name`, `email`, or `sharecount` (case-insensitive, punctuation-stripped) — so users get instant feedback instead of a failed submit at the end of the wizard.
+
+**Ask:** please confirm the full, authoritative list of required and optional column headers (exact casing/spelling) for the shareholder CSV import endpoint, and whether `.xlsx` uploads are held to the same column schema (we can't validate xlsx headers client-side without adding a parsing library, so today those go straight to the backend unchecked). If there's a header-matching flexibility built in (e.g. case-insensitive, alternate names like `shares`/`shareCount`), let us know so we can relax or drop our client-side check accordingly rather than duplicating slightly-wrong logic.
+
+---
+
+## Backend response (2026-07-14) — items 13b/15d, 15b, 14a/f, 14c, 14b/e/g — status update
+
+**15d — `GET /api/v1/client/analytics/stats` now returns `change` on all four stat cards.** Confirmed live:
+```json
+{
+  "totalEvents": { "count": 12, "color": "green", "change": 20.0 },
+  "totalAttendees": { "count": 340, "color": "blue", "change": -5.3 },
+  "avgFillRate": { "percentage": 68, "color": "orange", "change": 4.2 },
+  "documentsPublished": { "count": 7, "color": "purple", "change": null }
+}
+```
+Computed this-week vs. prior-7-days, per-stat windowing matches the semantics already documented for the admin summary endpoint (`totalEvents.change` by event date, `totalAttendees.change`/`documentsPublished.change` by `createdAt`). `change: null` means "no comparison available," not 0% — confirmed our `extractStat()`'s `??` chain already turns `null` into `undefined` correctly, so `StatCard` already skips the badge in that case with no code change needed. **✅ Resolved — FE comments updated, no logic change required.**
+
+**15b — `GET /api/v1/client/analytics/engagement` — `avgWatchTime`/`pollResponseRate` confirmed legitimately `null`.** Same root cause as the admin endpoint (no watch-time/polling infrastructure exists yet) — not a bug, our earlier correction (no polling feature anywhere in the product) was right. Removed the stale `retry:false` from `useAnalyticsEngagement()` now that the endpoint is confirmed to exist and respond normally. **✅ Resolved.**
+
+**14a — Event Format Distribution empty: likely explained by date-range scoping, not a data bug.** Backend confirmed the query logic itself is correct, but flagged an asymmetry: `GET /api/v1/admin/analytics/event-format` supports `?range=`, while the client-scoped version doesn't (and never has — confirmed intentional, since the Client Admin analytics page has no date-range selector at all and always requests all-time data). On Super Admin, `SuperAdminAnalytics.tsx` defaults its period filter to **"Last 30 Days"** — if the test events' dates fall outside that window, `event-format` would correctly return empty for that range while other unscoped widgets still show full data. This matches the symptom exactly. **Ask for user:** please switch the Super Admin analytics period selector to "All Time" and confirm whether Event Format Distribution then populates — if so, this is expected filtering behavior, not a bug, and item 14a can be closed.
+
+**14c — `shortlistedTeams` field added alongside `shortlistedCount`.** Confirmed — and turns out our FE was already reading both defensively (`c.shortlistedCount ?? c.shortlistedTeams`) across every Hackathons/Judging page from earlier defensive-parsing work, so this now resolves automatically with no FE change needed. **✅ Resolved.**
+
+**14b/f — `registrationCount`/`registerId` added to registrar-scoped `EventSummary`.** Confirmed both fields now present, `registerId` confirmed to be the same ID space as `/api/v1/admin/registrars/{id}/registers`. Our existing fallback chain already prioritizes `registrationCount` first, so the Register filter and RSVP display on the registrar Events pages should now work correctly against live data — please re-verify on your end since we can't inspect the live network response ourselves. **✅ Resolved (pending user re-verification).**
+
+**14e/g — `createdAt` added to the flat `GET /api/v1/admin/events` list (previously only on the registrar-scoped array).** Confirmed intentional insertion-order semantics, not calendar order — "12 Jul, then 25 Jul, then 12 Jul again" when sorted by `createdAt` is expected once both timestamps are visible side by side. **✅ Resolved — no bug, working as designed.**

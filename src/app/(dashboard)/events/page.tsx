@@ -7,7 +7,7 @@ import {
 import { useEvents } from "@/api/super-admin";
 import { useClientEvents, type ClientEventTypeFilter } from "@/api/client-events";
 import { useGetMe } from "@/api/auth/hooks";
-import { useRegistrars } from "@/api/registrars";
+import { useRegistrars, useRegistrarRegisters } from "@/api/registrars";
 import { useRegisters } from "@/api/registers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,13 +36,24 @@ const ADMIN_STATUS_TABS = [
   { label: "Ended",     value: "ENDED"     },
 ];
 
+// "Hackathon" removed — redundant with "Innovation" and not backed by a
+// distinctly-integrated endpoint on the client Events list (Innovation
+// Challenges have their own dedicated section in the sidebar).
 const CLIENT_TYPE_TABS: Array<{ label: string; value: ClientEventTypeFilter }> = [
   { label: "All Events",  value: "ALL"        },
   { label: "AGM",         value: "AGM"        },
   { label: "Launch",      value: "LAUNCH"     },
   { label: "Innovation",  value: "INNOVATION" },
-  { label: "Hackathon",   value: "HACKATHON"  },
   { label: "General",     value: "GENERAL"    },
+];
+
+// Event Type filter for the Super Admin (platform-wide) view — matches the
+// raw eventType values returned by GET /api/v1/admin/events.
+const ADMIN_EVENT_TYPE_OPTIONS = [
+  { id: "AGM_EGM",              name: "AGM / EGM"             },
+  { id: "PRODUCT_LAUNCH",       name: "Product Launch"        },
+  { id: "HACKATHON",            name: "Innovation Challenge"  },
+  { id: "GENERAL_EVENT",        name: "General"               },
 ];
 
 const FORMAT_ICON: Record<string, React.ElementType> = {
@@ -66,16 +77,23 @@ function FilterDropdown({
   options,
   onSelect,
   icon: Icon,
+  searchable = false,
 }: {
   label: string;
   value: string;
   options: { id: string; name: string }[];
   onSelect: (id: string) => void;
   icon?: React.ElementType;
+  /** Shows a text filter box above the list — useful for long, cross-org option lists. */
+  searchable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.id === value);
+  const visibleOptions = searchable && query.trim()
+    ? options.filter((o) => o.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
 
   useEffect(() => {
     function outside(e: MouseEvent) {
@@ -83,6 +101,10 @@ function FilterDropdown({
     }
     if (open) document.addEventListener("mousedown", outside);
     return () => document.removeEventListener("mousedown", outside);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) setQuery("");
   }, [open]);
 
   return (
@@ -103,7 +125,18 @@ function FilterDropdown({
       </button>
 
       {open && (
-        <div className="absolute z-50 top-[calc(100%+4px)] left-0 min-w-[200px] max-w-[260px] rounded-xl border border-[hsl(var(--border))] bg-white shadow-lg overflow-hidden">
+        <div className="absolute z-50 top-[calc(100%+4px)] left-0 min-w-[220px] max-w-[280px] rounded-xl border border-[hsl(var(--border))] bg-white shadow-lg overflow-hidden">
+          {searchable && (
+            <div className="p-2 border-b border-[hsl(var(--border)/0.5)]">
+              <Input
+                autoFocus
+                placeholder={`Search ${label.toLowerCase()}s…`}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+          )}
           {/* Clear option */}
           <button
             type="button"
@@ -118,7 +151,7 @@ function FilterDropdown({
           </button>
           <div className="border-t border-[hsl(var(--border)/0.5)]" />
           <div className="max-h-52 overflow-y-auto">
-            {options.map((o) => (
+            {visibleOptions.map((o) => (
               <button
                 key={o.id}
                 type="button"
@@ -134,7 +167,7 @@ function FilterDropdown({
                 <span className="truncate">{o.name}</span>
               </button>
             ))}
-            {options.length === 0 && (
+            {visibleOptions.length === 0 && (
               <p className="px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">No options</p>
             )}
           </div>
@@ -247,6 +280,12 @@ export default function EventsPage() {
   const [page,             setPage]             = useState(0);
   const [registrarFilter,  setRegistrarFilter]  = useState("");
   const [organizerFilter,  setOrganizerFilter]  = useState("");
+  // Register filter — scoped to whichever registrar is selected above. Uses the
+  // same GET /api/v1/admin/registrars/{id}/registers endpoint as the registrar
+  // detail page, so it's real data (not the empty client-scoped Organizer dropdown).
+  const [registerFilter,   setRegisterFilter]   = useState("");
+  // Event Type filter — super admin only (client admin already has CLIENT_TYPE_TABS).
+  const [adminTypeFilter,  setAdminTypeFilter]  = useState("");
 
   // These two hit super-admin-only backend endpoints — must stay gated behind
   // isSuperAdmin, or a Client Admin gets a 403 firing on every page load.
@@ -258,6 +297,7 @@ export default function EventsPage() {
   // registers/organisations" endpoint for super_admin, so this only fires for client roles;
   // the Organizer dropdown is hidden for super_admin below until that endpoint exists.
   const { data: registersData                          } = useRegisters("ACTIVE", 0, 200, !isSuperAdmin);
+  const { data: registrarRegistersData                 } = useRegistrarRegisters(registrarFilter);
 
   const isLoading = isAdmin ? adminLoading : clientLoading;
 
@@ -297,17 +337,39 @@ export default function EventsPage() {
     id:   r.id,
     name: r.name || (r as any).companyName || r.id,
   }));
+  const registerOptions = (registrarRegistersData ?? []).map((r) => ({
+    id:   r.id,
+    name: r.name || r.id,
+  }));
 
-  // Client-side filtering by search + registrar + organizer
-  const filtered = events.filter((e) => {
-    if (searchQuery.trim() && !e.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    if (organizerFilter && (e as any).registerId !== organizerFilter) return false;
-    if (registrarFilter) {
-      const reg = registrarOptions.find((r) => r.id === registrarFilter);
-      if (reg && !(e.organizerName ?? e.registerName ?? "").toLowerCase().includes(reg.name.toLowerCase())) return false;
-    }
-    return true;
-  });
+  // Client-side filtering by search + registrar + organizer + register + event type,
+  // then sorted by creation time (newest first) — falls back to scheduled `date`
+  // when `createdAt` isn't present on a given event object.
+  const filtered = events
+    .filter((e) => {
+      if (searchQuery.trim() && !e.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      if (organizerFilter && (e as any).registerId !== organizerFilter) return false;
+      if (registerFilter && (e as any).registerId !== registerFilter) return false;
+      if (adminTypeFilter && (e.eventType ?? "").toUpperCase() !== adminTypeFilter) return false;
+      if (registrarFilter) {
+        const reg = registrarOptions.find((r) => r.id === registrarFilter);
+        // Prefer a direct registrarId match when the backend provides one;
+        // fall back to matching the registrar's name against the event's
+        // organizer/register name (fragile, but the only signal we had before).
+        const eAny = e as any;
+        if (eAny.registrarId) {
+          if (eAny.registrarId !== registrarFilter) return false;
+        } else if (reg && !(e.organizerName ?? e.registerName ?? "").toLowerCase().includes(reg.name.toLowerCase())) {
+          return false;
+        }
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const at = new Date((a as any).createdAt ?? a.date ?? 0).getTime();
+      const bt = new Date((b as any).createdAt ?? b.date ?? 0).getTime();
+      return bt - at;
+    });
 
   if (isLoading) return <Loader variant="page" text="Loading Events…" />;
 
@@ -350,13 +412,29 @@ export default function EventsPage() {
               label="Registrar"
               value={registrarFilter}
               options={registrarOptions}
-              onSelect={(id) => { setRegistrarFilter(id); setPage(0); }}
+              onSelect={(id) => { setRegistrarFilter(id); setRegisterFilter(""); setPage(0); }}
               icon={Building2}
             />
-            {/* Organizer (per-register) filter is disabled for super_admin — the underlying
-                data source (/api/v1/client/registers) is org-scoped and returns nothing for
-                a platform admin. Re-enable once an admin-scoped registers-listing endpoint
-                exists (see BACKEND_BUGS item 12). */}
+            {/* Cascading Register filter — only shows once a Registrar is picked,
+                scoped to that registrar's own registers (real data via
+                GET /api/v1/admin/registrars/{id}/registers). Distinct from the
+                cross-org "Organizer" dropdown below, which has no admin-scoped
+                data source yet (see BACKEND_BUGS item 12). */}
+            {registrarFilter && (
+              <FilterDropdown
+                label="Register"
+                value={registerFilter}
+                options={registerOptions}
+                onSelect={(id) => { setRegisterFilter(id); setPage(0); }}
+                icon={Building2}
+              />
+            )}
+            <FilterDropdown
+              label="Event Type"
+              value={adminTypeFilter}
+              options={ADMIN_EVENT_TYPE_OPTIONS}
+              onSelect={(id) => { setAdminTypeFilter(id); setPage(0); }}
+            />
           </>
         )}
         {!isSuperAdmin && organizerOptions.length > 0 && (
@@ -369,10 +447,10 @@ export default function EventsPage() {
           />
         )}
 
-        {(searchQuery || (isSuperAdmin && (registrarFilter || organizerFilter))) && (
+        {(searchQuery || (isSuperAdmin && (registrarFilter || organizerFilter || registerFilter || adminTypeFilter))) && (
           <button
             type="button"
-            onClick={() => { setRegistrarFilter(""); setOrganizerFilter(""); setSearchQuery(""); setPage(0); }}
+            onClick={() => { setRegistrarFilter(""); setOrganizerFilter(""); setRegisterFilter(""); setAdminTypeFilter(""); setSearchQuery(""); setPage(0); }}
             className="text-xs text-[hsl(var(--primary))] hover:underline"
           >
             Clear filters

@@ -245,6 +245,12 @@ export interface EventSummaryResponse {
   endDate?:   string;
   registerId?: string;
   rsvpEnabled?: boolean;
+  /** Creation timestamp — used to sort event lists by "when created" rather
+   *  than by scheduled date. Not present in every backend response shape. */
+  createdAt?: string;
+  /** Registrar the owning register belongs to — used for the Events page's
+   *  Registrar filter. Falls back to name-substring matching when absent. */
+  registrarId?: string;
 }
 
 export interface AgendaItemResponse {

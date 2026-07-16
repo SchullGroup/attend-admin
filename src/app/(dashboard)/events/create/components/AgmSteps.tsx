@@ -343,7 +343,109 @@ export function AgmResolutionsStep({ s, showErrors = false }: { s: AgmState; sho
 
 // ─── Step 4 — Shareholders & Voting ──────────────────────────────────────────
 
+const MAX_SHAREHOLDER_LIST_BYTES = 10 * 1_024 * 1_024; // 10 MB
+
+// Authoritative schema from backend (2026-07-15 status doc): required columns
+// are `fullName` and `chn`; `email`, `phone`, `units`, `status` are optional.
+// (Our earlier guess of name/email/sharecount — inferred from one old error
+// message — was wrong and blocked valid files.) Keys below are the NORMALIZED
+// forms (lowercased, punctuation stripped) matched against headers; `display`
+// is the canonical casing shown in error messages and the dropzone hint.
+const REQUIRED_SHAREHOLDER_CSV_COLUMNS = [
+  { key: "fullname", display: "fullName" },
+  { key: "chn",      display: "chn" },
+];
+
+function formatBytes(b: number) {
+  if (b === 0) return "0 B";
+  if (b < 1_024) return `${b} B`;
+  if (b < 1_048_576) return `${(b / 1_024).toFixed(1)} KB`;
+  return `${(b / 1_048_576).toFixed(1)} MB`;
+}
+
+// Peeks at a CSV's header row (client-side only — .xlsx files aren't parsed,
+// since that needs a binary-parsing library) and reports back any of
+// REQUIRED_SHAREHOLDER_CSV_COLUMNS that are missing, so users get an
+// immediate, specific error instead of waiting on a backend round-trip.
+function findMissingCsvColumns(headerLine: string): string[] {
+  const headers = headerLine.split(",").map((h) => h.trim().toLowerCase().replace(/[^a-z0-9]/g, ""));
+  return REQUIRED_SHAREHOLDER_CSV_COLUMNS
+    .filter((col) => !headers.includes(col.key))
+    .map((col) => col.display);
+}
+
 export function AgmShareholdersStep({ s }: { s: AgmState }) {
+  async function handleShareholderFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    s.setShareholderListError("");
+
+    const isCsvOrXlsx = /\.(csv|xlsx)$/i.test(file.name);
+    if (!isCsvOrXlsx) {
+      s.setShareholderListError("Only .csv or .xlsx files are supported.");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > MAX_SHAREHOLDER_LIST_BYTES) {
+      s.setShareholderListError("File too large — max 10 MB.");
+      e.target.value = "";
+      return;
+    }
+
+    // For CSVs, check the header row up front so a missing required column
+    // (fullName / chn) is caught before submit rather than surfacing as a
+    // generic API error at the very end of the wizard.
+    if (/\.csv$/i.test(file.name)) {
+      try {
+        const headerLine = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result ?? "").split(/\r?\n/)[0] ?? "");
+          reader.onerror = () => reject(reader.error);
+          reader.readAsText(file.slice(0, 4096)); // header row is always well within the first 4KB
+        });
+        const missing = findMissingCsvColumns(headerLine);
+        if (missing.length > 0) {
+          s.setShareholderListError(`CSV is missing required column${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}`);
+          e.target.value = "";
+          return;
+        }
+      } catch {
+        // If the header peek fails for any reason, fall through and let the
+        // backend be the source of truth rather than blocking upload here.
+      }
+    }
+
+    s.setShareholderListParsing(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          // reader.result is a data URL ("data:text/csv;base64,AAAA…") —
+          // strip the prefix so we only send the raw base64 payload,
+          // matching the noticeFileBase64 legacy-fallback field's shape.
+          const result = reader.result as string;
+          const commaIdx = result.indexOf(",");
+          resolve(commaIdx >= 0 ? result.slice(commaIdx + 1) : result);
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      s.setShareholderListFilename(file.name);
+      s.setShareholderListSize(file.size);
+      s.setShareholderListBase64(base64);
+    } catch {
+      s.setShareholderListError("Couldn't read that file — please try again.");
+      s.setShareholderListFilename("");
+      s.setShareholderListSize(0);
+      s.setShareholderListBase64("");
+    } finally {
+      s.setShareholderListParsing(false);
+    }
+    e.target.value = "";
+  }
+
+  const shareholderListSelected = !!s.shareholderListBase64;
+
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -365,12 +467,58 @@ export function AgmShareholdersStep({ s }: { s: AgmState }) {
           ))}
         </div>
         {s.shareholderTargeting === "custom" && (
-          <label className="mt-3 border-2 border-dashed border-[hsl(var(--border))] rounded-xl p-5 flex flex-col items-center cursor-pointer hover:border-[hsl(var(--ring)/0.4)] transition-colors">
-            <Upload className="h-6 w-6 mb-2 text-[hsl(var(--muted-foreground))]" />
-            <p className="text-sm font-medium text-[hsl(var(--foreground))]">Upload shareholder list</p>
-            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">CSV with Name, Email, Phone, ShareCount</p>
-            <input type="file" accept=".csv,.xlsx" className="hidden" />
-          </label>
+          <>
+            <label className={cn(
+              "mt-3 border-2 border-dashed rounded-xl p-5 flex flex-col items-center transition-colors",
+              s.shareholderListParsing ? "cursor-wait opacity-60" : "cursor-pointer",
+              shareholderListSelected
+                ? "border-[hsl(var(--primary)/0.5)] bg-[hsl(var(--primary)/0.04)]"
+                : "border-[hsl(var(--border))] hover:border-[hsl(var(--ring)/0.4)]"
+            )}>
+              <Upload className={cn("h-6 w-6 mb-2", shareholderListSelected ? "text-[hsl(var(--primary))]" : "text-[hsl(var(--muted-foreground))]")} />
+              {s.shareholderListParsing ? (
+                <p className="text-sm font-medium text-[hsl(var(--foreground))]">Reading file…</p>
+              ) : shareholderListSelected ? (
+                <>
+                  <p className="text-sm font-semibold text-[hsl(var(--primary))]">{s.shareholderListFilename}</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">{formatBytes(s.shareholderListSize)} · Click to replace</p>
+                  <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+                    <Check className="h-3 w-3" /> Ready to upload
+                  </span>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-[hsl(var(--foreground))]">Upload shareholder list</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">CSV with columns: fullName, chn (required) · email, phone, units, status (optional)</p>
+                </>
+              )}
+              <input
+                type="file"
+                accept=".csv,.xlsx"
+                className="hidden"
+                disabled={s.shareholderListParsing}
+                onChange={handleShareholderFileChange}
+              />
+            </label>
+            {s.shareholderListError && (
+              <p className="text-xs text-red-600 mt-2">{s.shareholderListError}</p>
+            )}
+            {shareholderListSelected && !s.shareholderListParsing && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2 gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
+                onClick={() => {
+                  s.setShareholderListFilename("");
+                  s.setShareholderListSize(0);
+                  s.setShareholderListBase64("");
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Remove file
+              </Button>
+            )}
+          </>
         )}
       </div>
       <div className="flex items-center justify-between p-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)]">

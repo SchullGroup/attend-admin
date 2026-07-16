@@ -4,7 +4,7 @@
  * useLiveWebSocket
  *
  * Connects to the backend STOMP/SockJS WebSocket and subscribes to
- * /topic/live.{eventId} for real-time Q&A updates.
+ * /topic/live.{eventId} for real-time Q&A and live-poll updates.
  *
  * Both SockJS and @stomp/stompjs are bundled via npm — no CDN dependency.
  */
@@ -40,6 +40,32 @@ export type LiveWsMessage =
         answer:     string;
         answeredBy: string;
         answeredAt: string;
+      };
+    }
+  // ── Live polls (F1, backend 2026-07-15) — same topic as Q&A ──
+  | {
+      type: "POLL_OPENED";
+      payload: {
+        pollId:   string;
+        question: string;
+        options:  { id: string; label: string }[];
+        type:     "SINGLE_CHOICE";
+        closesAt?: string | null;
+      };
+    }
+  | {
+      type: "POLL_RESULTS_UPDATED";
+      payload: {
+        pollId:     string;
+        results:    { optionId: string; votes: number; percentage: number }[];
+        totalVotes: number;
+      };
+    }
+  | {
+      type: "POLL_CLOSED";
+      payload: {
+        pollId:       string;
+        finalResults: { optionId: string; votes: number; percentage: number }[];
       };
     };
 

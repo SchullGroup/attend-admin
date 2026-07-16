@@ -30,6 +30,14 @@ export function useAgmState() {
   const [resolutions,         setResolutions]         = useState<Resolution[]>([{ id: genId(), title: "", description: "", isSpecial: false }]);
   const [proxyEnabled,         setProxyEnabled]         = useState(true);
   const [shareholderTargeting, setShareholderTargeting] = useState<"all" | "custom">("all");
+  // Custom shareholder list CSV — read client-side into base64 and sent as
+  // agmConfig.shareholderListBase64/shareholderListFilename on submit (only
+  // when shareholderTargeting === "custom"). Mirrors the AGM Notice pattern.
+  const [shareholderListFilename, setShareholderListFilename] = useState("");
+  const [shareholderListBase64,   setShareholderListBase64]   = useState("");
+  const [shareholderListSize,     setShareholderListSize]     = useState(0);
+  const [shareholderListParsing,  setShareholderListParsing]  = useState(false);
+  const [shareholderListError,    setShareholderListError]    = useState("");
   const [enableZoomMeeting,    setEnableZoomMeeting]    = useState(false);
   const [zoomDurationMinutes,  setZoomDurationMinutes]  = useState("120");
   // Agenda
@@ -54,6 +62,11 @@ export function useAgmState() {
     resolutions, addResolution, removeResolution, updateResolution,
     proxyEnabled, setProxyEnabled,
     shareholderTargeting, setShareholderTargeting,
+    shareholderListFilename, setShareholderListFilename,
+    shareholderListBase64,   setShareholderListBase64,
+    shareholderListSize,     setShareholderListSize,
+    shareholderListParsing,  setShareholderListParsing,
+    shareholderListError,    setShareholderListError,
     agendaItems, addAgendaItem, removeAgendaItem, updateAgendaItem,
     enableZoomMeeting, setEnableZoomMeeting,
     zoomDurationMinutes, setZoomDurationMinutes,

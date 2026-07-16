@@ -1,9 +1,9 @@
 "use client";
-import { use, useState } from "react";
+import { use, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, Eye, ChevronLeft, ChevronRight } from "lucide-react";
-import { useRegistrarDetail, useRegistrarEventsPaged, getRegistrarDisplayName } from "@/api/registrars";
+import { useRegistrarDetail, useRegistrarEventsPaged, useRegistrarRegisters, getRegistrarDisplayName } from "@/api/registrars";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
@@ -14,12 +14,22 @@ import { getEventModule, MODULE_COLORS } from "@/lib/event-module";
 
 const PAGE_SIZE = 20;
 
+const EVENT_TYPE_OPTIONS = [
+  { id: "AGM_EGM",              name: "AGM / EGM"             },
+  { id: "PRODUCT_LAUNCH",       name: "Product Launch"        },
+  { id: "HACKATHON",            name: "Innovation Challenge"  },
+  { id: "GENERAL_EVENT",        name: "General"               },
+];
+
 export default function RegistrarEventsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const [page, setPage] = useState(0);
+  const [registerFilter, setRegisterFilter] = useState("");
+  const [typeFilter,     setTypeFilter]     = useState("");
 
   const { data: registrar, isLoading: registrarLoading } = useRegistrarDetail(id);
+  const { data: registersData } = useRegistrarRegisters(id);
   // The registrar-detail response already embeds the full events list (this is what the
   // main profile page uses) — GET /api/v1/admin/registrars/{id}/events as a separate
   // paginated call currently returns empty regardless of params, so it's only used as a
@@ -29,11 +39,45 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
 
   const isLoading   = registrarLoading;
   const usingPaged  = embeddedEvents.length === 0 && (pagedData?.events?.length ?? 0) > 0;
-  const allEvents   = usingPaged ? [] : embeddedEvents; // paged branch renders straight from pagedData below
-  const totalCount  = usingPaged ? (pagedData?.totalCount ?? 0) : (registrar?.eventsCount ?? allEvents.length);
+  const rawEvents   = usingPaged ? (pagedData?.events ?? []) : embeddedEvents;
+
+  const registerOptions = (registersData ?? []).map((r) => ({ id: r.id, name: r.name }));
+  const selectedRegisterName = registerOptions.find((r) => r.id === registerFilter)?.name;
+
+  // Filter by register + event type, then sort by creation time (newest first) —
+  // falls back to `date` when `createdAt` isn't present on a given event object.
+  //
+  // Register match tries `registerId` first, but also falls back to matching
+  // `registerName` (case-insensitive) against the selected register's name —
+  // backend has previously reported registerId as being in a different ID
+  // space on this embedded array than the standalone registers endpoint
+  // (BACKEND_BUGS item 14f), so an exact-id match alone can silently return
+  // zero results even when the register genuinely has events.
+  const filteredEvents = useMemo(() => {
+    let list = rawEvents as any[];
+    if (registerFilter) {
+      list = list.filter((e) =>
+        e.registerId === registerFilter ||
+        (selectedRegisterName && (e.registerName ?? "").toLowerCase() === selectedRegisterName.toLowerCase())
+      );
+    }
+    if (typeFilter)     list = list.filter((e) => (e.eventType ?? "").toUpperCase() === typeFilter);
+    return [...list].sort((a, b) => {
+      const at = new Date(a.createdAt ?? a.date ?? 0).getTime();
+      const bt = new Date(b.createdAt ?? b.date ?? 0).getTime();
+      return bt - at;
+    });
+  }, [rawEvents, registerFilter, typeFilter, selectedRegisterName]);
+
+  // When using the (unfiltered) paged branch, keep server pagination; once a
+  // client-side filter is active, or we're on the embedded-array fallback,
+  // paginate the filtered list locally instead.
+  const isFiltering = !!registerFilter || !!typeFilter;
+  const allEvents   = (usingPaged && !isFiltering) ? [] : filteredEvents;
+  const totalCount  = (usingPaged && !isFiltering) ? (pagedData?.totalCount ?? 0) : allEvents.length;
   const totalPages  = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const events      = usingPaged
-    ? (pagedData?.events ?? [])
+  const events      = (usingPaged && !isFiltering)
+    ? filteredEvents
     : allEvents.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
   const displayName = registrar ? getRegistrarDisplayName(registrar) : "Registrar";
 
@@ -47,6 +91,37 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">All Events</h1>
         <span className="text-sm text-[hsl(var(--muted-foreground))]">{totalCount} total</span>
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <select
+          value={registerFilter}
+          onChange={(e) => { setRegisterFilter(e.target.value); setPage(0); }}
+          className="h-9 pl-3 pr-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
+        >
+          <option value="">All Registers</option>
+          {registerOptions.map((r) => (
+            <option key={r.id} value={r.id}>{r.name}</option>
+          ))}
+        </select>
+        <select
+          value={typeFilter}
+          onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}
+          className="h-9 pl-3 pr-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
+        >
+          <option value="">All Event Types</option>
+          {EVENT_TYPE_OPTIONS.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+        {(registerFilter || typeFilter) && (
+          <button
+            onClick={() => { setRegisterFilter(""); setTypeFilter(""); setPage(0); }}
+            className="text-xs font-medium text-[hsl(var(--primary))] hover:underline"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       <Card className="attend-card overflow-hidden">
@@ -85,6 +160,9 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
                             <p className="text-sm font-medium text-[hsl(var(--foreground))] mt-0.5 truncate max-w-[240px]">
                               {evt.title}
                             </p>
+                            <p className="text-xs text-[hsl(var(--muted-foreground))] truncate max-w-[240px]">
+                              {evt.registerName ?? "—"}
+                            </p>
                           </div>
                         </div>
                       </td>
@@ -98,7 +176,7 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
                         {formatDate(evt.date)}
                       </td>
                       <td className="px-5 py-3 text-sm font-medium tabular-nums">
-                        {(evt.registrationCount ?? 0).toLocaleString()}
+                        {(evt.registrationCount ?? evt.rsvpCount ?? evt.registrationsCount ?? evt.totalRsvps ?? evt.rsvps ?? 0).toLocaleString()}
                       </td>
                       <td className="px-5 py-3">
                         <StatusBadge status={(evt.status ?? "").toLowerCase()} />

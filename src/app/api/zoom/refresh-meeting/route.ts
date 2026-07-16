@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { eventId } = body;
+  const { eventId, forceNew } = body as { eventId?: string; forceNew?: boolean };
   if (!eventId) {
     return NextResponse.json({ error: "eventId is required" }, { status: 400 });
   }
@@ -35,8 +35,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // forceNew=true tells the (idempotent, 2026-07-15+) backend to end the
+    // existing meeting and create a replacement — for meetings that no
+    // longer exist on Zoom's side (e.g. events from the pre-idempotency
+    // rotation era whose stored meetingId points at a deleted meeting).
     const backendRes = await fetch(
-      `${apiBase}/api/v1/client/events/${eventId}/zoom`,
+      `${apiBase}/api/v1/client/events/${eventId}/zoom${forceNew ? "?forceNew=true" : ""}`,
       {
         method:  "POST",
         headers: {

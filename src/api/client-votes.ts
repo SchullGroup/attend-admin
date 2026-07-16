@@ -237,8 +237,11 @@ export function useVoteResults(eventId: string) {
       );
       const raw = res.data.data as any;
       if (!raw) return raw as VoteResultsResponse;
+      // Backend confirmed (2026-07-15) the configured threshold is returned as
+      // `quorumPercentage` (alongside a boolean `quorumMet`) — read it first;
+      // older alias guesses kept as fallbacks.
       const requiredQuorumPercentage =
-        raw.requiredQuorumPercentage ?? raw.quorumRequiredPercentage ?? raw.quorumThreshold ?? undefined;
+        raw.quorumPercentage ?? raw.requiredQuorumPercentage ?? raw.quorumRequiredPercentage ?? raw.quorumThreshold ?? undefined;
       const resolutions: ResolutionResult[] = (raw.resolutions ?? []).map((r: any) => ({
         ...r,
         // Normalize whichever alias the backend uses for the per-resolution share-weighted toggle.

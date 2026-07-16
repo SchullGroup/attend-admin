@@ -1,7 +1,7 @@
 "use client";
 import { Card } from "@/components/ui/card";
 import { MessageSquare, ExternalLink } from "lucide-react";
-import ZoomEmbed, { type ZoomEmbedHandle } from "@/components/zoom-embed";
+import ZoomEmbed, { type ZoomEmbedHandle, type RefreshedZoomMeeting } from "@/components/zoom-embed";
 import type { ZoomMeetingDto } from "@/api/client-events";
 import type { RefObject } from "react";
 
@@ -12,6 +12,7 @@ export function ZoomMeetingCard({
   hostName,
   zoomEmbedRef,
   zoomToasts,
+  onMeetingRefreshed,
 }: {
   zoomMeeting: ZoomMeetingDto;
   zak: string;
@@ -19,6 +20,7 @@ export function ZoomMeetingCard({
   hostName: string;
   zoomEmbedRef: RefObject<ZoomEmbedHandle | null>;
   zoomToasts: { id: string; name: string; text: string }[];
+  onMeetingRefreshed?: (meeting: RefreshedZoomMeeting) => void;
 }) {
   return (
     <Card className="attend-card">
@@ -49,6 +51,7 @@ export function ZoomMeetingCard({
           eventId={eventId}
           userName={hostName}
           height={640}
+          onMeetingRefreshed={onMeetingRefreshed}
         />
         {/* Q&A toasts — float over the meeting when new questions arrive */}
         {zoomToasts.length > 0 && (

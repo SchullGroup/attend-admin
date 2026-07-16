@@ -311,11 +311,26 @@ export function useAdminChallengeApplications(
   return useQuery({
     queryKey: challengeKeys.applications(challengeId, status, page, size),
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<ApplicationListResponse>>(
+      const res = await apiClient.get<ApiResponse<any>>(
         `/api/v1/admin/challenges/${challengeId}/applications`,
         { params: { ...(status ? { status } : {}), page, size } }
       );
-      return res.data.data;
+      const raw = (res.data.data ?? (res.data as any)) as any;
+      // Defensive fallback — mirrors the pattern used by every other list
+      // hook in this file. The client-scoped equivalent
+      // (useClientChallengeApplications) assumes `{ content, totalElements,
+      // totalPages }` with no fallback; if the admin-scoped endpoint ever
+      // returns a differently-shaped envelope (e.g. `{ applications, total }`
+      // like some other admin endpoints), this keeps the Applications tab
+      // from silently rendering "No applications yet".
+      const content = Array.isArray(raw)
+        ? raw
+        : (raw?.content ?? raw?.applications ?? raw?.items ?? []);
+      return {
+        content,
+        totalElements: raw?.totalElements ?? raw?.totalCount ?? content.length,
+        totalPages:    raw?.totalPages    ?? 1,
+      } as ApplicationListResponse;
     },
     enabled: !!challengeId,
     staleTime: 30_000,

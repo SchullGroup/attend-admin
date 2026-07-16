@@ -2,22 +2,28 @@
 /**
  * ZoomEmbed — renders a Zoom meeting inline via an iframe pointing to /zoom-meeting.html.
  *
- * Why iframe:
- *   @zoom/meetingsdk/embedded bundles its own React and accesses React 16/17 internals
- *   (ReactCurrentOwner) that were removed in React 18, causing a crash on module evaluation.
- *   The iframe loads the SDK from the Zoom CDN in an isolated context with no React conflict.
+ * The iframe hosts Zoom's CLIENT VIEW (the full Zoom web client: native
+ * toolbar, Participants panel with waiting-room admits, Settings, view
+ * switching). Client view takes over its page by design — the iframe scopes
+ * that takeover to this card. The iframe also isolates the SDK's bundled
+ * React from the app's React (the original reason this page exists: the SDK
+ * touches React 16/17 internals removed in React 18+).
  *
  * Communication:
  *   Parent → iframe: ZOOM_JOIN      (join params)
  *   Parent → iframe: ZOOM_LEAVE     (request leave)
- *   Parent → iframe: ZOOM_SEND_CHAT (send a chat message inside the meeting)
+ *   Parent → iframe: ZOOM_SEND_CHAT (accepted but IGNORED — client view has
+ *                                    no programmatic chat API; Q&A reaches
+ *                                    the host via parent-rendered toasts)
  *   iframe → Parent: ZOOM_READY     (SDK scripts loaded, ready to receive join params)
- *   iframe → Parent: ZOOM_JOINED    (join() resolved successfully)
- *   iframe → Parent: ZOOM_ERROR     (join() rejected; carries .message)
+ *   iframe → Parent: ZOOM_JOINED    (join succeeded)
+ *   iframe → Parent: ZOOM_ERROR     (join failed; carries .message)
+ *   iframe → Parent: ZOOM_LEFT      (meeting left — fires for BOTH our Leave
+ *                                    button and Zoom's own toolbar Leave,
+ *                                    via the client view leaveUrl redirect)
  *
  * Imperative API (via forwardRef):
- *   ref.sendChat(message) — forwards a chat message into the live Zoom meeting.
- *   Only works while status === "joined".
+ *   ref.sendChat(message) — no-op under client view; kept so callers don't break.
  */
 import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { Loader2, AlertTriangle, Video, LogOut } from "lucide-react";
@@ -25,7 +31,11 @@ import { Button } from "@/components/ui/button";
 
 /** Imperative handle exposed to parent components via ref */
 export interface ZoomEmbedHandle {
-  /** Send a chat message visible to all participants inside the Zoom meeting. */
+  /**
+   * Historically forwarded a chat message into the Zoom meeting (component
+   * view). The client view has no chat-send API, so this is now a no-op —
+   * kept so existing callers (Q&A forwarding in SessionDetail) don't break.
+   */
   sendChat: (message: string) => void;
 }
 
@@ -40,6 +50,37 @@ export function parseZoomUrl(url: string): { meetingNumber: string; password: st
   } catch {
     return null;
   }
+}
+
+/**
+ * ZAKs are JWTs — decode the payload and check `exp` so we can refresh
+ * proactively instead of joining with a dead token, eating SDK error 200,
+ * and silently retrying (the old behavior; it made every first launch on a
+ * stale event a hidden fail-and-retry).
+ * Returns false when the token can't be decoded — in that case we just try
+ * the join and let the error-200 retry path handle it.
+ */
+function zakLooksExpired(zak: string): boolean {
+  try {
+    const part = zak.split(".")[1];
+    if (!part) return false;
+    const payload = JSON.parse(atob(part.replace(/-/g, "+").replace(/_/g, "/"))) as { exp?: number };
+    if (typeof payload.exp === "number") {
+      return payload.exp * 1000 < Date.now() + 60_000; // 60 s safety margin
+    }
+  } catch { /* undecodable — assume usable */ }
+  return false;
+}
+
+/** Subset of ZoomMeetingDto returned by /api/zoom/refresh-meeting. */
+export interface RefreshedZoomMeeting {
+  meetingId?: number | string;
+  password?:  string;
+  joinUrl?:   string;
+  startUrl?:  string;
+  /** Fresh host ZAK — returned directly since the backend's 2026-07-15
+   *  idempotency fix (before that it only travelled inside startUrl). */
+  hostZak?:   string;
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -61,10 +102,21 @@ interface ZoomEmbedProps {
    */
   zak?:           string;
   /**
-   * When provided, the component calls /api/zoom/refresh-meeting before every
-   * host join to ensure the ZAK is always fresh (ZAKs expire after ~24 h).
+   * When provided, the component calls /api/zoom/refresh-meeting before a
+   * host join whenever the ZAK is missing or expired. Since the backend's
+   * 2026-07-15 idempotency fix this returns the SAME meeting with a fresh
+   * ZAK; we still only refresh when needed and still adopt whatever meeting
+   * identity comes back, as a belt-and-braces guard for older backends
+   * (which rotated the meeting on every refresh).
    */
   eventId?:       string;
+  /**
+   * Called after /api/zoom/refresh-meeting returns. Parents should
+   * invalidate cached queries holding zoomMeeting/streamUrl so the UI stays
+   * in sync (a no-op now that the backend returns the same meeting; matters
+   * against older backends that rotated it).
+   */
+  onMeetingRefreshed?: (meeting: RefreshedZoomMeeting) => void;
 
   // Option B — parse from a raw Zoom join URL (fallback):
   streamUrl?: string;
@@ -79,6 +131,7 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
   password: passwordProp,
   zak: zakProp,
   eventId,
+  onMeetingRefreshed,
   streamUrl,
 }: ZoomEmbedProps, ref) {
   const iframeRef    = useRef<HTMLIFrameElement>(null);
@@ -111,46 +164,56 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
     }
   }
 
-  const handleLaunch = useCallback(async (forceRefresh = false) => {
+  const handleLaunch = useCallback(async (forceRefresh = false, forceNew = false) => {
     if (!resolved || !iframeRef.current) return;
     setStatus("loading");
     setErrMsg("");
     cleanupListener();
 
     try {
-      // Use stored meeting data by default — avoids creating a new meeting ID
-      // which would cause error 3000 if the previous meeting is still running.
-      // Only refresh when ZAK is missing or explicitly requested (after error 200).
+      // Use stored meeting data by default. Refresh ONLY when the ZAK is
+      // missing/expired or explicitly requested (after error 200) — the
+      // backend ROTATES the meeting on refresh, so an unnecessary refresh
+      // would orphan attendees already sitting in the current meeting.
       let joinNumber   = resolved.meetingNumber;
       let joinPassword = resolved.password;
       let joinZak      = resolved.zak;
 
-      if (eventId && (forceRefresh || !joinZak)) {
+      if (eventId && (forceRefresh || forceNew || !joinZak || zakLooksExpired(joinZak))) {
         try {
           const refreshRes = await fetch("/api/zoom/refresh-meeting", {
             method:  "POST",
             headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ eventId }),
+            // forceNew: replace a meeting that no longer exists on Zoom's
+            // side (deleted/expired) — ends it and creates a fresh one.
+            body:    JSON.stringify({ eventId, ...(forceNew ? { forceNew: true } : {}) }),
           });
           if (refreshRes.ok) {
-            const meeting = await refreshRes.json() as {
-              meetingId?: number | string;
-              password?:  string;
-              startUrl?:  string;
-            };
-            // Only take the meeting ID if we don't already have one.
-            // Preserving the existing meetingNumber is critical: the backend's
-            // POST /zoom may create a new meeting on some calls; if the OLD
-            // meeting is still running, starting a different meeting causes
-            // error 3000. We just need a fresh ZAK, not a new meeting.
-            if (meeting.meetingId && !joinNumber) joinNumber = String(meeting.meetingId);
-            if (meeting.password  !== undefined && !joinPassword) joinPassword = meeting.password;
+            const meeting = await refreshRes.json() as RefreshedZoomMeeting;
+            // ADOPT the refreshed meeting identity. Idempotent backends
+            // (2026-07-15+) return the same meeting so this is a no-op;
+            // older backends rotated the meeting on refresh, and pinning
+            // the OLD meetingNumber stranded the host in a meeting nobody
+            // else could reach. Adopting is correct either way.
+            if (meeting.meetingId) joinNumber = String(meeting.meetingId);
+            if (typeof meeting.password === "string") joinPassword = meeting.password;
+            // Fresh ZAK: prefer the one inside startUrl — that URL is what
+            // Zoom itself generated for this meeting's host, so its zak
+            // param is guaranteed to match the meeting. The dedicated
+            // hostZak field (added with the 2026-07-15 idempotency fix) is
+            // only a fallback: joins with it failed with "Not support start
+            // meeting via tokens (200)", which indicates it's issued for a
+            // different user than the meeting's host (logged as a backend
+            // bug in PENDING_BACKEND_FIXES.md).
+            let adoptedZak = "";
             if (meeting.startUrl) {
               try {
-                const freshZak = new URL(meeting.startUrl).searchParams.get("zak");
-                if (freshZak) joinZak = freshZak;
+                adoptedZak = new URL(meeting.startUrl).searchParams.get("zak") ?? "";
               } catch { /* ignore malformed url */ }
             }
+            if (!adoptedZak && meeting.hostZak) adoptedZak = meeting.hostZak;
+            if (adoptedZak) joinZak = adoptedZak;
+            onMeetingRefreshed?.(meeting);
           } else {
             const errBody = await refreshRes.json().catch(() => ({})) as { error?: string };
             throw new Error(errBody.error ?? `Meeting refresh failed (${refreshRes.status})`);
@@ -199,8 +262,13 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
             ? errMessage
             : (() => { try { return JSON.stringify(errMessage); } catch { return "Failed to join Zoom meeting"; } })();
 
-          // Error 200 = ZAK expired. Silently refresh and retry once.
-          if (typeof msg === "string" && msg.includes("200") && eventId && !forceRefresh) {
+          // ZAK expired/invalid — reported as code 200 by the old component
+          // view and code 3265 ("Token error") by the client view.
+          // Silently refresh and retry once.
+          const isTokenError =
+            typeof msg === "string" &&
+            (/\b(200|3265)\b/.test(msg) || /token error/i.test(msg));
+          if (isTokenError && eventId && !forceRefresh) {
             handleLaunch(true);
             return;
           }
@@ -222,7 +290,7 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
       cleanupListener();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolved, userName]);
+  }, [resolved, userName, eventId, onMeetingRefreshed]);
 
   function handleLeave() {
     cleanupListener();
@@ -255,6 +323,22 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
 
   // Cleanup listener on unmount
   useEffect(() => () => cleanupListener(), []);
+
+  // The client view navigates the iframe to ?left=1 after ANY leave —
+  // including Zoom's own toolbar Leave button, which never goes through
+  // handleLeave(). Catch that ZOOM_LEFT here and reset to the idle launch
+  // card instead of leaving a dead blank iframe behind the "joined" state.
+  useEffect(() => {
+    if (status !== "joined") return;
+    const onNativeLeft = (event: MessageEvent) => {
+      if (event.data?.type === "ZOOM_LEFT") {
+        if (iframeRef.current) iframeRef.current.src = "";
+        setStatus("idle");
+      }
+    };
+    window.addEventListener("message", onNativeLeft);
+    return () => window.removeEventListener("message", onNativeLeft);
+  }, [status]);
 
   if (!resolved) {
     return (
@@ -327,9 +411,19 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
           <div>
             <p className="text-sm font-semibold text-white mb-1">Failed to join meeting</p>
             <p className="text-xs text-gray-400 max-w-xs">{errMsg}</p>
-            {errMsg.includes("200") && (
+            {/not support start meeting/i.test(errMsg) ? (
               <p className="text-xs text-amber-400 max-w-xs mt-2">
-                Host token expired. Go to Event Settings → Refresh Meeting Token, then try again.
+                The host token doesn&apos;t match this meeting&apos;s host — a backend token issue,
+                not something a retry fixes. Flag to the backend team (see PENDING_BACKEND_FIXES.md,
+                Zoom hostZak item).
+              </p>
+            ) : (errMsg.includes("200") || errMsg.includes("3265") || /token/i.test(errMsg)) && (
+              <p className="text-xs text-amber-400 max-w-xs mt-2">
+                Host token expired or invalid. Try again fetches a fresh token; if it keeps
+                failing, this event&apos;s meeting may no longer exist on Zoom (common for
+                events created before the 2026-07-15 backend fix) — use Replace Meeting to
+                end it and generate a new one. Attendees get the new link automatically;
+                any previously shared links go dead.
               </p>
             )}
             {errMsg.includes("3000") && (
@@ -342,9 +436,32 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
             )}
           </div>
           <div className="flex flex-col items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setStatus("idle"); setErrMsg(""); }}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // On token errors, retry WITH a forced refresh — going back
+                // to idle and relaunching would reuse the same stale ZAK.
+                const tokenErr = /\b(200|3265)\b/.test(errMsg) || /token/i.test(errMsg);
+                setErrMsg("");
+                if (tokenErr && eventId) handleLaunch(true);
+                else setStatus("idle");
+              }}
+            >
               Try again
             </Button>
+            {eventId && (/\b(200|3265)\b/.test(errMsg) || /token|not support start meeting/i.test(errMsg)) && (
+              <Button
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={() => {
+                  setErrMsg("");
+                  handleLaunch(true, true);
+                }}
+              >
+                Replace Meeting (new link)
+              </Button>
+            )}
           </div>
         </div>
       )}

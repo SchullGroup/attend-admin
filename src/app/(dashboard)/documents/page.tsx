@@ -7,6 +7,7 @@ import { DOC_TYPES, DOC_TYPE_CONFIG, type DocType } from "@/lib/document-type";
 import { useGetMe } from "@/api/auth/hooks";
 import { useClientEventsDropdown } from "@/api/client-events";
 import { useGlobalDocuments as useAdminGlobalDocuments } from "@/api/super-admin";
+import { useRegistrars, useRegistrarRegisters } from "@/api/registrars";
 import {
   useGlobalDocuments as useClientGlobalDocuments,
   useDeleteGlobalDocument,
@@ -146,6 +147,12 @@ export default function DocumentsPage() {
   const [search,         setSearch]         = useState("");
   const [registerFilter, setRegisterFilter] = useState("");
   const [eventFilter,    setEventFilter]    = useState("");
+  // Registrar + (cascading) Register filters — Super Admin only. Registers here
+  // is a different concept from the client-only `registerFilter` above (which
+  // maps to that org's own "Organiser" dropdown) — this scopes across all
+  // registrars platform-wide, same pattern as the Events page.
+  const [registrarFilter,      setRegistrarFilter]      = useState("");
+  const [adminRegisterFilter,  setAdminRegisterFilter]  = useState("");
   const [uploadOpen,     setUploadOpen]     = useState(false);
   const [form,           setForm]           = useState({ title: "", type: "NOTICE" as DocType, eventId: "" });
   const [selectedFile,   setSelectedFile]   = useState<File | null>(null);
@@ -170,6 +177,15 @@ export default function DocumentsPage() {
   // picker, which needs every event (not just ones with existing docs).
   const { data: allEventOptions = [] } = useClientEventsDropdown(!isAdmin);
 
+  // Registrar + cascading Register filter data — Super Admin only.
+  const { data: registrarsData         } = useRegistrars("", 0, 100, isAdmin);
+  const { data: registrarRegistersData } = useRegistrarRegisters(isAdmin ? registrarFilter : "");
+  const registrarOptions = (registrarsData?.registrars ?? []).map((r) => ({
+    id:   r.id,
+    name: r.companyName || r.name || r.id,
+  }));
+  const adminRegisterOptions = (registrarRegistersData ?? []).map((r) => ({ id: r.id, name: r.name || r.id }));
+
   const deleteMutation   = useDeleteGlobalDocument();
   const downloadMutation = useDownloadGlobalDocument();
   const uploadMutation   = useUploadGlobalDocument();
@@ -177,9 +193,24 @@ export default function DocumentsPage() {
   const isLoading = isAdmin ? adminLoading : clientLoading;
 
   // Normalise both list response shapes
-  const docs: any[] = isAdmin
+  const rawDocs: any[] = isAdmin
     ? (adminDocsData?.documents ?? (adminDocsData as any)?.content ?? [])
     : (clientDocsData?.documents ?? []);
+
+  // Client-side Registrar/Register filtering for the admin path — the admin
+  // documents endpoint has no registrarId/registerId query params, but each
+  // GlobalDocumentItem does carry `registerId`, so we can filter locally once
+  // a Registrar (and optionally a specific Register under it) is selected.
+  const docs: any[] = isAdmin
+    ? rawDocs.filter((d) => {
+        if (adminRegisterFilter) return d.registerId === adminRegisterFilter;
+        if (registrarFilter) {
+          const ids = new Set(adminRegisterOptions.map((r) => r.id));
+          return ids.has(d.registerId);
+        }
+        return true;
+      })
+    : rawDocs;
 
   function handleUpload() {
     if (!form.title || !form.eventId || !selectedFile) return;
@@ -349,6 +380,34 @@ export default function DocumentsPage() {
           </div>
         )}
 
+        {/* Registrar + cascading Register dropdowns (Super Admin only) */}
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <select
+              value={registrarFilter}
+              onChange={(e) => { setRegistrarFilter(e.target.value); setAdminRegisterFilter(""); }}
+              className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
+            >
+              <option value="">All Registrars</option>
+              {registrarOptions.map((r) => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </select>
+            {registrarFilter && (
+              <select
+                value={adminRegisterFilter}
+                onChange={(e) => setAdminRegisterFilter(e.target.value)}
+                className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
+              >
+                <option value="">All Registers</option>
+                {adminRegisterOptions.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+
         {/* Search */}
         <div className="relative max-w-xs ml-auto">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
@@ -469,9 +528,9 @@ export default function DocumentsPage() {
           <div className="py-14 text-center">
             <FileText className="h-10 w-10 mx-auto mb-3 text-[hsl(var(--muted-foreground))] opacity-30" />
             <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-1">No documents found</p>
-            {(typeFilter || search || registerFilter || eventFilter) && (
+            {(typeFilter || search || registerFilter || eventFilter || registrarFilter || adminRegisterFilter) && (
               <button
-                onClick={() => { setTypeFilter(""); setSearch(""); setRegisterFilter(""); setEventFilter(""); }}
+                onClick={() => { setTypeFilter(""); setSearch(""); setRegisterFilter(""); setEventFilter(""); setRegistrarFilter(""); setAdminRegisterFilter(""); }}
                 className="text-xs text-[hsl(var(--primary))] hover:underline mt-1"
               >
                 Clear filters

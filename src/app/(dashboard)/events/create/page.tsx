@@ -171,6 +171,11 @@ function CreateEventInner() {
         agmNoticeUrl:         agm.noticeUrl  || undefined,
         agmNoticeFilename:    agm.noticeFile || undefined,
         agmNoticeSizeBytes:   agm.noticeFileSize || undefined,
+        // Custom shareholder list CSV — only sent when targeting is "custom"
+        // and a file was actually selected. Backend already has these fields
+        // reserved on AgmConfigRequest (previously unused/never populated).
+        shareholderListBase64:   agm.shareholderTargeting === "custom" ? (agm.shareholderListBase64   || undefined) : undefined,
+        shareholderListFilename: agm.shareholderTargeting === "custom" ? (agm.shareholderListFilename || undefined) : undefined,
       } : undefined;
 
       const productLaunchConfig = selectedModule === "LAUNCH" ? {
@@ -298,8 +303,12 @@ function CreateEventInner() {
           onSuccess: (createdEvent) => {
             const eventId = (createdEvent as any)?.id ?? (createdEvent as any)?.eventId;
 
-            // Auto-import shareholders for AGM (best-effort — failure doesn't block navigation)
-            if (selectedModule === "AGM" && organiserId && eventId) {
+            // Auto-import shareholders for AGM (best-effort — failure doesn't block navigation).
+            // Only when targeting "all" registered shareholders — a custom uploaded list
+            // (shareholderTargeting === "custom") already rode along in agmConfig above,
+            // and importing every register shareholder on top of it would defeat the point
+            // of uploading a custom list.
+            if (selectedModule === "AGM" && organiserId && eventId && agm.shareholderTargeting === "all") {
               importShareholders.mutate(
                 { eventId, registerId: organiserId },
                 { onError: () => {} } // suppress error toast — event was created successfully

@@ -30,9 +30,28 @@ import { EventLaunchAudienceTab }      from "./components/EventLaunchAudienceTab
 import { EventLaunchWaitlistTab }      from "./components/EventLaunchWaitlistTab";
 import { EventChallengeApplicationsTab } from "./components/EventChallengeApplicationsTab";
 import { EventChallengeJudgesTab }       from "./components/EventChallengeJudgesTab";
+import { EventPressKitTab }              from "./components/EventPressKitTab";
 import type { LocalAgendaItem, EventShim } from "./components/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * "Back" navigation for the event detail page. Previously this hard-pushed
+ * to `/events`, which meant coming from anywhere else (a registrar's events
+ * sub-page, a filtered Events list, Dashboard "Live Now", search results,
+ * etc.) always dropped the user onto the unfiltered All Events page instead
+ * of back where they came from. `router.back()` uses real browser history so
+ * it returns to the actual referring page; falls back to `/events` only
+ * when there's no in-app history to go back to (e.g. a bookmarked/direct
+ * link landed straight on this page).
+ */
+function handleBack(router: ReturnType<typeof useRouter>) {
+  if (typeof window !== "undefined" && window.history.length > 1) {
+    router.back();
+  } else {
+    router.push("/events");
+  }
+}
 
 function toModule(eventType?: string): string {
   if (!eventType) return "GENERAL";
@@ -119,7 +138,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <p className="text-lg font-semibold text-[hsl(var(--foreground))]">Event not found</p>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">This event may have been removed.</p>
-        <Button variant="outline" className="mt-4 gap-2" onClick={() => router.push("/events")}>
+        <Button variant="outline" className="mt-4 gap-2" onClick={() => handleBack(router)}>
           <ArrowLeft className="h-4 w-4" /> Back to Events
         </Button>
       </div>
@@ -207,11 +226,18 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     ...(isHACKATHON && isSuperAdmin ? ["Applications", "Judging"] : []),
     // Registrar tab only for super admin (overview already shows it for others)
     ...(isSuperAdmin ? ["Registrar"] : []),
-    // For AGM + super admin: stop here — Documents and everything after is hidden
+    // Documents should always be visible, regardless of role or module — it was
+    // previously bundled into the AGM+super-admin exclusion below and got hidden
+    // along with the AGM-voting-specific tabs by mistake.
+    "Documents",
+    // For AGM + super admin: stop here — the AGM-voting tabs below stay hidden
+    // (super admin gets Overview/Attendees/Registrar/Documents only for AGMs)
     ...(isSuperAdmin && isAGM ? [] : [
-      "Documents",
       ...(isAGM && !isSuperAdmin ? ["Resolutions", "Stakeholders"] : isAGM ? ["Resolutions"] : []),
       ...(!isSuperAdmin && isLAUNCH ? ["Audience Tiers", "Waitlist"] : []),
+      // Press Kit (F2) — Product Launch events. Client admin: full CRUD;
+      // super admin + Viewer: read-only (super admin reads /admin endpoint).
+      ...(isLAUNCH ? ["Press Kit"] : []),
       // Broadcast is a write operation — hidden for super admin and Viewer (read-only)
       ...(!isSuperAdmin && !isViewer ? ["Broadcast"] : []),
       ...(isAGM ? ["Vote Results", "Post-AGM"] : []),
@@ -226,7 +252,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {/* ── Page header ── */}
       <div className="mb-6">
         <button
-          onClick={() => router.push("/events")}
+          onClick={() => handleBack(router)}
           className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-4 transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> All Events
@@ -298,6 +324,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {tab === "Stakeholders"   && !isSuperAdmin && isAGM   && <EventExpectedAttendeesTab eventId={id} registerId={(apiEvent as any).registerId} readOnly={isViewer} />}
       {tab === "Audience Tiers" && !isSuperAdmin && isLAUNCH && <EventLaunchAudienceTab    eventId={id} />}
       {tab === "Waitlist"       && !isSuperAdmin && isLAUNCH && <EventLaunchWaitlistTab    eventId={id} />}
+      {tab === "Press Kit"      && isLAUNCH && <EventPressKitTab eventId={id} readOnly={isSuperAdmin || isViewer} isSuperAdmin={isSuperAdmin} />}
       {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab eventId={id} />}
       {tab === "Vote Results"       && isAGM && <EventVoteResultsTab voteResults={voteResultsData} />}
       {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} voteResults={voteResultsData} participants={participants} eventId={id} />}

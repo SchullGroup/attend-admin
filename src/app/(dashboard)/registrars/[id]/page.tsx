@@ -27,8 +27,22 @@ import { Loader } from "@/components/ui/Loader";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { ModuleBadge } from "@/components/custom/module-badge";
 import { DateCell } from "@/components/ui/date-cell";
-import { formatDate } from "@/lib/utils";
+import { CustomSelect } from "@/components/custom/custom-select";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { formatDate, digitsOnly, withIdPrefix, formatRcNumber } from "@/lib/utils";
 import { getEventModule, MODULE_COLORS } from "@/lib/event-module";
+
+const PLAN_OPTIONS = [
+  { label: "Starter",    value: "STARTER"    },
+  { label: "Growth",     value: "GROWTH"     },
+  { label: "Enterprise", value: "ENTERPRISE" },
+];
+
+const INDUSTRY_OPTIONS = [
+  "Financial Services", "Banking & Finance", "Insurance", "Oil & Gas", "FMCG",
+  "Telecommunications", "Technology / Fintech", "Healthcare", "Real Estate",
+  "Manufacturing", "Agriculture", "Education", "Other",
+];
 
 const EVENTS_PREVIEW_LIMIT = 6;
 
@@ -221,15 +235,36 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Industry</label>
-                <Input value={editForm.industry ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, industry: e.target.value }))} />
+                <CustomSelect
+                  value={editForm.industry ?? ""}
+                  onChange={(v) => setEditForm((f) => ({ ...f, industry: v }))}
+                  placeholder="Select industry…"
+                  options={INDUSTRY_OPTIONS.map((i) => ({ label: i, value: i }))}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Plan</label>
-                <Input value={editForm.plan ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, plan: e.target.value }))} />
+                <CustomSelect
+                  value={editForm.plan ?? ""}
+                  onChange={(v) => setEditForm((f) => ({ ...f, plan: v }))}
+                  placeholder="Select plan…"
+                  options={PLAN_OPTIONS}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">RC Number</label>
-                <Input value={editForm.rcNumber ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, rcNumber: e.target.value }))} />
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[hsl(var(--muted-foreground))] pointer-events-none">
+                    RC
+                  </span>
+                  <Input
+                    inputMode="numeric"
+                    value={digitsOnly((editForm.rcNumber ?? "").replace(/^RC/i, ""))}
+                    onChange={(e) => setEditForm((f) => ({ ...f, rcNumber: withIdPrefix("RC", digitsOnly(e.target.value), { space: true }) }))}
+                    placeholder="287640"
+                    className="pl-9"
+                  />
+                </div>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Website</label>
@@ -254,7 +289,10 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Phone</label>
-                <Input value={editForm.representativePhone ?? ""} onChange={(e) => setEditForm((f) => ({ ...f, representativePhone: e.target.value }))} />
+                <PhoneInput
+                  value={editForm.representativePhone ?? ""}
+                  onChange={(e164) => setEditForm((f) => ({ ...f, representativePhone: e164 }))}
+                />
               </div>
             </div>
 
@@ -286,7 +324,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
             <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4">Organisation</h2>
             <div className="flex flex-col gap-3">
               {([
-                { icon: Hash,      label: "RC Number", value: registrar.rcNumber ?? "—"  },
+                { icon: Hash,      label: "RC Number", value: registrar.rcNumber ? formatRcNumber(registrar.rcNumber) : "—"  },
                 { icon: Globe,     label: "Industry",  value: registrar.industry  ?? "—" },
                 { icon: Building2, label: "Plan",      value: registrar.plan      ?? "—" },
                 { icon: MapPin,    label: "Address",   value: (registrar as any).address  ?? null },
@@ -381,11 +419,15 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                     <th className="px-5 py-3 text-left">Organisation</th>
                     <th className="px-5 py-3 text-left">Industry</th>
                     <th className="px-5 py-3 text-left">Status</th>
-                    <th className="px-5 py-3 text-left">Events</th>
                     <th className="px-5 py-3 text-left">Enrolled</th>
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Event counts intentionally not shown here — this field
+                      was never populated by the backend (always 0, see
+                      PENDING_BACKEND_FIXES item 1). Which register organised
+                      an event is now shown per-row in the Events table below
+                      instead, via the new "Register" column. */}
                   {(registers as any[]).map((reg) => (
                     <tr key={reg.id} className="attend-table-row">
                       <td className="px-5 py-3">
@@ -396,9 +438,6 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                       </td>
                       <td className="px-5 py-3">
                         <StatusBadge status={(reg.status ?? "").toLowerCase()} />
-                      </td>
-                      <td className="px-5 py-3 text-sm font-medium tabular-nums text-center">
-                        {reg.eventCount ?? (reg as any).eventsCount ?? (reg as any).totalEvents ?? (reg as any).numberOfEvents ?? 0}
                       </td>
                       <td className="px-5 py-3">
                         <DateCell value={reg.enrolledAt} />
@@ -537,6 +576,9 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                               <p className="text-sm font-medium text-[hsl(var(--foreground))] mt-0.5 truncate max-w-[200px]">
                                 {evt.title}
                               </p>
+                              <p className="text-xs text-[hsl(var(--muted-foreground))] truncate max-w-[200px]">
+                                {evt.registerName ?? "—"}
+                              </p>
                             </div>
                           </div>
                         </td>
@@ -550,7 +592,12 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                           {formatDate(evt.date)}
                         </td>
                         <td className="px-5 py-3 text-sm font-medium tabular-nums">
-                          {(evt.registrationCount ?? 0).toLocaleString()}
+                          {/* Embedded registrar.events[] objects use a different field
+                              name than the flat /api/v1/admin/events list (which natively
+                              returns registrationCount) — widen the fallback chain the
+                              same way we did for register eventCount (see BACKEND_BUGS
+                              item 11). */}
+                          {(evt.registrationCount ?? evt.rsvpCount ?? evt.registrationsCount ?? evt.totalRsvps ?? evt.rsvps ?? 0).toLocaleString()}
                         </td>
                         <td className="px-5 py-3">
                           <StatusBadge status={(evt.status ?? "").toLowerCase()} />

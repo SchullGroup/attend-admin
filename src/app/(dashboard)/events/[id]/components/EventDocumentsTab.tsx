@@ -88,16 +88,40 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
   const deleteMutation = useDeleteEventDocument();
 
   // Normalise the two possible list shapes
-  const docs: any[] = isAdmin
+  const rawDocs: any[] = isAdmin
     ? (Array.isArray(adminDocs) ? adminDocs : [])
     : (Array.isArray(clientDocsRaw) ? clientDocsRaw :
        Array.isArray((clientDocsRaw as any)?.documents) ? (clientDocsRaw as any).documents : []);
 
   const isLoading = isAdmin ? adminLoading : clientLoading;
 
-  // Auto-register AGM notice URL (already on Cloudinary from event creation)
+  // Super admin has no client org, so the write-side auto-registration below never
+  // runs for that role — if the AGM notice (attached at event creation) isn't already
+  // present in the admin document list, show it as a synthetic read-only row instead
+  // of silently omitting it. This is display-only — no mutation, no persistence.
+  const hasNoticeInList = rawDocs.some(
+    (d: any) => d.documentType === "NOTICE" || d.title?.toLowerCase().includes("agm notice")
+  );
+  const docs: any[] = (isAdmin && agmNoticeUrl && !hasNoticeInList)
+    ? [
+        {
+          id: "agm-notice-synthetic",
+          title: "AGM Notice",
+          documentType: "NOTICE",
+          fileType: "PDF",
+          fileUrl: agmNoticeUrl,
+          sizeBytes: 0,
+          downloadCount: 0,
+          uploadedAt: undefined,
+        },
+        ...rawDocs,
+      ]
+    : rawDocs;
+
+  // Auto-register AGM notice URL (already on Cloudinary from event creation) —
+  // client-org roles only; super admin has no client-scoped upload endpoint to call.
   useEffect(() => {
-    if (!agmNoticeUrl || isLoading || noticeRegistered || readOnly) return;
+    if (!agmNoticeUrl || isLoading || noticeRegistered || readOnly || isAdmin) return;
     const alreadyUploaded = docs.some(
       (d: any) => d.documentType === "NOTICE" || d.title?.toLowerCase().includes("agm notice")
     );

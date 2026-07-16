@@ -4,29 +4,49 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Zoom Meeting</title>
-  <!-- The coi-serviceworker.js approach was tried and abandoned (it never
-       achieved crossOriginIsolated=true here and eventually self-disabled
-       COEP). COOP/COEP is now set server-side via middleware.ts instead,
-       scoped to this path only. This cleanup unregisters any leftover
-       service worker from that earlier attempt so it doesn't keep
-       intercepting requests from this page. -->
+  <!-- ────────────────────────────────────────────────────────────────────
+       This page hosts Zoom's CLIENT VIEW (ZoomMtg) — the full Zoom web
+       client, the same UI you get joining from zoom.us in a browser:
+       native bottom toolbar, Participants panel with waiting-room admit
+       prompts, Settings, view switching. It replaced the Component View
+       (ZoomMtgEmbedded) whose floating mini-window needed constant manual
+       sizing (viewSizes/PAD math), defaulted to ribbon view, and had
+       broken/cramped participants & settings popovers.
+
+       Client view "takes over the page" by design — which is exactly why
+       it lives in this dedicated iframe: it takes over THIS document only,
+       and the parent (zoom-embed.tsx) shows it inline inside the Zoom
+       Meeting card. The iframe also isolates the SDK's bundled React from
+       the app's React (the original reason this page exists).
+
+       COOP/COEP for SharedArrayBuffer (gallery view) is set server-side in
+       src/proxy.ts, scoped to this path and /events/live — the parent page
+       needs the headers too or crossOriginIsolated stays false in here.
+
+       postMessage protocol with the parent (unchanged from component view):
+         Parent → here : ZOOM_JOIN, ZOOM_LEAVE, ZOOM_SEND_CHAT (no-op now)
+         here → Parent : ZOOM_READY, ZOOM_JOINED, ZOOM_ERROR, ZOOM_LEFT
+
+       Leave flow: client view navigates to `leaveUrl` after leaving a
+       meeting (whether via our ZOOM_LEAVE message or Zoom's own toolbar
+       Leave button). leaveUrl is this same page with ?left=1, which just
+       posts ZOOM_LEFT to the parent so it can reset to idle.
+       ──────────────────────────────────────────────────────────────────── -->
   <script>
+    // Unregister any leftover coi-serviceworker from the abandoned
+    // client-side isolation attempt (see git history) so it doesn't keep
+    // intercepting requests from this page.
     if (navigator.serviceWorker) {
       navigator.serviceWorker.getRegistrations().then(function (regs) {
         regs.forEach(function (r) { r.unregister(); });
       });
     }
   </script>
+  <link type="text/css" rel="stylesheet" href="https://source.zoom.us/6.2.0/css/bootstrap.css" />
+  <link type="text/css" rel="stylesheet" href="https://source.zoom.us/6.2.0/css/react-select.css" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #111; }
-
-    #meetingSDKElement {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      width: 100%; height: 100%;
-      z-index: 1;
-    }
 
     #loading, #error {
       position: fixed;
@@ -49,20 +69,26 @@
   </style>
 </head>
 <body>
-  <div id="meetingSDKElement"></div>
-
   <div id="loading">
     <div id="loading-spinner"></div>
     <p style="font-size:13px">Loading Zoom…</p>
     <p id="coi-debug" style="font-size:11px;color:#666;font-family:monospace"></p>
   </div>
   <div id="error"></div>
+
   <script>
-    // Diagnostic only: confirms whether this iframe is actually
-    // cross-origin-isolated (required for SharedArrayBuffer, which
-    // Ribbon/Gallery view depend on). Visible on screen and logged to
-    // console so it can be checked without opening devtools on the
-    // right frame.
+    // Post-leave landing: client view navigated here via leaveUrl.
+    // Just tell the parent and render nothing — the parent tears the
+    // iframe down (or resets to the idle "Launch" card).
+    var IS_LEAVE_LANDING = new URLSearchParams(location.search).get('left') === '1';
+    if (IS_LEAVE_LANDING) {
+      document.getElementById('loading').style.display = 'none';
+      window.parent.postMessage({ type: 'ZOOM_LEFT' }, '*');
+    }
+
+    // Diagnostic: confirms whether this iframe is cross-origin-isolated
+    // (required for SharedArrayBuffer → gallery view). Shown on screen and
+    // logged so it can be checked without picking the right devtools frame.
     (function () {
       var isolated = typeof window.crossOriginIsolated !== 'undefined' ? window.crossOriginIsolated : 'unsupported';
       console.log('[ZoomEmbed] crossOriginIsolated =', isolated);
@@ -72,16 +98,34 @@
     })();
   </script>
 
+  <script>
+    // Zoom's toolbar menus (More, reactions, etc.) move focus into the
+    // menu when they open. The browser then scrolls EVERY ancestor
+    // scroller — including the parent dashboard page hosting this iframe —
+    // to reveal the newly focused element, which yanked the whole page to
+    // the top on every "More" click. Defaulting programmatic focus() to
+    // preventScroll stops that; must run before the SDK bundle loads.
+    (function () {
+      var origFocus = HTMLElement.prototype.focus;
+      HTMLElement.prototype.focus = function (opts) {
+        try {
+          origFocus.call(this, Object.assign({ preventScroll: true }, opts || {}));
+        } catch (_) {
+          origFocus.call(this);
+        }
+      };
+    })();
+  </script>
+
   <script src="https://source.zoom.us/6.2.0/lib/vendor/react.min.js"></script>
   <script src="https://source.zoom.us/6.2.0/lib/vendor/react-dom.min.js"></script>
   <script src="https://source.zoom.us/6.2.0/lib/vendor/redux.min.js"></script>
   <script src="https://source.zoom.us/6.2.0/lib/vendor/redux-thunk.min.js"></script>
   <script src="https://source.zoom.us/6.2.0/lib/vendor/lodash.min.js"></script>
-  <script src="https://source.zoom.us/zoom-meeting-embedded-6.2.0.min.js"></script>
+  <!-- CLIENT VIEW bundle (zoom-meeting-*), not the embedded/component one -->
+  <script src="https://source.zoom.us/zoom-meeting-6.2.0.min.js"></script>
 
   <script>
-    var sdkClient = null;
-
     function extractError(e) {
       if (!e) return 'Unknown error';
       if (typeof e === 'string') return e;
@@ -100,90 +144,73 @@
       window.parent.postMessage({ type: 'ZOOM_ERROR', message: msg }, '*');
     }
 
-    window.addEventListener('message', async function (event) {
+    if (!IS_LEAVE_LANDING) {
+      ZoomMtg.setZoomJSLib('https://source.zoom.us/6.2.0/lib', '/av');
+      ZoomMtg.preLoadWasm();
+      ZoomMtg.prepareWebSDK();
+    }
+
+    var joined = false;
+
+    window.addEventListener('message', function (event) {
       var data = event.data;
-      if (!data) return;
+      if (!data || IS_LEAVE_LANDING) return;
 
       if (data.type === 'ZOOM_JOIN') {
         try {
-          var el = document.getElementById('meetingSDKElement');
-
-          try { localStorage.clear(); } catch (_) {}
-          try { sessionStorage.clear(); } catch (_) {}
-
-          // Zoom doesn't expose separate sizes for Gallery/Active
-          // Speaker/Speaker — they all render inside the single "default"
-          // box, so sizing it to the real container width/height makes
-          // all three fill the card instead of leaving a black gap.
-          // "ribbon" gets the same box so its tile strip doesn't overflow
-          // and push the bottom toolbar off-screen once 4+ participants
-          // join. PAD_W keeps content off the right edge (near Zoom's own
-          // Leave button); PAD_H reserves room at the top (host-role
-          // banner) and bottom (mic/camera/participants toolbar) so
-          // neither gets covered or pushed out of view.
-          var PAD_W = 24;
-          var PAD_H = 100;
-          var w = Math.max(0, Math.floor(el.offsetWidth  || 340) - PAD_W);
-          var h = Math.max(0, Math.floor(el.offsetHeight || 520) - PAD_H);
-
-          sdkClient = ZoomMtgEmbedded.createClient();
-
-          await sdkClient.init({
-            sdkKey:       data.sdkKey,
-            zoomAppRoot:  el,
-            language:     'en-US',
-            patchJsMedia: true,
-            customize: {
-              video: {
-                isResizable: true,
-                viewSizes: {
-                  default: { width: 300, height: 300 },
-                  ribbon:  { width: 300, height: 300 },
+          ZoomMtg.init({
+            leaveUrl:       '/zoom-meeting.html?left=1',
+            patchJsMedia:   true,
+            // Skip the AV-preview screen: the parent keeps an opaque
+            // "Connecting…" overlay over this iframe until ZOOM_JOINED,
+            // so a preview screen would be invisible anyway. Mic/camera
+            // are controlled from the native toolbar once in.
+            disablePreview: true,
+            success: function () {
+              ZoomMtg.join({
+                signature:     String(data.signature     || ''),
+                meetingNumber: String(data.meetingNumber || ''),
+                passWord:      String(data.password      || ''),
+                userName:      String(data.userName      || 'Host'),
+                ...(data.zak ? { zak: String(data.zak) } : {}),
+                success: function () {
+                  joined = true;
+                  document.getElementById('loading').style.display = 'none';
+                  window.parent.postMessage({ type: 'ZOOM_JOINED' }, '*');
                 },
-              },
+                error: showError,
+              });
             },
+            error: showError,
           });
-
-          await sdkClient.join({
-            sdkKey:        String(data.sdkKey        || ''),
-            signature:     String(data.signature     || ''),
-            meetingNumber: String(data.meetingNumber || ''),
-            password:      String(data.password      || ''),
-            userName:      String(data.userName      || 'Host'),
-            ...(data.zak ? { zak: String(data.zak) } : {}),
-          });
-
-          document.getElementById('loading').style.display = 'none';
-          window.parent.postMessage({ type: 'ZOOM_JOINED' }, '*');
         } catch (e) {
           showError(e);
         }
       }
 
       if (data.type === 'ZOOM_LEAVE') {
-        (async () => {
-          try { if (sdkClient) await sdkClient.leaveMeeting(); } catch (_) {}
+        // After leaveMeeting the SDK navigates this iframe to leaveUrl
+        // (?left=1), which posts ZOOM_LEFT. If we never joined (still on
+        // loading/error), confirm immediately so the parent doesn't wait.
+        if (joined) {
+          try { ZoomMtg.leaveMeeting({}); } catch (_) {
+            window.parent.postMessage({ type: 'ZOOM_LEFT' }, '*');
+          }
+        } else {
           window.parent.postMessage({ type: 'ZOOM_LEFT' }, '*');
-        })();
+        }
       }
 
-      if (data.type === 'ZOOM_SEND_CHAT' && data.message && sdkClient) {
-        // Forward a website Q&A question into the live Zoom meeting chat.
-        try {
-          if (typeof sdkClient.sendChatMessage === 'function') {
-            // Zoom Embedded SDK ≥ 3.x: omit toUserId to send to everyone
-            sdkClient.sendChatMessage({ message: String(data.message) });
-          } else if (typeof sdkClient.getChatClient === 'function') {
-            sdkClient.getChatClient().sendToAll(String(data.message));
-          }
-        } catch (e) {
-          console.warn('[ZoomEmbed] Chat send failed:', e);
-        }
+      if (data.type === 'ZOOM_SEND_CHAT') {
+        // Component view had sendChatMessage(); client view has no
+        // programmatic chat API. Q&A questions still reach the host via
+        // the parent's floating toasts overlaid on this iframe.
+        console.warn('[ZoomEmbed] ZOOM_SEND_CHAT ignored — client view has no chat-send API.');
       }
     });
 
     window.addEventListener('load', function () {
-      window.parent.postMessage({ type: 'ZOOM_READY' }, '*');
+      if (!IS_LEAVE_LANDING) window.parent.postMessage({ type: 'ZOOM_READY' }, '*');
     });
   </script>
 </body>

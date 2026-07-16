@@ -423,7 +423,11 @@ export interface AdminAnalyticsEventItem {
   checkedInCount:  number;
   checkInRate:     number;
   avgWatchMinutes?: number;  // optional — returned by some backends
-  pollResponses?:  number;   // optional
+  /** Q&A engagement count for this event. The platform's live-session engagement
+   *  feature is Q&A, not a separate "polls" feature — `pollResponses` is kept as a
+   *  fallback for whichever field name the backend actually returns. */
+  qaResponses?:    number;
+  pollResponses?:  number;   // legacy/fallback field name
   dotColor?:       string;
 }
 
@@ -501,12 +505,20 @@ export function useAdminAnalyticsStats() {
   });
 }
 
-/** GET /api/v1/admin/analytics/by-type */
-export function useAdminAnalyticsByType() {
+/**
+ * GET /api/v1/admin/analytics/by-type
+ * @param range Date-range code sent as `?range=` — "30d" | "90d" | "12m" | "all".
+ * Confirmed live by backend across all admin analytics endpoints (BACKEND_BUGS
+ * item 13a). Omitted from the request when undefined (defaults server-side to "all").
+ */
+export function useAdminAnalyticsByType(range?: string) {
   return useQuery({
-    queryKey: [...superAdminKeys.all, "analytics", "by-type"],
+    queryKey: [...superAdminKeys.all, "analytics", "by-type", range],
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<{ byType: AdminAnalyticsByTypeItem[] }>>("/api/v1/admin/analytics/by-type");
+      const res = await apiClient.get<ApiResponse<{ byType: AdminAnalyticsByTypeItem[] }>>(
+        "/api/v1/admin/analytics/by-type",
+        { params: range ? { range } : undefined }
+      );
       const raw = (res.data.data ?? res.data) as any;
       // Try named fields first, fall back to first array found in the object
       const arr: any[] = Array.isArray(raw)
@@ -572,14 +584,14 @@ export function useAdminAnalyticsStakeholderGrowth(months = 6) {
 
 /** GET /api/v1/admin/analytics/event-performance */
 export function useAdminAnalyticsEventPerformance(
-  stakeholderId = "", eventType = "", page = 0, size = 20
+  stakeholderId = "", eventType = "", page = 0, size = 20, range?: string
 ) {
   return useQuery({
-    queryKey: [...superAdminKeys.all, "analytics", "event-performance", { stakeholderId, eventType, page, size }],
+    queryKey: [...superAdminKeys.all, "analytics", "event-performance", { stakeholderId, eventType, page, size, range }],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<AdminAnalyticsEventPerformanceResponse>>(
         "/api/v1/admin/analytics/event-performance",
-        { params: { ...(stakeholderId ? { stakeholderId } : {}), ...(eventType ? { eventType } : {}), page, size } }
+        { params: { ...(stakeholderId ? { stakeholderId } : {}), ...(eventType ? { eventType } : {}), ...(range ? { range } : {}), page, size } }
       );
       const raw = (res.data.data ?? res.data) as any;
       const events = Array.isArray(raw)
@@ -631,9 +643,11 @@ export interface AdminSummaryStats {
   totalRegistrations:  number;
   registrationsChange?: number;   // % vs prior period (positive = up)
   eventsHosted:        number;
+  eventsHostedChange?: number;    // % vs prior period
   docsDistributed:     number;
   docsChange?:         number;
   votesCast:           number;
+  votesCastChange?:    number;    // % vs prior period
   [key: string]: any;
 }
 
@@ -658,9 +672,13 @@ export interface EventFormatItem {
   color?: string;
 }
 
+/**
+ * No `pollResponseRate` field — backend confirmed there is no polling feature
+ * anywhere in the product (no Poll entity, no response tracking of any kind).
+ * Q&A is the only live-session engagement feature.
+ */
 export interface AdminEngagementMetrics {
   avgWatchTimeMinutes:  number;
-  pollResponseRate:     number;
   qaParticipationRate:  number;
   documentDownloads:    number;
   [key: string]: any;
@@ -668,21 +686,30 @@ export interface AdminEngagementMetrics {
 
 /**
  * GET /api/v1/admin/analytics/summary
- * Summary stat cards at the top of the analytics page.
+ * Summary stat cards at the top of the analytics page. Backend confirmed
+ * week-over-week `*Change` percentages (registrationsChange, eventsHostedChange,
+ * docsChange, votesCastChange) — always last-7-days-vs-prior-7-days regardless
+ * of the `range` filter; `null` when there's no prior-week data to compare
+ * against. See BACKEND_BUGS item 13b.
  */
-export function useAdminSummaryStats() {
+export function useAdminSummaryStats(range?: string) {
   return useQuery({
-    queryKey: [...superAdminKeys.all, "analytics", "summary"],
+    queryKey: [...superAdminKeys.all, "analytics", "summary", range],
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<AdminSummaryStats>>("/api/v1/admin/analytics/summary");
+      const res = await apiClient.get<ApiResponse<AdminSummaryStats>>(
+        "/api/v1/admin/analytics/summary",
+        { params: range ? { range } : undefined }
+      );
       const d = (res.data.data ?? res.data) as any;
       return {
         totalRegistrations:  d?.totalRegistrations  ?? d?.registrations       ?? d?.totalParticipants ?? 0,
         registrationsChange: d?.registrationsChange ?? d?.registrationChange  ?? d?.changePercent     ?? undefined,
         eventsHosted:        d?.eventsHosted        ?? d?.totalEvents          ?? d?.eventCount        ?? 0,
+        eventsHostedChange:  d?.eventsHostedChange  ?? d?.eventsChange         ?? undefined,
         docsDistributed:     d?.docsDistributed     ?? d?.totalDocuments       ?? d?.documentCount     ?? 0,
         docsChange:          d?.docsChange          ?? d?.documentsChange      ?? undefined,
         votesCast:           d?.votesCast           ?? d?.totalVotes           ?? d?.votes             ?? 0,
+        votesCastChange:     d?.votesCastChange     ?? d?.votesChange          ?? undefined,
       } as AdminSummaryStats;
     },
     staleTime: 60_000,
@@ -693,12 +720,12 @@ export function useAdminSummaryStats() {
  * GET /api/v1/admin/analytics/top-organisers?limit=5
  * Top organisers ranked by number of events hosted.
  */
-export function useAdminTopOrganisers(limit = 5) {
+export function useAdminTopOrganisers(limit = 5, range?: string) {
   return useQuery({
-    queryKey: [...superAdminKeys.all, "analytics", "top-organisers", limit],
+    queryKey: [...superAdminKeys.all, "analytics", "top-organisers", limit, range],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<{ organisers: TopOrganiserItem[] }>>(
-        "/api/v1/admin/analytics/top-organisers", { params: { limit } }
+        "/api/v1/admin/analytics/top-organisers", { params: { limit, ...(range ? { range } : {}) } }
       );
       const raw = (res.data.data ?? res.data) as any;
       const arr: any[] = Array.isArray(raw)
@@ -718,12 +745,13 @@ export function useAdminTopOrganisers(limit = 5) {
  * GET /api/v1/admin/analytics/kyc-breakdown
  * KYC verification status breakdown across all registered stakeholders.
  */
-export function useAdminKycBreakdown() {
+export function useAdminKycBreakdown(range?: string) {
   return useQuery({
-    queryKey: [...superAdminKeys.all, "analytics", "kyc-breakdown"],
+    queryKey: [...superAdminKeys.all, "analytics", "kyc-breakdown", range],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<{ breakdown: KycBreakdownItem[] }>>(
-        "/api/v1/admin/analytics/kyc-breakdown"
+        "/api/v1/admin/analytics/kyc-breakdown",
+        { params: range ? { range } : undefined }
       );
       const raw = (res.data.data ?? res.data) as any;
       const arr: any[] = Array.isArray(raw)
@@ -745,12 +773,13 @@ export function useAdminKycBreakdown() {
  * GET /api/v1/admin/analytics/event-format
  * Distribution of events by format (virtual / hybrid / in-person).
  */
-export function useAdminEventFormat() {
+export function useAdminEventFormat(range?: string) {
   return useQuery({
-    queryKey: [...superAdminKeys.all, "analytics", "event-format"],
+    queryKey: [...superAdminKeys.all, "analytics", "event-format", range],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<{ formats: EventFormatItem[] }>>(
-        "/api/v1/admin/analytics/event-format"
+        "/api/v1/admin/analytics/event-format",
+        { params: range ? { range } : undefined }
       );
       const raw = (res.data.data ?? res.data) as any;
       const arr: any[] = Array.isArray(raw)
@@ -770,18 +799,18 @@ export function useAdminEventFormat() {
  * GET /api/v1/admin/analytics/engagement
  * Platform-wide engagement metrics (watch time, poll rates, downloads).
  */
-export function useAdminEngagement() {
+export function useAdminEngagement(range?: string) {
   return useQuery({
-    queryKey: [...superAdminKeys.all, "analytics", "engagement"],
+    queryKey: [...superAdminKeys.all, "analytics", "engagement", range],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<AdminEngagementMetrics>>(
-        "/api/v1/admin/analytics/engagement"
+        "/api/v1/admin/analytics/engagement",
+        { params: range ? { range } : undefined }
       );
       const d = (res.data.data ?? res.data) as any;
       return {
         avgWatchTimeMinutes: d?.avgWatchTimeMinutes ?? d?.avgWatchTime    ?? d?.averageWatchTime ?? 0,
-        pollResponseRate:    d?.pollResponseRate    ?? d?.pollRate         ?? d?.pollResponsePct ?? 0,
-        qaParticipationRate: d?.qaParticipationRate ?? d?.qaRate           ?? d?.qaParticipation ?? 0,
+        qaParticipationRate: d?.qaParticipationRate ?? d?.qnaParticipation ?? d?.qaRate ?? d?.qaParticipation ?? 0,
         documentDownloads:   d?.documentDownloads   ?? d?.totalDownloads   ?? d?.downloads       ?? 0,
       } as AdminEngagementMetrics;
     },
