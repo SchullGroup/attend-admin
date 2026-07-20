@@ -441,8 +441,30 @@ export function useBulkAddShareholders() {
     },
     onSuccess: (data, { registerId, shareholders }) => {
       queryClient.invalidateQueries({ queryKey: shareholderKeys.list(registerId) });
-      const count = (data as any)?.count ?? (data as any)?.imported ?? shareholders.length;
-      popup.success("Shareholders Imported", `${count} shareholders added successfully.`, 3000);
+      const d = data as any;
+      // New response shape (AGM milestone #3): inserted/updated/skipped +
+      // per-row errors. Rows with neither email NOR phone are skipped
+      // server-side instead of saved contactless.
+      if (d?.inserted != null || d?.updated != null || d?.skipped != null) {
+        const parts = [
+          d?.inserted ? `${d.inserted} added` : null,
+          d?.updated  ? `${d.updated} updated` : null,
+        ].filter(Boolean).join(", ") || "No changes";
+        if ((d?.skipped ?? 0) > 0) {
+          const errs: string[] = d?.errors ?? [];
+          const detail = errs.slice(0, 3).join(" ") + (errs.length > 3 ? ` (+${errs.length - 3} more)` : "");
+          popup.error(
+            `Imported with ${d.skipped} row${d.skipped > 1 ? "s" : ""} skipped`,
+            `${parts}. Skipped rows need at least an email or phone. ${detail}`,
+          );
+        } else {
+          popup.success("Shareholders Imported", `${parts}.`, 3000);
+        }
+      } else {
+        // Legacy response fallback
+        const count = d?.count ?? d?.imported ?? shareholders.length;
+        popup.success("Shareholders Imported", `${count} shareholders added successfully.`, 3000);
+      }
     },
     onError: (error: any) => parseAndToastApiError(error, "Bulk import failed."),
   });

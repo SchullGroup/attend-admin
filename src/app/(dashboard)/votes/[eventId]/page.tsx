@@ -28,6 +28,9 @@ import { useGetMe } from "@/api/auth/hooks";
 // Helpers
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line import/order
+import { ProxiesSection } from "./ProxiesSection";
+
 function resolutionStatusStyle(status: string) {
   const s = status?.toUpperCase();
   if (s === "OPEN")   return { bg: "#dcfce7", color: "#16a34a", dot: "#16a34a" };
@@ -537,6 +540,9 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
   // open/close vote, offline vote entry, or share-weighted tallies toggle.
   const { data: userResponse } = useGetMe();
   const isViewer = resolveRole(userResponse?.data) === "viewer";
+  // Only the org owner and team-Admin may mark proxies attended (backend-enforced too)
+  const roleForProxies = resolveRole(userResponse?.data);
+  const canMarkProxies = roleForProxies === "client_admin" || roleForProxies === "admin";
 
   async function handleExport() {
     setExporting(true);
@@ -712,6 +718,9 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
             ))
           )}
         </div>
+
+        {/* ── Proxy Register (AGM milestone #5) ── */}
+        <ProxiesSection eventId={eventId} canMark={canMarkProxies} />
       </div>
     </div>
   );

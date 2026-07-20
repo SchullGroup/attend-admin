@@ -16,6 +16,7 @@ import {
   useRetainEventData,
   type ZoomMeetingDto,
 } from "@/api/client-events";
+import { EventGuestAccessCard } from "./EventGuestAccessCard";
 
 // ── Label helper ──────────────────────────────────────────────────────────────
 
@@ -290,6 +291,9 @@ export function EventSettingsTab({
           </Button>
         </div>
       </Card>
+
+      {/* ── Guest Access (AGM milestone #2) ── */}
+      <EventGuestAccessCard eventId={eventId} />
 
       {/* ── Zoom Meeting ── */}
       <Card className="attend-card p-5">
