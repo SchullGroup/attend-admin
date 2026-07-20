@@ -46,7 +46,11 @@ export function EventGuestAccessCard({ eventId }: { eventId: string }) {
         eventId,
         payload: {
           ...(label.trim() ? { label: label.trim() } : {}),
-          ...(expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {}),
+          // Backend expects a plain LocalDateTime ("2026-08-01T18:00:00" —
+          // no millis, no Z). Sending toISOString() ("…T10:45:00.000Z")
+          // made deserialization blow up as a 500 "Unexpected error".
+          // datetime-local inputs give "YYYY-MM-DDTHH:mm" — just add :00.
+          ...(expiresAt ? { expiresAt: expiresAt.length === 16 ? `${expiresAt}:00` : expiresAt } : {}),
           ...(maxUses ? { maxUses: parseInt(maxUses, 10) } : {}),
         },
       },

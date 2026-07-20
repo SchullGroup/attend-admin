@@ -24,6 +24,7 @@ import type { ZoomEmbedHandle } from "@/components/zoom-embed";
 import { eventColor, formatTime, initials, playChime } from "./helpers";
 import { toEventModule } from "@/lib/event-module";
 import { EventPressKitTab } from "../../[id]/components/EventPressKitTab";
+import { EventGuestAccessCard } from "../../[id]/components/EventGuestAccessCard";
 import { parseStreamUrl } from "./stream-helpers";
 import { LiveHeaderCard } from "./LiveHeaderCard";
 import { ZoomMeetingCard } from "./ZoomMeetingCard";
@@ -64,6 +65,10 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
   const { data: meData           } = useGetMe();
   const hostName = meData?.data?.fullName ?? meData?.data?.firstName ?? "Host";
   const isSuperAdmin = isSuperAdminRole(resolveRole(meData?.data));
+  // Guest-access management is CLIENT_ADMIN / ADMIN / EVENT_MANAGER —
+  // surfaced here (not just event Settings) because EVENT_MANAGER can't
+  // see the Settings tab. Hidden for super admin and Viewer.
+  const canManageGuests = !isSuperAdmin && resolveRole(meData?.data) !== "viewer";
 
   // ── Live polls (F1) — super admin reads the /admin endpoint, read-only.
   // Polls don't exist for AGM events (resolutions/voting instead), so the
@@ -278,8 +283,10 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
           )}
         </div>
 
-        {/* Right: Q&A + Attendance */}
+        {/* Right: Q&A + Guest Access + Attendance */}
         <div className="col-span-1 flex flex-col gap-5">
+
+          {canManageGuests && <EventGuestAccessCard eventId={eventId} />}
 
           <QAPanel
             questions={questions}
