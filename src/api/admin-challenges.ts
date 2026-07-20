@@ -257,7 +257,7 @@ export function useAdminChallengeOrganisers() {
 }
 
 /** Full detail for a single challenge (super admin). */
-export function useAdminChallengeDetail(challengeId: string) {
+export function useAdminChallengeDetail(challengeId: string, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: challengeKeys.detail(challengeId),
     queryFn: async () => {
@@ -266,7 +266,7 @@ export function useAdminChallengeDetail(challengeId: string) {
       );
       return (res.data.data ?? (res.data as any)) as AdminChallengeDetail;
     },
-    enabled: !!challengeId,
+    enabled: !!challengeId && (opts?.enabled ?? true),
     staleTime: 30_000,
   });
 }
