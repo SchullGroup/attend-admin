@@ -35,6 +35,14 @@ export function isSuperAdminRole(role: string | null | undefined): boolean {
   return SUPER_ADMIN_ROLES.has((role ?? "").toLowerCase().replace(/[-\s]+/g, "_"));
 }
 
+/**
+ * Platform default brand colour — applied to every register (and, through
+ * inheritance, its events/live-room) that hasn't set a custom `brandColor`
+ * yet. Matches the backend default (F4 — Register Branding), so a register
+ * with no explicit branding renders identically on FE and BE.
+ */
+export const DEFAULT_BRAND_COLOR = "#0B5CFF";
+
 export function formatCurrency(n: number) {
   if (n >= 1_000_000_000) return `₦${(n / 1_000_000_000).toFixed(1)}B`;
   if (n >= 1_000_000) return `₦${(n / 1_000_000).toFixed(1)}M`;

@@ -111,8 +111,26 @@ const VALID_TRANSITIONS: Record<string, ApplicationStatus[]> = {
 // ---------------------------------------------------------------------------
 // Overview tab
 // ---------------------------------------------------------------------------
-function OverviewTab({ challengeId, readOnly = false }: { challengeId: string; readOnly?: boolean }) {
-  const { data: c, isLoading } = useClientChallengeDetail(challengeId);
+function OverviewTab({
+  challengeId,
+  readOnly = false,
+  isSuperAdmin = false,
+}: {
+  challengeId: string;
+  readOnly?: boolean;
+  isSuperAdmin?: boolean;
+}) {
+  // Super admin has no client org, so the client-scoped detail endpoint
+  // returns nothing for them (this rendered as "Challenge not found." even
+  // though the page header — which IS role-aware — loaded fine). Fetch from
+  // the /admin endpoint for that role instead; shapes are near-identical
+  // (both map the same Event entity), missing optional fields just render
+  // blank.
+  const clientQ = useClientChallengeDetail(challengeId, { enabled: !isSuperAdmin });
+  const adminQ  = useAdminChallengeDetail(challengeId,  { enabled: isSuperAdmin });
+  const { data: c, isLoading } = isSuperAdmin
+    ? { data: adminQ.data as unknown as ReturnType<typeof useClientChallengeDetail>["data"], isLoading: adminQ.isLoading }
+    : clientQ;
   const toggleOpen = useToggleApplicationsOpen();
 
   if (isLoading) return <Loader variant="inline" text="Loading…" />;
@@ -1681,9 +1699,10 @@ export default function ChallengeDetailPage({
   const [clientTab, setClientTab] = useState<ClientTab>("Overview");
   const [adminTab,  setAdminTab]  = useState<AdminTab>("Overview");
 
-  // Always call both hooks (rules of hooks); enable based on role
-  const { data: clientChallenge, isLoading: clientLoading, isError: clientErrored, error: clientErr } = useClientChallengeDetail(challengeId);
-  const { data: adminChallenge,  isLoading: adminLoading,  isError: adminErrored,  error: adminErr  } = useAdminChallengeDetail(challengeId);
+  // Always call both hooks (rules of hooks); enabled per role so only the
+  // role-appropriate endpoint is actually hit
+  const { data: clientChallenge, isLoading: clientLoading, isError: clientErrored, error: clientErr } = useClientChallengeDetail(challengeId, { enabled: !isSuperAdmin });
+  const { data: adminChallenge,  isLoading: adminLoading,  isError: adminErrored,  error: adminErr  } = useAdminChallengeDetail(challengeId, { enabled: isSuperAdmin });
 
   const challenge = isSuperAdmin ? adminChallenge  : clientChallenge;
   const isLoading = isSuperAdmin ? adminLoading    : clientLoading;
@@ -1796,7 +1815,7 @@ export default function ChallengeDetailPage({
       </div>
 
       {/* Tab panels — super admin */}
-      {isSuperAdmin && tab === "Overview"    && <OverviewTab          challengeId={challengeId} />}
+      {isSuperAdmin && tab === "Overview"    && <OverviewTab          challengeId={challengeId} readOnly isSuperAdmin />}
       {isSuperAdmin && tab === "Leaderboard" && <AdminLeaderboardTab  challengeId={challengeId} />}
       {isSuperAdmin && tab === "Judges"      && <AdminJudgesTab       challengeId={challengeId} />}
       {isSuperAdmin && tab === "Resources"   && <ResourcesTab challengeId={challengeId} readOnly isSuperAdmin />}

@@ -385,7 +385,10 @@ export default function LoginPage() {
                 key={f.label}
                 className="rounded-xl p-4 text-left"
                 style={{
-                  backgroundColor: "rgba(255,255,255,0.06)",
+                  // Solid (not translucent) so the decorative rings behind the
+                  // grid don't show through the card — same visual shade as the
+                  // old rgba(255,255,255,0.06)-over-#111827 look, just opaque.
+                  backgroundColor: "#1f2634",
                   border: "1px solid rgba(255,255,255,0.09)",
                 }}
               >

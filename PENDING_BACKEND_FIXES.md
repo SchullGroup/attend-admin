@@ -52,6 +52,20 @@ Live repro right after the idempotency deploy: host join fails with **"Not suppo
 
 **Ask:** issue the fresh ZAK for the meeting's actual host — `GET /v2/users/{meetingHostUserId}/token?type=zak` via the S2S app — and put the same token in both `hostZak` and the regenerated `startUrl`. FE currently works around by preferring the `startUrl` zak param over `hostZak`; if the startUrl token is also wrong, joins are fully broken until this is fixed.
 
+### 🔴 NEW (2026-07-20) — Guest-access create 500s when optional fields are sent
+
+`POST /client/events/{id}/guest-access` with `{ label, expiresAt: "2026-07-21T10:45:00.000Z", maxUses: 20 }` → 500 "Unexpected error"; empty body works. Almost certainly the `expiresAt` format: your handoff example is a plain LocalDateTime (`2026-08-01T18:00:00`) and the ISO `Z`/millis variant kills deserialization. FE now sends the plain format (2026-07-20) — please (a) confirm that's the expected format and its timezone semantics (server-local? UTC?), and (b) return a 400 with a field message on bad input instead of a 500 "Unexpected error".
+
+### 🚧 NEW FEATURE REQUEST (2026-07-20) — F4: Register branding (logo + brand color), inherited by events
+
+**What to build:**
+
+1. **Branding fields on Register:** `logoUrl` (nullable string — file itself goes through the existing `POST /api/v1/upload`, we send the resulting URL) and `brandColor` (hex `#RRGGBB`). `brandColor` must always have a value: default it to a platform constant (suggest `#0B5CFF`; tell us what you pick so the FE default matches) for all existing and new registers.
+2. **PATCH endpoint:** `PATCH /api/v1/client/registers/{registerId}/branding` — body `{ logoUrl?: string | null, brandColor?: string }`, any subset; `logoUrl: null` clears the logo; 400 (not 500) on invalid hex. Roles: CLIENT_ADMIN / ADMIN.
+3. **Read it back everywhere:** register detail/list responses gain `branding: { logoUrl, brandColor }`.
+4. **Inherit into every event payload:** any event created under a register carries its register's branding in ALL event-serving responses — client + admin event list/detail, live-room snapshot, and participant-facing event endpoints — as the same nested `branding: { logoUrl, brandColor }` object. Resolve at read time (live inheritance), so changing a register's branding immediately restyles all its events — no snapshot copies.
+5. FE note: our event UI already probes `logoUrl ?? registerLogoUrl ?? branding?.logoUrl` — standardize on `branding.logoUrl` and we'll align on it.
+
 ### One new clarifying question for backend (minor)
 `GET /votes/{eventId}/results` — confirmed `quorumPercentage` is the **configured threshold**. The FE has also been displaying that field as the **achieved** quorum % (big number on the vote page). Is there a separate achieved-attendance-percentage field, or only threshold + `quorumMet`? If only threshold, we'll relabel the UI.
 

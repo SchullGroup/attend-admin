@@ -378,7 +378,7 @@ export function useClientChallenges(search = "", status = "", page = 0, size = 2
   });
 }
 
-export function useClientChallengeDetail(challengeId: string) {
+export function useClientChallengeDetail(challengeId: string, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: clientChallengeKeys.detail(challengeId),
     queryFn: async () => {
@@ -387,7 +387,7 @@ export function useClientChallengeDetail(challengeId: string) {
       );
       return res.data.data;
     },
-    enabled: !!challengeId,
+    enabled: !!challengeId && (opts?.enabled ?? true),
     staleTime: 60_000,
   });
 }

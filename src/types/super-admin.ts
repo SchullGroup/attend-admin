@@ -6,6 +6,23 @@
 export type RegisterStatus = "PENDING" | "ACTIVE" | "SUSPENDED" | "REJECTED";
 
 /**
+ * Register Branding (F4, 2026-07-20) — PATCH /api/v1/client/registers/{id}/branding
+ *
+ * `brandColor` is never null on the wire — the backend defaults every
+ * register to the platform colour (`DEFAULT_BRAND_COLOR` in lib/utils.ts,
+ * "#0B5CFF") until a CLIENT_ADMIN/ADMIN sets a custom one. `logoUrl` is
+ * nullable — null means no logo uploaded.
+ *
+ * Resolved live from the register at read time everywhere it's nested:
+ * register list/detail, and every event-serving endpoint under that
+ * register (client + admin event list/detail, live-room snapshot).
+ */
+export interface RegisterBranding {
+  logoUrl:    string | null;
+  brandColor: string;
+}
+
+/**
  * One row returned by GET /api/v1/admin/registers/{id}/documents
  * (Document Vault tab on the Register detail page)
  *
@@ -54,6 +71,8 @@ export interface RegisterItem {
   createdAt?:           string;    // ← present in legacy payloads; not used for display
   representativeName?:  string;
   representativePhone?: string;
+  /** Nested branding (F4) — always present with a resolved brandColor once backend is live. */
+  branding?:             RegisterBranding;
 }
 
 /** Full profile returned by GET /api/v1/admin/registers/{id} */
@@ -357,6 +376,16 @@ export type EventDetailResponse = {
   };
   createdAt: string;
   updatedAt: string;
+  /**
+   * Register branding, inherited live from the owning register (F4).
+   * Resolved at read time — changing the register's branding immediately
+   * restyles this event, no snapshot lag. Prefer `branding.logoUrl` /
+   * `branding.brandColor`; `logoUrl` / `registerLogoUrl` are legacy
+   * top-level aliases some backend versions still send.
+   */
+  branding?:        RegisterBranding;
+  logoUrl?:          string;
+  registerLogoUrl?:  string;
 } & EventTypeConfig;
 
 
@@ -865,6 +894,8 @@ export interface ClientRegisterDetailResponse {
   approvedAt?:          string;   // legacy fallback date alias
   eventCount?:          number;
   events?:              ClientRegisterEventItem[];
+  /** Nested branding (F4) — { logoUrl, brandColor }. See RegisterBranding. */
+  branding?:            RegisterBranding;
 }
 
 /**

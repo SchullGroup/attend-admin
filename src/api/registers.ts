@@ -15,6 +15,7 @@
  *   Reject     POST /api/v1/client/registers/{id}/reject     body: { reason? }
  *   Suspend    POST /api/v1/client/registers/{id}/suspend    body: { reason? }
  *   Activate   POST /api/v1/client/registers/{id}/activate
+ *   Branding   PATCH /api/v1/client/registers/{id}/branding  body: { logoUrl?, brandColor? } — roles: CLIENT_ADMIN, ADMIN
  *
  * Cache roots: ["registers"] / ["register", id]
  */
@@ -27,6 +28,7 @@ import {
   RegistersListResponse,
   ClientRegisterDetailResponse,
   RegisterDocumentItem,
+  RegisterBranding,
 } from "@/types/super-admin";
 import { ApiResponse } from "@/types/api";
 
@@ -327,6 +329,56 @@ export function useActivateRegister() {
   });
 }
 
+/**
+ * Update a register's branding — logo and/or brand colour.
+ *
+ * PATCH /api/v1/client/registers/{registerId}/branding
+ * Body: any subset of { logoUrl, brandColor }.
+ *   - `logoUrl: null` clears the logo; omit the key to leave it unchanged.
+ *   - `brandColor` can never be cleared — omit the key to leave it unchanged,
+ *     or send a valid 6-digit hex (#RRGGBB). Server responds 400 (not 500)
+ *     on an invalid hex, with a field message the UI surfaces via
+ *     parseAndToastApiError.
+ * Roles: CLIENT_ADMIN, ADMIN.
+ *
+ * Read back everywhere via `branding: { logoUrl, brandColor }` on the
+ * register list/detail responses, and inherited live into every event
+ * served under this register (client/admin event list/detail, live-room).
+ */
+export interface UpdateRegisterBrandingPayload {
+  logoUrl?:    string | null;
+  brandColor?: string;
+}
+
+export function useUpdateRegisterBranding() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      registerId,
+      ...payload
+    }: { registerId: string } & UpdateRegisterBrandingPayload) => {
+      const res = await apiClient.patch<ApiResponse<RegisterBranding>>(
+        `/api/v1/client/registers/${registerId}/branding`,
+        payload
+      );
+      return res.data.data;
+    },
+    onSuccess: (_, { registerId }) => {
+      // Register list/detail AND every event served under this register embed
+      // branding — invalidate broadly (client + super-admin event caches,
+      // live-room snapshot) so open event/live views pick up the change too.
+      queryClient.invalidateQueries({ queryKey: registerKeys.all });
+      queryClient.invalidateQueries({ queryKey: registerKeys.detail(registerId) });
+      queryClient.invalidateQueries({ queryKey: ["clientEvents"] });
+      queryClient.invalidateQueries({ queryKey: ["live"] });
+      queryClient.invalidateQueries({ queryKey: ["super-admin"] });
+      popup.success("Branding Updated", "Changes apply across this register's events immediately.", 2500);
+    },
+    onError: (error: any) =>
+      parseAndToastApiError(error, "Failed to update branding. Please try again."),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Backward-compat alias — useStakeholderEvents is still imported by the
 // existing detail page. Delegates to the corrected useRegisterEvents hook.
@@ -441,8 +493,30 @@ export function useBulkAddShareholders() {
     },
     onSuccess: (data, { registerId, shareholders }) => {
       queryClient.invalidateQueries({ queryKey: shareholderKeys.list(registerId) });
-      const count = (data as any)?.count ?? (data as any)?.imported ?? shareholders.length;
-      popup.success("Shareholders Imported", `${count} shareholders added successfully.`, 3000);
+      const d = data as any;
+      // New response shape (AGM milestone #3): inserted/updated/skipped +
+      // per-row errors. Rows with neither email NOR phone are skipped
+      // server-side instead of saved contactless.
+      if (d?.inserted != null || d?.updated != null || d?.skipped != null) {
+        const parts = [
+          d?.inserted ? `${d.inserted} added` : null,
+          d?.updated  ? `${d.updated} updated` : null,
+        ].filter(Boolean).join(", ") || "No changes";
+        if ((d?.skipped ?? 0) > 0) {
+          const errs: string[] = d?.errors ?? [];
+          const detail = errs.slice(0, 3).join(" ") + (errs.length > 3 ? ` (+${errs.length - 3} more)` : "");
+          popup.error(
+            `Imported with ${d.skipped} row${d.skipped > 1 ? "s" : ""} skipped`,
+            `${parts}. Skipped rows need at least an email or phone. ${detail}`,
+          );
+        } else {
+          popup.success("Shareholders Imported", `${parts}.`, 3000);
+        }
+      } else {
+        // Legacy response fallback
+        const count = d?.count ?? d?.imported ?? shareholders.length;
+        popup.success("Shareholders Imported", `${count} shareholders added successfully.`, 3000);
+      }
     },
     onError: (error: any) => parseAndToastApiError(error, "Bulk import failed."),
   });

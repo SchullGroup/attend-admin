@@ -39,7 +39,7 @@ export function EventStakeholderTab({ stakeholderName, stakeholderData }: EventS
 
   const eventsCount  = d.eventsCount  ?? d.organizer?.eventsCount  ?? null;
 
-  const logoUrl  = d.logoUrl ?? d.registerLogoUrl ?? d.branding?.logoUrl ?? null;
+  const logoUrl  = d.branding?.logoUrl ?? null;
   const initials = name !== "—"
     ? name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()
     : "?";

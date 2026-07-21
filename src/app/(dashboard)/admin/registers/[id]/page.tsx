@@ -17,6 +17,7 @@ import { useRegisterDetail, useRegisterDocuments } from "@/api/registers";
 import { useClientEvents, type EventListItem } from "@/api/client-events";
 import { RegisterShareholdersSection } from "./components/RegisterShareholdersSection";
 import { RegisterDocumentsSection }    from "./components/RegisterDocumentsSection";
+import { RegisterBrandingSection }     from "./components/RegisterBrandingSection";
 import { useGetMe } from "@/api/auth/hooks";
 import { getEventModule, MODULE_COLORS } from "@/lib/event-module";
 import { formatDate } from "@/lib/utils";
@@ -191,6 +192,8 @@ export default function RegisterDetailPage() {
   const role         = normaliseRole(userResponse?.data?.role);
   const canLiveControl = role !== "viewer";
   const canCreate      = role !== "viewer";
+  // Branding PATCH is CLIENT_ADMIN / ADMIN only (matches the endpoint's role gate).
+  const canEditBranding = role === "client_admin" || role === "admin";
 
   const {
     data:      register,
@@ -339,6 +342,13 @@ export default function RegisterDetailPage() {
           </div>
         </div>
       </Card>
+
+      {/* ── Branding (F4) ── */}
+      <RegisterBrandingSection
+        registerId={id}
+        branding={register.branding}
+        canEdit={canEditBranding}
+      />
 
       {/* ── Events table ── */}
       <div id="events-registry">

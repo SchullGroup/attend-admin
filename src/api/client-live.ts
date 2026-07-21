@@ -13,6 +13,7 @@ import { parseAndToastApiError } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
 import { toast } from "sonner";
 import type { ZoomMeetingDto } from "@/api/client-events";
+import type { RegisterBranding } from "@/types/super-admin";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -83,6 +84,8 @@ export interface LiveRoomDetail {
   recentAttendance:  LiveAttendeeEntry[];
   /** Zoom meeting info — returned by some backend versions alongside the live snapshot */
   zoomMeeting?:      ZoomMeetingDto;
+  /** Register branding (F4), inherited live — { logoUrl, brandColor }. Drives the control-room accent colour. */
+  branding?:         RegisterBranding;
 }
 
 // ---------------------------------------------------------------------------

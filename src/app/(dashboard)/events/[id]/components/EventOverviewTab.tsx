@@ -30,7 +30,8 @@ interface Props {
   isAGM:                   boolean;
   onNavigate:              (tab: string) => void;
   stakeholderName?:        string;
-  stakeholderLogoUrl?:     string;
+  /** Register branding logo — belongs to the Organiser (the register/company), not the Registrar firm. */
+  organiserLogoUrl?:       string;
   expectedAttendeesCount?: number;
   /** When true, all agenda write actions (add, edit, delete) are hidden */
   isSuperAdmin?:           boolean;
@@ -38,7 +39,7 @@ interface Props {
 
 export function EventOverviewTab({
   event, fill, eventDocs, agendaItems, isAGM, onNavigate,
-  stakeholderName, stakeholderLogoUrl, expectedAttendeesCount = 0,
+  stakeholderName, organiserLogoUrl, expectedAttendeesCount = 0,
   isSuperAdmin = false,
 }: Props) {
   const FormatIcon    = FORMAT_ICON[event.format] ?? Monitor;
@@ -509,12 +510,16 @@ export function EventOverviewTab({
       {/* ── Right column ── */}
       <div className="flex flex-col gap-4">
 
-        {/* Organiser card */}
+        {/* Organiser card — the register/company running the event. Carries
+            the register's branding logo (F4); falls back to initials. */}
         <Card className="attend-card p-5">
           <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3">Organiser</h2>
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-[hsl(var(--primary))] font-bold text-sm shrink-0">
-              {event.organiser.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+            <div className="h-10 w-10 rounded-xl bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-[hsl(var(--primary))] font-bold text-sm shrink-0 overflow-hidden border border-[hsl(var(--border))]">
+              {organiserLogoUrl
+                ? <img src={organiserLogoUrl} alt={event.organiser} className="h-full w-full object-cover" />
+                : event.organiser.split(" ").map((n: string) => n[0]).join("").slice(0, 2)
+              }
             </div>
             <div>
               <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{event.organiser}</p>
@@ -523,16 +528,15 @@ export function EventOverviewTab({
           </div>
         </Card>
 
-        {/* Registrar card */}
+        {/* Registrar card — the servicing registrar firm (a distinct entity
+            from the organiser, e.g. Meristem vs. Zenith Bank). No logo field
+            of its own today, so this stays initials-only. */}
         {stakeholderName && (
           <Card className="attend-card p-5">
             <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3">Registrar</h2>
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-[hsl(var(--muted))] flex items-center justify-center font-bold text-sm shrink-0 text-[hsl(var(--muted-foreground))] overflow-hidden border border-[hsl(var(--border))]">
-                {stakeholderLogoUrl
-                  ? <img src={stakeholderLogoUrl} alt={stakeholderName} className="h-full w-full object-cover" />
-                  : stakeholderName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)
-                }
+                {stakeholderName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
               </div>
               <div>
                 <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{stakeholderName}</p>
