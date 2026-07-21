@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { ArrowLeft, Radio, FileText } from "lucide-react";
 import type { EventModule } from "@/types/mock";
+import { DEFAULT_BRAND_COLOR } from "@/lib/utils";
 
 // ── Tab components ────────────────────────────────────────────────────────────
 import { EventOverviewTab }     from "./components/EventOverviewTab";
@@ -159,7 +160,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     endTime:   "",
     format:    toFormatKey(apiEvent.format),
     module:    toModule(apiEvent.eventType),
-    color:     "#9333ea",
+    // Register brand colour (F4), inherited live from the event's register —
+    // same probe order as the logo chain below (direct field, then nested
+    // branding), falling back to the platform default.
+    color:     (apiEvent as any).brandColor ?? (apiEvent as any).branding?.brandColor ?? DEFAULT_BRAND_COLOR,
     agenda:    (apiEvent.agenda ?? agendaItems) as LocalAgendaItem[],
   };
 

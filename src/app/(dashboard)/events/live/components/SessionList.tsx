@@ -77,7 +77,9 @@ export function SessionList({ onSelect }: { onSelect: (eventId: string) => void 
             </thead>
             <tbody>
               {sessions.map((sess) => {
-                const color = eventColor(sess.eventType);
+                // Register brand colour (F4), inherited live — falls back to
+                // the module-based default when no custom colour is set.
+                const color = sess.branding?.brandColor || eventColor(sess.eventType);
                 return (
                   <tr key={sess.id} className="attend-table-row">
                     <td className="px-5 py-4">

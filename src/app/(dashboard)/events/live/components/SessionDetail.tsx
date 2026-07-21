@@ -166,7 +166,9 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
     );
   }
 
-  const color           = eventColor(room.eventType);
+  // Register brand colour (F4), inherited live from the event's register —
+  // falls back to the module-based default when no custom colour is set.
+  const color           = room.branding?.brandColor || eventColor(room.eventType);
   const module          = toEventModule(room.eventType);
   const isAGM           = module === "AGM";
   const isLaunch        = module === "LAUNCH";

@@ -16,6 +16,7 @@ import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
+import type { RegisterBranding } from "@/types/super-admin";
 
 // ---------------------------------------------------------------------------
 // Types — aligned with swagger schemas
@@ -35,6 +36,8 @@ export interface EventListItem {
   registerName?: string;
   registerId?:   string;
   rsvpEnabled?:  boolean;
+  /** Register branding (F4), inherited live — { logoUrl, brandColor }. */
+  branding?:     RegisterBranding;
 }
 
 export interface EventListResponse {
