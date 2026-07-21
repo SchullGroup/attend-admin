@@ -160,10 +160,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     endTime:   "",
     format:    toFormatKey(apiEvent.format),
     module:    toModule(apiEvent.eventType),
-    // Register brand colour (F4), inherited live from the event's register —
-    // same probe order as the logo chain below (direct field, then nested
-    // branding), falling back to the platform default.
-    color:     (apiEvent as any).brandColor ?? (apiEvent as any).branding?.brandColor ?? DEFAULT_BRAND_COLOR,
+    // Register brand colour (F4), inherited live from the event's register.
+    // Backend now populates `branding.brandColor` consistently on every
+    // event-serving payload (handoff item 7) — no more probing aliases.
+    color:     (apiEvent as any).branding?.brandColor ?? DEFAULT_BRAND_COLOR,
     agenda:    (apiEvent.agenda ?? agendaItems) as LocalAgendaItem[],
   };
 
@@ -313,7 +313,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* ── Tab panels ── */}
-      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} organiserLogoUrl={(apiEvent as any).logoUrl ?? (apiEvent as any).registerLogoUrl ?? (apiEvent as any).branding?.logoUrl ?? undefined} expectedAttendeesCount={expectedAttendeesCount} isSuperAdmin={isSuperAdmin} />}
+      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} organiserLogoUrl={(apiEvent as any).branding?.logoUrl ?? undefined} expectedAttendeesCount={expectedAttendeesCount} isSuperAdmin={isSuperAdmin} />}
       {tab === "Attendees"          && <EventAttendeesTab   participants={participants} suspendUser={suspendUser} eventId={id} />}
       {tab === "Applications" && isHACKATHON && isSuperAdmin && <EventChallengeApplicationsTab challengeId={id} />}
       {tab === "Judging"      && isHACKATHON && isSuperAdmin && <EventChallengeJudgesTab       challengeId={id} />}

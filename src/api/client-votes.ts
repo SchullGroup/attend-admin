@@ -57,11 +57,71 @@ export interface VoteStats {
   upcomingOrDraft:  number;
 }
 
+/**
+ * "STANDARD" — today's single-subject resolution (unchanged), default when omitted.
+ * "CANDIDATE" — a multi-nominee slate (e.g. "Election of President") voted
+ * for/against/abstain independently per candidate under one shared open/close
+ * lifecycle and quorum context. See `candidates` on ResolutionResult.
+ */
+export type ResolutionType = "STANDARD" | "CANDIDATE";
+
+/** One nominee row in the "Add Resolution" composer, before the server assigns an id. */
+export interface CandidateInput {
+  name:  string;
+  bio?:  string;
+}
+
+/**
+ * Per-candidate vote tally on a CANDIDATE resolution — mirrors the same
+ * online/offline/combined field set as ResolutionResult, scoped to one nominee.
+ */
+export interface CandidateResult {
+  id:                    string;
+  name:                  string;
+  bio?:                  string;
+  order?:                number;
+  /** Informational rank within the slate — 1 = highest combinedForCount. */
+  rank?:                 number;
+  // Online counts
+  votesFor:              number;
+  votesAgainst:          number;
+  abstentions:           number;
+  totalVotesCast?:       number;
+  // Online shares
+  sharesFor:             number;
+  sharesAgainst:         number;
+  sharesAbstain:         number;
+  totalShares?:          number;
+  // Offline counts
+  offlineForCount:       number;
+  offlineAgainstCount:   number;
+  offlineAbstainCount:   number;
+  // Offline shares
+  offlineForShares?:     number;
+  offlineAgainstShares?: number;
+  offlineAbstainShares?: number;
+  // Combined counts
+  combinedForCount:      number;
+  combinedAgainstCount:  number;
+  combinedAbstainCount:  number;
+  // Combined shares
+  combinedForShares?:    number;
+  combinedAgainstShares?: number;
+  combinedAbstainShares?: number;
+  // Summary
+  percentageFor:         number;
+  passed:                boolean;
+}
+
 export interface ResolutionResult {
   id:                    string;
   order:                 number;
   title:                 string;
   status:                string;
+  // Discriminator (F8) — "STANDARD" when omitted. CANDIDATE resolutions carry
+  // a `candidates` slate instead of using the flat vote-tally fields below.
+  resolutionType?:       ResolutionType;
+  candidates?:           CandidateResult[];
   // Online counts
   votesFor:              number;
   votesAgainst:          number;
@@ -119,6 +179,8 @@ export interface OfflineVoteRequest {
   forShares?:     number;
   againstShares?: number;
   abstainShares?: number;
+  /** Required when the resolution is CANDIDATE-type — scopes this in-room count to one nominee. */
+  candidateId?:   string;
 }
 
 export interface OpenResolutionRequest {
@@ -132,6 +194,27 @@ export interface CreateResolutionRequest {
   votingDeadline?:         string;   // ISO datetime e.g. "2026-06-22T18:00:00"
   order?:                  number;
   defaultDurationSeconds?: number;
+  // Discriminator (F8) — omit/STANDARD for today's single-subject resolution.
+  resolutionType?:         ResolutionType;
+  /** Required (min 2) when resolutionType is CANDIDATE; ignored otherwise. */
+  candidates?:              CandidateInput[];
+}
+
+/** One CSV row for a CANDIDATE resolution's nominee — same shape as an export row, per candidate. */
+export interface ExportCandidateItem {
+  id:            string;
+  name:          string;
+  bio?:          string;
+  order?:        number;
+  rank?:         number;
+  forCount:      number;
+  againstCount:  number;
+  abstainCount:  number;
+  forShares:     number;
+  againstShares: number;
+  abstainShares: number;
+  totalVotes:    number;
+  result:        string;
 }
 
 export interface ExportResolutionItem {
@@ -139,6 +222,8 @@ export interface ExportResolutionItem {
   title:             string;
   specialResolution: boolean;
   status:            string;
+  resolutionType?:   ResolutionType;
+  candidates?:       ExportCandidateItem[];
   forCount:          number;
   againstCount:      number;
   abstainCount:      number;

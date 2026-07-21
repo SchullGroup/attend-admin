@@ -17,6 +17,7 @@ import {
   useSetQuorum,
   ResolutionResult,
 } from "@/api/client-votes";
+import type { ResolutionType, CandidateInput, CandidateResult } from "@/api/client-votes";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,12 +62,24 @@ function StatCell({ label, value, sub }: { label: string; value: number | string
 // ---------------------------------------------------------------------------
 // Offline vote entry form
 // ---------------------------------------------------------------------------
+/** Shared shape between a resolution's own offline tallies and one candidate's. */
+interface OfflineVoteInitial {
+  offlineForCount?:      number;
+  offlineAgainstCount?:  number;
+  offlineAbstainCount?:  number;
+  offlineForShares?:     number;
+  offlineAgainstShares?: number;
+  offlineAbstainShares?: number;
+}
+
 function OfflineVoteForm({
-  eventId, resolutionId, initial, onSaved,
+  eventId, resolutionId, initial, candidateId, onSaved,
 }: {
   eventId: string;
   resolutionId: string;
-  initial: ResolutionResult;
+  initial: OfflineVoteInitial;
+  /** Present only when this form is scoped to one nominee on a CANDIDATE resolution. */
+  candidateId?: string;
   onSaved: () => void;
 }) {
   const [form, setForm] = useState({
@@ -113,13 +126,108 @@ function OfflineVoteForm({
         disabled={isPending}
         onClick={() =>
           mutate(
-            { eventId, resolutionId, data: form },
+            { eventId, resolutionId, data: candidateId ? { ...form, candidateId } : form },
             { onSuccess: onSaved }
           )
         }
       >
         {isPending ? "Saving…" : "Save Offline Votes"}
       </Button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Candidate block — one nominee's breakdown inside a CANDIDATE resolution card
+// ---------------------------------------------------------------------------
+function CandidateBlock({
+  c, eventId, resolutionId, readOnly,
+}: {
+  c: CandidateResult;
+  eventId: string;
+  resolutionId: string;
+  readOnly: boolean;
+}) {
+  const [showOffline, setShowOffline] = useState(false);
+  const cTotal = (c.combinedForCount ?? 0) + (c.combinedAgainstCount ?? 0) + (c.combinedAbstainCount ?? 0);
+  const cPct   = cTotal > 0 ? Math.round(((c.combinedForCount ?? 0) / cTotal) * 100) : 0;
+
+  return (
+    <div className="rounded-xl border border-[hsl(var(--border))] p-4">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">
+            {c.name}
+            {typeof c.rank === "number" && (
+              <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]">
+                #{c.rank}
+              </span>
+            )}
+          </p>
+          {c.bio && <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{c.bio}</p>}
+        </div>
+        {c.passed ? (
+          <span className="flex items-center gap-1 text-xs font-semibold text-green-600 shrink-0">
+            <CheckCircle2 className="h-3.5 w-3.5" /> Passed
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-xs font-semibold text-red-500 shrink-0">
+            <XCircle className="h-3.5 w-3.5" /> Failed
+          </span>
+        )}
+      </div>
+
+      <VoteBar pct={cPct} color="#16a34a" />
+      <div className="flex justify-between mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">
+        <span className="text-green-600 font-medium">For {c.combinedForCount}</span>
+        <span className="text-yellow-600">Abstain {c.combinedAbstainCount}</span>
+        <span className="text-red-500 font-medium">Against {c.combinedAgainstCount}</span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 mt-3">
+        <div className="rounded-lg bg-[hsl(var(--muted)/0.4)] p-3">
+          <div className="text-[11px] font-semibold text-[hsl(var(--foreground))] mb-1.5">Online</div>
+          <div className="flex flex-col gap-1.5">
+            <StatCell label="For"     value={c.votesFor} />
+            <StatCell label="Against" value={c.votesAgainst} />
+            <StatCell label="Abstain" value={c.abstentions} />
+          </div>
+        </div>
+        <div className="rounded-lg bg-[hsl(var(--muted)/0.4)] p-3">
+          <div className="text-[11px] font-semibold text-[hsl(var(--foreground))] mb-1.5">In-room</div>
+          <div className="flex flex-col gap-1.5">
+            <StatCell label="For"     value={c.offlineForCount} />
+            <StatCell label="Against" value={c.offlineAgainstCount} />
+            <StatCell label="Abstain" value={c.offlineAbstainCount} />
+          </div>
+        </div>
+        <div className="rounded-lg bg-[hsl(var(--muted)/0.4)] p-3">
+          <div className="text-[11px] font-semibold text-[hsl(var(--foreground))] mb-1.5">Combined</div>
+          <div className="flex flex-col gap-1.5">
+            <StatCell label="For"     value={c.combinedForCount} />
+            <StatCell label="Against" value={c.combinedAgainstCount} />
+            <StatCell label="Abstain" value={c.combinedAbstainCount} />
+          </div>
+        </div>
+      </div>
+
+      {!readOnly && (
+        <button
+          className="mt-3 text-xs text-[hsl(var(--primary))] underline underline-offset-2"
+          onClick={() => setShowOffline((v) => !v)}
+        >
+          {showOffline ? "Hide" : "Enter in-room votes…"}
+        </button>
+      )}
+      {!readOnly && showOffline && (
+        <OfflineVoteForm
+          eventId={eventId}
+          resolutionId={resolutionId}
+          candidateId={c.id}
+          initial={c}
+          onSaved={() => setShowOffline(false)}
+        />
+      )}
     </div>
   );
 }
@@ -152,6 +260,14 @@ function ResolutionCard({
 
   const totalCombined = (res.combinedForCount ?? 0) + (res.combinedAgainstCount ?? 0) + (res.combinedAbstainCount ?? 0);
 
+  // Candidate Poll (F8) — a slate of nominees voted for/against/abstain independently,
+  // sharing one open/close lifecycle and quorum context. See `candidates` below.
+  const isCandidatePoll = res.resolutionType === "CANDIDATE";
+  const candidates      = res.candidates ?? [];
+  const leadingCandidate = candidates.length > 0
+    ? [...candidates].sort((a, b) => (b.combinedForCount ?? 0) - (a.combinedForCount ?? 0))[0]
+    : null;
+
   return (
     <Card className="attend-card overflow-hidden">
       {/* Header row */}
@@ -177,45 +293,66 @@ function ResolutionCard({
                 Special
               </span>
             )}
-          </div>
-
-          {/* Pass / fail */}
-          <div className="flex items-center gap-3 mt-1.5">
-            {res.passed ? (
-              <span className="flex items-center gap-1 text-xs font-semibold text-green-600">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Passed
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-xs font-semibold text-red-500">
-                <XCircle className="h-3.5 w-3.5" /> Failed
+            {isCandidatePoll && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]">
+                Candidate Poll · {candidates.length} nominee{candidates.length === 1 ? "" : "s"}
               </span>
             )}
-            <span className="text-xs text-[hsl(var(--muted-foreground))]">
-              {pct}% for
-            </span>
           </div>
 
-          {/* Percentage bar */}
-          <div className="mt-2 grid grid-cols-3 gap-1">
-            <div className="col-span-3">
-              <div className="h-2 w-full rounded-full bg-[hsl(var(--muted))] overflow-hidden flex">
-                <div className="h-full bg-green-500 transition-all" style={{ width: `${pct}%` }} />
-                <div
-                  className="h-full bg-red-400 transition-all"
-                  style={{
-                    width: `${Math.round(
-                      (res.combinedAgainstCount / Math.max(totalCombined, 1)) * 100
-                    )}%`,
-                  }}
-                />
-              </div>
-              <div className="flex justify-between mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">
-                <span className="text-green-600 font-medium">For {res.combinedForCount}</span>
-                <span className="text-yellow-600">Abstain {res.combinedAbstainCount}</span>
-                <span className="text-red-500 font-medium">Against {res.combinedAgainstCount}</span>
-              </div>
+          {isCandidatePoll ? (
+            /* Candidate Poll summary — per-nominee breakdown lives in the expanded section below */
+            <div className="flex items-center gap-3 mt-1.5">
+              {leadingCandidate && (
+                <span className="text-xs font-semibold text-[hsl(var(--foreground))]">
+                  Leading: {leadingCandidate.name}
+                </span>
+              )}
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                {totalCombined.toLocaleString()} total votes cast
+              </span>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Pass / fail */}
+              <div className="flex items-center gap-3 mt-1.5">
+                {res.passed ? (
+                  <span className="flex items-center gap-1 text-xs font-semibold text-green-600">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Passed
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-xs font-semibold text-red-500">
+                    <XCircle className="h-3.5 w-3.5" /> Failed
+                  </span>
+                )}
+                <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                  {pct}% for
+                </span>
+              </div>
+
+              {/* Percentage bar */}
+              <div className="mt-2 grid grid-cols-3 gap-1">
+                <div className="col-span-3">
+                  <div className="h-2 w-full rounded-full bg-[hsl(var(--muted))] overflow-hidden flex">
+                    <div className="h-full bg-green-500 transition-all" style={{ width: `${pct}%` }} />
+                    <div
+                      className="h-full bg-red-400 transition-all"
+                      style={{
+                        width: `${Math.round(
+                          (res.combinedAgainstCount / Math.max(totalCombined, 1)) * 100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">
+                    <span className="text-green-600 font-medium">For {res.combinedForCount}</span>
+                    <span className="text-yellow-600">Abstain {res.combinedAbstainCount}</span>
+                    <span className="text-red-500 font-medium">Against {res.combinedAgainstCount}</span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Status badge + expand */}
@@ -234,7 +371,21 @@ function ResolutionCard({
       {/* Expanded detail */}
       {expanded && (
         <div className="px-5 pb-5 border-t border-[hsl(var(--border))]">
-          {/* Online / Offline / Combined breakdown */}
+          {isCandidatePoll ? (
+            /* Candidate Poll — one breakdown block per nominee, voted independently */
+            <div className="flex flex-col gap-3 mt-4">
+              {candidates.length === 0 ? (
+                <p className="text-xs text-[hsl(var(--muted-foreground))] py-4 text-center">No candidates on this slate.</p>
+              ) : (
+                [...candidates]
+                  .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                  .map((c) => (
+                    <CandidateBlock key={c.id} c={c} eventId={eventId} resolutionId={res.id} readOnly={readOnly} />
+                  ))
+              )}
+            </div>
+          ) : (
+          /* Online / Offline / Combined breakdown */
           <div className="grid grid-cols-3 gap-4 mt-4">
             {/* Online */}
             <div className="rounded-xl bg-[hsl(var(--muted)/0.4)] p-4">
@@ -302,6 +453,7 @@ function ResolutionCard({
               </div>
             </div>
           </div>
+          )}
 
           {/* Per-resolution share-weighted tallies toggle — default OFF, locked while OPEN */}
           <div className="mt-4 pt-4 border-t border-[hsl(var(--border))] flex items-center justify-between gap-3">
@@ -386,8 +538,10 @@ function ResolutionCard({
             </div>
           )}
 
-          {/* Offline vote entry — hidden for Viewer (read-only) */}
-          {!readOnly && (
+          {/* Offline vote entry — single-subject resolutions only; a Candidate Poll's
+              in-room votes are entered per-nominee inside each CandidateBlock above.
+              Hidden for Viewer (read-only). */}
+          {!isCandidatePoll && !readOnly && (
             <button
               className="mt-4 text-xs text-[hsl(var(--primary))] underline underline-offset-2"
               onClick={() => setShowOffline((v) => !v)}
@@ -395,7 +549,7 @@ function ResolutionCard({
               {showOffline ? "Hide" : "Enter in-room votes…"}
             </button>
           )}
-          {!readOnly && showOffline && (
+          {!isCandidatePoll && !readOnly && showOffline && (
             <OfflineVoteForm
               eventId={eventId}
               resolutionId={res.id}
@@ -412,6 +566,15 @@ function ResolutionCard({
 // ---------------------------------------------------------------------------
 // Add Resolution inline form
 // ---------------------------------------------------------------------------
+let _candUid = 0;
+const candUid = () => `cand_${++_candUid}`;
+
+interface NewCandidateRow {
+  id:   string; // local key, not a server id
+  name: string;
+  bio:  string;
+}
+
 function AddResolutionForm({ eventId, onDone }: { eventId: string; onDone: () => void }) {
   const [form, setForm] = useState({
     title:            "",
@@ -419,11 +582,61 @@ function AddResolutionForm({ eventId, onDone }: { eventId: string; onDone: () =>
     specialResolution: false,
     votingDeadline:   "",
   });
+  const [resolutionType, setResolutionType] = useState<ResolutionType>("STANDARD");
+  const [candidateRows,  setCandidateRows]  = useState<NewCandidateRow[]>([]);
   const { mutate, isPending } = useAddResolution();
 
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm((f) => ({ ...f, [k]: v }));
   }
+
+  function setType(type: ResolutionType) {
+    setResolutionType(type);
+    if (type === "CANDIDATE" && candidateRows.length < 2) {
+      setCandidateRows((prev) => [
+        ...prev,
+        ...Array.from({ length: 2 - prev.length }, () => ({ id: candUid(), name: "", bio: "" })),
+      ]);
+    }
+  }
+  function addCandidateRow() {
+    setCandidateRows((prev) => [...prev, { id: candUid(), name: "", bio: "" }]);
+  }
+  function removeCandidateRow(id: string) {
+    setCandidateRows((prev) => prev.filter((c) => c.id !== id));
+  }
+  function updateCandidateRow(id: string, field: "name" | "bio", val: string) {
+    setCandidateRows((prev) => prev.map((c) => c.id === id ? { ...c, [field]: val } : c));
+  }
+
+  function handleSubmit() {
+    const isCandidatePoll = resolutionType === "CANDIDATE";
+    let candidates: CandidateInput[] | undefined;
+    if (isCandidatePoll) {
+      candidates = candidateRows
+        .map((c) => ({ name: c.name.trim(), bio: c.bio.trim() || undefined }))
+        .filter((c) => c.name);
+      if (candidates.length < 2) return;
+    }
+    mutate(
+      {
+        eventId,
+        data: {
+          title:             form.title.trim(),
+          description:       form.description.trim() || undefined,
+          specialResolution: form.specialResolution,
+          votingDeadline:    form.votingDeadline || undefined,
+          resolutionType:    isCandidatePoll ? "CANDIDATE" : undefined,
+          candidates,
+        },
+      },
+      { onSuccess: onDone }
+    );
+  }
+
+  const isCandidatePoll = resolutionType === "CANDIDATE";
+  const validCandidateCount = candidateRows.filter((c) => c.name.trim()).length;
+  const canSubmit = !isPending && !!form.title.trim() && (!isCandidatePoll || validCandidateCount >= 2);
 
   return (
     <Card className="attend-card p-5">
@@ -476,25 +689,84 @@ function AddResolutionForm({ eventId, onDone }: { eventId: string; onDone: () =>
             </label>
           </div>
         </div>
+
+        <div>
+          <label className="block text-xs text-[hsl(var(--muted-foreground))] mb-1">Resolution type</label>
+          <div className="inline-flex rounded-lg border border-[hsl(var(--border))] p-0.5 bg-[hsl(var(--muted)/0.3)]">
+            <button
+              type="button"
+              onClick={() => setType("STANDARD")}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                resolutionType === "STANDARD"
+                  ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
+                  : "text-[hsl(var(--muted-foreground))]"
+              }`}
+            >
+              Standard
+            </button>
+            <button
+              type="button"
+              onClick={() => setType("CANDIDATE")}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                resolutionType === "CANDIDATE"
+                  ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
+                  : "text-[hsl(var(--muted-foreground))]"
+              }`}
+            >
+              Candidate Poll
+            </button>
+          </div>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+            Candidate Poll lets shareholders vote For/Against/Abstain on each nominee independently, under one open/close window — e.g. &quot;Election of President&quot;.
+          </p>
+        </div>
+
+        {isCandidatePoll && (
+          <div className="flex flex-col gap-2 rounded-lg border border-[hsl(var(--border))] p-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-[hsl(var(--muted-foreground))]">
+                Candidates * <span className="opacity-70">(min. 2)</span>
+              </label>
+              <button
+                type="button"
+                onClick={addCandidateRow}
+                className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline"
+              >
+                + Add candidate
+              </button>
+            </div>
+            {candidateRows.map((c, ci) => (
+              <div key={c.id} className="flex items-center gap-2">
+                <span className="text-xs text-[hsl(var(--muted-foreground))] w-4 shrink-0">{ci + 1}.</span>
+                <Input
+                  placeholder="Candidate name"
+                  value={c.name}
+                  onChange={(e) => updateCandidateRow(c.id, "name", e.target.value)}
+                  className="h-8 text-sm flex-1"
+                />
+                <Input
+                  placeholder="Bio (optional)"
+                  value={c.bio}
+                  onChange={(e) => updateCandidateRow(c.id, "bio", e.target.value)}
+                  className="h-8 text-sm flex-1"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeCandidateRow(c.id)}
+                  className="text-[hsl(var(--muted-foreground))] hover:text-red-500 transition-colors shrink-0"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+            {candidateRows.length === 0 && (
+              <p className="text-xs text-[hsl(var(--muted-foreground))] italic">No candidates added yet.</p>
+            )}
+          </div>
+        )}
+
         <div className="flex gap-2 pt-1">
-          <Button
-            size="sm"
-            disabled={isPending || !form.title.trim()}
-            onClick={() =>
-              mutate(
-                {
-                  eventId,
-                  data: {
-                    title:            form.title.trim(),
-                    description:      form.description.trim() || undefined,
-                    specialResolution: form.specialResolution,
-                    votingDeadline:   form.votingDeadline || undefined,
-                  },
-                },
-                { onSuccess: onDone }
-              )
-            }
-          >
+          <Button size="sm" disabled={!canSubmit} onClick={handleSubmit}>
             {isPending ? "Adding…" : "Add Resolution"}
           </Button>
           <Button size="sm" variant="outline" onClick={onDone}>Cancel</Button>
@@ -551,20 +823,44 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
       const exp    = result.data;
       if (!exp) return;
       const header = ["Order", "Title", "Special", "Status", "For (count)", "Against (count)", "Abstain (count)", "For (shares)", "Against (shares)", "Abstain (shares)", "Total Votes", "Result"];
-      const rows   = exp.resolutions.map((r) => [
-        String(r.order),
-        r.title,
-        r.specialResolution ? "Yes" : "No",
-        r.status,
-        String(r.forCount),
-        String(r.againstCount),
-        String(r.abstainCount),
-        String(r.forShares),
-        String(r.againstShares),
-        String(r.abstainShares),
-        String(r.totalVotes),
-        r.result,
-      ]);
+      // Candidate Poll resolutions export one row per nominee (title suffixed with
+      // the nominee's name) instead of a single flat row, mirroring the UI breakdown.
+      const rows: string[][] = [];
+      exp.resolutions.forEach((r) => {
+        if (r.resolutionType === "CANDIDATE" && r.candidates && r.candidates.length > 0) {
+          r.candidates.forEach((c) => {
+            rows.push([
+              String(r.order),
+              `${r.title} — ${c.name}`,
+              r.specialResolution ? "Yes" : "No",
+              r.status,
+              String(c.forCount),
+              String(c.againstCount),
+              String(c.abstainCount),
+              String(c.forShares),
+              String(c.againstShares),
+              String(c.abstainShares),
+              String(c.totalVotes),
+              c.result,
+            ]);
+          });
+        } else {
+          rows.push([
+            String(r.order),
+            r.title,
+            r.specialResolution ? "Yes" : "No",
+            r.status,
+            String(r.forCount),
+            String(r.againstCount),
+            String(r.abstainCount),
+            String(r.forShares),
+            String(r.againstShares),
+            String(r.abstainShares),
+            String(r.totalVotes),
+            r.result,
+          ]);
+        }
+      });
       downloadCsv(`${exp.eventTitle ?? eventId}-resolutions.csv`, [header, ...rows]);
     } finally {
       setExporting(false);

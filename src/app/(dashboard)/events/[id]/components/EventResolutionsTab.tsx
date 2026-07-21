@@ -18,6 +18,7 @@ import {
   useOpenResolutionVoting,
   useCloseResolutionVoting,
 } from "@/api/client-votes";
+import type { ResolutionType, CandidateInput, CandidateResult } from "@/api/client-votes";
 import type { LocalAgendaItem } from "./types";
 
 let _uid = 0;
@@ -32,6 +33,16 @@ export interface AgmResolution {
   isSpecialResolution?: boolean;
   specialResolution?:  boolean;
   order?:              number;
+  // Candidate-poll fields (F8) — omitted/STANDARD for a normal single-subject resolution.
+  resolutionType?:     ResolutionType;
+  candidates?:         CandidateResult[];
+}
+
+/** One nominee row in the composer, before it's saved to the server. */
+interface CandidateRow {
+  id:   string; // local key, not a server id
+  name: string;
+  bio:  string;
 }
 
 /** Unsaved row being composed in the AGM resolution form */
@@ -41,6 +52,8 @@ interface AgmNewRow {
   description:             string;
   specialResolution:       boolean;
   defaultDurationSeconds?: number;
+  resolutionType:          ResolutionType;
+  candidates:              CandidateRow[];
 }
 
 interface Props {
@@ -97,7 +110,10 @@ export function EventResolutionsTab({
   const addResolutionMutation = useAddResolution();
 
   function addAgmRow() {
-    setAgmNewRows((prev) => [...prev, { id: uid(), title: "", description: "", specialResolution: false, defaultDurationSeconds: undefined }]);
+    setAgmNewRows((prev) => [...prev, {
+      id: uid(), title: "", description: "", specialResolution: false,
+      defaultDurationSeconds: undefined, resolutionType: "STANDARD", candidates: [],
+    }]);
   }
   function removeAgmRow(id: string) {
     setAgmNewRows((prev) => prev.filter((r) => r.id !== id));
@@ -105,10 +121,48 @@ export function EventResolutionsTab({
   function updateAgmRow(id: string, field: keyof AgmNewRow, val: string | boolean) {
     setAgmNewRows((prev) => prev.map((r) => r.id === id ? { ...r, [field]: val } : r));
   }
+  /** Switches a row between Standard / Candidate Poll, seeding 2 blank candidate rows on first switch. */
+  function setAgmRowType(id: string, type: ResolutionType) {
+    setAgmNewRows((prev) => prev.map((r) => {
+      if (r.id !== id) return r;
+      const candidates = type === "CANDIDATE" && r.candidates.length < 2
+        ? [...r.candidates, ...Array.from({ length: 2 - r.candidates.length }, () => ({ id: uid(), name: "", bio: "" }))]
+        : r.candidates;
+      return { ...r, resolutionType: type, candidates };
+    }));
+  }
+  function addCandidateRow(rowId: string) {
+    setAgmNewRows((prev) => prev.map((r) =>
+      r.id === rowId ? { ...r, candidates: [...r.candidates, { id: uid(), name: "", bio: "" }] } : r
+    ));
+  }
+  function removeCandidateRow(rowId: string, candidateId: string) {
+    setAgmNewRows((prev) => prev.map((r) =>
+      r.id === rowId ? { ...r, candidates: r.candidates.filter((c) => c.id !== candidateId) } : r
+    ));
+  }
+  function updateCandidateRow(rowId: string, candidateId: string, field: "name" | "bio", val: string) {
+    setAgmNewRows((prev) => prev.map((r) =>
+      r.id === rowId
+        ? { ...r, candidates: r.candidates.map((c) => c.id === candidateId ? { ...c, [field]: val } : c) }
+        : r
+    ));
+  }
   function persistAgmRow(row: AgmNewRow) {
     if (!row.title.trim()) {
       toast.error("Title is required before saving.");
       return;
+    }
+    const isCandidatePoll = row.resolutionType === "CANDIDATE";
+    let candidates: CandidateInput[] | undefined;
+    if (isCandidatePoll) {
+      candidates = row.candidates
+        .map((c) => ({ name: c.name.trim(), bio: c.bio.trim() || undefined }))
+        .filter((c) => c.name);
+      if (candidates.length < 2) {
+        toast.error("Add at least 2 candidates for a candidate poll.");
+        return;
+      }
     }
     addResolutionMutation.mutate(
       {
@@ -118,6 +172,8 @@ export function EventResolutionsTab({
           description:             row.description.trim() || undefined,
           specialResolution:       row.specialResolution,
           defaultDurationSeconds:  row.defaultDurationSeconds,
+          resolutionType:          isCandidatePoll ? "CANDIDATE" : undefined,
+          candidates,
         },
       },
       { onSuccess: () => setAgmNewRows((prev) => prev.filter((r) => r.id !== row.id)) }
@@ -187,6 +243,8 @@ export function EventResolutionsTab({
           againstCount:      r.votesAgainst,
           abstainCount:      r.abstentions,
           totalShares:       r.totalShares,
+          resolutionType:    r.resolutionType ?? "STANDARD",
+          candidates:        r.candidates,
         }))
       : agmResolutions
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
@@ -201,6 +259,8 @@ export function EventResolutionsTab({
             againstCount:      0,
             abstainCount:      0,
             totalShares:       0,
+            resolutionType:    r.resolutionType ?? "STANDARD",
+            candidates:        r.candidates,
           }));
 
     const isEmpty = displayList.length === 0 && agmNewRows.length === 0;
@@ -256,6 +316,8 @@ export function EventResolutionsTab({
             const isOpen    = statusUp === "OPEN";
             const isClosed  = statusUp === "CLOSED";
             const total     = res.forCount + res.againstCount + res.abstainCount;
+            const isCandidatePoll = res.resolutionType === "CANDIDATE";
+            const candidates = res.candidates ?? [];
 
             return (
               <div
@@ -289,6 +351,11 @@ export function EventResolutionsTab({
                             <CheckCircle2 className="h-3 w-3" /> Ordinary
                           </span>
                         )}
+                        {isCandidatePoll && (
+                          <span className="text-[10px] font-semibold text-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.08)] rounded-full px-2 py-0.5">
+                            Candidate Poll · {candidates.length || res.candidates?.length || 0} nominees
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm font-semibold text-[hsl(var(--foreground))] leading-snug">
                         {res.title}
@@ -296,6 +363,11 @@ export function EventResolutionsTab({
                       {res.description && (
                         <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1 leading-relaxed">
                           {res.description}
+                        </p>
+                      )}
+                      {isCandidatePoll && isPending && candidates.length > 0 && (
+                        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1.5">
+                          Nominees: {candidates.map((c) => c.name).join(", ")}
                         </p>
                       )}
                     </div>
@@ -344,8 +416,43 @@ export function EventResolutionsTab({
                   )}
                 </div>
 
-                {/* Vote results bar (open or closed) */}
-                {(isOpen || isClosed) && (
+                {/* Vote results — one bar set per candidate for a Candidate Poll, else a single bar set */}
+                {(isOpen || isClosed) && isCandidatePoll && candidates.length > 0 && (
+                  <div className="mt-3 flex flex-col gap-2">
+                    {[...candidates]
+                      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                      .map((c) => {
+                        const cTotal = c.votesFor + c.votesAgainst + c.abstentions;
+                        return (
+                          <div key={c.id} className="bg-[hsl(var(--background))] rounded-xl border border-[hsl(var(--border))] p-3 flex flex-col gap-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-semibold text-[hsl(var(--foreground))] min-w-0 truncate">
+                                {c.name}
+                                {c.bio && <span className="font-normal text-[hsl(var(--muted-foreground))]"> — {c.bio}</span>}
+                              </p>
+                              {typeof c.rank === "number" && (
+                                <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]">
+                                  #{c.rank}
+                                </span>
+                              )}
+                            </div>
+                            <VoteBar label="For"     value={c.votesFor}     total={cTotal} color="#16a34a" />
+                            <VoteBar label="Against" value={c.votesAgainst} total={cTotal} color="#dc2626" />
+                            <VoteBar label="Abstain" value={c.abstentions}  total={cTotal} color="#9ca3af" />
+                            {isClosed && (
+                              <div className="pt-1.5 mt-0.5 border-t border-[hsl(var(--border))] flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
+                                <span>Total votes: <span className="font-semibold text-[hsl(var(--foreground))]">{cTotal.toLocaleString()}</span></span>
+                                <span className={`font-semibold ${c.passed ? "text-green-600" : "text-red-600"}`}>
+                                  {cTotal > 0 ? (c.passed ? "✓ Passed" : "✗ Failed") : "No votes cast"}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+                {(isOpen || isClosed) && !isCandidatePoll && (
                   <div className="mt-3 bg-[hsl(var(--background))] rounded-xl border border-[hsl(var(--border))] p-3 flex flex-col gap-2">
                     <VoteBar label="For"     value={res.forCount}     total={total} color="#16a34a" />
                     <VoteBar label="Against" value={res.againstCount} total={total} color="#dc2626" />
@@ -422,6 +529,82 @@ export function EventResolutionsTab({
                   <span className="text-xs text-[hsl(var(--muted-foreground))]">(requires 75% majority)</span>
                 </span>
               </label>
+
+              <div>
+                <Label className="mb-1.5">Resolution type</Label>
+                <div className="inline-flex rounded-lg border border-[hsl(var(--border))] p-0.5 bg-[hsl(var(--muted)/0.3)]">
+                  <button
+                    type="button"
+                    onClick={() => setAgmRowType(row.id, "STANDARD")}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                      row.resolutionType === "STANDARD"
+                        ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
+                        : "text-[hsl(var(--muted-foreground))]"
+                    }`}
+                  >
+                    Standard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAgmRowType(row.id, "CANDIDATE")}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                      row.resolutionType === "CANDIDATE"
+                        ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
+                        : "text-[hsl(var(--muted-foreground))]"
+                    }`}
+                  >
+                    Candidate Poll
+                  </button>
+                </div>
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                  Candidate Poll lets shareholders vote For/Against/Abstain on each nominee independently, under one open/close window — e.g. &quot;Election of President&quot;.
+                </p>
+              </div>
+
+              {row.resolutionType === "CANDIDATE" && (
+                <div className="flex flex-col gap-2 rounded-lg border border-[hsl(var(--border))] p-3 bg-[hsl(var(--background))]">
+                  <div className="flex items-center justify-between">
+                    <Label>
+                      Candidates <span className="text-red-500">*</span>{" "}
+                      <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(min. 2)</span>
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={() => addCandidateRow(row.id)}
+                      className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline"
+                    >
+                      + Add candidate
+                    </button>
+                  </div>
+                  {row.candidates.map((c, ci) => (
+                    <div key={c.id} className="flex items-center gap-2">
+                      <span className="text-xs text-[hsl(var(--muted-foreground))] w-4 shrink-0">{ci + 1}.</span>
+                      <Input
+                        placeholder="Candidate name"
+                        value={c.name}
+                        onChange={(e) => updateCandidateRow(row.id, c.id, "name", e.target.value)}
+                        className="flex-1"
+                      />
+                      <Input
+                        placeholder="Bio (optional)"
+                        value={c.bio}
+                        onChange={(e) => updateCandidateRow(row.id, c.id, "bio", e.target.value)}
+                        className="flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeCandidateRow(row.id, c.id)}
+                        className="text-[hsl(var(--muted-foreground))] hover:text-red-500 transition-colors shrink-0"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  {row.candidates.length === 0 && (
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] italic">No candidates added yet.</p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <Label className="mb-1.5">Default vote duration (seconds) <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span></Label>
