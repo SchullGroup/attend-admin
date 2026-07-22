@@ -18,6 +18,7 @@ import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
+import type { RegisterBranding } from "@/types/super-admin";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +45,8 @@ export interface ChallengeListItem {
   shortlistedTeams?:  number;   // legacy
   shortlistedCount?:  number;   // API field
   status:             string;
+  /** Register branding (AGM handoff #10), resolved from the register that created this challenge. */
+  branding?:          RegisterBranding;
 }
 
 export interface ChallengeListResponse {
@@ -90,6 +93,8 @@ export interface ChallengeDetail {
   expectedDeliverable:     string;
   eligibilityCriteria:     string;
   submissionRequirements?: SubmissionRequirements;
+  /** Register branding (AGM handoff #10), resolved from the register that created this challenge. */
+  branding?:               RegisterBranding;
 }
 
 export interface ApplicationTab {

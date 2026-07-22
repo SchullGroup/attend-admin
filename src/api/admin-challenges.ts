@@ -17,6 +17,7 @@ import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
+import type { RegisterBranding } from "@/types/super-admin";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,6 +34,8 @@ export interface ChallengeItem {
   format:           string;
   shortlistedTeams: number;
   status:           string;
+  /** Register branding (AGM handoff #10), resolved from the register that created this challenge. */
+  branding?:        RegisterBranding;
 }
 
 export interface ChallengeSummary {
@@ -125,6 +128,8 @@ export interface AdminChallengeDetail {
   expectedDeliverable?:   string;
   eligibilityCriteria?:   string;
   submissionRequirements?: Record<string, boolean>;
+  /** Register branding (AGM handoff #10), resolved from the register that created this challenge. */
+  branding?:              RegisterBranding;
 }
 
 export interface AdminJudge {

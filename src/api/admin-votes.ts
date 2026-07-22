@@ -15,6 +15,13 @@ import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
+import type { VoteResultsResponse, ResolutionResult } from "@/api/client-votes";
+
+// Re-export so existing/new consumers of this file can import the full,
+// fully-populated result shape from either module — the admin `/results`
+// endpoint now returns the exact same envelope as the client-admin one
+// (AGM handoff #6).
+export type { VoteResultsResponse, ResolutionResult } from "@/api/client-votes";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,15 +60,6 @@ export interface VoteStatsResponse {
   endedCount:   number;
   pendingCount: number;
   totalVotes:   number;
-}
-
-export interface VoteResultsResponse {
-  eventId:     string;
-  eventTitle:  string;
-  organiser:   string;
-  date:        string;
-  status:      string;
-  resolutions: ResolutionVoteResult[];
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +129,16 @@ export function useAdminVoteOrganisers() {
   });
 }
 
-/** Full vote results for a single AGM event. */
+/**
+ * Full, read-only vote results for a single AGM event (super admin).
+ *
+ * Backend confirmed (AGM handoff #6) this now returns the exact same
+ * fully-populated fields the client-admin `/results` endpoint already did —
+ * shares, offline/in-room counts, combined totals, real quorum, and
+ * resolutionType/candidates for Candidate Polls (F8) — previously these
+ * were present but always zero/false here. Normalized identically to
+ * useVoteResults in client-votes.ts so both surfaces stay consistent.
+ */
 export function useAdminVoteResults(eventId: string) {
   return useQuery({
     queryKey: voteKeys.results(eventId),
@@ -139,7 +146,16 @@ export function useAdminVoteResults(eventId: string) {
       const res = await apiClient.get<ApiResponse<VoteResultsResponse>>(
         `/api/v1/admin/votes/${eventId}/results`
       );
-      return res.data.data;
+      const raw = res.data.data as any;
+      if (!raw) return raw as VoteResultsResponse;
+      const requiredQuorumPercentage =
+        raw.quorumPercentage ?? raw.requiredQuorumPercentage ?? raw.quorumRequiredPercentage ?? raw.quorumThreshold ?? undefined;
+      const resolutions: ResolutionResult[] = (raw.resolutions ?? []).map((r: any) => ({
+        ...r,
+        shareWeightedTalliesEnabled:
+          r.shareWeightedTalliesEnabled ?? r.shareWeightedTallies ?? r.weightedTalliesEnabled ?? false,
+      }));
+      return { ...raw, requiredQuorumPercentage, resolutions } as VoteResultsResponse;
     },
     enabled:   !!eventId,
     staleTime: 15_000,
