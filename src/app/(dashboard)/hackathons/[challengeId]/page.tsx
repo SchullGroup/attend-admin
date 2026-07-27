@@ -1753,8 +1753,14 @@ export default function ChallengeDetailPage({
         </button>
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5" style={{ backgroundColor: "#7c22c918" }}>
-              <Lightbulb className="h-5 w-5" style={{ color: "#7c22c9" }} />
+            <div
+              className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5 overflow-hidden"
+              style={{ backgroundColor: (challenge as any).branding?.logoUrl ? undefined : `${(challenge as any).branding?.brandColor ?? "#7c22c9"}18` }}
+            >
+              {(challenge as any).branding?.logoUrl
+                ? <img src={(challenge as any).branding.logoUrl} alt="" className="h-full w-full object-cover" />
+                : <Lightbulb className="h-5 w-5" style={{ color: (challenge as any).branding?.brandColor ?? "#7c22c9" }} />
+              }
             </div>
             <div>
               <h1 className="text-2xl font-bold text-[hsl(var(--foreground))] leading-tight">{challenge.title}</h1>

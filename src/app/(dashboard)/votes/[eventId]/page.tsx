@@ -1016,7 +1016,7 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
         </div>
 
         {/* ── Proxy Register (AGM milestone #5) ── */}
-        <ProxiesSection eventId={eventId} canMark={canMarkProxies} />
+        <ProxiesSection eventId={eventId} canMark={canMarkProxies} resolutions={resolutions} />
       </div>
     </div>
   );

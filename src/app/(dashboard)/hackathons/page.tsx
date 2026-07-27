@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
+import type { RegisterBranding } from "@/types/super-admin";
 
 const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
 const JUDGE_ROLES       = new Set(["judge"]);
@@ -134,8 +135,14 @@ function JudgeChallengesView() {
                 <tr key={c.id} className="attend-table-row">
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#7c22c918" }}>
-                        <Lightbulb className="h-4 w-4" style={{ color: "#7c22c9" }} />
+                      <div
+                        className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
+                        style={{ backgroundColor: c.branding?.logoUrl ? undefined : `${c.branding?.brandColor ?? "#7c22c9"}18` }}
+                      >
+                        {c.branding?.logoUrl
+                          ? <img src={c.branding.logoUrl} alt="" className="h-full w-full object-cover" />
+                          : <Lightbulb className="h-4 w-4" style={{ color: c.branding?.brandColor ?? "#7c22c9" }} />
+                        }
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[220px]">{c.title}</p>
@@ -210,7 +217,7 @@ export default function HackathonsPage() {
   if (isLoading) return <Loader variant="page" text="Loading Challenges…" />;
 
   const summary    = data?.summary;
-  const challenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; applicationCount?: number; shortlistedTeams?: number; shortlistedCount?: number; status?: string }>;
+  const challenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; applicationCount?: number; shortlistedTeams?: number; shortlistedCount?: number; status?: string; branding?: RegisterBranding }>;
   // Server already filters by status (both hooks are passed statusTab) and paginates —
   // no client-side re-filtering, otherwise "totalCount" and the rendered rows fall out of sync.
   const totalCount = data?.totalCount ?? challenges.length;
@@ -342,8 +349,14 @@ export default function HackathonsPage() {
                 <tr key={c.id} className="attend-table-row">
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#7c22c918" }}>
-                        <Lightbulb className="h-4 w-4" style={{ color: "#7c22c9" }} />
+                      <div
+                        className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
+                        style={{ backgroundColor: c.branding?.logoUrl ? undefined : `${c.branding?.brandColor ?? "#7c22c9"}18` }}
+                      >
+                        {c.branding?.logoUrl
+                          ? <img src={c.branding.logoUrl} alt="" className="h-full w-full object-cover" />
+                          : <Lightbulb className="h-4 w-4" style={{ color: c.branding?.brandColor ?? "#7c22c9" }} />
+                        }
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[220px]">{c.title}</p>

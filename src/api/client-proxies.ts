@@ -35,6 +35,13 @@ export interface EventProxy {
   sharesRepresented?: number;
   assignedAt?:       string;
   attendedAt?:       string | null;
+  /**
+   * Virtual proxy code (AGM handoff #10) — a random 10-digit code the proxy
+   * holder enters as a guest to self-service cast this vote. Backend confirmed
+   * this on the *create*-proxy-assignment response; not confirmed on this list
+   * endpoint yet, so it's optional here and only rendered when actually present.
+   */
+  proxyCode?:        string;
 }
 
 export interface ProxyTab {
@@ -66,6 +73,7 @@ function normalize(raw: any): ProxyListResponse {
     sharesRepresented: p?.sharesRepresented ?? undefined,
     assignedAt:        p?.assignedAt ?? undefined,
     attendedAt:        p?.attendedAt ?? null,
+    proxyCode:         p?.proxyCode ?? undefined,
   }));
   return {
     eventId:    raw?.eventId ?? "",
@@ -126,5 +134,64 @@ export function useMarkProxyAttended() {
       );
     },
     onError: (e) => parseAndToastApiError(e, "Failed to mark proxy as attended."),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Bulk in-person proxy vote upload (AGM handoff #10)
+//
+//   POST /api/v1/client/votes/{eventId}/proxy-votes   (CLIENT_ADMIN / ADMIN)
+//
+// Each row upserts a Vote attributed to the *grantor* (the shareholder who
+// assigned a proxy — referrerEmail), flows through the same tallying as a
+// self-cast vote, and marks that grantor's ProxyAssignment ATTENDED. Once
+// recorded, the grantor's own later vote attempt on that resolution/candidate
+// is rejected (409) — proxy precedence.
+// ---------------------------------------------------------------------------
+
+export interface ProxyVoteInput {
+  /** The grantor's (shareholder's) email — not the proxy holder's. */
+  referrerEmail: string;
+  resolutionId:  string;
+  /** Only for CANDIDATE-type resolutions (F8) — omit for STANDARD. */
+  candidateId?:  string;
+  choice:        "FOR" | "AGAINST" | "ABSTAIN";
+}
+
+export interface ProxyVoteUploadResult {
+  recorded:          number;
+  skipped:           number;
+  referrersNotified: number;
+  errors:            string[];
+}
+
+export function useUploadProxyVotes() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      eventId,
+      proxyVotes,
+    }: {
+      eventId:    string;
+      proxyVotes: ProxyVoteInput[];
+    }) => {
+      const res = await apiClient.post<ApiResponse<ProxyVoteUploadResult>>(
+        `/api/v1/client/votes/${eventId}/proxy-votes`,
+        { proxyVotes }
+      );
+      return res.data.data;
+    },
+    onSuccess: (data, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["proxies", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["clientVotes", "results", eventId] });
+      const recorded = data?.recorded ?? 0;
+      const skipped  = data?.skipped ?? 0;
+      popup.success(
+        "Proxy Votes Recorded",
+        `${recorded} vote${recorded === 1 ? "" : "s"} recorded${skipped ? ` · ${skipped} skipped` : ""}.`,
+        3500
+      );
+    },
+    onError: (e) => parseAndToastApiError(e, "Failed to upload proxy votes."),
   });
 }

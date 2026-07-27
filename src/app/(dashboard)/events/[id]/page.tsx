@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEventDetail, useEventDocuments, useEventAttendees } from "@/api/super-admin";
 import { useClientEventDetail, useClientEventDocuments, useClientEventAttendees, useExpectedAttendees } from "@/api/client-events";
 import { useVoteResults } from "@/api/client-votes";
+import { useAdminVoteResults } from "@/api/admin-votes";
 import { useGetMe } from "@/api/auth/hooks";
 import { useSuspendUserAccount } from "@/api/users";
 import { ModuleBadge } from "@/components/custom/module-badge";
@@ -125,6 +126,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   // passing "" as eventId makes useVoteResults a no-op (enabled: !!eventId → false).
   const agmEventType      = toModule((apiEvent as any)?.eventType);
   const { data: voteResultsData } = useVoteResults(agmEventType === "AGM" ? id : "");
+  // Super-admin read-only equivalent (AGM handoff #6 parity fix) — only fired
+  // for super admin viewing an AGM event; client roles use voteResultsData above.
+  const { data: adminVoteResultsData } = useAdminVoteResults(
+    isAdmin && agmEventType === "AGM" ? id : ""
+  );
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [tab,              setTab]             = useState("Overview");
@@ -234,9 +240,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     // previously bundled into the AGM+super-admin exclusion below and got hidden
     // along with the AGM-voting-specific tabs by mistake.
     "Documents",
-    // For AGM + super admin: stop here — the AGM-voting tabs below stay hidden
-    // (super admin gets Overview/Attendees/Registrar/Documents only for AGMs)
-    ...(isSuperAdmin && isAGM ? [] : [
+    // For AGM + super admin: only a read-only Vote Results tab (AGM handoff #6
+    // parity fix) — Resolutions/Stakeholders/Post-AGM/Settings etc. stay hidden,
+    // super admin has no write access to any of those.
+    ...(isSuperAdmin && isAGM ? ["Vote Results"] : [
       ...(isAGM && !isSuperAdmin ? ["Resolutions", "Stakeholders"] : isAGM ? ["Resolutions"] : []),
       ...(!isSuperAdmin && isLAUNCH ? ["Audience Tiers", "Waitlist"] : []),
       // Press Kit (F2) — Product Launch events. Client admin: full CRUD;
@@ -330,7 +337,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {tab === "Waitlist"       && !isSuperAdmin && isLAUNCH && <EventLaunchWaitlistTab    eventId={id} />}
       {tab === "Press Kit"      && isLAUNCH && <EventPressKitTab eventId={id} readOnly={isSuperAdmin || isViewer} isSuperAdmin={isSuperAdmin} />}
       {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab eventId={id} />}
-      {tab === "Vote Results"       && isAGM && <EventVoteResultsTab voteResults={voteResultsData} />}
+      {tab === "Vote Results"       && isAGM && <EventVoteResultsTab voteResults={isSuperAdmin ? adminVoteResultsData : voteResultsData} />}
       {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} voteResults={voteResultsData} participants={participants} eventId={id} />}
       {tab === "Settings" && !isSuperAdmin && <EventSettingsTab
         eventId={id}

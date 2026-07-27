@@ -20,6 +20,7 @@ import type {
   ApplicationListResponse,
   LeaderboardResponse,
 } from "@/api/client-challenges";
+import type { RegisterBranding } from "@/types/super-admin";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,6 +38,8 @@ export interface JudgeChallengeItem {
   scoredCount?:     number;
   pendingCount?:    number;
   totalCount?:      number;
+  /** Register branding (AGM handoff #10), resolved from the register that created this challenge. */
+  branding?:        RegisterBranding;
 }
 
 export interface JudgeChallengeListResponse {
