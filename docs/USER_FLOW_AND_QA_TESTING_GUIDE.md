@@ -70,6 +70,13 @@ The Attend Admin Portal is an enterprise hybrid event, AGM (Annual General Meeti
 - **Silent Refresh:** When `accessToken` expires (401 response), Axios interceptor (`src/lib/api-client.ts`) transparently calls `/api/auth/refresh` using the HTTP-Only `refreshToken` and retries the original request without user interruption.
 - **Logout:** Clicking **Logout** in user menu clears client cookies, clears React Query cache, invokes `POST /api/auth/logout`, and redirects to `/login`.
 
+### Flow 2.4: Two-Factor Authentication (MFA) Setup & Enforcement
+**Steps:**
+1. Upon initial login (or if MFA policy is enforced organization-wide), user is directed to `/mfa-setup`.
+2. Scan QR code using Authenticator App (Google/Microsoft Authenticator) or select SMS fallback.
+3. Enter 6-digit verification code.
+**Expected Outcome:** 2FA is activated. On subsequent logins, a 2FA prompt appears after Step 2 of Flow 2.1, requiring the TOTP code before issuing the `accessToken`.
+
 ---
 
 ## 3. Super Admin User Flows
@@ -158,6 +165,15 @@ The Attend Admin Portal is an enterprise hybrid event, AGM (Annual General Meeti
 6. Click **Publish Challenge**.
 **Expected Outcome:** Challenge is live for participant registration and judge assignment.
 
+### Flow 5.3: Bulk Dispatch Event Invitations / Notices
+**Precondition:** Event is `PUBLISHED` and attached to an `ACTIVE` register.
+**Steps:**
+1. Navigate to `/events/[id]/dispatch`.
+2. Review email template (Notice of Meeting, credentials, and unique QR code).
+3. Select target audience (All Shareholders vs Unregistered Only).
+4. Click **Send Bulk Invites**.
+**Expected Outcome:** System triggers asynchronous email jobs via queue. Progress bar updates as emails are dispatched. Audit log records the dispatch event.
+
 ---
 
 ## 6. Event Operations & Participant Management Flows
@@ -176,8 +192,9 @@ The Attend Admin Portal is an enterprise hybrid event, AGM (Annual General Meeti
 **Steps:**
 1. View list of attached resolutions.
 2. Click **Create Resolution** to add a new item during pre-meeting planning.
-3. Edit resolution text, voting options (e.g., FOR / AGAINST / ABSTAIN), or voting weight multiplier.
-4. Change status from `DRAFT` to `READY`.
+3. Select Resolution Type: **Standard** (FOR / AGAINST / ABSTAIN) or **Election** (e.g., "Select 3 out of 5 Directors").
+4. Edit resolution text, voting options/candidates, or voting weight multiplier.
+5. Change status from `DRAFT` to `READY`.
 **Expected Outcome:** Resolutions updated and queued for activation in Live Control Room.
 
 ---
@@ -218,9 +235,10 @@ The Attend Admin Portal is an enterprise hybrid event, AGM (Annual General Meeti
 2. Click **Open Voting Window**.
 3. Real-time ticker broadcasts `VOTING_OPENED` event to all connected participant devices.
 4. Monitor live incoming vote tallies (FOR %, AGAINST %, ABSTAIN %, Total Shares Voted, Quorum Progress Bar).
-5. Click **Close Voting Window** when time elapses.
-6. Click **Publish Results** to show final tallies on participant screens.
-**Expected Outcome:** Voting window locks; votes tallied; results permanently attached to resolution.
+5. *Vote Amendments:* While window is open, participants can change their selection. The system recalculates live tallies seamlessly.
+6. Click **Close Voting Window** when time elapses.
+7. Click **Publish Results** to show final tallies on participant screens.
+**Expected Outcome:** Voting window locks (amendments disabled); votes tallied; results permanently attached to resolution.
 
 ### Flow 7.5: Live Polls & Audience Q&A / Hand Raise Management
 **Polls Steps:**
@@ -233,6 +251,13 @@ The Attend Admin Portal is an enterprise hybrid event, AGM (Annual General Meeti
 2. View attendee submitted questions ranked by upvotes.
 3. Click **Answer Textually** or mark as **Answered Live**.
 4. View Hand Raise Queue (attendees requesting to speak). Click **Grant Microphone / Promote to Speaker** or **Lower Hand**.
+
+### Flow 7.6: Emergency Broadcasts & Stream Fallbacks
+**Steps:**
+1. In the event of a stream outage or urgent update, Host navigates to **Broadcast Ticker** tab.
+2. Enters emergency alert text (e.g., "Stream dropped, attempting reconnect. Please hold.").
+3. Clicks **Push Emergency Notification**.
+**Expected Outcome:** Persistent banner appears on all attendee interfaces immediately.
 
 ---
 
@@ -259,6 +284,15 @@ The Attend Admin Portal is an enterprise hybrid event, AGM (Annual General Meeti
 2. Verify government-issued ID against system register details.
 3. Click **Mark KYC Verified & Check-In**.
 **Expected Outcome:** Attendee status updated to `KYC_VERIFIED` & `CHECKED_IN`; badge printing queue triggered.
+
+### Flow 8.3: Proxy Onsite Check-In
+**Steps:**
+1. Proxy arrives holding a proxy authorization document.
+2. Registrar searches for the original Shareholder Account Number.
+3. Registrar clicks **Check-In as Proxy**.
+4. Enters Proxy's name and uploads/verifies authorization proof.
+5. Clicks **Confirm Proxy Check-In**.
+**Expected Outcome:** Original shareholder is marked as `REPRESENTED_BY_PROXY`; Proxy receives voting keypad or mobile access to cast shares.
 
 ---
 
@@ -315,6 +349,14 @@ The Attend Admin Portal is an enterprise hybrid event, AGM (Annual General Meeti
 - **Vote Audit Log Export:** Click **Download Vote Audit CSV**. Browser downloads complete audit trail of every vote cast with timestamp, voter ID, share weight, and decision.
 - **Statutory Return Generation:** Click **Generate Statutory Return**. View structured filing document formatted according to regulatory requirements (SEC/CAC guidelines), including meeting details, quorum percentages, and itemized resolution voting tables. Click **Export Document**.
 
+### Flow 10.4: Event Recordings (VOD) & Distribution
+**Steps:**
+1. After meeting concludes, navigate to **Post-AGM / Media** tab.
+2. Upload final event recording MP4 or link to YouTube VOD.
+3. Set visibility (e.g., "Available to all registered shareholders").
+4. Click **Publish VOD & Notify Attendees**.
+**Expected Outcome:** Notification email sent to absentees; VOD replaces live stream player on the event landing page.
+
 ---
 
 ## 11. Hackathon & Innovation Challenge Flows
@@ -362,6 +404,13 @@ The Attend Admin Portal is an enterprise hybrid event, AGM (Annual General Meeti
 3. Select Role (`client_admin`, `event_manager`, `kyc_officer`, `judge`, `viewer`).
 4. Click **Send Invitation**.
 **Expected Outcome:** User invited; permissions enforced upon first login according to assigned role matrix.
+
+### Flow 12.3: Team Member Offboarding / Deactivation
+**Steps:**
+1. Locate team member in the Team List table.
+2. Click action menu (3 dots) -> **Deactivate Account** (or Revoke Access).
+3. Confirm deactivation prompt.
+**Expected Outcome:** User status changes to `INACTIVE`. Active sessions are forcefully terminated via WebSocket/token revocation; future login attempts fail.
 
 ---
 
