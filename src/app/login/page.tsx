@@ -108,7 +108,7 @@ function OtpInput({
 export default function LoginPage() {
   const router = useRouter();
   const [step, setStep] = useState<"credentials" | "otp">("credentials");
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -120,7 +120,7 @@ export default function LoginPage() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     loginMutation(
-      { email, password },
+      { identifier, password },
       {
         onSuccess: (response) => {
           // Block attendee-only accounts — this portal is admin-only.
@@ -153,7 +153,7 @@ export default function LoginPage() {
           toast.error(
             err?.response?.data?.message ||
               err?.message ||
-              "Invalid email or password",
+              "Invalid email, phone number, or password",
           );
         },
       },
@@ -188,7 +188,7 @@ export default function LoginPage() {
     }, 600);
     // addAuditEntry({
     //   actor: "Admin User",
-    //   actorEmail: email,
+    //   actorEmail: identifier,
     //   actorRole: "super_admin",
     //   action: "Signed in",
     //   category: "auth",
@@ -199,7 +199,7 @@ export default function LoginPage() {
     // });
     // addAuditEntry({
     //   actor: "Admin User",
-    //   actorEmail: email,
+    //   actorEmail: identifier,
     //   actorRole: "super_admin",
     //   action: "2FA verified",
     //   category: "auth",
@@ -249,18 +249,18 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               <div className="flex flex-col gap-1.5">
                 <Label
-                  htmlFor="email"
+                  htmlFor="identifier"
                   className="text-sm font-medium"
                   style={{ color: "#374151" }}
                 >
-                  Email address
+                  Email or phone number
                 </Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@yourorganisation.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="identifier"
+                  type="text"
+                  placeholder="Enter email or phone number"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
                   required
                   className="h-11"
                 />
