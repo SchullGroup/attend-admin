@@ -18,6 +18,7 @@ import {
 import { useLogin } from "@/api/auth/hooks";
 import { toast } from "sonner";
 import Cookies from "js-cookie";
+import { consumeSessionEndReason } from "@/lib/auth-session";
 
 const FEATURES = [
   {
@@ -116,6 +117,11 @@ export default function LoginPage() {
   const [countdown, setCountdown] = useState(60);
   const [resendKey, setResendKey] = useState(0);
   const { mutate: loginMutation, isPending } = useLogin();
+
+  useEffect(() => {
+    const reason = consumeSessionEndReason();
+    if (reason) toast.error(reason, { duration: 6000 });
+  }, []);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -5,6 +5,7 @@ import { refreshAccessToken } from "@/lib/api-client";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Header } from "@/components/shell/header";
 import { Loader } from "@/components/ui/Loader";
+import { rememberSessionEndReason } from "@/lib/auth-session";
 
 export default function DashboardLayout({
   children,
@@ -41,8 +42,9 @@ export default function DashboardLayout({
       .then(() => {
         setReady(true);
       })
-      .catch(() => {
+      .catch((error) => {
         // Refresh token is also expired or missing — send to login.
+        rememberSessionEndReason(error);
         window.location.replace("/login");
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Bell, Send, FileText, Megaphone, Clock, Users } from "lucide-react";
+import { Bell, Send, FileText, Megaphone, Clock, Users, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,11 +12,13 @@ import {
   type SendBroadcastRequest,
 } from "@/api/client-events";
 
-type Channel = "EMAIL" | "SMS" | "ALL";
+type Channel = "EMAIL" | "SMS" | "PUSH" | "IN_APP" | "ALL";
 
 const CHANNEL_CONFIG: { key: Channel; label: string; icon: React.ElementType; needsSubject: boolean }[] = [
   { key: "SMS",   label: "SMS",          icon: Send,      needsSubject: false },
   { key: "EMAIL", label: "Email",        icon: FileText,  needsSubject: true  },
+  { key: "PUSH",  label: "Push",         icon: Smartphone, needsSubject: false },
+  { key: "IN_APP", label: "In-app",      icon: Bell,       needsSubject: false },
   { key: "ALL",   label: "All Channels", icon: Megaphone, needsSubject: true  },
 ];
 
@@ -82,7 +84,7 @@ export function EventBroadcastTab({ eventId }: Props) {
               </div>
               {channel === "ALL" && (
                 <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1.5">
-                  Sends via Email + SMS. PUSH is not yet available.
+                  Sends through all available delivery channels, including the in-app notification bell.
                 </p>
               )}
             </div>
@@ -168,6 +170,8 @@ export function EventBroadcastTab({ eventId }: Props) {
                     <span>{item.totalRecipients} recipients</span>
                     {item.emailSent > 0 && <span>{item.emailSent} email</span>}
                     {item.smsSent > 0   && <span>{item.smsSent} SMS</span>}
+                    {(item.pushSent ?? 0) > 0 && <span>{item.pushSent} push</span>}
+                    {(item.inAppSent ?? 0) > 0 && <span>{item.inAppSent} in-app</span>}
                     {item.skipped > 0   && <span>{item.skipped} skipped</span>}
                   </div>
                 </div>

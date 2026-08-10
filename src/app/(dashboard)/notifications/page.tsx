@@ -20,26 +20,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/ui/Loader";
 import { timeAgo, resolveRole, isSuperAdminRole } from "@/lib/utils";
+import { notificationTypeColor, notificationTypeInitial } from "@/lib/notification";
 
 const JUDGE_ROLES = new Set(["judge"]);
-
-// Notification type → accent color
-const TYPE_COLORS: Record<string, string> = {
-  EVENT:          "#2563eb",
-  VOTE:           "#7c22c9",
-  DOCUMENT:       "#f59e0b",
-  APPLICATION:    "#16a34a",
-  SYSTEM:         "#6b7280",
-  ANNOUNCEMENT:   "#0891b2",
-};
-
-function typeColor(type: string) {
-  return TYPE_COLORS[type?.toUpperCase()] ?? "#374151";
-}
-
-function typeInitial(type: string) {
-  return (type ?? "N").charAt(0).toUpperCase();
-}
 
 // ---------------------------------------------------------------------------
 // Detail panel
@@ -51,7 +34,7 @@ function DetailPanel({
   notification: ClientNotificationItem | any;
   onClose: () => void;
 }) {
-  const color = typeColor(notification.type);
+  const color = notificationTypeColor(notification.type);
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
@@ -70,7 +53,7 @@ function DetailPanel({
             className="h-9 w-9 rounded-xl flex items-center justify-center text-sm font-bold shrink-0"
             style={{ backgroundColor: color + "18", color }}
           >
-            {typeInitial(notification.type)}
+            {notificationTypeInitial(notification.type)}
           </div>
           <div>
             <span
@@ -258,7 +241,7 @@ export default function NotificationsPage() {
               </div>
             ) : (
               notifications.map((n) => {
-                const color = typeColor(n.type);
+                const color = notificationTypeColor(n.type);
                 const isSelected = selected?.id === n.id;
                 return (
                   <div
@@ -277,7 +260,7 @@ export default function NotificationsPage() {
                       className="h-9 w-9 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 mt-0.5"
                       style={{ backgroundColor: color + "18", color }}
                     >
-                      {typeInitial(n.type)}
+                      {notificationTypeInitial(n.type)}
                     </div>
 
                     <div className="flex-1 min-w-0">
