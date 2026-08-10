@@ -2,7 +2,7 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Lock, Eye, EyeOff, Check, X, CheckCircle2, Loader2, ArrowLeft } from "lucide-react";
+import { Lock, Eye, EyeOff, Check, X, CheckCircle2, Loader2, ArrowLeft, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +18,9 @@ function ResetPasswordInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
+  const initialOtp = searchParams.get("otp")?.replace(/\D/g, "").slice(0, 6) ?? "";
 
+  const [otp,           setOtp]           = useState(initialOtp);
   const [password,      setPassword]      = useState("");
   const [confirm,       setConfirm]       = useState("");
   const [showPassword,  setShowPassword]  = useState(false);
@@ -29,13 +31,14 @@ function ResetPasswordInner() {
 
   const rulesPass = RULES.every((r) => r.test(password));
   const matches   = password === confirm && confirm.length > 0;
-  const canSubmit = rulesPass && matches;
+  const otpIsValid = /^\d{6}$/.test(otp);
+  const canSubmit = rulesPass && matches && otpIsValid;
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
     resetPassword.mutate(
-      { token, newPassword: password },
+      { token, otp, newPassword: password },
       { onSuccess: () => setDone(true) }
     );
   }
@@ -84,6 +87,30 @@ function ResetPasswordInner() {
               </div>
 
               <form onSubmit={onSubmit} className="space-y-5">
+                <div className="space-y-1.5">
+                  <Label htmlFor="otp" className="text-sm font-medium" style={{ color: "#374151" }}>
+                    One-time password
+                  </Label>
+                  <div className="relative">
+                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: "#9ca3af" }} />
+                    <Input
+                      id="otp"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="6-digit code"
+                      value={otp}
+                      onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                      className="h-11 pl-9 font-mono"
+                      maxLength={6}
+                      required
+                    />
+                  </div>
+                  {otp.length > 0 && !otpIsValid && (
+                    <p className="text-xs text-red-600 font-medium">Enter the 6-digit code sent to your email.</p>
+                  )}
+                </div>
+
                 {/* New password */}
                 <div className="space-y-1.5">
                   <Label htmlFor="password" className="text-sm font-medium" style={{ color: "#374151" }}>
