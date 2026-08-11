@@ -1,6 +1,6 @@
 import axios from "axios";
 import Cookies from "js-cookie";
-import { rememberSessionEndReason } from "@/lib/auth-session";
+import { isSessionRevokedError, rememberSessionEndReason } from "@/lib/auth-session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -128,11 +128,12 @@ apiClient.interceptors.response.use(
 
     if (
       error.response?.status === 401 &&
-      error.response?.data?.error === "Session invalidated"
+      isSessionRevokedError(error)
     ) {
       rememberSessionEndReason(error);
       Cookies.remove("accessToken");
       if (typeof window !== "undefined") {
+        window.localStorage.removeItem("userLogoUrl");
         window.location.replace("/login");
       }
       return Promise.reject(error);
@@ -199,6 +200,7 @@ apiClient.interceptors.response.use(
           rememberSessionEndReason(refreshError);
           Cookies.remove("accessToken");
           if (typeof window !== "undefined") {
+            window.localStorage.removeItem("userLogoUrl");
             window.location.replace("/login");
           }
         }

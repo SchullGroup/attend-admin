@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   ArrowLeft, Building2, CalendarX, Eye, Monitor,
   MapPin, Users2, Radio, Hash, Mail, Phone, User,
-  CalendarCheck,
+  CalendarCheck, Globe2, MapPinned,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,9 +18,10 @@ import { useClientEvents, type EventListItem } from "@/api/client-events";
 import { RegisterShareholdersSection } from "./components/RegisterShareholdersSection";
 import { RegisterDocumentsSection }    from "./components/RegisterDocumentsSection";
 import { RegisterBrandingSection }     from "./components/RegisterBrandingSection";
+import { RegisterDetailsEditor }      from "./components/RegisterDetailsEditor";
 import { useGetMe } from "@/api/auth/hooks";
 import { getEventModule, MODULE_COLORS } from "@/lib/event-module";
-import { formatDate } from "@/lib/utils";
+import { formatDate, resolveRole } from "@/lib/utils";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -189,11 +190,13 @@ export default function RegisterDetailPage() {
 
   // Role-based permission: viewer cannot access the live control room
   const { data: userResponse } = useGetMe();
-  const role         = normaliseRole(userResponse?.data?.role);
+  const role         = resolveRole(userResponse?.data);
   const canLiveControl = role !== "viewer";
   const canCreate      = role !== "viewer";
-  // Branding PATCH is CLIENT_ADMIN / ADMIN only (matches the endpoint's role gate).
+  // Branding PATCH accepts CLIENT_ADMIN / ADMIN (matches the endpoint's role gate).
   const canEditBranding = role === "client_admin" || role === "admin";
+  // Register metadata PATCH is intentionally restricted to CLIENT_ADMIN.
+  const canEditDetails  = role === "client_admin";
 
   const {
     data:      register,
@@ -245,6 +248,8 @@ export default function RegisterDetailPage() {
   const email      = register.email      ?? (register as any).contactEmail ?? null;
   const repName    = register.representativeName  ?? null;
   const repPhone   = register.representativePhone ?? null;
+  const website    = register.website ?? null;
+  const address    = register.address ?? null;
   const enrolledAt = register.enrolledAt ?? (register as any).approvedAt  ?? null;
 
   const eventCount  = register.eventCount ?? events.length;
@@ -285,15 +290,18 @@ export default function RegisterDetailPage() {
               </div>
             </div>
           </div>
+          <RegisterDetailsEditor register={register} canEdit={canEditDetails} />
         </div>
 
         {/* Metadata grid */}
-        <div className="mt-5 pt-4 border-t border-[hsl(var(--border))] grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="mt-5 pt-4 border-t border-[hsl(var(--border))] grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {([
             { icon: Hash,          label: "RC Number",     value: rcNumber },
             { icon: Mail,          label: "Email",          value: email    },
             { icon: User,          label: "Representative", value: repName  },
             { icon: Phone,         label: "Rep. Phone",     value: repPhone },
+            { icon: Globe2,        label: "Website",        value: website  },
+            { icon: MapPinned,     label: "Address",        value: address  },
           ] as { icon: React.ElementType; label: string; value: string | null }[]).map(
             ({ icon: Icon, label, value }) => (
               <div key={label} className="flex items-start gap-2">

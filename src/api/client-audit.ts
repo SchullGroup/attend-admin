@@ -5,7 +5,8 @@
  *
  * Endpoint:
  *   GET /api/v1/client/audit-logs
- *   Params: search, category, severity, page, size
+ *   Params: search, actionType, severity, startDate, endDate, userEmail,
+ *           entityId, page, size
  *   Returns paginated activity history for the authenticated organisation.
  */
 
@@ -44,11 +45,17 @@ export interface AuditLogsResponse {
 }
 
 export interface AuditLogParams {
-  search?:   string;
-  category?: string;
-  severity?: string;
-  page?:     number;
-  size?:     number;
+  search?:     string;
+  actionType?: string;
+  /** Legacy/admin alias. Client requests are sent as actionType. */
+  category?:   string;
+  severity?:   string;
+  startDate?:  string;
+  endDate?:    string;
+  userEmail?:  string;
+  entityId?:   string;
+  page?:       number;
+  size?:       number;
 }
 
 // ─── Query key factory ────────────────────────────────────────────────────────
@@ -60,27 +67,86 @@ export const clientAuditKeys = {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useClientAuditLogs(params: AuditLogParams = {}) {
-  const { search = "", category = "", severity = "", page = 0, size = 20 } = params;
+function toAuditParams(params: AuditLogParams, includePagination = true) {
+  const {
+    search = "",
+    actionType = "",
+    category = "",
+    severity = "",
+    startDate = "",
+    endDate = "",
+    userEmail = "",
+    entityId = "",
+    page = 0,
+    size = 20,
+  } = params;
+
+  return {
+    ...(includePagination ? { page, size } : {}),
+    ...(search.trim()     ? { search: search.trim() }         : {}),
+    ...(actionType || category ? { actionType: actionType || category } : {}),
+    ...(severity          ? { severity }                      : {}),
+    ...(startDate         ? { startDate }                     : {}),
+    ...(endDate           ? { endDate }                       : {}),
+    ...(userEmail.trim()  ? { userEmail: userEmail.trim() }   : {}),
+    ...(entityId.trim()   ? { entityId: entityId.trim() }     : {}),
+  };
+}
+
+function exportFilename(contentDisposition?: string): string {
+  const encoded = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plain = contentDisposition?.match(/filename="?([^";]+)"?/i)?.[1];
+  return decodeURIComponent(encoded ?? plain ?? "audit-logs.csv");
+}
+
+export function useClientAuditLogs(params: AuditLogParams = {}, enabled = true) {
+  const normalized = {
+    search: params.search ?? "",
+    actionType: params.actionType ?? "",
+    category: params.category ?? "",
+    severity: params.severity ?? "",
+    startDate: params.startDate ?? "",
+    endDate: params.endDate ?? "",
+    userEmail: params.userEmail ?? "",
+    entityId: params.entityId ?? "",
+    page: params.page ?? 0,
+    size: params.size ?? 20,
+  };
 
   return useQuery({
-    queryKey: clientAuditKeys.list({ search, category, severity, page, size }),
+    queryKey: clientAuditKeys.list(normalized),
+    enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<AuditLogsResponse>>(
         "/api/v1/client/audit-logs",
-        {
-          params: {
-            page,
-            size,
-            ...(search.trim()  ? { search:   search.trim()  } : {}),
-            ...(category       ? { category                 } : {}),
-            ...(severity       ? { severity                 } : {}),
-          },
-        }
+        { params: toAuditParams(normalized) }
       );
       return res.data.data;
     },
     staleTime: 30_000,
     placeholderData: (prev) => prev, // keep previous page visible during refetch
   });
+}
+
+export async function exportClientAuditLogs(params: AuditLogParams) {
+  const res = await apiClient.get<Blob>("/api/v1/client/audit-logs/export", {
+    params: toAuditParams(params, false),
+    responseType: "blob",
+  });
+  return {
+    blob: res.data,
+    filename: exportFilename(res.headers["content-disposition"]),
+  };
+}
+
+export async function exportSelectedClientAuditLogs(ids: string[]) {
+  const res = await apiClient.post<Blob>(
+    "/api/v1/client/audit-logs/export",
+    ids,
+    { responseType: "blob" }
+  );
+  return {
+    blob: res.data,
+    filename: exportFilename(res.headers["content-disposition"]),
+  };
 }

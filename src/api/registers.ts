@@ -15,6 +15,7 @@
  *   Reject     POST /api/v1/client/registers/{id}/reject     body: { reason? }
  *   Suspend    POST /api/v1/client/registers/{id}/suspend    body: { reason? }
  *   Activate   POST /api/v1/client/registers/{id}/activate
+ *   Update     PATCH /api/v1/client/registers/{id}           body: editable metadata subset
  *   Branding   PATCH /api/v1/client/registers/{id}/branding  body: { logoUrl?, brandColor? } — roles: CLIENT_ADMIN, ADMIN
  *
  * Cache roots: ["registers"] / ["register", id]
@@ -42,6 +43,17 @@ export interface EnrollRegisterPayload {
   industry?:             string | null;
   representativeName?:   string;
   representativePhone?:  string;
+}
+
+export interface UpdateRegisterPayload {
+  name?:                string;
+  email?:               string;
+  rcNumber?:            string | null;
+  industry?:            string | null;
+  representativeName?: string | null;
+  representativePhone?: string | null;
+  website?:             string | null;
+  address?:             string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -326,6 +338,33 @@ export function useActivateRegister() {
     },
     onError: (error: any) =>
       parseAndToastApiError(error, "Activation failed. Please try again."),
+  });
+}
+
+/** Update any subset of register profile fields. Roles: CLIENT_ADMIN only. */
+export function useUpdateRegister() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      registerId,
+      updates,
+    }: {
+      registerId: string;
+      updates: UpdateRegisterPayload;
+    }) => {
+      const res = await apiClient.patch<ApiResponse<ClientRegisterDetailResponse>>(
+        `/api/v1/client/registers/${registerId}`,
+        updates
+      );
+      return res.data.data;
+    },
+    onSuccess: (updated, { registerId }) => {
+      queryClient.setQueryData(registerKeys.detail(registerId), updated);
+      queryClient.invalidateQueries({ queryKey: registerKeys.all });
+      popup.success("Register Updated", "Register details have been saved.", 2500);
+    },
+    onError: (error: any) =>
+      parseAndToastApiError(error, "Failed to update register details."),
   });
 }
 
