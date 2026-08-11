@@ -121,6 +121,10 @@ export function EventSettingsTab({
     endMutation.isPending     ||
     cancelMutation.isPending;
 
+  const normalizedStatus = currentStatus.toLowerCase();
+  const isPublished = normalizedStatus === "published" || normalizedStatus === "live" || normalizedStatus === "ended";
+  const isLive = normalizedStatus === "live";
+
   function handleLifecycle(
     status: "published" | "live" | "ended" | "cancelled",
     mutation: { mutate: (id: string, opts?: any) => void; isPending: boolean }
@@ -396,20 +400,22 @@ export function EventSettingsTab({
         <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
           {[
             {
-              label:    "Publish Event",
-              desc:     "Make event visible and open RSVPs",
-              action:   "Publish",
+              label:    isPublished ? "Published" : "Publish Event",
+              desc:     isPublished ? "Event is visible and open for RSVPs" : "Make event visible and open RSVPs",
+              action:   isPublished ? "Published" : "Publish",
               status:   "published" as const,
               mutation: publishMutation,
-              disabled: ["PUBLISHED", "published", "LIVE", "live", "ENDED", "ended", "CANCELLED", "cancelled"].includes(currentStatus),
+              completed: isPublished,
+              disabled: ["published", "live", "ended", "cancelled"].includes(normalizedStatus),
             },
             {
-              label:    "Go Live",
-              desc:     "Start the live stream and event",
-              action:   "Go Live",
+              label:    isLive ? "Live" : "Go Live",
+              desc:     isLive ? "Live stream and event are active" : "Start the live stream and event",
+              action:   isLive ? "Live" : "Go Live",
               status:   "live" as const,
               mutation: goLiveMutation,
-              disabled: ["DRAFT", "draft", "LIVE", "live", "ENDED", "ended", "CANCELLED", "cancelled"].includes(currentStatus),
+              completed: isLive,
+              disabled: ["draft", "live", "ended", "cancelled"].includes(normalizedStatus),
             },
             {
               label:    "End Event",
@@ -417,9 +423,10 @@ export function EventSettingsTab({
               action:   "End Event",
               status:   "ended" as const,
               mutation: endMutation,
-              disabled: !["LIVE", "live"].includes(currentStatus),
+              completed: false,
+              disabled: !isLive,
             },
-          ].map(({ label, desc, action, status, mutation, disabled }) => (
+          ].map(({ label, desc, action, status, mutation, completed, disabled }) => (
             <div key={label} className="flex items-center justify-between py-3">
               <div>
                 <p className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</p>
@@ -431,7 +438,11 @@ export function EventSettingsTab({
                 disabled={disabled || anyLifecyclePending}
                 onClick={() => handleLifecycle(status, mutation)}
               >
-                {status === "live" && <Radio className="h-3.5 w-3.5 mr-1.5" />}
+                {completed ? (
+                  status === "live" ? <Radio className="h-3.5 w-3.5 mr-1.5" /> : <Check className="h-3.5 w-3.5 mr-1.5" />
+                ) : status === "live" ? (
+                  <Radio className="h-3.5 w-3.5 mr-1.5" />
+                ) : null}
                 {mutation.isPending ? "…" : action}
               </Button>
             </div>

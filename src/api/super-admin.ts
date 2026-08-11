@@ -32,8 +32,8 @@ import { ApiResponse } from "@/types/api";
 
 export const superAdminKeys = {
   all: ["super-admin"] as const,
-  auditLogs: (search: string, category: string, severity: string, page: number, size: number) =>
-    ["super-admin", "audit-logs", { search, category, severity, page, size }] as const,
+  auditLogs: (params: AdminAuditLogParams) =>
+    ["super-admin", "audit-logs", params] as const,
   dashboardStats: () => [...superAdminKeys.all, "dashboard-stats"] as const,
   platformStats: () => [...superAdminKeys.all, "platform-stats"] as const,
   stakeholders: (page: number, limit: number) => [...superAdminKeys.all, "stakeholders", page, limit] as const,
@@ -329,32 +329,75 @@ export interface AdminAuditLogsResponse {
   logs:         AdminAuditLogEntry[];
 }
 
+export interface AdminAuditLogParams {
+  search?:     string;
+  actionType?: string;
+  /** Legacy alias. Admin requests are sent as actionType. */
+  category?:   string;
+  severity?:   string;
+  startDate?:  string;
+  endDate?:    string;
+  userEmail?:  string;
+  entityId?:   string;
+  page?:       number;
+  size?:       number;
+}
+
+function toAdminAuditParams(params: AdminAuditLogParams, includePagination = true) {
+  const {
+    search = "",
+    actionType = "",
+    category = "",
+    severity = "",
+    startDate = "",
+    endDate = "",
+    userEmail = "",
+    entityId = "",
+    page = 0,
+    size = 20,
+  } = params;
+
+  return {
+    ...(includePagination ? { page, size } : {}),
+    ...(search.trim()         ? { search: search.trim() }                     : {}),
+    ...(actionType || category ? { actionType: actionType || category }       : {}),
+    ...(severity              ? { severity }                                  : {}),
+    ...(startDate             ? { startDate }                                 : {}),
+    ...(endDate               ? { endDate }                                   : {}),
+    ...(userEmail.trim()      ? { userEmail: userEmail.trim() }               : {}),
+    ...(entityId.trim()       ? { entityId: entityId.trim() }                 : {}),
+  };
+}
+
+function adminAuditExportFilename(contentDisposition?: string): string {
+  const encoded = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plain = contentDisposition?.match(/filename="?([^";]+)"?/i)?.[1];
+  return decodeURIComponent(encoded ?? plain ?? "audit-logs.csv");
+}
+
 export function useAdminAuditLogs(
-  params: {
-    search?:   string;
-    category?: string;
-    severity?: string;
-    page?:     number;
-    size?:     number;
-  } = {},
+  params: AdminAuditLogParams = {},
   enabled = true,
 ) {
-  const { search = "", category = "", severity = "", page = 0, size = 20 } = params;
+  const normalized: Required<AdminAuditLogParams> = {
+    search: params.search ?? "",
+    actionType: params.actionType ?? "",
+    category: params.category ?? "",
+    severity: params.severity ?? "",
+    startDate: params.startDate ?? "",
+    endDate: params.endDate ?? "",
+    userEmail: params.userEmail ?? "",
+    entityId: params.entityId ?? "",
+    page: params.page ?? 0,
+    size: params.size ?? 20,
+  };
   return useQuery({
-    queryKey: superAdminKeys.auditLogs(search, category, severity, page, size),
+    queryKey: superAdminKeys.auditLogs(normalized),
     enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<AdminAuditLogsResponse>>(
         "/api/v1/admin/audit-logs",
-        {
-          params: {
-            page,
-            size,
-            ...(search.trim()  ? { search:   search.trim()  } : {}),
-            ...(category       ? { category                 } : {}),
-            ...(severity       ? { severity                 } : {}),
-          },
-        }
+        { params: toAdminAuditParams(normalized) }
       );
       const raw = (res.data.data ?? res.data) as any;
       // Normalise field aliases (totalEvents vs totalCount, logs vs entries)
@@ -374,6 +417,29 @@ export function useAdminAuditLogs(
     staleTime: 30_000,
     placeholderData: (prev) => prev,
   });
+}
+
+export async function exportAdminAuditLogs(params: AdminAuditLogParams) {
+  const res = await apiClient.get<Blob>("/api/v1/admin/audit-logs/export", {
+    params: toAdminAuditParams(params, false),
+    responseType: "blob",
+  });
+  return {
+    blob: res.data,
+    filename: adminAuditExportFilename(res.headers["content-disposition"]),
+  };
+}
+
+export async function exportSelectedAdminAuditLogs(ids: string[]) {
+  const res = await apiClient.post<Blob>(
+    "/api/v1/admin/audit-logs/export",
+    ids,
+    { responseType: "blob" }
+  );
+  return {
+    blob: res.data,
+    filename: adminAuditExportFilename(res.headers["content-disposition"]),
+  };
 }
 
 // ---------------------------------------------------------------------------

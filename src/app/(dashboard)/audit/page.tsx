@@ -14,7 +14,11 @@ import {
   type AuditCategory,
   type AuditSeverity,
 } from "@/api/client-audit";
-import { useAdminAuditLogs } from "@/api/super-admin";
+import {
+  useAdminAuditLogs,
+  exportAdminAuditLogs,
+  exportSelectedAdminAuditLogs,
+} from "@/api/super-admin";
 import { resolveRole, isSuperAdminRole } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -234,7 +238,17 @@ export default function AuditLogPage() {
   // Super admin uses the platform-wide audit log; client admin uses their org's log.
   // Hooks are always called (Rules of Hooks) but only enabled for the applicable role.
   const { data: adminData,  isLoading: adminLoading,  isFetching: adminFetching  } = useAdminAuditLogs(
-    { search: searchQuery, category, severity, page, size: PAGE_SIZE },
+    {
+      search: searchQuery,
+      actionType: category,
+      severity,
+      startDate,
+      endDate,
+      userEmail,
+      entityId,
+      page,
+      size: PAGE_SIZE,
+    },
     !userLoading && isSuperAdmin,
   );
   const { data: clientData, isLoading: clientLoading, isFetching: clientFetching } = useClientAuditLogs(
@@ -291,7 +305,7 @@ export default function AuditLogPage() {
   }
 
   async function handleExport(selectedOnly: boolean) {
-    if (isSuperAdmin || exporting) return;
+    if (exporting) return;
     if (startDate && endDate && startDate > endDate) {
       toast.error("Start date must be before or equal to end date.");
       return;
@@ -300,9 +314,13 @@ export default function AuditLogPage() {
     setExporting(true);
     try {
       const params = { search: searchQuery, actionType: category, severity, startDate, endDate, userEmail, entityId };
-      const result = selectedOnly
-        ? await exportSelectedClientAuditLogs([...selectedIds])
-        : await exportClientAuditLogs(params);
+      const result = isSuperAdmin
+        ? selectedOnly
+          ? await exportSelectedAdminAuditLogs([...selectedIds])
+          : await exportAdminAuditLogs(params)
+        : selectedOnly
+          ? await exportSelectedClientAuditLogs([...selectedIds])
+          : await exportClientAuditLogs(params);
       await downloadExport(result);
       toast.success("Audit CSV downloaded.");
     } catch (error) {
@@ -325,7 +343,9 @@ export default function AuditLogPage() {
       <div>
         <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Audit Log</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-          Activity history for your organisation. Filterable by category and severity.
+          {isSuperAdmin
+            ? "Platform-wide activity history. Filterable by category and severity."
+            : "Activity history for your organisation. Filterable by category and severity."}
         </p>
       </div>
 
@@ -374,22 +394,20 @@ export default function AuditLogPage() {
             </button>
           )}
         </div>
-        {!isSuperAdmin && (
-          <div className="mt-3 grid grid-cols-1 gap-3 border-t border-[hsl(var(--border))] pt-3 sm:grid-cols-2 lg:grid-cols-3">
-            <input type="email" value={userEmail} onChange={(event) => { setUserEmail(event.target.value); setPage(0); }} placeholder="User email" className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
-            <input type="text" value={entityId} onChange={(event) => { setEntityId(event.target.value); setPage(0); }} placeholder="Entity ID" className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
-            <div className="flex items-center gap-2">
-              <input type="date" value={startDate} onChange={(event) => { setStartDate(event.target.value); setPage(0); }} aria-label="Start date" className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">to</span>
-              <input type="date" value={endDate} onChange={(event) => { setEndDate(event.target.value); setPage(0); }} aria-label="End date" className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
-            </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 border-t border-[hsl(var(--border))] pt-3 sm:grid-cols-2 lg:grid-cols-3">
+          <input type="email" value={userEmail} onChange={(event) => { setUserEmail(event.target.value); setPage(0); }} placeholder="User email" className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
+          <input type="text" value={entityId} onChange={(event) => { setEntityId(event.target.value); setPage(0); }} placeholder="Entity ID" className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
+          <div className="flex items-center gap-2">
+            <input type="date" value={startDate} onChange={(event) => { setStartDate(event.target.value); setPage(0); }} aria-label="Start date" className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
+            <span className="text-xs text-[hsl(var(--muted-foreground))]">to</span>
+            <input type="date" value={endDate} onChange={(event) => { setEndDate(event.target.value); setPage(0); }} aria-label="End date" className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
           </div>
-        )}
+        </div>
       </Card>
 
       {/* Table */}
       <Card className="attend-card overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-[hsl(var(--border))] flex flex-wrap items-center justify-between gap-3">
+        <div className="px-5 py-3.5 border-b border-[hsl(var(--border))] flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-semibold text-[hsl(var(--foreground))]">Events</h2>
           <div className="flex items-center gap-3">
             {isFetching && !isLoading && (
@@ -400,17 +418,13 @@ export default function AuditLogPage() {
             <span className="text-xs text-[hsl(var(--muted-foreground))]">
               {isLoading ? "Loading…" : `${totalCount.toLocaleString()} event${totalCount !== 1 ? "s" : ""}`}
             </span>
-            {!isSuperAdmin && (
-              <>
-                <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" disabled={exporting} onClick={() => handleExport(false)}>
-                  {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                  Export all
-                </Button>
-                <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" disabled={exporting || selectedIds.size === 0} onClick={() => handleExport(true)}>
-                  <Download className="h-3.5 w-3.5" /> Export selected{selectedIds.size ? ` (${selectedIds.size})` : ""}
-                </Button>
-              </>
-            )}
+            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" disabled={exporting} onClick={() => handleExport(false)}>
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Export all
+            </Button>
+            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" disabled={exporting || selectedIds.size === 0} onClick={() => handleExport(true)}>
+              <Download className="h-3.5 w-3.5" /> Export selected{selectedIds.size ? ` (${selectedIds.size})` : ""}
+            </Button>
           </div>
         </div>
 
@@ -418,11 +432,9 @@ export default function AuditLogPage() {
           <table className="w-full min-w-[900px]">
             <thead>
               <tr className="attend-table-header">
-                {!isSuperAdmin && (
-                  <th className="px-3 py-3 text-left w-10">
-                    <input type="checkbox" aria-label="Select all audit entries on this page" checked={allPageSelected} onChange={togglePageSelection} className="h-4 w-4 accent-[hsl(var(--primary))]" />
-                  </th>
-                )}
+                <th className="px-3 py-3 text-left w-10">
+                  <input type="checkbox" aria-label="Select all audit entries on this page" checked={allPageSelected} onChange={togglePageSelection} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+                </th>
                 <th className="px-5 py-3 text-left">Timestamp</th>
                 <th className="px-5 py-3 text-left">Actor</th>
                 <th className="px-5 py-3 text-left">Action</th>
@@ -434,11 +446,11 @@ export default function AuditLogPage() {
             </thead>
             <tbody>
               {isLoading
-                  ? [...Array(8)].map((_, i) => <SkeletonRow key={i} showSelection={!isSuperAdmin} />)
+                ? [...Array(8)].map((_, i) => <SkeletonRow key={i} showSelection />)
                 : logs.length === 0
                   ? (
                     <tr>
-                        <td colSpan={isSuperAdmin ? 7 : 8} className="px-5 py-14 text-center">
+                      <td colSpan={8} className="px-5 py-14 text-center">
                         <Activity className="h-8 w-8 mx-auto mb-3 text-[hsl(var(--muted-foreground))] opacity-30" />
                         <p className="text-sm font-medium text-[hsl(var(--foreground))]">No events found</p>
                         <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
@@ -447,7 +459,7 @@ export default function AuditLogPage() {
                       </td>
                     </tr>
                   )
-                  : logs.map((entry) => <LogRow key={entry.id} entry={entry} selected={selectedIds.has(entry.id)} onToggle={toggleSelected} canSelect={!isSuperAdmin} />)
+                  : logs.map((entry) => <LogRow key={entry.id} entry={entry} selected={selectedIds.has(entry.id)} onToggle={toggleSelected} canSelect />)
               }
             </tbody>
           </table>
