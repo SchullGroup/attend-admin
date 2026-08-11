@@ -887,8 +887,10 @@ export interface ClientRegisterDetailResponse {
   email?:               string;
   rcNumber?:            string | null;
   industry?:            string | null;
-  representativeName?:  string;
-  representativePhone?: string;
+  representativeName?:  string | null;
+  representativePhone?: string | null;
+  website?:              string | null;
+  address?:              string | null;
   status:               string;
   enrolledAt?:          string;
   approvedAt?:          string;   // legacy fallback date alias

@@ -1,19 +1,22 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Search, ShieldAlert, AlertTriangle, Info, Activity } from "lucide-react";
+import { Search, ShieldAlert, AlertTriangle, Info, Activity, Download, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { CustomSelect } from "@/components/custom/custom-select";
 import { Button } from "@/components/ui/button";
 import { useGetMe } from "@/api/auth/hooks";
 import {
   useClientAuditLogs,
+  exportClientAuditLogs,
+  exportSelectedClientAuditLogs,
   type AuditLogEntry,
   type AuditCategory,
   type AuditSeverity,
 } from "@/api/client-audit";
 import { useAdminAuditLogs } from "@/api/super-admin";
 import { resolveRole, isSuperAdminRole } from "@/lib/utils";
+import { toast } from "sonner";
 
 // ─── Display config ───────────────────────────────────────────────────────────
 
@@ -66,9 +69,10 @@ function formatTimestamp(iso: string) {
 
 // ─── Skeleton row ─────────────────────────────────────────────────────────────
 
-function SkeletonRow() {
+function SkeletonRow({ showSelection }: { showSelection: boolean }) {
   return (
     <tr className="attend-table-row">
+      {showSelection && <td className="px-3 py-3.5 w-10" />}
       {[160, 180, 130, 80, 140, 200, 72].map((w, i) => (
         <td key={i} className="px-5 py-3.5">
           <div className="h-3.5 rounded bg-[hsl(var(--muted))] animate-pulse" style={{ width: w }} />
@@ -80,7 +84,17 @@ function SkeletonRow() {
 
 // ─── Log row ──────────────────────────────────────────────────────────────────
 
-function LogRow({ entry }: { entry: AuditLogEntry }) {
+function LogRow({
+  entry,
+  selected,
+  onToggle,
+  canSelect,
+}: {
+  entry: AuditLogEntry;
+  selected: boolean;
+  onToggle: (id: string) => void;
+  canSelect: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const cat    = CATEGORY_CONFIG[entry.category as AuditCategory] ?? defaultCat;
   const sev    = SEVERITY_CONFIG[entry.severity as AuditSeverity] ?? defaultSev;
@@ -91,6 +105,19 @@ function LogRow({ entry }: { entry: AuditLogEntry }) {
         className="attend-table-row cursor-pointer select-none"
         onClick={() => setExpanded((p) => !p)}
       >
+        {/* Selection */}
+        {canSelect && (
+          <td className="px-3 py-3 w-10" onClick={(event) => event.stopPropagation()}>
+            <input
+              type="checkbox"
+              aria-label={`Select audit entry ${entry.id}`}
+              checked={selected}
+              onChange={() => onToggle(entry.id)}
+              className="h-4 w-4 accent-[hsl(var(--primary))]"
+            />
+          </td>
+        )}
+
         {/* Timestamp */}
         <td className="px-5 py-3 text-xs text-[hsl(var(--muted-foreground))] whitespace-nowrap font-mono">
           {formatTimestamp(entry.timestamp)}
@@ -151,7 +178,7 @@ function LogRow({ entry }: { entry: AuditLogEntry }) {
       {/* Expanded detail panel */}
       {expanded && (
         <tr className="bg-[hsl(var(--muted)/0.4)]">
-          <td colSpan={7} className="px-5 py-4 border-b border-[hsl(var(--border))]">
+          <td colSpan={canSelect ? 8 : 7} className="px-5 py-4 border-b border-[hsl(var(--border))]">
             <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-1.5">
               Full Details
             </p>
@@ -186,6 +213,12 @@ export default function AuditLogPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [category,    setCategory]    = useState("");
   const [severity,    setSeverity]    = useState("");
+  const [userEmail,   setUserEmail]   = useState("");
+  const [entityId,    setEntityId]    = useState("");
+  const [startDate,   setStartDate]   = useState("");
+  const [endDate,     setEndDate]     = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [exporting,   setExporting]   = useState(false);
   const [page,        setPage]        = useState(0);
 
   // Debounce search — fire API call 400 ms after the user stops typing
@@ -196,6 +229,7 @@ export default function AuditLogPage() {
 
   const applyCategory = useCallback((v: string) => { setCategory(v); setPage(0); }, []);
   const applySeverity = useCallback((v: string) => { setSeverity(v); setPage(0); }, []);
+  useEffect(() => setSelectedIds(new Set()), [searchQuery, category, severity, userEmail, entityId, startDate, endDate, page]);
 
   // Super admin uses the platform-wide audit log; client admin uses their org's log.
   // Hooks are always called (Rules of Hooks) but only enabled for the applicable role.
@@ -204,7 +238,18 @@ export default function AuditLogPage() {
     !userLoading && isSuperAdmin,
   );
   const { data: clientData, isLoading: clientLoading, isFetching: clientFetching } = useClientAuditLogs(
-    !isSuperAdmin ? { search: searchQuery, category, severity, page, size: PAGE_SIZE } : {}
+    !isSuperAdmin ? {
+      search: searchQuery,
+      actionType: category,
+      severity,
+      startDate,
+      endDate,
+      userEmail,
+      entityId,
+      page,
+      size: PAGE_SIZE,
+    } : {},
+    !userLoading && !isSuperAdmin,
   );
 
   const data       = isSuperAdmin ? adminData  : clientData;
@@ -215,7 +260,57 @@ export default function AuditLogPage() {
   const logs       = data?.logs       ?? [];
   const totalCount = data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const hasFilters = !!(searchQuery || category || severity);
+  const hasFilters = !!(searchQuery || category || severity || userEmail || entityId || startDate || endDate);
+  const pageIds = logs.map((entry) => entry.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function togglePageSelection() {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }
+
+  async function downloadExport(result: { blob: Blob; filename: string }) {
+    const url = URL.createObjectURL(result.blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = result.filename;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  async function handleExport(selectedOnly: boolean) {
+    if (isSuperAdmin || exporting) return;
+    if (startDate && endDate && startDate > endDate) {
+      toast.error("Start date must be before or equal to end date.");
+      return;
+    }
+    if (selectedOnly && selectedIds.size === 0) return;
+    setExporting(true);
+    try {
+      const params = { search: searchQuery, actionType: category, severity, startDate, endDate, userEmail, entityId };
+      const result = selectedOnly
+        ? await exportSelectedClientAuditLogs([...selectedIds])
+        : await exportClientAuditLogs(params);
+      await downloadExport(result);
+      toast.success("Audit CSV downloaded.");
+    } catch (error) {
+      toast.error("Audit export failed. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const stats = [
     { label: "Total Events", value: data?.totalEvents ?? 0, color: "#111827", icon: Activity     },
@@ -272,18 +367,29 @@ export default function AuditLogPage() {
           {hasFilters && (
             <button
               type="button"
-              onClick={() => { setSearchInput(""); setSearchQuery(""); setCategory(""); setSeverity(""); setPage(0); }}
+              onClick={() => { setSearchInput(""); setSearchQuery(""); setCategory(""); setSeverity(""); setUserEmail(""); setEntityId(""); setStartDate(""); setEndDate(""); setPage(0); }}
               className="text-xs text-[hsl(var(--primary))] hover:underline self-center whitespace-nowrap"
             >
               Clear filters
             </button>
           )}
         </div>
+        {!isSuperAdmin && (
+          <div className="mt-3 grid grid-cols-1 gap-3 border-t border-[hsl(var(--border))] pt-3 sm:grid-cols-2 lg:grid-cols-3">
+            <input type="email" value={userEmail} onChange={(event) => { setUserEmail(event.target.value); setPage(0); }} placeholder="User email" className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
+            <input type="text" value={entityId} onChange={(event) => { setEntityId(event.target.value); setPage(0); }} placeholder="Entity ID" className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
+            <div className="flex items-center gap-2">
+              <input type="date" value={startDate} onChange={(event) => { setStartDate(event.target.value); setPage(0); }} aria-label="Start date" className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">to</span>
+              <input type="date" value={endDate} onChange={(event) => { setEndDate(event.target.value); setPage(0); }} aria-label="End date" className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Table */}
       <Card className="attend-card overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-[hsl(var(--border))] flex items-center justify-between">
+          <div className="px-5 py-3.5 border-b border-[hsl(var(--border))] flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-semibold text-[hsl(var(--foreground))]">Events</h2>
           <div className="flex items-center gap-3">
             {isFetching && !isLoading && (
@@ -294,6 +400,17 @@ export default function AuditLogPage() {
             <span className="text-xs text-[hsl(var(--muted-foreground))]">
               {isLoading ? "Loading…" : `${totalCount.toLocaleString()} event${totalCount !== 1 ? "s" : ""}`}
             </span>
+            {!isSuperAdmin && (
+              <>
+                <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" disabled={exporting} onClick={() => handleExport(false)}>
+                  {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                  Export all
+                </Button>
+                <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" disabled={exporting || selectedIds.size === 0} onClick={() => handleExport(true)}>
+                  <Download className="h-3.5 w-3.5" /> Export selected{selectedIds.size ? ` (${selectedIds.size})` : ""}
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -301,6 +418,11 @@ export default function AuditLogPage() {
           <table className="w-full min-w-[900px]">
             <thead>
               <tr className="attend-table-header">
+                {!isSuperAdmin && (
+                  <th className="px-3 py-3 text-left w-10">
+                    <input type="checkbox" aria-label="Select all audit entries on this page" checked={allPageSelected} onChange={togglePageSelection} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+                  </th>
+                )}
                 <th className="px-5 py-3 text-left">Timestamp</th>
                 <th className="px-5 py-3 text-left">Actor</th>
                 <th className="px-5 py-3 text-left">Action</th>
@@ -312,11 +434,11 @@ export default function AuditLogPage() {
             </thead>
             <tbody>
               {isLoading
-                ? [...Array(8)].map((_, i) => <SkeletonRow key={i} />)
+                  ? [...Array(8)].map((_, i) => <SkeletonRow key={i} showSelection={!isSuperAdmin} />)
                 : logs.length === 0
                   ? (
                     <tr>
-                      <td colSpan={7} className="px-5 py-14 text-center">
+                        <td colSpan={isSuperAdmin ? 7 : 8} className="px-5 py-14 text-center">
                         <Activity className="h-8 w-8 mx-auto mb-3 text-[hsl(var(--muted-foreground))] opacity-30" />
                         <p className="text-sm font-medium text-[hsl(var(--foreground))]">No events found</p>
                         <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
@@ -325,7 +447,7 @@ export default function AuditLogPage() {
                       </td>
                     </tr>
                   )
-                  : logs.map((entry) => <LogRow key={entry.id} entry={entry} />)
+                  : logs.map((entry) => <LogRow key={entry.id} entry={entry} selected={selectedIds.has(entry.id)} onToggle={toggleSelected} canSelect={!isSuperAdmin} />)
               }
             </tbody>
           </table>

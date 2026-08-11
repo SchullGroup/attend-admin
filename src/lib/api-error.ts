@@ -4,10 +4,11 @@ import { toast } from "sonner";
  * Unified API error parser for all React Query onError blocks.
  *
  * Tier priority (highest → lowest):
- *  1. Explicit server root-level `message` string
- *  2. Structured field-validation `errors[]` array (Spring Boot / NestJS format)
- *  3. HTTP status code fallbacks (400, 403)
- *  4. Supplied `defaultFallback` string
+ *  1. Known stable backend error code
+ *  2. Explicit server root-level `message` string
+ *  3. Structured field-validation `errors[]` array (Spring Boot / NestJS format)
+ *  4. HTTP status code fallbacks
+ *  5. Supplied `defaultFallback` string
  */
 export function parseAndToastApiError(
   error: any,
@@ -16,10 +17,26 @@ export function parseAndToastApiError(
   console.error("🔴 [Debug API Error Context]:", error);
 
   const responseData = error?.response?.data;
+  const requestId = typeof responseData?.requestId === "string"
+    ? ` Request ID: ${responseData.requestId}`
+    : "";
+  const codeMessages: Record<string, string> = {
+    OTP_NOT_FOUND: "OTP not found. Request a new code and try again.",
+    OTP_EXPIRED: "OTP expired. Request a new code and try again.",
+    INVALID_OTP: "Invalid OTP. Check the code and try again.",
+    TOO_MANY_ATTEMPTS: "Too many incorrect attempts. Request a new OTP.",
+  };
+  const codeMessage = typeof responseData?.code === "string"
+    ? codeMessages[responseData.code.toUpperCase()]
+    : undefined;
 
-  // Tier 1: Explicit server root-level message
-  if (responseData?.message && typeof responseData.message === "string") {
-    toast.error(responseData.message);
+  // Stable codes take priority so UX copy does not depend on server wording.
+  const rootMessage =
+    codeMessage ||
+    (typeof responseData?.message === "string" && responseData.message) ||
+    (typeof responseData?.error === "string" && responseData.error);
+  if (rootMessage) {
+    toast.error(`${rootMessage}${requestId}`);
     return;
   }
 
@@ -42,6 +59,16 @@ export function parseAndToastApiError(
 
   if (error?.response?.status === 403) {
     toast.error("Access denied (403): Your account does not have permission for this action.");
+    return;
+  }
+
+  if (error?.response?.status === 409) {
+    toast.error("The requested change conflicts with the resource's current state.");
+    return;
+  }
+
+  if (error?.response?.status === 503) {
+    toast.error(`The service is temporarily unavailable.${requestId}`, { duration: 6000 });
     return;
   }
 

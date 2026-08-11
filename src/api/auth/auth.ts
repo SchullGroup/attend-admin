@@ -97,7 +97,7 @@ export function useResetPassword() {
     onSuccess: () =>
       popup.success("Password Updated", "Your password has been reset. Please log in.", 3500),
     onError: (error: any) =>
-      parseAndToastApiError(error, "Reset failed. The link may have expired."),
+      parseAndToastApiError(error, "Reset failed. The one-time password may have expired."),
   });
 }
 
