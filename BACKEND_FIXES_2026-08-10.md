@@ -2,6 +2,24 @@
 
 This document consolidates the current backend work needed by `attend-admin`. Please implement the behavior and contracts below on the staging API and share any contract changes with frontend.
 
+## Frontend contract clarification: OTP password reset
+
+The reset endpoint is documented as:
+
+`POST /api/v1/auth/reset-password`
+
+Request body:
+
+```json
+{
+  "email": "user@example.com",
+  "otp": "264236",
+  "newPassword": "Password123"
+}
+```
+
+The frontend must not send a reset-link `token`; the email and OTP are the reset credentials. Please confirm the OTP expiry, maximum attempts, resend/rate-limit behavior, and stable error codes for an invalid, expired, or already-used OTP.
+
 ## 1. Expire sessions after two hours of inactivity
 
 All authenticated `attend-admin` sessions must expire after **2 hours without authenticated activity**.
@@ -130,6 +148,22 @@ Please investigate why affected registers were never activated or why approval n
 - Audit who approved the register and when.
 - Add a regression test proving an approved register can immediately be used to create an event.
 
+## 8. Add indexed server-side shareholder search
+
+The register Shareholders tab needs to find a particular shareholder without loading or scanning the full register. Some registers contain millions of rows, so this must be implemented as a database-backed search on the existing paginated endpoint:
+
+`GET /api/v1/client/registers/{registerId}/shareholders?page=0&size=50&search=...`
+
+- Add an optional `search` query parameter that matches shareholder name, email, phone, CHN, and account/shareholder number.
+- Apply the search in the database query **before pagination** and return the same paginated response shape currently used by the endpoint (`content`, `totalElements`, `totalPages`, `number`/`page`, and `size`).
+- Matching should be case-insensitive for text fields. Trim the search term and document whether partial matching is prefix-only or contains matching.
+- Scope every query by `registerId` and the authenticated organisation before applying the search term.
+- Add composite/indexed lookup paths appropriate to the database, especially for `(register_id, chn)`, `(register_id, account_number)`, normalized email, and normalized phone. For name lookup at this scale, use a database-supported full-text/trigram index rather than an unindexed `%term%` scan.
+- Do not fetch the whole register into application memory and do not perform frontend-only filtering.
+- Keep response time bounded for million-row registers; target p95 under 500 ms for exact identifier searches and under 1 second for indexed name searches on staging-sized data.
+- Reject unreasonable `size` values with a documented maximum and return an empty page, not `404`, when there are no matches.
+- Add query-plan/performance tests using a realistically large dataset and authorization tests proving shareholders from another organisation cannot be discovered.
+
 ## Acceptance and handoff
 
 For each item, please provide:
@@ -137,4 +171,4 @@ For each item, please provide:
 1. The staging deployment/commit containing the fix.
 2. Final endpoint paths, request parameters/bodies, response examples, and stable error codes.
 3. Any required database migration, index, environment-variable, or data-backfill steps.
-4. Automated test coverage for session concurrency/idle expiry, filtered audit export, register updates/approval, upload failures, and weighted vote aggregation.
+4. Automated test coverage for session concurrency/idle expiry, filtered audit export, register updates/approval, indexed shareholder search, upload failures, and weighted vote aggregation.
