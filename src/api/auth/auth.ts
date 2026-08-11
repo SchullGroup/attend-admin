@@ -31,7 +31,8 @@ export interface ForgotPasswordRequest {
 }
 
 export interface ResetPasswordRequest {
-  token:       string;
+  email:       string;
+  otp:         string;
   newPassword: string;
 }
 
@@ -81,7 +82,7 @@ export function useForgotPassword() {
 }
 
 // ---------------------------------------------------------------------------
-// Reset password — uses token from email link
+// Reset password — uses the OTP sent to the user's email
 // POST /api/v1/auth/reset-password
 // ---------------------------------------------------------------------------
 export function useResetPassword() {

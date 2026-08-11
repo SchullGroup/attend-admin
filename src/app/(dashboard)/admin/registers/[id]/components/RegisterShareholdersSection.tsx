@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Users, UserPlus, Upload, Trash2, Hash, Mail,
-  Check, X, FileText, AlertCircle, Loader2, Pencil,
+  Check, X, FileText, AlertCircle, Loader2, Pencil, Search,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -115,7 +116,21 @@ const EMPTY_FORM: AddForm = { fullName: "", email: "", phone: "", chn: "", units
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function RegisterShareholdersSection({ registerId }: { registerId: string }) {
-  const { data, isLoading } = useRegisterShareholders(registerId);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const pageSize = 50;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const nextSearch = searchInput.trim();
+      setSearch(nextSearch.length >= 2 ? nextSearch : "");
+      setPage(0);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  const { data, isLoading, isFetching } = useRegisterShareholders(registerId, page, pageSize, search);
   const addOne  = useAddShareholder();
   const bulkAdd = useBulkAddShareholders();
   const update  = useUpdateShareholder();
@@ -461,14 +476,39 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
 
       {/* ── Shareholder table ── */}
       <Card className="attend-card overflow-hidden">
+        <div className="flex flex-col gap-2 border-b border-[hsl(var(--border))] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+            <Input
+              type="search"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder="Search name, email, phone, or CHN..."
+              className="h-9 pl-9 pr-9"
+              aria-label="Search shareholders"
+            />
+            {isFetching && !isLoading && (
+              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-[hsl(var(--muted-foreground))]" />
+            )}
+          </div>
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            {searchInput.trim().length === 1
+              ? "Enter at least 2 characters"
+              : search
+                ? `${data?.totalCount ?? 0} result${(data?.totalCount ?? 0) === 1 ? "" : "s"}`
+                : `Showing ${shareholders.length} of ${(data?.totalCount ?? shareholders.length).toLocaleString()}`}
+          </p>
+        </div>
         {isLoading ? (
           <div className="px-5 py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">Loading shareholders…</div>
         ) : shareholders.length === 0 ? (
           <div className="py-16 flex flex-col items-center gap-3 text-center">
             <Users className="h-9 w-9 text-[hsl(var(--muted-foreground))] opacity-25" />
-            <p className="text-sm font-medium text-[hsl(var(--foreground))]">No shareholders enrolled</p>
+            <p className="text-sm font-medium text-[hsl(var(--foreground))]">
+              {search ? `No shareholders found for "${search}"` : "No shareholders enrolled"}
+            </p>
             <p className="text-xs text-[hsl(var(--muted-foreground))]">
-              Upload a CSV or add shareholders manually.
+              {search ? "Try a different name, email, phone number, or CHN." : "Upload a CSV or add shareholders manually."}
             </p>
           </div>
         ) : (
@@ -594,6 +634,35 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
               })}
             </tbody>
           </table>
+        )}
+        {!isLoading && (data?.totalPages ?? 1) > 1 && (
+          <div className="flex items-center justify-between border-t border-[hsl(var(--border))] px-5 py-3">
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              Page {(data?.page ?? page) + 1} of {data?.totalPages ?? 1}
+            </p>
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1 px-2.5"
+                onClick={() => setPage((current) => Math.max(0, current - 1))}
+                disabled={page === 0 || isFetching}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" /> Previous
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1 px-2.5"
+                onClick={() => setPage((current) => current + 1)}
+                disabled={page >= (data?.totalPages ?? 1) - 1 || isFetching}
+              >
+                Next <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
         )}
       </Card>
     </div>

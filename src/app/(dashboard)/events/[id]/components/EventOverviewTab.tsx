@@ -32,21 +32,22 @@ interface Props {
   stakeholderName?:        string;
   /** Register branding logo — belongs to the Organiser (the register/company), not the Registrar firm. */
   organiserLogoUrl?:       string;
-  expectedAttendeesCount?: number;
+  /** Total registered attendee records, not the AGM expected/import list. */
+  attendeesCount?:         number;
   /** When true, all agenda write actions (add, edit, delete) are hidden */
   isSuperAdmin?:           boolean;
 }
 
 export function EventOverviewTab({
   event, fill, eventDocs, agendaItems, isAGM, onNavigate,
-  stakeholderName, organiserLogoUrl, expectedAttendeesCount = 0,
+  stakeholderName, organiserLogoUrl, attendeesCount = 0,
   isSuperAdmin = false,
 }: Props) {
   const FormatIcon    = FORMAT_ICON[event.format] ?? Monitor;
   const isLAUNCH      = event.module === "LAUNCH";
   const isHACKATHON   = event.module === "HACKATHON";
-  const attendeeLabel = isAGM ? "Expected Attendees" : "RSVPs";
-  const attendeeValue = isAGM ? expectedAttendeesCount.toLocaleString() : event.rsvpCount.toLocaleString();
+  const attendeeLabel = isAGM ? "Attendees" : "RSVPs";
+  const attendeeValue = isAGM ? attendeesCount.toLocaleString() : event.rsvpCount.toLocaleString();
 
   // Fetch live agenda from dedicated endpoint
   const { data: liveAgenda = [] } = useClientEventAgenda(event.id);
@@ -186,7 +187,7 @@ export function EventOverviewTab({
               <div className="h-3 rounded-full transition-all" style={{ width: `${Math.min(fill, 100)}%`, backgroundColor: event.color }} />
             </div>
             <div className="flex justify-between mt-2 text-xs text-[hsl(var(--muted-foreground))]">
-              <span>{attendeeValue} {isAGM ? "expected" : "registered"}</span>
+              <span>{attendeeValue} registered</span>
               <span>{event.capacity?.toLocaleString()} capacity</span>
             </div>
           </Card>

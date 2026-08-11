@@ -760,6 +760,8 @@ export interface BroadcastHistoryItem {
   totalRecipients:  number;
   emailSent:        number;
   smsSent:          number;
+  pushSent?:        number;
+  inAppSent?:       number;
   skipped:          number;
   sentAt:           string;
   timeAgo:          string;
@@ -777,7 +779,7 @@ export interface BroadcastHistoryResponse {
 export interface SendBroadcastRequest {
   subject?: string;
   message:  string;
-  channel:  "EMAIL" | "SMS" | "ALL";
+  channel:  "EMAIL" | "SMS" | "PUSH" | "IN_APP" | "ALL";
 }
 
 export interface BulkNoticeRequest {

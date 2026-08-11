@@ -27,6 +27,7 @@ import {
 import { useGlobalSearch } from "@/api/super-admin";
 import { useClientSearch, type SearchEvent, type SearchTeamMember, type SearchDocument } from "@/api/client-search";
 import { timeAgo, resolveRole, isSuperAdminRole } from "@/lib/utils";
+import { notificationTypeColor } from "@/lib/notification";
 
 // ---------------------------------------------------------------------------
 // Web Audio notification chime
@@ -473,7 +474,20 @@ export function Header() {
                         {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0 mt-1" />}
                       </div>
                       <p className="text-[11px] text-[hsl(var(--muted-foreground))] mt-0.5 line-clamp-2">{n.message}</p>
-                      <span className="text-[10px] text-[hsl(var(--muted-foreground))] mt-1 block">{timeAgo(n.createdAt)}</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        {n.type && (
+                          <span
+                            className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                            style={{
+                              backgroundColor: `${notificationTypeColor(n.type)}15`,
+                              color: notificationTypeColor(n.type),
+                            }}
+                          >
+                            {n.type}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{timeAgo(n.createdAt)}</span>
+                      </div>
                     </div>
                   ))
                 ) : (

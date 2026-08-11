@@ -23,7 +23,6 @@ import type { EventShim } from "./types";
 interface Props {
   event:        EventShim;
   voteResults:  VoteResultsResponse | null | undefined;
-  participants: any[];
   eventId:      string;
 }
 
@@ -36,7 +35,7 @@ function downloadCsv(filename: string, rows: string[][]) {
   URL.revokeObjectURL(url);
 }
 
-export function EventPostAgmTab({ event, voteResults, participants, eventId }: Props) {
+export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
   // ── Summary ──────────────────────────────────────────────────────────────
   const { data: summary, isLoading: summaryLoading } = usePostAgmSummary(eventId);
 
@@ -134,7 +133,7 @@ export function EventPostAgmTab({ event, voteResults, participants, eventId }: P
         {[
           { label: "Resolutions Passed", value: summaryLoading ? "…" : `${passed} / ${totalRes}`, icon: Vote, color: "#1a6b3c" },
           { label: "Total Votes Cast",   value: (summary?.totalVotesCastShares ?? totalVotesCast).toLocaleString(), icon: CheckCircle2, color: "#111827" },
-          { label: "Attendees Present",  value: (summary?.totalCheckedIn ?? event.rsvpCount).toLocaleString(), icon: Users, color: "#7c22c9" },
+          { label: "Attendees Present",  value: summaryLoading ? "…" : summary ? summary.totalCheckedIn.toLocaleString() : "—", icon: Users, color: "#7c22c9" },
           { label: "Minutes Status",     value: summaryLoading ? "…" : (summary?.minutesStatus ?? minutes?.status ?? "Not Started"), icon: BookOpen, color: "#d97706" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="flex items-center gap-3 px-5 py-4">
@@ -185,7 +184,7 @@ export function EventPostAgmTab({ event, voteResults, participants, eventId }: P
             value={content}
             disabled={isFinalised}
             onChange={(e) => { setContent(e.target.value); setTouchedContent(true); }}
-            placeholder={`MINUTES OF THE ANNUAL GENERAL MEETING\n\nHeld on ${new Date(event.date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} at ${event.startTime}\n\nATTENDANCE: ${event.rsvpCount.toLocaleString()} shareholders present or represented.\n\nBUSINESS TRANSACTED\n1. ...\n`}
+            placeholder={`MINUTES OF THE ANNUAL GENERAL MEETING\n\nHeld on ${new Date(event.date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} at ${event.startTime}\n\nATTENDANCE: ${summary?.totalCheckedIn != null ? summary.totalCheckedIn.toLocaleString() : "[attendance count]"} shareholders present or represented.\n\nBUSINESS TRANSACTED\n1. ...\n`}
             className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] resize-none disabled:opacity-60 disabled:cursor-not-allowed"
           />
         )}
@@ -260,12 +259,14 @@ export function EventPostAgmTab({ event, voteResults, participants, eventId }: P
             <CheckCircle2 className="h-5 w-5 text-[hsl(var(--primary))] shrink-0" />
             <div>
               <p className="text-sm font-medium text-[hsl(var(--foreground))]">
-                {certEligibility?.totalEligible ?? participants.filter((p) => p.kycStatus === "full").length} verified attendees eligible for certificates
+                {certEligibility
+                  ? `${certEligibility.totalEligible.toLocaleString()} of ${(summary?.totalCheckedIn ?? certEligibility.totalEligible).toLocaleString()} attendees present are eligible for certificates`
+                  : "Certificate eligibility data is unavailable"}
               </p>
               <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
                 {certEligibility
                   ? `${certEligibility.totalSent} sent · ${certEligibility.totalPending} pending`
-                  : "Certificates will be delivered to their document vault and email"}
+                  : "The backend must return attendance-based eligibility before certificates can be sent"}
               </p>
             </div>
           </div>

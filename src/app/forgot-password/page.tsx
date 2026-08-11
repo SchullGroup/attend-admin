@@ -23,6 +23,10 @@ export default function ForgotPasswordPage() {
     );
   }
 
+  function continueToReset() {
+    router.push(`/reset-password?email=${encodeURIComponent(email.trim())}`);
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f6f7fb] px-4">
       <div className="w-full max-w-[400px]">
@@ -47,7 +51,7 @@ export default function ForgotPasswordPage() {
               <div>
                 <h1 className="text-xl font-bold" style={{ color: "#111827" }}>Check your inbox</h1>
                 <p className="mt-2 text-sm" style={{ color: "#6b7280" }}>
-                  We sent a password reset link to{" "}
+                  We sent a password reset code to{" "}
                   <span className="font-semibold" style={{ color: "#374151" }}>{email}</span>.
                   It expires in 15 minutes.
                 </p>
@@ -64,7 +68,7 @@ export default function ForgotPasswordPage() {
               </p>
               <Button
                 className="w-full h-11"
-                onClick={() => router.push("/reset-password")}
+                onClick={continueToReset}
               >
                 Set new password
               </Button>
@@ -84,7 +88,7 @@ export default function ForgotPasswordPage() {
                   Forgot your password?
                 </h1>
                 <p className="text-sm" style={{ color: "#6b7280" }}>
-                  Enter your admin email and we&apos;ll send you a reset link.
+                  Enter your admin email and we&apos;ll send you a reset code.
                 </p>
               </div>
 
@@ -111,7 +115,7 @@ export default function ForgotPasswordPage() {
                   {forgotPassword.isPending ? (
                     <><Loader2 className="h-4 w-4 animate-spin" /> Sending…</>
                   ) : (
-                    "Send reset link"
+                    "Send reset code"
                   )}
                 </Button>
               </form>

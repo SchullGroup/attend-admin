@@ -8,7 +8,7 @@ import {
   useCreateInnovationEvent,
   useCreateProductLaunchEvent,
 } from "@/api/events";
-import { useCreateEvent, useImportShareholdersToEvent, useCreateEventZoomMeeting, type CreateEventRequest } from "@/api/client-events";
+import { useCreateEvent, useCreateEventZoomMeeting, type CreateEventRequest } from "@/api/client-events";
 import { useGetMe } from "@/api/auth/hooks";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -77,7 +77,6 @@ function CreateEventInner() {
   const createHack             = useCreateInnovationEvent();
   const createLaunch           = useCreateProductLaunchEvent();
   const createClientEvent      = useCreateEvent();
-  const importShareholders     = useImportShareholdersToEvent();
   const createEventZoomMeeting = useCreateEventZoomMeeting();
 
   const selectedOrganiser = activeOrganisers.find((o) => o.id === organiserId) ?? null;
@@ -300,21 +299,7 @@ function CreateEventInner() {
           zoomDurationMinutes: zoomDuration,
         },
         {
-          onSuccess: (createdEvent) => {
-            const eventId = (createdEvent as any)?.id ?? (createdEvent as any)?.eventId;
-
-            // Auto-import shareholders for AGM (best-effort — failure doesn't block navigation).
-            // Only when targeting "all" registered shareholders — a custom uploaded list
-            // (shareholderTargeting === "custom") already rode along in agmConfig above,
-            // and importing every register shareholder on top of it would defeat the point
-            // of uploading a custom list.
-            if (selectedModule === "AGM" && organiserId && eventId && agm.shareholderTargeting === "all") {
-              importShareholders.mutate(
-                { eventId, registerId: organiserId },
-                { onError: () => {} } // suppress error toast — event was created successfully
-              );
-            }
-
+          onSuccess: () => {
             setSubmitting(false);
             onDone();
           },

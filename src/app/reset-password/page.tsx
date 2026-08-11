@@ -2,7 +2,7 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Lock, Eye, EyeOff, Check, X, CheckCircle2, Loader2, ArrowLeft } from "lucide-react";
+import { Lock, Eye, EyeOff, Check, X, CheckCircle2, Loader2, ArrowLeft, KeyRound, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,8 +17,11 @@ const RULES = [
 function ResetPasswordInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const token = searchParams.get("token") ?? "";
+  const initialEmail = searchParams.get("email") ?? "";
+  const initialOtp = searchParams.get("otp")?.replace(/\D/g, "").slice(0, 6) ?? "";
 
+  const [email,         setEmail]         = useState(initialEmail);
+  const [otp,           setOtp]           = useState(initialOtp);
   const [password,      setPassword]      = useState("");
   const [confirm,       setConfirm]       = useState("");
   const [showPassword,  setShowPassword]  = useState(false);
@@ -29,13 +32,15 @@ function ResetPasswordInner() {
 
   const rulesPass = RULES.every((r) => r.test(password));
   const matches   = password === confirm && confirm.length > 0;
-  const canSubmit = rulesPass && matches;
+  const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const otpIsValid = /^\d{6}$/.test(otp);
+  const canSubmit = rulesPass && matches && emailIsValid && otpIsValid;
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
     resetPassword.mutate(
-      { token, newPassword: password },
+      { email: email.trim().toLowerCase(), otp, newPassword: password },
       { onSuccess: () => setDone(true) }
     );
   }
@@ -84,6 +89,52 @@ function ResetPasswordInner() {
               </div>
 
               <form onSubmit={onSubmit} className="space-y-5">
+                <div className="space-y-1.5">
+                  <Label htmlFor="email" className="text-sm font-medium" style={{ color: "#374151" }}>
+                    Email address
+                  </Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: "#9ca3af" }} />
+                    <Input
+                      id="email"
+                      type="email"
+                      autoComplete="email"
+                      placeholder="you@yourorganisation.com"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      className="h-11 pl-9"
+                      required
+                    />
+                  </div>
+                  {email.length > 0 && !emailIsValid && (
+                    <p className="text-xs text-red-600 font-medium">Enter the email address used to request the code.</p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="otp" className="text-sm font-medium" style={{ color: "#374151" }}>
+                    One-time password
+                  </Label>
+                  <div className="relative">
+                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: "#9ca3af" }} />
+                    <Input
+                      id="otp"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="6-digit code"
+                      value={otp}
+                      onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                      className="h-11 pl-9 font-mono"
+                      maxLength={6}
+                      required
+                    />
+                  </div>
+                  {otp.length > 0 && !otpIsValid && (
+                    <p className="text-xs text-red-600 font-medium">Enter the 6-digit code sent to your email.</p>
+                  )}
+                </div>
+
                 {/* New password */}
                 <div className="space-y-1.5">
                   <Label htmlFor="password" className="text-sm font-medium" style={{ color: "#374151" }}>

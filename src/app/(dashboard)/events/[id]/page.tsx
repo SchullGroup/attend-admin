@@ -2,7 +2,7 @@
 import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useEventDetail, useEventDocuments, useEventAttendees } from "@/api/super-admin";
-import { useClientEventDetail, useClientEventDocuments, useClientEventAttendees, useExpectedAttendees } from "@/api/client-events";
+import { useClientEventDetail, useClientEventDocuments, useClientEventAttendees } from "@/api/client-events";
 import { useVoteResults } from "@/api/client-votes";
 import { useAdminVoteResults } from "@/api/admin-votes";
 import { useGetMe } from "@/api/auth/hooks";
@@ -27,7 +27,6 @@ import { EventVoteResultsTab }  from "./components/EventVoteResultsTab";
 import { EventPostAgmTab }      from "./components/EventPostAgmTab";
 import { EventSettingsTab }     from "./components/EventSettingsTab";
 import { EventStakeholderTab }          from "./components/EventStakeholderTab";
-import { EventExpectedAttendeesTab }   from "./components/EventExpectedAttendeesTab";
 import { EventLaunchAudienceTab }      from "./components/EventLaunchAudienceTab";
 import { EventLaunchWaitlistTab }      from "./components/EventLaunchWaitlistTab";
 import { EventChallengeApplicationsTab } from "./components/EventChallengeApplicationsTab";
@@ -114,7 +113,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const { data: clientDocs }                             = useClientEventDocuments(id, "", { enabled: isClient });
   const { data: adminAttendees  }                        = useEventAttendees(id, 0, 50, "", { enabled: isAdmin });
   const { data: clientAttendees }                        = useClientEventAttendees(id, "", 0, 50);
-  const { data: expectedAttendeesData }                  = useExpectedAttendees(id);
   const suspendUser = useSuspendUserAccount();
 
   const apiEvent          = isAdmin ? adminEvent    : clientEvent;
@@ -181,6 +179,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     Array.isArray((attendeesResponse as any)?.participants) ? (attendeesResponse as any).participants :
     Array.isArray((attendeesResponse as any)?.data)       ? (attendeesResponse as any).data :
     [];
+  // `participants.length` is only the current page (50 rows). Prefer the
+  // endpoint's total so the AGM overview remains correct for large events.
+  const attendeesCount =
+    (attendeesResponse as any)?.totalCount ??
+    (attendeesResponse as any)?.totalElements ??
+    participants.length;
 
   const _docsRaw = (docsResponse as any)?.data ?? docsResponse;
   const eventDocs: any[] =
@@ -224,8 +228,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   // no settings/status/zoom/feature changes, no attendee import/add/delete.
   const isViewer = (currentUser?.role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "viewer";
 
-  const expectedAttendeesCount = expectedAttendeesData?.totalCount ?? 0;
-
   const TABS = [
     "Overview",
     "Attendees",
@@ -244,7 +246,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     // parity fix) — Resolutions/Stakeholders/Post-AGM/Settings etc. stay hidden,
     // super admin has no write access to any of those.
     ...(isSuperAdmin && isAGM ? ["Vote Results"] : [
-      ...(isAGM && !isSuperAdmin ? ["Resolutions", "Stakeholders"] : isAGM ? ["Resolutions"] : []),
+      ...(isAGM ? ["Resolutions"] : []),
       ...(!isSuperAdmin && isLAUNCH ? ["Audience Tiers", "Waitlist"] : []),
       // Press Kit (F2) — Product Launch events. Client admin: full CRUD;
       // super admin + Viewer: read-only (super admin reads /admin endpoint).
@@ -320,7 +322,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* ── Tab panels ── */}
-      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} organiserLogoUrl={(apiEvent as any).branding?.logoUrl ?? undefined} expectedAttendeesCount={expectedAttendeesCount} isSuperAdmin={isSuperAdmin} />}
+      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} organiserLogoUrl={(apiEvent as any).branding?.logoUrl ?? undefined} attendeesCount={attendeesCount} isSuperAdmin={isSuperAdmin} />}
       {tab === "Attendees"          && <EventAttendeesTab   participants={participants} suspendUser={suspendUser} eventId={id} />}
       {tab === "Applications" && isHACKATHON && isSuperAdmin && <EventChallengeApplicationsTab challengeId={id} />}
       {tab === "Judging"      && isHACKATHON && isSuperAdmin && <EventChallengeJudgesTab       challengeId={id} />}
@@ -332,13 +334,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       )}
       {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} isAdmin={isAdmin} readOnly={isViewer} />}
       {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin || isViewer} canControlVoting={isClientAdmin} />}
-      {tab === "Stakeholders"   && !isSuperAdmin && isAGM   && <EventExpectedAttendeesTab eventId={id} registerId={(apiEvent as any).registerId} readOnly={isViewer} />}
       {tab === "Audience Tiers" && !isSuperAdmin && isLAUNCH && <EventLaunchAudienceTab    eventId={id} />}
       {tab === "Waitlist"       && !isSuperAdmin && isLAUNCH && <EventLaunchWaitlistTab    eventId={id} />}
       {tab === "Press Kit"      && isLAUNCH && <EventPressKitTab eventId={id} readOnly={isSuperAdmin || isViewer} isSuperAdmin={isSuperAdmin} />}
       {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab eventId={id} />}
       {tab === "Vote Results"       && isAGM && <EventVoteResultsTab voteResults={isSuperAdmin ? adminVoteResultsData : voteResultsData} />}
-      {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} voteResults={voteResultsData} participants={participants} eventId={id} />}
+      {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} voteResults={voteResultsData} eventId={id} />}
       {tab === "Settings" && !isSuperAdmin && <EventSettingsTab
         eventId={id}
         title={event.title}

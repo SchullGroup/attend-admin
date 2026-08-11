@@ -1,5 +1,6 @@
 import axios from "axios";
 import Cookies from "js-cookie";
+import { rememberSessionEndReason } from "@/lib/auth-session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -125,6 +126,18 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    if (
+      error.response?.status === 401 &&
+      error.response?.data?.error === "Session invalidated"
+    ) {
+      rememberSessionEndReason(error);
+      Cookies.remove("accessToken");
+      if (typeof window !== "undefined") {
+        window.location.replace("/login");
+      }
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -183,9 +196,10 @@ apiClient.interceptors.response.use(
           }
 
           // Refresh token is genuinely expired or invalid — send to login.
+          rememberSessionEndReason(refreshError);
           Cookies.remove("accessToken");
           if (typeof window !== "undefined") {
-            window.location.href = "/login";
+            window.location.replace("/login");
           }
         }
         return Promise.reject(refreshError);

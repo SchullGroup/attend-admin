@@ -424,16 +424,25 @@ export interface ShareholderListResponse {
 }
 
 export const shareholderKeys = {
-  list: (registerId: string) => ["register", registerId, "shareholders"] as const,
+  all:  (registerId: string) => ["register", registerId, "shareholders"] as const,
+  list: (registerId: string, page: number, size: number, search: string) =>
+          ["register", registerId, "shareholders", { page, size, search }] as const,
 };
 
-export function useRegisterShareholders(registerId: string, page = 0, size = 100) {
+export function useRegisterShareholders(registerId: string, page = 0, size = 50, search = "") {
+  const normalizedSearch = search.trim();
   return useQuery({
-    queryKey: shareholderKeys.list(registerId),
-    queryFn:  async () => {
+    queryKey: shareholderKeys.list(registerId, page, size, normalizedSearch),
+    queryFn:  async ({ signal }) => {
       const res = await apiClient.get<ApiResponse<ShareholderListResponse>>(
         `/api/v1/client/registers/${registerId}/shareholders`,
-        { params: { page, size } }
+        {
+          params: { page, size, ...(normalizedSearch ? { search: normalizedSearch } : {}) },
+          // Cancel superseded requests when the debounced search changes. This
+          // avoids wasting browser/network work and prevents stale large-query
+          // responses competing with the latest search.
+          signal,
+        }
       );
       const raw = (res.data.data ?? (res.data as any)) as any;
       return {
@@ -446,6 +455,7 @@ export function useRegisterShareholders(registerId: string, page = 0, size = 100
     },
     enabled:   !!registerId,
     staleTime: 30_000,
+    placeholderData: (previous) => previous,
   });
 }
 
@@ -466,7 +476,7 @@ export function useAddShareholder() {
       return (res.data.data ?? (res.data as any));
     },
     onSuccess: (_, { registerId }) => {
-      queryClient.invalidateQueries({ queryKey: shareholderKeys.list(registerId) });
+      queryClient.invalidateQueries({ queryKey: shareholderKeys.all(registerId) });
       popup.success("Shareholder Added", "The shareholder has been enrolled.", 2500);
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to add shareholder."),
@@ -492,7 +502,7 @@ export function useBulkAddShareholders() {
       return (res.data.data ?? (res.data as any));
     },
     onSuccess: (data, { registerId, shareholders }) => {
-      queryClient.invalidateQueries({ queryKey: shareholderKeys.list(registerId) });
+      queryClient.invalidateQueries({ queryKey: shareholderKeys.all(registerId) });
       const d = data as any;
       // New response shape (AGM milestone #3): inserted/updated/skipped +
       // per-row errors. Rows with neither email NOR phone are skipped
@@ -551,7 +561,7 @@ export function useUpdateShareholder() {
       return (res.data.data ?? (res.data as any)) as Shareholder;
     },
     onSuccess: (_, { registerId }) => {
-      queryClient.invalidateQueries({ queryKey: shareholderKeys.list(registerId) });
+      queryClient.invalidateQueries({ queryKey: shareholderKeys.all(registerId) });
       popup.success("Shareholder Updated", "Changes have been saved.", 2500);
     },
     // 409 = CHN collision with another shareholder in the same register
@@ -566,7 +576,7 @@ export function useDeleteShareholder() {
       await apiClient.delete(`/api/v1/client/registers/${registerId}/shareholders/${shareholderId}`);
     },
     onSuccess: (_, { registerId }) => {
-      queryClient.invalidateQueries({ queryKey: shareholderKeys.list(registerId) });
+      queryClient.invalidateQueries({ queryKey: shareholderKeys.all(registerId) });
       popup.success("Shareholder Removed", "Shareholder has been removed from the register.", 2500);
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to remove shareholder."),
