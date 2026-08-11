@@ -433,10 +433,16 @@ export function useRegisterShareholders(registerId: string, page = 0, size = 50,
   const normalizedSearch = search.trim();
   return useQuery({
     queryKey: shareholderKeys.list(registerId, page, size, normalizedSearch),
-    queryFn:  async () => {
+    queryFn:  async ({ signal }) => {
       const res = await apiClient.get<ApiResponse<ShareholderListResponse>>(
         `/api/v1/client/registers/${registerId}/shareholders`,
-        { params: { page, size, ...(normalizedSearch ? { search: normalizedSearch } : {}) } }
+        {
+          params: { page, size, ...(normalizedSearch ? { search: normalizedSearch } : {}) },
+          // Cancel superseded requests when the debounced search changes. This
+          // avoids wasting browser/network work and prevents stale large-query
+          // responses competing with the latest search.
+          signal,
+        }
       );
       const raw = (res.data.data ?? (res.data as any)) as any;
       return {

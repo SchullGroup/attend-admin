@@ -148,6 +148,16 @@ Please investigate why affected registers were never activated or why approval n
 - Audit who approved the register and when.
 - Add a regression test proving an approved register can immediately be used to create an event.
 
+### Frontend verification (2026-08-11)
+
+The frontend integration for this flow is already present:
+
+- Pending registers render an **Approve** action in `src/app/(dashboard)/registers/page.tsx`.
+- The action calls `POST /api/v1/client/registers/{registerId}/approve` through `useApproveRegister` in `src/api/registers.ts`.
+- On success, the register list/detail queries are invalidated so an `ACTIVE` status returned by the API is shown immediately.
+
+Therefore item 7 is **not fully fixed by frontend code**. If a register remains `PENDING` after this request, or the request is rejected for an otherwise valid register, the remaining issue is backend authorization, persistence, validation, or affected legacy data. Please validate this endpoint with a real affected register and provide the response/request ID plus the persisted database status.
+
 ## 8. Add indexed server-side shareholder search
 
 The register Shareholders tab needs to find a particular shareholder without loading or scanning the full register. Some registers contain millions of rows, so this must be implemented as a database-backed search on the existing paginated endpoint:
@@ -163,6 +173,85 @@ The register Shareholders tab needs to find a particular shareholder without loa
 - Keep response time bounded for million-row registers; target p95 under 500 ms for exact identifier searches and under 1 second for indexed name searches on staging-sized data.
 - Reject unreasonable `size` values with a documented maximum and return an empty page, not `404`, when there are no matches.
 - Add query-plan/performance tests using a realistically large dataset and authorization tests proving shareholders from another organisation cannot be discovered.
+
+### Frontend readiness and efficiency (2026-08-11)
+
+The Shareholders tab is already prepared for this server-side contract:
+
+- It waits 350 ms after typing, requires at least two characters, trims the term, and resets to page 0.
+- It requests only 50 rows using `page`, `size`, and `search`; it does not download the full register or scan millions of records in the browser.
+- Search, page, and page size are included in the TanStack Query cache key; the previous page remains visible while the next page loads.
+- Superseded requests are now cancelled with `AbortSignal`, reducing wasted work during rapid searches.
+
+No frontend algorithm can make a non-indexed database search efficient at this scale. Backend should confirm from logs/query plans that `search` is applied before pagination and is not ignored. The response should also echo authoritative page metadata so the UI can paginate search results correctly. The indexes and p95 targets above remain required.
+
+## 9. Post-AGM attendee count and certificate eligibility are missing
+
+The Post-AGM screen cannot reliably show how many people were **present** or how many attendance certificates can be sent. The normal attendee list is registration-based and paginated; its first page and its RSVP total must not be used as attendance or certificate eligibility fallbacks.
+
+Please implement/fix these existing Post-AGM contracts:
+
+### Summary
+
+`GET /api/v1/client/events/{eventId}/post-agm/summary`
+
+Required successful payload:
+
+```json
+{
+  "data": {
+    "totalRegistered": 1200,
+    "totalCheckedIn": 846,
+    "totalEligibleForCertificate": 831,
+    "certificatesSent": 500,
+    "totalResolutions": 8,
+    "resolutionsPassed": 7,
+    "resolutionsFailed": 1,
+    "totalVotesCastShares": 4589000,
+    "minutesStatus": "DRAFT"
+  }
+}
+```
+
+`totalCheckedIn` must be the authoritative distinct count of attendees present, derived from successful event check-ins/attendance records—not RSVP, expected-attendee, connection-event, or attendee-list page size. Define how duplicate scans, manual check-ins, online attendance, proxy attendance, and revoked check-ins are deduplicated.
+
+### Certificate eligibility
+
+`GET /api/v1/client/events/{eventId}/post-agm/certificates/eligibility`
+
+Required payload:
+
+```json
+{
+  "data": {
+    "totalEligible": 831,
+    "totalSent": 500,
+    "totalPending": 331,
+    "attendees": [
+      {
+        "userId": "uuid",
+        "fullName": "Ada Example",
+        "email": "ada@example.com",
+        "kycStatus": "FULL_KYC",
+        "checkedInAt": "2026-08-10T09:05:00Z",
+        "certificateStatus": "PENDING",
+        "emailedAt": null
+      }
+    ]
+  }
+}
+```
+
+- Eligibility must start from distinct attendees who were actually present, then apply the documented KYC/email/certificate rules.
+- `totalEligible = totalSent + totalPending`; `totalEligible` must not exceed `summary.totalCheckedIn` unless a documented represented/proxy rule explains it.
+- Return all eligible recipients or add documented server-side pagination. If paginated, totals must cover the full result set, not the current page.
+- `POST /api/v1/client/events/{eventId}/post-agm/certificates/send` must select eligible pending recipients server-side and return `{ totalEligible, queued, message }`. It must be idempotent so retries do not send duplicate certificates.
+- Do not trust recipient counts or recipient eligibility supplied by frontend. Record per-recipient queue/send/failure state and expose retryable failures.
+- Scope all routes to the authenticated organisation and event; allow only authorized client roles and audit who initiated a bulk send.
+- Return stable `409` errors for an event that has not ended or attendance that has not been finalised, and actionable `4xx` errors for missing certificate templates or recipient email data.
+- Add tests for zero attendance, duplicate check-ins, mixed KYC states, already-sent certificates, partial queue failure, retry idempotency, and cross-tenant access.
+
+Frontend now displays an em dash/unavailable state instead of falsely substituting RSVP count or the first 50 attendee rows. Once these endpoints return the contract above, the Post-AGM summary and certificate recipient counts will render automatically.
 
 ## Acceptance and handoff
 

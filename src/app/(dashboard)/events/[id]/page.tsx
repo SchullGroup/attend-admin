@@ -2,7 +2,7 @@
 import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useEventDetail, useEventDocuments, useEventAttendees } from "@/api/super-admin";
-import { useClientEventDetail, useClientEventDocuments, useClientEventAttendees, useExpectedAttendees } from "@/api/client-events";
+import { useClientEventDetail, useClientEventDocuments, useClientEventAttendees } from "@/api/client-events";
 import { useVoteResults } from "@/api/client-votes";
 import { useAdminVoteResults } from "@/api/admin-votes";
 import { useGetMe } from "@/api/auth/hooks";
@@ -114,7 +114,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const { data: clientDocs }                             = useClientEventDocuments(id, "", { enabled: isClient });
   const { data: adminAttendees  }                        = useEventAttendees(id, 0, 50, "", { enabled: isAdmin });
   const { data: clientAttendees }                        = useClientEventAttendees(id, "", 0, 50);
-  const { data: expectedAttendeesData }                  = useExpectedAttendees(id);
   const suspendUser = useSuspendUserAccount();
 
   const apiEvent          = isAdmin ? adminEvent    : clientEvent;
@@ -181,6 +180,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     Array.isArray((attendeesResponse as any)?.participants) ? (attendeesResponse as any).participants :
     Array.isArray((attendeesResponse as any)?.data)       ? (attendeesResponse as any).data :
     [];
+  // `participants.length` is only the current page (50 rows). Prefer the
+  // endpoint's total so the AGM overview remains correct for large events.
+  const attendeesCount =
+    (attendeesResponse as any)?.totalCount ??
+    (attendeesResponse as any)?.totalElements ??
+    participants.length;
 
   const _docsRaw = (docsResponse as any)?.data ?? docsResponse;
   const eventDocs: any[] =
@@ -223,8 +228,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   // no add/edit/delete resolutions or agenda, no vote control, no broadcast,
   // no settings/status/zoom/feature changes, no attendee import/add/delete.
   const isViewer = (currentUser?.role ?? "").toLowerCase().replace(/[-\s]/g, "_") === "viewer";
-
-  const expectedAttendeesCount = expectedAttendeesData?.totalCount ?? 0;
 
   const TABS = [
     "Overview",
@@ -320,7 +323,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* ── Tab panels ── */}
-      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} organiserLogoUrl={(apiEvent as any).branding?.logoUrl ?? undefined} expectedAttendeesCount={expectedAttendeesCount} isSuperAdmin={isSuperAdmin} />}
+      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} organiserLogoUrl={(apiEvent as any).branding?.logoUrl ?? undefined} attendeesCount={attendeesCount} isSuperAdmin={isSuperAdmin} />}
       {tab === "Attendees"          && <EventAttendeesTab   participants={participants} suspendUser={suspendUser} eventId={id} />}
       {tab === "Applications" && isHACKATHON && isSuperAdmin && <EventChallengeApplicationsTab challengeId={id} />}
       {tab === "Judging"      && isHACKATHON && isSuperAdmin && <EventChallengeJudgesTab       challengeId={id} />}
@@ -338,7 +341,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {tab === "Press Kit"      && isLAUNCH && <EventPressKitTab eventId={id} readOnly={isSuperAdmin || isViewer} isSuperAdmin={isSuperAdmin} />}
       {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab eventId={id} />}
       {tab === "Vote Results"       && isAGM && <EventVoteResultsTab voteResults={isSuperAdmin ? adminVoteResultsData : voteResultsData} />}
-      {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} voteResults={voteResultsData} participants={participants} eventId={id} />}
+      {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} voteResults={voteResultsData} eventId={id} />}
       {tab === "Settings" && !isSuperAdmin && <EventSettingsTab
         eventId={id}
         title={event.title}
