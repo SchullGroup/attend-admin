@@ -184,7 +184,6 @@ function FilterDropdown({
 function EventTableRow({ event, isSuperAdmin, isViewer }: { event: EventSummaryResponse; isSuperAdmin: boolean; isViewer?: boolean }) {
   const isLive      = event.status?.toUpperCase() === "LIVE" || event.live;
   const mod         = getEventModule(event);
-  const isAGM       = mod === "AGM";
   const dotColor    = MODULE_COLORS[mod];
   const FormatIcon  = FORMAT_ICON[event.format] ?? Monitor;
   const registerName = getEventRegisterName(event);
@@ -220,15 +219,14 @@ function EventTableRow({ event, isSuperAdmin, isViewer }: { event: EventSummaryR
       <td className="px-5 py-3 text-sm tabular-nums">
         {(() => {
           const count = event.registrationCount ?? 0;
-          const cap   = (event.maximumCapacity != null && event.maximumCapacity > 0) ? event.maximumCapacity : null;
           return (
             <div>
               <span className="font-medium">{count.toLocaleString()}</span>
-              {!isAGM && cap != null && (
-                <span className="text-[hsl(var(--muted-foreground))] font-normal"> of {cap.toLocaleString()}</span>
+              {event.maximumCapacity != null && event.maximumCapacity > 0 && (
+                <span className="text-[hsl(var(--muted-foreground))] font-normal"> of {event.maximumCapacity.toLocaleString()}</span>
               )}
               <div className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5">
-                {isAGM ? "expected" : "RSVPs"}
+                RSVPs
               </div>
             </div>
           );
@@ -501,7 +499,7 @@ export default function EventsPage() {
               <th className="px-5 py-3 text-left">Event</th>
               <th className="px-5 py-3 text-left">Date</th>
               <th className="px-5 py-3 text-left">Format</th>
-              <th className="px-5 py-3 text-left">RSVP / Expected</th>
+              <th className="px-5 py-3 text-left">RSVPs</th>
               <th className="px-5 py-3 text-left">Status</th>
               <th className="px-5 py-3 text-left">Actions</th>
             </tr>
