@@ -14,7 +14,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CustomSelect } from "@/components/custom/custom-select";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { digitsOnly, withIdPrefix } from "@/lib/utils";
 import type { ClientRegisterDetailResponse } from "@/types/super-admin";
+
+const INDUSTRY_OPTIONS = [
+  "Banking & Finance", "Insurance", "Oil & Gas", "FMCG", "Telecommunications",
+  "Technology / Fintech", "Healthcare", "Real Estate", "Manufacturing", "Agriculture",
+  "Financial Services", "Education", "Other",
+];
 
 type FormState = Record<
   "name" | "email" | "rcNumber" | "industry" | "representativeName" |
@@ -26,7 +35,7 @@ function toForm(register: ClientRegisterDetailResponse): FormState {
   return {
     name: register.name ?? "",
     email: register.email ?? "",
-    rcNumber: register.rcNumber ?? "",
+    rcNumber: register.rcNumber ? digitsOnly(register.rcNumber) : "",
     industry: register.industry ?? "",
     representativeName: register.representativeName ?? "",
     representativePhone: register.representativePhone ?? "",
@@ -64,7 +73,7 @@ export function RegisterDetailsEditor({
     const updates: UpdateRegisterPayload = {
       name: form.name.trim(),
       email: form.email.trim().toLowerCase(),
-      rcNumber: optional(form.rcNumber),
+      rcNumber: form.rcNumber.trim() ? withIdPrefix("RC", form.rcNumber, { space: true }) : null,
       industry: optional(form.industry),
       representativeName: optional(form.representativeName),
       representativePhone: optional(form.representativePhone),
@@ -98,10 +107,46 @@ export function RegisterDetailsEditor({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Register name" required value={form.name} onChange={(value) => setField("name", value)} />
             <Field label="Email" type="email" required value={form.email} onChange={(value) => setField("email", value)} />
-            <Field label="RC number" value={form.rcNumber} onChange={(value) => setField("rcNumber", value)} />
-            <Field label="Industry" value={form.industry} onChange={(value) => setField("industry", value)} />
+            <div className="space-y-1.5">
+              <Label htmlFor="register-rc-number">RC number</Label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[hsl(var(--muted-foreground))]">
+                  RC
+                </span>
+                <Input
+                  id="register-rc-number"
+                  type="text"
+                  inputMode="numeric"
+                  value={form.rcNumber}
+                  onChange={(event) => setField("rcNumber", digitsOnly(event.target.value))}
+                  placeholder="125384"
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Industry</Label>
+              <CustomSelect
+                value={form.industry}
+                onChange={(value) => setField("industry", value)}
+                placeholder="Not specified"
+                options={[
+                  { label: "Not specified", value: "" },
+                  ...INDUSTRY_OPTIONS.map((industry) => ({ label: industry, value: industry })),
+                  ...(form.industry && !INDUSTRY_OPTIONS.includes(form.industry)
+                    ? [{ label: `${form.industry} (legacy)`, value: form.industry }]
+                    : []),
+                ]}
+              />
+            </div>
             <Field label="Representative" value={form.representativeName} onChange={(value) => setField("representativeName", value)} />
-            <Field label="Representative phone" type="tel" value={form.representativePhone} onChange={(value) => setField("representativePhone", value)} />
+            <div className="space-y-1.5">
+              <Label>Representative phone</Label>
+              <PhoneInput
+                value={form.representativePhone}
+                onChange={(value) => setField("representativePhone", value)}
+              />
+            </div>
             <Field label="Website" type="url" placeholder="https://example.com" value={form.website} onChange={(value) => setField("website", value)} />
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="register-address">Address</Label>
