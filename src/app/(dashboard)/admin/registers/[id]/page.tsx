@@ -193,9 +193,10 @@ export default function RegisterDetailPage() {
   const role         = resolveRole(userResponse?.data);
   const canLiveControl = role !== "viewer";
   const canCreate      = role !== "viewer";
-  // Branding PATCH is CLIENT_ADMIN / ADMIN only (matches the endpoint's role gate).
+  // Branding PATCH accepts CLIENT_ADMIN / ADMIN (matches the endpoint's role gate).
   const canEditBranding = role === "client_admin" || role === "admin";
-  const canEditDetails  = role === "client_admin" || role === "admin";
+  // Register metadata PATCH is intentionally restricted to CLIENT_ADMIN.
+  const canEditDetails  = role === "client_admin";
 
   const {
     data:      register,
