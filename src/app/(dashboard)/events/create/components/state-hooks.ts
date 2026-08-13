@@ -93,7 +93,9 @@ export function useLaunchState() {
   const [embargoEnabled, setEmbargoEnabled] = useState(false);
   const [embargoAt,      setEmbargoAt]      = useState("");
   const [audienceMode,   setAudienceMode]   = useState<"open" | "invite">("open");
-  const [featured,       setFeatured]       = useState(false);
+  const [featured,            setFeatured]            = useState(false);
+  const [enableZoomMeeting,   setEnableZoomMeeting]   = useState(false);
+  const [zoomDurationMinutes, setZoomDurationMinutes] = useState("120");
   const addSpeaker    = () => setSpeakers((s) => [...s, { id: genId(), name: "", role: "", bio: "" }]);
   const removeSpeaker = (id: string) => setSpeakers((s) => s.filter((x) => x.id !== id));
   const updateSpeaker = (id: string, field: keyof SpeakerItem, val: string) =>
@@ -107,6 +109,8 @@ export function useLaunchState() {
     speakers, addSpeaker, removeSpeaker, updateSpeaker,
     embargoEnabled, setEmbargoEnabled, embargoAt, setEmbargoAt,
     audienceMode, setAudienceMode, featured, setFeatured,
+    enableZoomMeeting, setEnableZoomMeeting,
+    zoomDurationMinutes, setZoomDurationMinutes,
   };
 }
 
@@ -132,7 +136,9 @@ export function useHackState() {
   const [maxTeam,            setMaxTeam]            = useState("5");
   const [eligibility,        setEligibility]        = useState("");
   const [capacity,           setCapacity]           = useState("");
-  const [featured,           setFeatured]           = useState(false);
+  const [featured,            setFeatured]            = useState(false);
+  const [enableZoomMeeting,   setEnableZoomMeeting]   = useState(false);
+  const [zoomDurationMinutes, setZoomDurationMinutes] = useState("120");
   const [prizes,  setPrizes]  = useState<Prize[]>([
     { id: genId(), place: "1st Place", reward: "" },
     { id: genId(), place: "2nd Place", reward: "" },
@@ -161,6 +167,8 @@ export function useHackState() {
     techStack, setTechStack, participationType, setParticipationType,
     minTeam, setMinTeam, maxTeam, setMaxTeam,
     eligibility, setEligibility, capacity, setCapacity, featured, setFeatured,
+    enableZoomMeeting, setEnableZoomMeeting,
+    zoomDurationMinutes, setZoomDurationMinutes,
     prizes, addPrize, removePrize, updatePrize,
     criteria, addCriterion, removeCriterion, updateCriterion,
   };
