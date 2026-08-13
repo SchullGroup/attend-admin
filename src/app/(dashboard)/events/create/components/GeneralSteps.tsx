@@ -89,17 +89,19 @@ export function GeneralStep0({ s, organiserName, showErrors = false }: { s: Gene
         <Toggle checked={s.featured} onChange={s.setFeatured} color="#0f766e" />
       </div>
 
-      <div className="flex items-center justify-between rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] px-4 py-3">
-        <div>
-          <p className="text-sm font-semibold text-[hsl(var(--foreground))] flex items-center gap-1.5">
-            <Video className="h-3.5 w-3.5 text-[#0B5CFF]" /> Auto-Create Zoom Meeting
-          </p>
-          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">Backend creates a Zoom meeting and provides a join link automatically</p>
+      {s.format !== "in_person" && (
+        <div className="flex items-center justify-between rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-[hsl(var(--foreground))] flex items-center gap-1.5">
+              <Video className="h-3.5 w-3.5 text-[#0B5CFF]" /> Auto-Create Zoom Meeting
+            </p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">Backend creates a Zoom meeting and provides a join link automatically</p>
+          </div>
+          <Toggle checked={s.enableZoomMeeting} onChange={s.setEnableZoomMeeting} color="#0B5CFF" />
         </div>
-        <Toggle checked={s.enableZoomMeeting} onChange={s.setEnableZoomMeeting} color="#0B5CFF" />
-      </div>
+      )}
 
-      {s.enableZoomMeeting && (
+      {s.format !== "in_person" && s.enableZoomMeeting && (
         <div>
           <Label className="mb-2 block">Zoom Meeting Duration (minutes)</Label>
           <Input

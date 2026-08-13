@@ -255,13 +255,18 @@ function CreateEventInner() {
                             : selectedModule === "HACKATHON" ? (parseInt(hack.capacity,    10) || 0)
                             : (parseInt(general.capacity, 10) || 0);
 
-      const enableZoom = selectedModule === "AGM"   ? agm.enableZoomMeeting
-                      : selectedModule === "GENERAL" ? general.enableZoomMeeting
+      const enableZoom = selectedModule === "AGM"       ? agm.enableZoomMeeting
+                      : selectedModule === "GENERAL"   ? general.enableZoomMeeting
+                      : selectedModule === "LAUNCH"    ? launch.enableZoomMeeting
+                      : selectedModule === "HACKATHON" ? hack.enableZoomMeeting
                       : false;
 
       const zoomDuration = enableZoom
-        ? (selectedModule === "AGM"   ? parseInt(agm.zoomDurationMinutes, 10)
-                                      : parseInt(general.zoomDurationMinutes, 10)) || 120
+        ? (selectedModule === "AGM"       ? parseInt(agm.zoomDurationMinutes, 10)
+         : selectedModule === "GENERAL"   ? parseInt(general.zoomDurationMinutes, 10)
+         : selectedModule === "LAUNCH"    ? parseInt(launch.zoomDurationMinutes, 10)
+         : selectedModule === "HACKATHON" ? parseInt(hack.zoomDurationMinutes, 10)
+         : 120) || 120
         : undefined;
 
       const featuredValue = selectedModule === "AGM"      ? agm.featured
@@ -364,6 +369,10 @@ function CreateEventInner() {
 
     if (selectedModule === "GENERAL") {
       setSubmitting(true);
+      const generalIsVirtual = general.format === "virtual" || general.format === "hybrid";
+      const generalStreamUrl = general.enableZoomMeeting && generalIsVirtual && !general.streamUrl
+        ? "https://zoom.us"
+        : (general.streamUrl || undefined);
       createGeneral.mutate(
         {
           registerId:        organiserId,
@@ -373,17 +382,42 @@ function CreateEventInner() {
           startTime:         general.time,
           format:            fmt(general.format),
           venue:             general.venue         || undefined,
-          streamUrl:         general.streamUrl     || undefined,
+          streamUrl:         generalStreamUrl,
           maximumCapacity:   parseInt(general.capacity, 10) || undefined,
           audienceTargeting: audience(general.audienceMode),
         },
-        { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+        {
+          onSuccess: (createdEvent) => {
+            const eventId = (createdEvent as any)?.id ?? (createdEvent as any)?.eventId;
+            if (general.enableZoomMeeting && eventId) {
+              createEventZoomMeeting.mutate(
+                { eventId, durationMinutes: parseInt(general.zoomDurationMinutes, 10) || 120 },
+                {
+                  onSuccess:  () => { setSubmitting(false); onDone(); },
+                  onError:    () => {
+                    setSubmitting(false);
+                    toast.info("Event created. Open the event → Settings to add the Zoom meeting.");
+                    onDone();
+                  },
+                }
+              );
+            } else {
+              setSubmitting(false);
+              onDone();
+            }
+          },
+          onError: () => setSubmitting(false),
+        }
       );
       return;
     }
 
     if (selectedModule === "HACKATHON") {
       setSubmitting(true);
+      const hackIsVirtual = hack.format === "virtual" || hack.format === "hybrid";
+      const hackStreamUrl = hack.enableZoomMeeting && hackIsVirtual && !hack.streamUrl
+        ? "https://zoom.us"
+        : (hack.streamUrl || undefined);
       createHack.mutate(
         {
           registerId:           organiserId,
@@ -395,7 +429,7 @@ function CreateEventInner() {
           startTime:            hack.time               || "09:00",
           format:               fmt(hack.format),
           venue:                hack.venue              || undefined,
-          streamUrl:            hack.streamUrl          || undefined,
+          streamUrl:            hackStreamUrl,
           problemStatement:     hack.problemStatement   || undefined,
           expectedDeliverable:  hack.deliverable        || undefined,
           submissionDeadline:   hack.submissionDeadline || undefined,
@@ -411,13 +445,38 @@ function CreateEventInner() {
             weight:    parseInt(c.weight.replace("%", ""), 10) || 0,
           })),
         },
-        { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+        {
+          onSuccess: (createdEvent) => {
+            const eventId = (createdEvent as any)?.id ?? (createdEvent as any)?.eventId;
+            if (hack.enableZoomMeeting && eventId) {
+              createEventZoomMeeting.mutate(
+                { eventId, durationMinutes: parseInt(hack.zoomDurationMinutes, 10) || 120 },
+                {
+                  onSuccess:  () => { setSubmitting(false); onDone(); },
+                  onError:    () => {
+                    setSubmitting(false);
+                    toast.info("Challenge created. Open the event → Settings to add the Zoom meeting.");
+                    onDone();
+                  },
+                }
+              );
+            } else {
+              setSubmitting(false);
+              onDone();
+            }
+          },
+          onError: () => setSubmitting(false),
+        }
       );
       return;
     }
 
     if (selectedModule === "LAUNCH") {
       setSubmitting(true);
+      const launchIsVirtual = launch.format === "virtual" || launch.format === "hybrid";
+      const launchStreamUrl = launch.enableZoomMeeting && launchIsVirtual && !launch.streamUrl
+        ? "https://zoom.us"
+        : (launch.streamUrl || undefined);
       createLaunch.mutate(
         {
           registerId:         organiserId,
@@ -426,7 +485,7 @@ function CreateEventInner() {
           startTime:          launch.time,
           format:             fmt(launch.format),
           venue:              launch.venue               || undefined,
-          streamUrl:          launch.streamUrl           || undefined,
+          streamUrl:          launchStreamUrl,
           maximumCapacity:    parseInt(launch.capacity, 10) || undefined,
           productName:        launch.productName          || undefined,
           tagline:            launch.tagline              || undefined,
@@ -441,7 +500,28 @@ function CreateEventInner() {
             .filter((sp) => sp.name.trim())
             .map((sp) => ({ name: sp.name, roleTitle: sp.role, bio: sp.bio || undefined })),
         },
-        { onSuccess: onDone, onSettled: () => setSubmitting(false) }
+        {
+          onSuccess: (createdEvent) => {
+            const eventId = (createdEvent as any)?.id ?? (createdEvent as any)?.eventId;
+            if (launch.enableZoomMeeting && eventId) {
+              createEventZoomMeeting.mutate(
+                { eventId, durationMinutes: parseInt(launch.zoomDurationMinutes, 10) || 120 },
+                {
+                  onSuccess:  () => { setSubmitting(false); onDone(); },
+                  onError:    () => {
+                    setSubmitting(false);
+                    toast.info("Launch event created. Open the event → Settings to add the Zoom meeting.");
+                    onDone();
+                  },
+                }
+              );
+            } else {
+              setSubmitting(false);
+              onDone();
+            }
+          },
+          onError: () => setSubmitting(false),
+        }
       );
     }
   }
