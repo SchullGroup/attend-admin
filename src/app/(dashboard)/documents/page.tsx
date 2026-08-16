@@ -478,7 +478,7 @@ export default function DocumentsPage() {
                         title="Download"
                         disabled={downloadMutation.isPending}
                         onClick={() => {
-                          if (doc.fileUrl) {
+                          if (isAdmin && doc.fileUrl) {
                             const a = document.createElement("a");
                             a.href = doc.fileUrl;
                             a.download = doc.originalFilename || doc.title;
@@ -486,7 +486,10 @@ export default function DocumentsPage() {
                             a.rel = "noopener noreferrer";
                             a.click();
                           } else {
-                            downloadMutation.mutate(doc.id);
+                            downloadMutation.mutate({
+                              documentId: doc.id,
+                              filename: doc.originalFilename || doc.title || "document",
+                            });
                           }
                         }}
                       >

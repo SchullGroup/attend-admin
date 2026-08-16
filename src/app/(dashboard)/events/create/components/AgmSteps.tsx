@@ -347,15 +347,11 @@ export function AgmResolutionsStep({ s, showErrors = false }: { s: AgmState; sho
 
 const MAX_SHAREHOLDER_LIST_BYTES = 10 * 1_024 * 1_024; // 10 MB
 
-// Authoritative schema from backend (2026-07-15 status doc): required columns
-// are `fullName` and `chn`; `email`, `phone`, `units`, `status` are optional.
-// (Our earlier guess of name/email/sharecount — inferred from one old error
-// message — was wrong and blocked valid files.) Keys below are the NORMALIZED
-// forms (lowercased, punctuation stripped) matched against headers; `display`
-// is the canonical casing shown in error messages and the dropzone hint.
+// CHN is optional in every shareholder flow. Validate only the minimum identity
+// column here; the backend remains responsible for row-level import validation.
+// Keys are normalized (lowercased, punctuation stripped) before comparison.
 const REQUIRED_SHAREHOLDER_CSV_COLUMNS = [
   { key: "fullname", display: "fullName" },
-  { key: "chn",      display: "chn" },
 ];
 
 function formatBytes(b: number) {
@@ -394,9 +390,7 @@ export function AgmShareholdersStep({ s }: { s: AgmState }) {
       return;
     }
 
-    // For CSVs, check the header row up front so a missing required column
-    // (fullName / chn) is caught before submit rather than surfacing as a
-    // generic API error at the very end of the wizard.
+    // For CSVs, catch a missing fullName column before submitting the event.
     if (/\.csv$/i.test(file.name)) {
       try {
         const headerLine = await new Promise<string>((resolve, reject) => {
@@ -491,7 +485,7 @@ export function AgmShareholdersStep({ s }: { s: AgmState }) {
               ) : (
                 <>
                   <p className="text-sm font-medium text-[hsl(var(--foreground))]">Upload shareholder list</p>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">CSV with columns: fullName, chn (required) · email, phone, units, status (optional)</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">CSV columns: fullName (required) · CHN, email, phone, units, status (optional)</p>
                 </>
               )}
               <input

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useRegisters } from "@/api/registers";
 import {
@@ -53,6 +53,7 @@ function CreateEventInner() {
   const [submitting,     setSubmitting]     = useState(false);
   const [organiserId,    setOrganiserId]    = useState("");
   const [showStepErrors, setShowStepErrors] = useState(false);
+  const submissionLockRef = useRef(false);
 
   useEffect(() => {
     const type = searchParams.get("type") as ModuleId | null;
@@ -139,11 +140,18 @@ function CreateEventInner() {
   // ─── Submit ─────────────────────────────────────────────────────────────────
 
   function handleSubmit() {
+    if (submissionLockRef.current) return;
     if (!organiserId) {
       toast.error("Please select an organiser before creating an event.");
       return;
     }
     if (!selectedModule) return;
+
+    submissionLockRef.current = true;
+    const stopSubmitting = () => {
+      submissionLockRef.current = false;
+      setSubmitting(false);
+    };
 
     const onDone = () => router.push("/events");
     const fmt = (f: string) => f.toUpperCase() as "VIRTUAL" | "IN_PERSON" | "HYBRID";
@@ -305,10 +313,10 @@ function CreateEventInner() {
         },
         {
           onSuccess: () => {
-            setSubmitting(false);
+            stopSubmitting();
             onDone();
           },
-          onError: () => setSubmitting(false),
+          onError: stopSubmitting,
         }
       );
       return;
@@ -348,20 +356,20 @@ function CreateEventInner() {
               createEventZoomMeeting.mutate(
                 { eventId, durationMinutes: parseInt(agm.zoomDurationMinutes, 10) || 120 },
                 {
-                  onSuccess:  () => { setSubmitting(false); onDone(); },
+                  onSuccess:  () => { stopSubmitting(); onDone(); },
                   onError:    () => {
-                    setSubmitting(false);
+                    stopSubmitting();
                     toast.info("AGM created. Open the event → Settings to add the Zoom meeting.");
                     onDone();
                   },
                 }
               );
             } else {
-              setSubmitting(false);
+              stopSubmitting();
               onDone();
             }
           },
-          onError: () => setSubmitting(false),
+          onError: stopSubmitting,
         }
       );
       return;
@@ -393,20 +401,20 @@ function CreateEventInner() {
               createEventZoomMeeting.mutate(
                 { eventId, durationMinutes: parseInt(general.zoomDurationMinutes, 10) || 120 },
                 {
-                  onSuccess:  () => { setSubmitting(false); onDone(); },
+                  onSuccess:  () => { stopSubmitting(); onDone(); },
                   onError:    () => {
-                    setSubmitting(false);
+                    stopSubmitting();
                     toast.info("Event created. Open the event → Settings to add the Zoom meeting.");
                     onDone();
                   },
                 }
               );
             } else {
-              setSubmitting(false);
+              stopSubmitting();
               onDone();
             }
           },
-          onError: () => setSubmitting(false),
+          onError: stopSubmitting,
         }
       );
       return;
@@ -452,20 +460,20 @@ function CreateEventInner() {
               createEventZoomMeeting.mutate(
                 { eventId, durationMinutes: parseInt(hack.zoomDurationMinutes, 10) || 120 },
                 {
-                  onSuccess:  () => { setSubmitting(false); onDone(); },
+                  onSuccess:  () => { stopSubmitting(); onDone(); },
                   onError:    () => {
-                    setSubmitting(false);
+                    stopSubmitting();
                     toast.info("Challenge created. Open the event → Settings to add the Zoom meeting.");
                     onDone();
                   },
                 }
               );
             } else {
-              setSubmitting(false);
+              stopSubmitting();
               onDone();
             }
           },
-          onError: () => setSubmitting(false),
+          onError: stopSubmitting,
         }
       );
       return;
@@ -507,20 +515,20 @@ function CreateEventInner() {
               createEventZoomMeeting.mutate(
                 { eventId, durationMinutes: parseInt(launch.zoomDurationMinutes, 10) || 120 },
                 {
-                  onSuccess:  () => { setSubmitting(false); onDone(); },
+                  onSuccess:  () => { stopSubmitting(); onDone(); },
                   onError:    () => {
-                    setSubmitting(false);
+                    stopSubmitting();
                     toast.info("Launch event created. Open the event → Settings to add the Zoom meeting.");
                     onDone();
                   },
                 }
               );
             } else {
-              setSubmitting(false);
+              stopSubmitting();
               onDone();
             }
           },
-          onError: () => setSubmitting(false),
+          onError: stopSubmitting,
         }
       );
     }

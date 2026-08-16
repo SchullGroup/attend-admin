@@ -108,12 +108,12 @@ The create body contains optional fields:
 ```json
 {
   "label": "Board observers",
-  "expiresAt": "2026-08-20T18:00:00",
+  "expiresAt": "2026-08-20T17:00:00.000Z",
   "maxUses": 20
 }
 ```
 
-`label` is the admin-entered name/description for a code; it is not the guest's identity and must not become part of code matching. The frontend currently sends a plain local date-time without milliseconds or `Z` because the backend previously returned a generic `500` when given an ISO instant.
+`label` is the admin-entered name/description for a code; it is not the guest's identity and must not become part of code matching. The frontend now converts the admin's `datetime-local` value to an ISO-8601 UTC instant with `toISOString()`. For example, `2026-08-20T18:00` entered in Lagos (UTC+1) is sent as `2026-08-20T17:00:00.000Z`. Backend must accept this format and return a field-level `400`, not a generic `500`, for malformed expiry values.
 
 ### Reported defect
 
@@ -143,16 +143,16 @@ Required behavior:
 - Return `400` with a field-level message for an invalid `expiresAt` or `maxUses`, never a generic `500`.
 - Return stable guest-facing errors without leaking whether an unrelated event/code exists. Internally distinguish at least revoked, expired, exhausted, invalid, and event-unavailable states for logs/support.
 
-### Open timezone question requiring backend confirmation
+### Required timezone contract
 
-The product has not yet defined what timezone a value such as `2026-08-20T18:00:00` represents. Backend must propose and document one authoritative contract before frontend changes format. Recommended contract:
+The frontend now sends an absolute instant, so backend must implement and document this authoritative contract:
 
 1. Accept an ISO-8601 instant/offset such as `2026-08-20T17:00:00Z` or `2026-08-20T18:00:00+01:00`.
 2. Store expiry as an instant (`timestamptz`/UTC), not a timezone-free server-local value.
 3. Return ISO-8601 with `Z` or an explicit offset.
 4. If offset-free input remains supported for backward compatibility, interpret it in the event/organisation timezone and document that timezone in the response.
 
-Please answer explicitly: **Which timezone is used today for offset-free `expiresAt`, and which request format should frontend send going forward?**
+Please answer explicitly: **Does every create, list, redeem, and join path preserve and compare this instant consistently?**
 
 ### Guest-facing APIs affected
 
@@ -179,7 +179,9 @@ Also test expiry boundaries using the API server, database, and client in differ
 
 ### Current frontend contract
 
-Both the manual form and CSV parser already omit `chn` when it is blank. They send the same endpoint:
+CHN is optional everywhere in `attend-admin`, including manual register entry, register CSV import, and the custom shareholder list uploaded while creating an AGM.
+
+The manual register form and register CSV parser omit `chn` when it is blank. They send the same endpoint:
 
 `POST /api/v1/client/registers/{registerId}/shareholders`
 
@@ -198,7 +200,14 @@ Manual add is wrapped as a one-row bulk request:
 }
 ```
 
-CSV upload uses the same shape with multiple rows. When CHN is supplied, frontend normalizes it to a value such as `CHN123456`; when blank or when the CSV has no CHN column, the `chn` property is omitted/undefined. The frontend display copy now explicitly marks CHN as optional.
+Register CSV upload uses the same shape with multiple rows. When CHN is supplied, frontend normalizes it to a value such as `CHN123456`; when blank or when the CSV has no CHN column, the `chn` property is omitted/undefined. The frontend display copy explicitly marks CHN as optional.
+
+The AGM creation flow accepts a custom `.csv` or `.xlsx` shareholder list inside the event request. Its client-side CSV header validation now requires only `fullName`; `chn`, `email`, `phone`, `units`, and `status` are optional. The affected event-create contracts are:
+
+- `POST /api/v1/client/events` using `agmConfig.shareholderListBase64` and `agmConfig.shareholderListFilename`.
+- The admin AGM event-creation endpoint used by the backend for the corresponding top-level AGM fields (currently sent through the admin event-create mutation).
+
+Backend processing of the embedded AGM shareholder file must apply the same optional-CHN rules as direct register imports. A file that has valid shareholder rows but no CHN header must not be rejected.
 
 ### Required backend behavior and data changes
 
@@ -219,12 +228,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_register_shareholder_nonnull_chn
 - `GET` list/detail/search responses must allow `chn: null` or omission without serialization failures.
 - `PATCH /api/v1/client/registers/{registerId}/shareholders/{shareholderId}` must preserve an omitted CHN and support clearing it according to the documented null policy.
 - Any CSV template/parser on the backend must not require a `CHN` header or non-empty CHN cells.
+- Apply the same rule to embedded custom shareholder lists decoded from AGM event-creation payloads; do not maintain a second parser/schema that still requires CHN.
 
 ### Acceptance tests
 
 - Add one shareholder manually without CHN and confirm persistence and retrieval.
 - Import a CSV with no CHN column and confirm every otherwise-valid row is processed.
 - Import a CSV with a CHN column containing a mixture of blank and populated values.
+- Create an AGM with a custom CSV that contains `fullName` but no CHN column and confirm event creation and shareholder targeting both succeed.
+- Repeat AGM creation with `.xlsx` data containing blank CHN cells.
 - Add multiple shareholders with null CHN in the same register; no uniqueness error should occur.
 - Submit duplicate non-null CHNs in the same register and confirm the documented upsert/conflict behavior.
 - Confirm null CHNs in separate tenants cannot cause cross-tenant matching.

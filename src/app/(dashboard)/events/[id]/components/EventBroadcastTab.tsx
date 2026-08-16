@@ -22,9 +22,9 @@ const CHANNEL_CONFIG: { key: Channel; label: string; icon: React.ElementType; ne
   { key: "ALL",   label: "All Channels", icon: Megaphone, needsSubject: true  },
 ];
 
-interface Props { eventId: string }
+interface Props { eventId: string; isAgm?: boolean }
 
-export function EventBroadcastTab({ eventId }: Props) {
+export function EventBroadcastTab({ eventId, isAgm = false }: Props) {
   const [channel, setChannel] = useState<Channel>("EMAIL");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
@@ -84,7 +84,7 @@ export function EventBroadcastTab({ eventId }: Props) {
               </div>
               {channel === "ALL" && (
                 <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1.5">
-                  Sends through all available delivery channels, including the in-app notification bell.
+                  Sends through all available delivery channels. Push and in-app require a matching Attend account.
                 </p>
               )}
             </div>
@@ -111,7 +111,7 @@ export function EventBroadcastTab({ eventId }: Props) {
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder={`Write an update for ${recipientCount.toLocaleString()} registered attendees…`}
+                placeholder={`Write an update for ${recipientCount.toLocaleString()} ${isAgm ? "active shareholders" : "registered attendees"}…`}
                 rows={4}
                 className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] resize-none"
               />
@@ -131,7 +131,7 @@ export function EventBroadcastTab({ eventId }: Props) {
               {sendMutation.isPending ? (
                 "Sending…"
               ) : (
-                <><Send className="h-4 w-4" /> Send to {recipientCount.toLocaleString()} attendees</>
+                <><Send className="h-4 w-4" /> Send to {recipientCount.toLocaleString()} {isAgm ? "shareholders" : "attendees"}</>
               )}
             </Button>
           </div>
