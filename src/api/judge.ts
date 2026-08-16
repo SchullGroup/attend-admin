@@ -53,6 +53,15 @@ export interface ScoringCriteria {
   description?: string;
 }
 
+interface ScoringCriteriaApiItem {
+  name?:        string;
+  criterion?:   string;
+  title?:       string;
+  label?:       string;
+  weight?:      number;
+  description?: string;
+}
+
 export interface ScoringApplication {
   applicationId: string;
   teamName:      string;
@@ -269,10 +278,24 @@ export function useJudgeScoringPanel(challengeId: string) {
         `/api/v1/judge/challenges/${challengeId}/scoring`
       );
       const raw = res.data.data ?? (res.data as any);
+      const rawCriteria: ScoringCriteriaApiItem[] = Array.isArray(raw?.criteria)
+        ? raw.criteria
+        : [];
+      const criteria = rawCriteria.map((item, index) => ({
+        name: (
+          item.name
+          ?? item.criterion
+          ?? item.title
+          ?? item.label
+          ?? `Criterion ${index + 1}`
+        ).trim(),
+        weight: Number(item.weight ?? 0),
+        description: item.description,
+      }));
       return {
         challengeId:    raw?.challengeId    ?? challengeId,
         challengeTitle: raw?.challengeTitle ?? "",
-        criteria:       raw?.criteria       ?? [],
+        criteria,
         applications:   raw?.applications   ?? (raw as any)?.shortlisted ?? (raw as any)?.teams ?? [],
         totalCount:     raw?.totalCount,
       } as ScoringPanelResponse;

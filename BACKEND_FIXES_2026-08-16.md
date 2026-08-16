@@ -7,7 +7,7 @@ This handoff covers six production issues found from `attend-admin`. The fronten
 - Event end/cancel still uses the existing lifecycle endpoints. The response type now accepts the optional `zoomMeetingEndStatus` values documented below without requiring them.
 - Guest-code expiry is serialized from the admin's local `datetime-local` input to an ISO-8601 UTC instant before submission.
 - CHN is optional in manual shareholder entry, register CSV upload, and custom AGM shareholder-list header validation. Blank CHN values are omitted from requests.
-- Both innovation challenge create paths send their configured criteria; the judge UI reads `data.criteria` from the scoring endpoint.
+- Both innovation challenge create paths send their configured criteria. The deployed judge scoring response uses `{ criterion, weight }`; the frontend judge API adapter now normalizes `criterion` to its internal `name` field before rendering.
 - Global and client event-document downloads now go through backend document endpoints so counters/audits can run. Direct URLs are used only when no persisted document ID exists, such as a synthetic admin AGM-notice row.
 - Event creation already blocks repeat clicks while the request is pending; no duplicate-create UI change is required in this handoff.
 
@@ -301,6 +301,24 @@ Admin payload fragment:
 
 The frontend validates that configured weights total 100. Verify both request DTO/service mapping paths persist the criteria into the same authoritative challenge data and do not drop them before the judge projection is built.
 
+Observed staging response on 2026-08-16:
+
+```json
+{
+  "data": {
+    "challengeId": "fc79621a-0742-41e5-84c1-9efcae320da7",
+    "criteria": [
+      { "criterion": "Innovation", "weight": 30 },
+      { "criterion": "Impact", "weight": 30 },
+      { "criterion": "Execution", "weight": 40 }
+    ],
+    "teams": []
+  }
+}
+```
+
+The data was present, but the judge UI previously displayed only the percentages because its internal view model expected `name`. The frontend now accepts `criterion` as the authoritative deployed field and also tolerates `name`, `title`, or `label` for compatibility.
+
 ### Reported defect and required scope
 
 The criteria are visible/configured on the admin side but assigned judges do not receive them. This request is about **criteria visibility**. Do not introduce a new per-criterion score submission model in this change; the current judge score body may remain `{ "score": number, "comment": string? }`.
@@ -308,7 +326,7 @@ The criteria are visible/configured on the admin side but assigned judges do not
 ### Required persistence and response behavior
 
 - Persist every criterion with a stable ID (recommended), challenge/event ID, display name, description if supported, weight, and deterministic order.
-- Preserve the name consistently. Creation currently uses `criterion`; the judge scoring frontend currently expects each response item as `{ name, weight, description? }`. Either map persisted `criterion` to response `name`, or standardize one field across APIs and notify frontend before deployment.
+- Preserve the label consistently. Creation and the observed judge response use `criterion`. The frontend normalizes this to an internal `name` view-model property, so backend may keep the deployed `{ criterion, weight }` wire format. Do not return the weight without a non-blank `criterion`.
 - Do not return default/hard-coded criteria when event-specific criteria exist.
 - Return criteria only after verifying the judge is assigned/authorized for that challenge.
 - The source of truth must be the criteria saved with the challenge at creation/update time.
@@ -326,17 +344,17 @@ Required response fragment:
     "challengeTitle": "2026 Innovation Challenge",
     "criteria": [
       {
-        "name": "Innovation",
+        "criterion": "Innovation",
         "weight": 40,
         "description": null
       },
       {
-        "name": "Impact",
+        "criterion": "Impact",
         "weight": 35,
         "description": null
       },
       {
-        "name": "Feasibility",
+        "criterion": "Feasibility",
         "weight": 25,
         "description": null
       }
@@ -527,7 +545,7 @@ The product-side verification result is:
 | End/cancel event ends Zoom for everyone | Confirmed working | Keep regression coverage for both lifecycle endpoints and repeated requests. |
 | Named and expiring guest access codes | Confirmed working | Keep the label/expiry/max-use acceptance matrix as regression coverage. |
 | Optional shareholder CHN | Still failing | Remains open. Apply the DTO, persistence, uniqueness, direct import, and embedded AGM import changes in section 3. |
-| Challenge criteria visible to judges | Confirmed working | Keep authorization and event-specific criteria regression coverage. |
+| Challenge criteria visible to judges | Frontend field mapping fixed; pending UI retest | The API returns `criterion`; the judge adapter now maps it to the UI's `name` field. Refresh the judging page and confirm all labels and weights render. |
 
 The CHN failure should be logged with the failed endpoint, sanitized request body/file headers, response body, status, request ID, and whether it occurred in manual entry, direct register CSV import, or AGM custom-list import. A successful frontend request can omit `chn`; the backend must not convert that omission into a required-field or uniqueness failure.
 
