@@ -1,6 +1,6 @@
 # Backend fixes requested - 2026-08-16
 
-This handoff covers four production issues found from `attend-admin`. The frontend contracts and affected APIs have been traced below. Please implement the authoritative fixes in the backend, deploy them to staging, and return request/response evidence for each acceptance test.
+This handoff covers six production issues found from `attend-admin`. The frontend contracts and affected APIs have been traced below. Please implement the authoritative fixes in the backend, deploy them to staging, and return request/response evidence for each acceptance test.
 
 ## Priority summary
 
@@ -10,6 +10,8 @@ This handoff covers four production issues found from `attend-admin`. The fronte
 | P0 | Guest access codes with a label/name and expiry often fail when a guest redeems them | Guest-access create and guest-facing redeem/join endpoints, expiry parsing/validation |
 | P1 | CHN must be optional when manually adding or CSV-importing shareholders | Shareholder request DTO, entity/schema nullability, bulk validation and deduplication |
 | P1 | Innovation challenge criteria created by an admin are not returned to assigned judges | Innovation config persistence and judge challenge/scoring responses |
+| P0 | Sending an attendee broadcast currently returns HTTP 500 | Broadcast send orchestration, channel providers, delivery history and error mapping |
+| P1 | Repeated document downloads must never return HTTP 500 | Global-document download endpoint, file storage lookup, counter/audit idempotency |
 
 ## 1. End the Zoom meeting when an admin ends or cancels an event
 
@@ -347,6 +349,143 @@ The scoring endpoint is the blocking contract because the current judge UI alrea
 - Confirm omitted config during an unrelated event update does not erase criteria.
 - Confirm an empty-criteria legacy challenge returns `criteria: []`, not `null` or `500`.
 
+## 5. Fix HTTP 500 when sending an attendee broadcast
+
+### Clarified frontend meaning of "broadcast"
+
+In this repository, the event **Broadcast** tab is the attendee messaging feature. It is not a video-stream start/stop API. The failing write contract used by the frontend is:
+
+`POST /api/v1/client/events/{eventId}/broadcast`
+
+The frontend also reads:
+
+- `GET /api/v1/client/events/{eventId}/broadcast/recipients`
+- `GET /api/v1/client/events/{eventId}/broadcast/history?page=0&size=20`
+
+The send request supports `EMAIL`, `SMS`, `PUSH`, `IN_APP`, and `ALL`:
+
+```json
+{
+  "channel": "EMAIL",
+  "subject": "Important event update",
+  "message": "The meeting will begin in ten minutes."
+}
+```
+
+`subject` is required by the current UI for `EMAIL` and `ALL`; `message` is required and limited to 500 characters. The reported defect is that pressing **Send Broadcast** returns HTTP 500. No frontend broadcast change is required for this pass.
+
+### Required backend investigation
+
+Trace the request with one correlation ID through all of these stages:
+
+1. Event lookup, tenant authorization, and recipient selection.
+2. Request DTO validation and channel enum mapping.
+3. Recipient contact normalization and filtering.
+4. Provider calls for email, SMS, push, and in-app delivery.
+5. Broadcast-history persistence and per-channel counters.
+6. Transaction boundaries, especially if a provider call fails after a history row is created.
+
+Inspect for null contact fields, empty recipient lists, unsupported provider configuration, enum casing differences, missing email subject, serialization errors, and database constraints on delivery counters/history. Provider configuration failures and bad request data must not escape as an unclassified HTTP 500.
+
+### Required behavior
+
+- Validate the event, channel, subject rules, message length, and recipient availability before dispatch.
+- Return `400` with field-level errors for malformed payloads, `403` for cross-tenant access, and `404` for an event not visible to the authenticated organisation.
+- If a requested provider is not configured, return a stable `503`/`422` code such as `BROADCAST_CHANNEL_UNAVAILABLE`; do not throw a generic `500`.
+- For `ALL`, define whether delivery is best-effort per channel or all-or-nothing. Best-effort is recommended because one unavailable provider should not erase successful sends through other channels.
+- Persist one history record with accurate `totalRecipients`, `emailSent`, `smsSent`, `pushSent`, `inAppSent`, and `skipped` values. Counts must never be negative or null.
+- Do not report a message as sent before provider acceptance is known. If delivery is queued asynchronously, return an explicit `QUEUED` state and update history after worker processing.
+- Prevent accidental duplicate delivery when the frontend retries after a timeout. Support an idempotency key or a server-generated dispatch ID that can be safely queried/retried.
+- Sanitize provider errors in the API response while retaining provider request IDs and full diagnostics in backend logs.
+
+Recommended success response:
+
+```json
+{
+  "data": {
+    "id": "broadcast-uuid",
+    "eventId": "event-uuid",
+    "channel": "EMAIL",
+    "status": "SENT",
+    "totalRecipients": 120,
+    "emailSent": 116,
+    "smsSent": 0,
+    "pushSent": 0,
+    "inAppSent": 0,
+    "skipped": 4,
+    "createdAt": "2026-08-16T11:30:00Z"
+  }
+}
+```
+
+### Acceptance tests
+
+- Send a valid email broadcast and confirm a non-500 success, provider acceptance, and matching history counts.
+- Test `SMS`, `PUSH`, `IN_APP`, and `ALL` independently, including recipients with missing contact fields.
+- Send to an event with zero eligible recipients and confirm a stable documented response rather than a `500`.
+- Disable one provider and confirm a stable channel-unavailable or partial-delivery response.
+- Submit missing subject, empty message, more than 500 characters, and an unsupported channel; each must return a deterministic `400`.
+- Retry the same dispatch after a simulated timeout and prove recipients do not receive duplicate messages.
+- Confirm the resulting item appears in broadcast history with accurate counters and tenant isolation.
+
+## 6. Make repeated document downloads reliable and idempotent
+
+### Current frontend contract
+
+The global document vault downloads files through:
+
+`GET /api/v1/client/documents/{documentId}/download`
+
+The frontend requests the response as a binary blob and saves it using the document's original filename. The same document may be downloaded repeatedly by the same or different authorized users. The document model exposed to the frontend includes `fileUrl`, `cloudinaryPublicId`, `originalFilename`, `mimeType`, `sizeBytes`, and `downloadCount`.
+
+There is also a detail endpoint:
+
+`GET /api/v1/client/documents/{documentId}`
+
+The current frontend comments indicate that detail retrieval may include `fileData` and increment a counter. Backend must define one authoritative counting policy so detail fetches, downloads, retries, and redirects do not conflict.
+
+### Reported defect
+
+A document can download successfully once and then return HTTP 500 on a later download. A successful first download must not mutate, consume, move, or invalidate the stored file reference. Download counting or audit persistence must not make the binary operation single-use.
+
+### Required backend investigation
+
+For one affected document, compare the database row and storage object before and after the first successful request. Trace:
+
+- tenant/document authorization;
+- file URL or Cloudinary public-ID resolution;
+- storage-provider response and redirect handling;
+- binary streaming/content-disposition construction;
+- `downloadCount` increment logic;
+- download audit insertion and unique constraints;
+- entity versioning/optimistic-lock failures; and
+- transaction lifecycle when the client disconnects or retries.
+
+Common failure candidates include a one-time signed URL being persisted and reused, a unique audit constraint that allows only one record per user/document, a non-atomic read-modify-write counter, a null file stream after the first request, or a transaction committing counter state before storage retrieval succeeds.
+
+### Required behavior
+
+- Every authorized request must resolve the original immutable storage object or generate a fresh signed URL when the provider requires expiring URLs.
+- Never persist a temporary one-time URL as the canonical file location.
+- Increment `downloadCount` atomically, for example with `download_count = download_count + 1`; concurrent requests must not lose updates or trigger optimistic-lock HTTP 500 errors.
+- A download audit table must allow repeated downloads. Each attempt/success should have its own ID and timestamp; do not enforce uniqueness on only `(document_id, user_id)`.
+- Count only according to one documented rule. Recommended: increment after storage retrieval is successfully established, once per accepted download request. Do not increment on authorization failure, missing storage object, or provider failure.
+- Repeated GET requests are operationally idempotent with respect to file availability: they may increment analytics, but must return the same file bytes and must not change or delete the underlying object.
+- Return the correct `Content-Type`, `Content-Length` when known, and safe `Content-Disposition` filename on every request.
+- Map missing documents to `404`, unauthorized/cross-tenant access to `403`/`404` per security policy, missing storage objects to a stable `410` or `502`, and provider timeouts to `503`. Do not expose provider credentials or raw stack traces.
+- If the API redirects to Cloudinary/object storage, generate a fresh usable URL per request and preserve the same status/error contract.
+
+### Acceptance tests
+
+- Download the same document at least five times sequentially and verify identical file hash/size and no HTTP 500.
+- Download the same document concurrently from at least ten requests and verify every authorized request succeeds and `downloadCount` follows the documented rule.
+- Repeat downloads after the original signed URL's expiry window and prove a fresh valid URL/object stream is returned.
+- Verify a failed provider request does not corrupt the document row or prevent the next retry from succeeding.
+- Verify download-audit rows can be created repeatedly for the same user and document.
+- Confirm cross-tenant access cannot retrieve the file or increment its counter.
+- Confirm a missing storage object returns the documented stable error and correlation ID, not a generic `500`.
+- Confirm `GET /api/v1/client/documents/{documentId}` does not unexpectedly consume or invalidate the subsequent `/download` request.
+
 ## Required backend response to this handoff
 
 Please return:
@@ -356,5 +495,5 @@ Please return:
 3. The chosen `expiresAt` timezone and wire-format contract.
 4. Database migrations for nullable CHN and challenge criteria, including index/constraint changes.
 5. Sanitized request/response samples and correlation IDs for the acceptance tests.
-6. Automated regression-test results for all four items.
+6. Automated regression-test results for all six items.
 7. Any proposed response-contract changes before frontend implementation depends on them.

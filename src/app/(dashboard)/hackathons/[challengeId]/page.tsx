@@ -1463,7 +1463,14 @@ function JudgesTab({ challengeId, readOnly = false }: { challengeId: string; rea
                         variant="ghost"
                         className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
                         disabled={removeJudge.isPending}
-                        onClick={() => removeJudge.mutate({ challengeId, judgeId: j.id })}
+                        onClick={() => popup.confirm(
+                          "Remove Judge",
+                          `Remove ${j.name} from this challenge? Their challenge assignments will no longer be available.`,
+                          () => removeJudge.mutate({ challengeId, judgeId: j.id }),
+                          undefined,
+                          "Remove"
+                        )}
+                        title={`Remove ${j.name} from challenge`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>

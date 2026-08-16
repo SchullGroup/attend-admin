@@ -16,6 +16,7 @@ import {
 } from "@/api/super-admin";
 import { apiClient } from "@/lib/api-client";
 import { throttledProgress } from "@/lib/utils";
+import { popup } from "@/lib/popup-store";
 import { toast } from "sonner";
 
 // Allowed document type values from the API
@@ -228,6 +229,16 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
     toast.info("No download URL available for this document.");
   }
 
+  function confirmDeleteDocument(d: any) {
+    popup.confirm(
+      "Delete Event Document",
+      `Delete ${d.title || "this document"}? It will no longer be available from this event.`,
+      () => deleteMutation.mutate({ eventId, documentId: d.id }),
+      undefined,
+      "Delete Document"
+    );
+  }
+
   const isBusy = uploading || uploadMutation.isPending;
 
   return (
@@ -365,7 +376,7 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
                             className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
                             disabled={deleteMutation.isPending}
                             title="Delete"
-                            onClick={() => deleteMutation.mutate({ eventId, documentId: d.id })}
+                            onClick={() => confirmDeleteDocument(d)}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>

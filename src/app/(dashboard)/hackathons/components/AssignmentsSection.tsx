@@ -4,6 +4,7 @@ import { Award, ChevronDown, Star, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
+import { popup } from "@/lib/popup-store";
 import {
   useClientChallengeApplications,
   useApplicationJudgeAssignments,
@@ -86,7 +87,14 @@ function CoJudgePanel({
                     {!readOnly && (
                       <button
                         disabled={removeCoJudge.isPending}
-                        onClick={() => removeCoJudge.mutate({ challengeId, applicationId, judgeId: cj.judgeId })}
+                        onClick={() => popup.confirm(
+                          "Remove Co-Judge",
+                          `Remove ${name} as a co-judge for this application?`,
+                          () => removeCoJudge.mutate({ challengeId, applicationId, judgeId: cj.judgeId }),
+                          undefined,
+                          "Remove"
+                        )}
+                        aria-label={`Remove ${name} as co-judge`}
                         className="ml-0.5 rounded-full hover:bg-red-100 hover:text-red-600 transition-colors p-0.5"
                       >
                         ✕

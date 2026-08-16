@@ -16,6 +16,7 @@ import {
   useCreateGuestAccess,
   useRevokeGuestAccess,
 } from "@/api/client-guest-access";
+import { popup } from "@/lib/popup-store";
 
 function fmtWhen(iso?: string | null) {
   if (!iso) return null;
@@ -52,6 +53,16 @@ export function EventGuestAccessCard({ eventId }: { eventId: string }) {
         },
       },
       { onSuccess: () => { setShowForm(false); setLabel(""); setExpiresAt(""); setMaxUses(""); } }
+    );
+  }
+
+  function confirmRevoke(accessId: string, code: string) {
+    popup.confirm(
+      "Revoke Guest Code",
+      `Revoke guest code ${code}? Guests will no longer be able to use it to join this event.`,
+      () => revokeMutation.mutate({ eventId, accessId }),
+      undefined,
+      "Revoke Code"
     );
   }
 
@@ -149,7 +160,7 @@ export function EventGuestAccessCard({ eventId }: { eventId: string }) {
                   size="sm"
                   className="h-7 gap-1 text-xs text-red-600 hover:text-red-700 shrink-0"
                   disabled={revokeMutation.isPending}
-                  onClick={() => revokeMutation.mutate({ eventId, accessId: c.id })}
+                  onClick={() => confirmRevoke(c.id, c.code)}
                 >
                   <Ban className="h-3 w-3" /> Revoke
                 </Button>

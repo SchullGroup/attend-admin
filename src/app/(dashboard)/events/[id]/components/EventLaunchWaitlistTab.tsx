@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
 import { useListWaitlist, useApproveWaitlist, useRemoveWaitlist } from "@/api/client-events";
+import { popup } from "@/lib/popup-store";
 
 function timeAgo(iso: string): string {
   if (!iso) return "";
@@ -32,6 +33,17 @@ export function EventLaunchWaitlistTab({ eventId }: { eventId: string }) {
 
   const entries    = data?.entries    ?? [];
   const totalPages = data?.totalPages ?? 1;
+
+  function confirmRemove(entry: (typeof entries)[number]) {
+    const name = `${entry.firstName} ${entry.lastName}`.trim() || entry.email;
+    popup.confirm(
+      "Remove Waitlist Entry",
+      `Remove ${name} from this event's waitlist?`,
+      () => remove.mutate({ eventId, waitlistId: entry.id }),
+      undefined,
+      "Remove Entry"
+    );
+  }
 
   if (isLoading) return <Loader variant="inline" text="Loading waitlist…" />;
 
@@ -101,7 +113,7 @@ export function EventLaunchWaitlistTab({ eventId }: { eventId: string }) {
                             </button>
                           )}
                           <button
-                            onClick={() => remove.mutate({ eventId, waitlistId: entry.id })}
+                            onClick={() => confirmRemove(entry)}
                             disabled={remove.isPending}
                             className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-red-50 text-[hsl(var(--muted-foreground))] hover:text-red-600 transition-colors disabled:opacity-50"
                           >

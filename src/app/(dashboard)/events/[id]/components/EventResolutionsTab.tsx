@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { toast } from "sonner";
+import { popup } from "@/lib/popup-store";
 import {
   useClientEventAgenda,
   useAddAgendaItem,
@@ -736,7 +737,13 @@ export function EventResolutionsTab({
                 <button
                   type="button"
                   disabled={deleteMutation.isPending}
-                  onClick={() => item.id && deleteMutation.mutate({ eventId, itemId: item.id })}
+                  onClick={() => item.id && popup.confirm(
+                    "Delete Agenda Item",
+                    `Delete “${item.title}” from this event's agenda?`,
+                    () => deleteMutation.mutate({ eventId, itemId: item.id! }),
+                    undefined,
+                    "Delete Item"
+                  )}
                   className="text-[hsl(var(--muted-foreground))] hover:text-red-500 transition-colors disabled:opacity-40"
                 >
                   {deleteMutation.isPending

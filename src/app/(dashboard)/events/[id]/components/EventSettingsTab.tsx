@@ -16,6 +16,7 @@ import {
   useRetainEventData,
   type ZoomMeetingDto,
 } from "@/api/client-events";
+import { popup } from "@/lib/popup-store";
 import { EventGuestAccessCard } from "./EventGuestAccessCard";
 
 // ── Label helper ──────────────────────────────────────────────────────────────
@@ -130,6 +131,33 @@ export function EventSettingsTab({
     mutation: { mutate: (id: string, opts?: any) => void; isPending: boolean }
   ) {
     mutation.mutate(eventId, { onSuccess: () => onStatusChange(status) });
+  }
+
+  function confirmLifecycle(
+    status: "published" | "live" | "ended" | "cancelled",
+    mutation: { mutate: (id: string, opts?: any) => void; isPending: boolean }
+  ) {
+    if (status === "ended") {
+      popup.confirm(
+        "End Event",
+        "End this live event for everyone? Attendee access will close and the linked Zoom meeting will also be ended when the backend completes the action.",
+        () => handleLifecycle(status, mutation),
+        undefined,
+        "End Event"
+      );
+      return;
+    }
+    if (status === "cancelled") {
+      popup.confirm(
+        "Cancel Event",
+        "Cancel this event? Registered attendees will be notified and the linked Zoom meeting will be ended if it is currently running.",
+        () => handleLifecycle(status, mutation),
+        undefined,
+        "Cancel Event"
+      );
+      return;
+    }
+    handleLifecycle(status, mutation);
   }
 
   function handleSave() {
@@ -436,7 +464,7 @@ export function EventSettingsTab({
                 size="sm"
                 variant={status === "live" ? "default" : "outline"}
                 disabled={disabled || anyLifecyclePending}
-                onClick={() => handleLifecycle(status, mutation)}
+                onClick={() => confirmLifecycle(status, mutation)}
               >
                 {completed ? (
                   status === "live" ? <Radio className="h-3.5 w-3.5 mr-1.5" /> : <Check className="h-3.5 w-3.5 mr-1.5" />
@@ -498,7 +526,7 @@ export function EventSettingsTab({
               ["CANCELLED", "cancelled", "ENDED", "ended"].includes(currentStatus) ||
               anyLifecyclePending
             }
-            onClick={() => handleLifecycle("cancelled", cancelMutation)}
+            onClick={() => confirmLifecycle("cancelled", cancelMutation)}
           >
             {cancelMutation.isPending ? "Cancelling…" : "Cancel Event"}
           </Button>

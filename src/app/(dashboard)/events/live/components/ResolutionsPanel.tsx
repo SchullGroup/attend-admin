@@ -6,6 +6,7 @@ import { Wifi, Vote, X, Clock, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { useOpenResolutionVoting, useCloseResolutionVoting, } from "@/api/client-votes";
 import type { LiveResolution } from "@/api/client-live";
 import { VoteBar } from "./VoteBar";
+import { popup } from "@/lib/popup-store";
 
 export function ResolutionsPanel({
   resolutions,
@@ -190,7 +191,13 @@ export function ResolutionsPanel({
                     variant="outline"
                     className="h-8 gap-1.5 border-red-200 text-red-600 hover:bg-red-50"
                     disabled={busy}
-                    onClick={() => closeVote.mutate({ eventId, resolutionId: res.id })}
+                    onClick={() => popup.confirm(
+                      "Close Voting",
+                      `Close voting for “${res.title}”? Participants will no longer be able to submit votes.`,
+                      () => closeVote.mutate({ eventId, resolutionId: res.id }),
+                      undefined,
+                      "Close Voting"
+                    )}
                   >
                     <X className="h-3.5 w-3.5" />
                     {closeVote.isPending ? "Closing…" : "Close Voting"}

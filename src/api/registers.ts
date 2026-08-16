@@ -621,3 +621,43 @@ export function useDeleteShareholder() {
     onError: (error: any) => parseAndToastApiError(error, "Failed to remove shareholder."),
   });
 }
+
+/** Delete multiple shareholders through the existing per-record endpoint. */
+export function useBulkDeleteShareholders() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      registerId,
+      shareholderIds,
+    }: {
+      registerId: string;
+      shareholderIds: string[];
+    }) => {
+      const results = await Promise.allSettled(
+        shareholderIds.map((shareholderId) =>
+          apiClient.delete(`/api/v1/client/registers/${registerId}/shareholders/${shareholderId}`)
+        )
+      );
+      const deletedIds = shareholderIds.filter((_, index) => results[index]?.status === "fulfilled");
+      const failedIds = shareholderIds.filter((_, index) => results[index]?.status === "rejected");
+      return { deletedIds, failedIds };
+    },
+    onSuccess: ({ deletedIds, failedIds }, { registerId }) => {
+      queryClient.invalidateQueries({ queryKey: shareholderKeys.all(registerId) });
+      if (failedIds.length > 0) {
+        popup.error(
+          "Bulk Delete Incomplete",
+          `${deletedIds.length} shareholder${deletedIds.length === 1 ? " was" : "s were"} deleted, but ${failedIds.length} could not be deleted. The failed rows remain selected.`,
+          5000
+        );
+        return;
+      }
+      popup.success(
+        "Shareholders Deleted",
+        `${deletedIds.length} shareholder${deletedIds.length === 1 ? " has" : "s have"} been removed.`,
+        2500
+      );
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to delete the selected shareholders."),
+  });
+}

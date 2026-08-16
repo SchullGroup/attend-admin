@@ -17,10 +17,11 @@ import {
   useBulkAddShareholders,
   useUpdateShareholder,
   useDeleteShareholder,
+  useBulkDeleteShareholders,
   type Shareholder,
-  type ShareholderUploadItem,
 } from "@/api/registers";
 import { cn, digitsOnly, withIdPrefix, resolveRole } from "@/lib/utils";
+import { popup } from "@/lib/popup-store";
 import { useGetMe } from "@/api/auth/hooks";
 import Papa from "papaparse";
 
@@ -135,6 +136,7 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
   const bulkAdd = useBulkAddShareholders();
   const update  = useUpdateShareholder();
   const remove  = useDeleteShareholder();
+  const bulkRemove = useBulkDeleteShareholders();
 
   // Only the organisation's owner (client_admin) may add/upload/edit/delete
   // shareholders — every other team role (Admin, Event Manager, Viewer,
@@ -143,6 +145,56 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
   const isClientAdmin = resolveRole(userResponse?.data) === "client_admin";
 
   const shareholders: Shareholder[] = data?.shareholders ?? [];
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const currentPageIds = shareholders.map((shareholder) => shareholder.id);
+  const allCurrentPageSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedIds.has(id));
+
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [page, search]);
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleCurrentPage() {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allCurrentPageSelected) currentPageIds.forEach((id) => next.delete(id));
+      else currentPageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }
+
+  function confirmDeleteShareholder(shareholder: Shareholder) {
+    popup.confirm(
+      "Delete Shareholder",
+      `Delete ${displayName(shareholder)} from this register? This cannot be undone.`,
+      () => remove.mutate({ registerId, shareholderId: shareholder.id }),
+      undefined,
+      "Delete"
+    );
+  }
+
+  function confirmBulkDelete() {
+    const shareholderIds = Array.from(selectedIds);
+    if (!shareholderIds.length) return;
+    popup.confirm(
+      "Delete Selected Shareholders",
+      `Delete ${shareholderIds.length} selected shareholder${shareholderIds.length === 1 ? "" : "s"}? This cannot be undone.`,
+      () => bulkRemove.mutate(
+        { registerId, shareholderIds },
+        { onSuccess: ({ failedIds }) => setSelectedIds(new Set(failedIds)) }
+      ),
+      undefined,
+      `Delete ${shareholderIds.length}`
+    );
+  }
 
   // Manual add form
   const [showForm,  setShowForm]  = useState(false);
@@ -242,7 +294,7 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
     e.target.value = "";
   }
 
-  function handleCsvImport() {
+  function executeCsvImport() {
     const valid = csvRows.filter((r) => !r._error);
     if (!valid.length) return;
     setCsvImporting(true);
@@ -263,6 +315,20 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
         onSuccess: () => { setCsvRows([]); setCsvFileName(""); setShowCsvPreview(false); setCsvImporting(false); setReplaceAll(false); },
         onError:   () => setCsvImporting(false),
       }
+    );
+  }
+
+  function handleCsvImport() {
+    if (!replaceAll) {
+      executeCsvImport();
+      return;
+    }
+    popup.confirm(
+      "Replace All Shareholders",
+      "This import will remove the existing shareholder list and replace it with the valid rows in this file. Continue?",
+      executeCsvImport,
+      undefined,
+      "Replace and Import"
     );
   }
 
@@ -491,13 +557,28 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
               <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-[hsl(var(--muted-foreground))]" />
             )}
           </div>
-          <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            {searchInput.trim().length === 1
-              ? "Enter at least 2 characters"
-              : search
-                ? `${data?.totalCount ?? 0} result${(data?.totalCount ?? 0) === 1 ? "" : "s"}`
-                : `Showing ${shareholders.length} of ${(data?.totalCount ?? shareholders.length).toLocaleString()}`}
-          </p>
+          <div className="flex items-center justify-between gap-3 sm:justify-end">
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              {searchInput.trim().length === 1
+                ? "Enter at least 2 characters"
+                : search
+                  ? `${data?.totalCount ?? 0} result${(data?.totalCount ?? 0) === 1 ? "" : "s"}`
+                  : `Showing ${shareholders.length} of ${(data?.totalCount ?? shareholders.length).toLocaleString()}`}
+            </p>
+            {isClientAdmin && selectedIds.size > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                className="h-8 gap-1.5 whitespace-nowrap"
+                disabled={bulkRemove.isPending}
+                onClick={confirmBulkDelete}
+              >
+                {bulkRemove.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                Delete selected ({selectedIds.size})
+              </Button>
+            )}
+          </div>
         </div>
         {isLoading ? (
           <div className="px-5 py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">Loading shareholders…</div>
@@ -515,6 +596,17 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
           <table className="w-full">
             <thead>
               <tr className="attend-table-header">
+                {isClientAdmin && (
+                  <th className="w-10 px-3 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={allCurrentPageSelected}
+                      onChange={toggleCurrentPage}
+                      aria-label="Select all shareholders on this page"
+                      className="h-4 w-4 accent-[hsl(var(--primary))]"
+                    />
+                  </th>
+                )}
                 <th className="px-5 py-3 text-left">Shareholder</th>
                 <th className="px-5 py-3 text-left hidden sm:table-cell">Phone</th>
                 <th className="px-5 py-3 text-left">CHN</th>
@@ -527,7 +619,7 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                 if (editingId === s.id) {
                   return (
                     <tr key={s.id} className="attend-table-row bg-[hsl(var(--primary)/0.03)]">
-                      <td className="px-5 py-3" colSpan={5}>
+                      <td className="px-5 py-3" colSpan={isClientAdmin ? 6 : 5}>
                         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">
                           <div className="sm:col-span-1">
                             <Label className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Name</Label>
@@ -585,6 +677,17 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                 }
                 return (
                 <tr key={s.id} className="attend-table-row">
+                  {isClientAdmin && (
+                    <td className="w-10 px-3 py-3.5 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(s.id)}
+                        onChange={() => toggleSelected(s.id)}
+                        aria-label={`Select ${displayName(s)}`}
+                        className="h-4 w-4 accent-[hsl(var(--primary))]"
+                      />
+                    </td>
+                  )}
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2.5">
                       <div className="h-7 w-7 rounded-full bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-xs font-bold text-[hsl(var(--primary))] shrink-0">
@@ -622,7 +725,8 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                           size="sm" variant="ghost"
                           className="h-7 w-7 p-0 text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:bg-red-50"
                           disabled={remove.isPending}
-                          onClick={() => remove.mutate({ registerId, shareholderId: s.id })}
+                          onClick={() => confirmDeleteShareholder(s)}
+                          title={`Delete ${displayName(s)}`}
                         >
                           {remove.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                         </Button>

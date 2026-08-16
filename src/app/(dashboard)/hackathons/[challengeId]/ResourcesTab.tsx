@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client";
+import { popup } from "@/lib/popup-store";
 import {
   useChallengeResources,
   useAdminChallengeResources,
@@ -115,6 +116,16 @@ export function ResourcesTab({
         },
       },
       { onSuccess: resetForm }
+    );
+  }
+
+  function confirmDeleteResource(resource: ChallengeResource) {
+    popup.confirm(
+      "Delete Challenge Resource",
+      `Delete ${resource.title}? Participants will no longer be able to access it from this challenge.`,
+      () => deleteMutation.mutate({ challengeId, resourceId: resource.id }),
+      undefined,
+      "Delete Resource"
     );
   }
 
@@ -284,7 +295,7 @@ export function ResourcesTab({
                         )}
                         {!readOnly && (
                           <button
-                            onClick={() => deleteMutation.mutate({ challengeId, resourceId: r.id })}
+                            onClick={() => confirmDeleteResource(r)}
                             disabled={deleteMutation.isPending}
                             className="p-1.5 rounded-lg text-[hsl(var(--muted-foreground))] hover:text-red-500 hover:bg-[hsl(var(--muted))] shrink-0"
                             title="Delete"
