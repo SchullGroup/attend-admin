@@ -37,6 +37,10 @@ export function isSessionRevokedError(error: unknown): boolean {
   return getSessionEndMessage(error) === SESSION_INVALIDATED_MESSAGE;
 }
 
+export function isSessionEndedError(error: unknown): boolean {
+  return getSessionEndMessage(error) !== undefined;
+}
+
 export function rememberSessionEndReason(error: unknown): boolean {
   if (typeof window === "undefined") return false;
 

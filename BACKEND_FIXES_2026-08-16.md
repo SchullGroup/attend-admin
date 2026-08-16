@@ -497,3 +497,94 @@ Please return:
 5. Sanitized request/response samples and correlation IDs for the acceptance tests.
 6. Automated regression-test results for all six items.
 7. Any proposed response-contract changes before frontend implementation depends on them.
+
+## Product verification update - 2026-08-16
+
+The product-side verification result is:
+
+| Item | Status | Follow-up |
+| --- | --- | --- |
+| End/cancel event ends Zoom for everyone | Confirmed working | Keep regression coverage for both lifecycle endpoints and repeated requests. |
+| Named and expiring guest access codes | Confirmed working | Keep the label/expiry/max-use acceptance matrix as regression coverage. |
+| Optional shareholder CHN | Still failing | Remains open. Apply the DTO, persistence, uniqueness, direct import, and embedded AGM import changes in section 3. |
+| Challenge criteria visible to judges | Confirmed working | Keep authorization and event-specific criteria regression coverage. |
+
+The CHN failure should be logged with the failed endpoint, sanitized request body/file headers, response body, status, request ID, and whether it occurred in manual entry, direct register CSV import, or AGM custom-list import. A successful frontend request can omit `chn`; the backend must not convert that omission into a required-field or uniqueness failure.
+
+## Additional open issue: two-hour inactivity expiry may not be enforced correctly
+
+The original requirement is in `BACKEND_FIXES_2026-08-10.md`: expire an admin session after **120 minutes without authenticated activity**. This is a sliding server-side idle timeout, not a fixed access-token lifetime and not a fixed 120-minute lifetime from login.
+
+### Current frontend behavior
+
+- The browser access-token cookie has a one-day client-side lifetime.
+- The HttpOnly refresh-token cookie has a seven-day client-side lifetime.
+- These cookie lifetimes are storage ceilings only. They do not implement or override the two-hour backend idle policy.
+- Authenticated API requests use the access token. On an ordinary access-token `401`, the frontend may call `POST /api/auth/refresh`, which proxies to `POST /api/v1/auth/refresh-token`.
+- The frontend recognizes backend codes `IDLE_TIMEOUT` and `SESSION_EXPIRED`, clears local auth state, redirects to login, and shows: `Your session expired after 2 hours of inactivity. Please log in again.`
+- The frontend has been tightened so an explicit `401` idle-expiry response is terminal and is not followed by a refresh attempt.
+
+Therefore, the authoritative fix must remain backend-side. A seven-day refresh cookie must not allow a session idle for more than 120 minutes to resume.
+
+### Required backend model
+
+Maintain an authoritative server-side session record keyed to the access/refresh token family, for example:
+
+```text
+sessionId
+userId
+deviceId
+refreshTokenHash / tokenFamilyId
+lastActivityAt
+revokedAt
+revokeReason
+createdAt
+absoluteExpiresAt (optional separate maximum lifetime)
+```
+
+For every authenticated request:
+
+1. Resolve the active server-side session/token family.
+2. Reject it when revoked or when `serverNow >= lastActivityAt + 120 minutes`.
+3. On rejection, revoke the session/token family and return `401` with stable code `IDLE_TIMEOUT` or `SESSION_EXPIRED`.
+4. Only after successful authentication/authorization, advance `lastActivityAt` using server time. Throttle writes if needed, but do not create a gap large enough to expire an actively used session incorrectly.
+5. Do not count public requests, failed authentication, static assets, browser mouse movement, or merely keeping a tab open as authenticated activity.
+
+For `POST /api/v1/auth/refresh-token`:
+
+1. Resolve the same server-side session/token family from the refresh token.
+2. Apply the same 120-minute idle check **before** issuing or rotating any token.
+3. If idle-expired, revoke the whole token family and return the same stable `401` expiry code. Do not issue a new access or refresh token.
+4. A successful refresh may update `lastActivityAt`, because it is an authenticated session operation, but it must not resurrect an already expired session.
+
+JWT `exp`, access-token TTL, refresh-token TTL, and cookie `maxAge` may remain separate security limits. None of them is a substitute for `lastActivityAt` enforcement.
+
+### Response contract
+
+Return the stable code at the top level or in the existing standard error envelope, consistently for both protected endpoints and refresh:
+
+```json
+{
+  "status": "FAILURE",
+  "code": "IDLE_TIMEOUT",
+  "error": "Session expired",
+  "message": "Your session expired after 2 hours of inactivity. Please log in again."
+}
+```
+
+Do not return a generic `INVALID_TOKEN` for this case if the server knows the session expired from inactivity, and do not return HTTP `500`.
+
+### Required acceptance evidence
+
+- At T+119 minutes with no activity, an authenticated request succeeds and advances the idle deadline.
+- At T+121 minutes with no activity, a protected endpoint returns `401 IDLE_TIMEOUT` and the session is revoked.
+- At T+121 minutes, calling refresh directly also returns `401 IDLE_TIMEOUT` and issues no tokens.
+- Activity at T+90 minutes allows the same session to remain valid until 120 minutes after that activity, proving this is sliding rather than fixed from login.
+- Browser mouse/keyboard activity without an authenticated request does not extend the backend session.
+- A background polling/websocket policy is explicitly decided and tested. If those calls count as activity, a dashboard left open may never become idle; if product expects human inactivity, passive polling must not extend `lastActivityAt`.
+- The expiry applies to `SUPER_ADMIN`, `CLIENT_ADMIN`, `ADMIN`, `JUDGE`, `EVENT_MANAGER`, and `VIEWER`.
+- Concurrent tabs for the same session share one authoritative deadline and cannot race to revive an expired token family.
+- Server/database clock handling uses UTC/server time and is covered at the exact 120-minute boundary.
+- Audit records include session ID, user ID, device ID, last activity, expiry time, request ID, and reason, without raw access/refresh tokens.
+
+Please return the session entity/cache fields used, the exact activity-update rule, token TTL configuration, sanitized protected-request and refresh responses at T+121, and automated test results. Without that evidence, changing JWT or cookie expiry to two hours does not satisfy this requirement.
