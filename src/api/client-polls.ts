@@ -71,11 +71,27 @@ function normalizePoll(raw: any): Poll {
       ? { id: String(i), label: o }
       : { id: String(o.id ?? o.optionId ?? i), label: o.label ?? o.text ?? "" }
   );
-  const results: PollOptionResult[] = (raw?.results ?? raw?.finalResults ?? []).map((r: any) => ({
-    optionId:   String(r.optionId ?? r.id ?? ""),
+  // The snapshot endpoint embeds results in each option, while websocket
+  // messages return a separate results/finalResults array. Normalize both
+  // shapes so a page reload renders the same bars as the live view.
+  const snapshotResults = options.map((option, index) => {
+    const rawOption = raw?.options?.[index];
+    if (typeof rawOption === "string" || !rawOption) return null;
+    const hasResult = rawOption.votes != null || rawOption.percentage != null;
+    return hasResult
+      ? {
+          optionId: option.id,
+          votes: rawOption.votes ?? rawOption.count ?? 0,
+          percentage: rawOption.percentage ?? rawOption.pct ?? 0,
+        }
+      : null;
+  }).filter(Boolean) as PollOptionResult[];
+  const responseResults: PollOptionResult[] = (raw?.results ?? raw?.finalResults ?? []).map((r: any) => ({
+    optionId:   String(r.optionId ?? r.id ?? r.option?.id ?? ""),
     votes:      r.votes ?? r.count ?? 0,
     percentage: r.percentage ?? r.pct ?? 0,
   }));
+  const results = responseResults.length > 0 ? responseResults : snapshotResults;
   const status = String(raw?.status ?? (raw?.closedAt ? "CLOSED" : "OPEN")).toUpperCase() === "CLOSED" ? "CLOSED" : "OPEN";
   return {
     id:         String(raw?.id ?? raw?.pollId ?? ""),
