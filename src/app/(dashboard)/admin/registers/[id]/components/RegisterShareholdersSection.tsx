@@ -307,8 +307,8 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
 
         {isClientAdmin && (
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-3">
-            <span className="font-medium">CSV format: Full Name, CHN, Email, Phone, Units, Status</span>
-            {" "}· CHN is used for upsert deduplication.
+            <span className="font-medium">CSV columns: Full Name and Email are required; CHN, Phone, Units, and Status are optional.</span>
+            {" "}When supplied, CHN is used for upsert deduplication.
           </p>
         )}
       </Card>
