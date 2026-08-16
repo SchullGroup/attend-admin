@@ -87,6 +87,7 @@ export function PollsPanel({
   // ── Live overlay: patch query snapshot with websocket updates ──
   const [wsPatches, setWsPatches] = useState<Record<string, Partial<Poll>>>({});
   const [wsNewPolls, setWsNewPolls] = useState<Poll[]>([]);
+  const [hiddenPollIds, setHiddenPollIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     if (!wsMessage) return;
@@ -131,8 +132,8 @@ export function PollsPanel({
       // Polls announced over WS that the snapshot doesn't know yet
       ...wsNewPolls.filter((p) => !base.some((b) => b.id === p.id)),
     ].map((p) => (wsPatches[p.id] ? { ...p, ...wsPatches[p.id] } : p));
-    return merged;
-  }, [pollsFromQuery, wsNewPolls, wsPatches]);
+    return merged.filter((poll) => !hiddenPollIds.has(poll.id));
+  }, [pollsFromQuery, wsNewPolls, wsPatches, hiddenPollIds]);
 
   const openPoll    = polls.find((p) => p.status === "OPEN") ?? null;
   const closedPolls = polls.filter((p) => p.status === "CLOSED");
@@ -180,7 +181,31 @@ export function PollsPanel({
     popup.confirm(
       "Delete Poll",
       `Delete “${poll.question}”? This cannot be undone.`,
-      () => deleteMutation.mutate({ eventId, pollId: poll.id }),
+      () => {
+        setHiddenPollIds((prev) => new Set(prev).add(poll.id));
+        deleteMutation.mutate(
+          { eventId, pollId: poll.id },
+          {
+            onSuccess: () => {
+              // Remove websocket-only entries too; the query mutation handles the
+              // server snapshot, while these overlays intentionally live locally.
+              setWsNewPolls((prev) => prev.filter((item) => item.id !== poll.id));
+              setWsPatches((prev) => {
+                const next = { ...prev };
+                delete next[poll.id];
+                return next;
+              });
+            },
+            onError: () => {
+              setHiddenPollIds((prev) => {
+                const next = new Set(prev);
+                next.delete(poll.id);
+                return next;
+              });
+            },
+          },
+        );
+      },
       undefined,
       "Delete Poll"
     );

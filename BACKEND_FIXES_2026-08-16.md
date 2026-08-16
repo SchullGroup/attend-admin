@@ -1,6 +1,6 @@
 # Backend fixes requested - 2026-08-16
 
-This handoff covers six production issues found from `attend-admin`. The frontend contracts and affected APIs have been traced below. It intentionally lists backend-owned actions and UI-verifiable acceptance checks; environment migration/deployment status is not assumed here.
+This handoff covers seven production issues found from `attend-admin`. The frontend contracts and affected APIs have been traced below. It intentionally lists backend-owned actions and UI-verifiable acceptance checks; environment migration/deployment status is not assumed here.
 
 ## Frontend/API alignment already completed
 
@@ -21,6 +21,7 @@ After the backend actions are available in the test environment, verify in this 
 4. Create an innovation challenge with non-default criteria, assign a judge, and inspect the judge scoring page.
 5. Send a broadcast from the event Broadcast tab and verify history/counters.
 6. Download the same document repeatedly from both the global Documents page and an event Documents tab; refresh and verify the count increments without a `500`.
+7. Create a poll with an expiry five minutes in the future, verify it stays open until the configured instant, then delete a zero-vote closed poll and verify it disappears immediately without a page reload.
 
 ## Priority summary
 
@@ -32,6 +33,7 @@ After the backend actions are available in the test environment, verify in this 
 | P1 | Innovation challenge criteria created by an admin are not returned to assigned judges | Innovation config persistence and judge challenge/scoring responses |
 | P0 | Sending an attendee broadcast currently returns HTTP 500 | Broadcast send orchestration, channel providers, delivery history and error mapping |
 | P1 | Repeated document downloads must never return HTTP 500 | Global-document download endpoint, file storage lookup, counter/audit idempotency |
+| P0 | Polls with a future auto-close time can close immediately or return inconsistent timestamps | Poll create/list endpoints, poll expiry column, scheduler, vote validation, live poll websocket events |
 
 ## 1. End the Zoom meeting when an admin ends or cancels an event
 
@@ -524,6 +526,75 @@ Common failure candidates include a one-time signed URL being persisted and reus
 - Confirm a missing storage object returns the documented stable error and correlation ID, not a generic `500`.
 - Confirm `GET /api/v1/client/documents/{documentId}` does not unexpectedly consume or invalidate the subsequent `/download` request.
 
+## 7. Fix poll auto-close timestamps and status consistency
+
+### Current frontend contract
+
+The Live Control Room creates polls through:
+
+`POST /api/v1/client/events/{eventId}/polls`
+
+The request body is:
+
+```json
+{
+  "question": "Check Poll expiry",
+  "options": ["Yes", "No"],
+  "closesAt": "2026-08-16T14:32:00.000Z"
+}
+```
+
+The admin enters `closesAt` with a browser `datetime-local` control. The frontend converts that local wall-clock value to an absolute ISO-8601 instant with `new Date(value).toISOString()` before sending it. This is intentional: for example, `15:32` entered in Lagos (UTC+1) is sent as `14:32:00.000Z`.
+
+### Observed staging response
+
+For a poll created at approximately 15:29 in Lagos with an expiry set approximately five minutes in the future, the list endpoint returned:
+
+```json
+{
+  "id": "0135c445-0909-4323-835e-218e9418d332",
+  "createdAt": "2026-08-16T15:29:21.991677",
+  "closesAt": "2026-08-16T14:32:00",
+  "status": "OPEN",
+  "closedAt": null
+}
+```
+
+This response is internally inconsistent: `closesAt` is earlier than `createdAt`, has no offset or `Z`, and the status remained `OPEN`. In the UI, polls configured with a future expiry can therefore close immediately or be represented with the wrong expiry. The exact test response had request reference ID `52ebe33c-2460-4afb-9cbd-83fd933295b6`.
+
+### Required backend behavior
+
+- Treat `closesAt` as an absolute instant at every stage: create DTO parsing, persistence, automatic-close scheduling, list/detail response mapping, participant vote validation, and `POLL_OPENED`/`POLL_CLOSED` websocket messages.
+- Accept ISO-8601 values with `Z` or an explicit offset, such as `2026-08-16T14:32:00.000Z` or `2026-08-16T15:32:00+01:00`.
+- Store the value in a timezone-aware UTC database type (`timestamptz` or equivalent), not a timezone-free local datetime column.
+- Return `closesAt`, `createdAt`, and `closedAt` as ISO-8601 values with `Z` or an explicit offset. Do not serialize an instant as `2026-08-16T14:32:00` without timezone information.
+- Compare using server UTC time and one explicit boundary rule. Recommended: the poll is open while `now < closesAt`; at `now >= closesAt`, transition it to `CLOSED` exactly once.
+- Do not mark a poll closed merely because its timestamp is numerically earlier after dropping an offset. Preserve the instant rather than comparing local clock components.
+- Ensure the scheduler/worker and the synchronous vote path use the same expiry predicate and update/publish `POLL_CLOSED` atomically or idempotently.
+- Reject malformed, offset-free (if not supported), or past `closesAt` values with a field-level `400`. A past value must not create a poll that is inconsistently `OPEN`.
+- If a past expiry is intentionally allowed for immediate closure, define that behavior explicitly and return `status: "CLOSED"` with `closedAt`; do not return an `OPEN` poll with a past `closesAt`.
+
+### APIs and data affected
+
+- `POST /api/v1/client/events/{eventId}/polls`
+- `GET /api/v1/client/events/{eventId}/polls`
+- `GET /api/v1/admin/events/{eventId}/polls`
+- `PATCH /api/v1/client/events/{eventId}/polls/{pollId}/close`
+- Participant poll vote endpoint(s), if separate
+- Live STOMP topic `/topic/live.{eventId}` messages `POLL_OPENED`, `POLL_RESULTS_UPDATED`, and `POLL_CLOSED`
+- Poll entity/request DTO/response DTO, expiry column type, scheduler/worker, and expiry comparison query
+
+### Acceptance tests
+
+- Create a poll without `closesAt`; it remains open until manually closed.
+- Create a poll with an expiry five minutes in the future from clients in Lagos (UTC+1), UTC, and another timezone; all clients observe the same absolute close instant.
+- Confirm the persisted and returned `closesAt` is the requested instant with `Z` or an explicit offset, and is after `createdAt`.
+- Confirm the poll remains `OPEN` before the instant and becomes `CLOSED` at/after it, with one `POLL_CLOSED` event and correct `closedAt`.
+- Confirm a poll with a past expiry returns the documented field-level `400` or an immediately `CLOSED` response, never `OPEN` with a past expiry.
+- Vote immediately before and at/after expiry; the former follows the boundary policy and the latter is rejected consistently.
+- Verify list, admin list, websocket, scheduler, and vote paths all preserve the same instant and do not depend on server local timezone.
+- Repeat scheduler execution and confirm automatic close and websocket publication are idempotent.
+
 ## Required backend response to this handoff
 
 Please return:
@@ -533,7 +604,7 @@ Please return:
 3. The chosen `expiresAt` timezone and wire-format contract.
 4. Database migrations for nullable CHN and challenge criteria, including index/constraint changes.
 5. Sanitized request/response samples and correlation IDs for the acceptance tests.
-6. Automated regression-test results for all six items.
+6. Automated regression-test results for all seven items.
 7. Any proposed response-contract changes before frontend implementation depends on them.
 
 ## Product verification update - 2026-08-16
@@ -546,6 +617,7 @@ The product-side verification result is:
 | Named and expiring guest access codes | Confirmed working | Keep the label/expiry/max-use acceptance matrix as regression coverage. |
 | Optional shareholder CHN | Still failing | Remains open. Apply the DTO, persistence, uniqueness, direct import, and embedded AGM import changes in section 3. |
 | Challenge criteria visible to judges | Frontend field mapping fixed; pending UI retest | The API returns `criterion`; the judge adapter now maps it to the UI's `name` field. Refresh the judging page and confirm all labels and weights render. |
+| Poll auto-close timestamp/status consistency | Backend fix required; frontend delete refresh fixed | The poll create request sends a UTC instant, but staging returned a timezone-free `closesAt` earlier than `createdAt`. The backend must normalize, persist, compare, schedule, and return the same instant consistently. Zero-vote deletion now removes the poll optimistically and rolls back on failure. |
 
 The CHN failure should be logged with the failed endpoint, sanitized request body/file headers, response body, status, request ID, and whether it occurred in manual entry, direct register CSV import, or AGM custom-list import. A successful frontend request can omit `chn`; the backend must not convert that omission into a required-field or uniqueness failure.
 
