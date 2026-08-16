@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  getAuthRoles,
+  hasAttendAdminRole,
+  UNSUPPORTED_PORTAL_ROLE_MESSAGE,
+} from "@/lib/auth-roles";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -22,16 +27,14 @@ export async function POST(request: Request) {
 
     const tokenData = data.data ?? data;
 
-    // Block attendee-only accounts at the proxy level — token never reaches the browser.
-    const rolesRaw: string[] = [
-      ...(Array.isArray(tokenData.roles) ? tokenData.roles : []),
-      ...(tokenData.role ? [tokenData.role] : []),
-    ];
-    const normalized = rolesRaw.map((r: string) => String(r ?? "").toLowerCase().replace(/[-\s]+/g, "_")).filter(Boolean);
-    const isAttendeeOnly = normalized.length > 0 && normalized.every((r: string) => r === "attendee");
-    if (isAttendeeOnly) {
+    // The auth service is shared with the attendee platform. Reject every
+    // account that has no explicit Attend Admin role before issuing cookies.
+    if (!hasAttendAdminRole(tokenData)) {
+      console.warn("Rejected login for unsupported portal role", {
+        roles: getAuthRoles(tokenData),
+      });
       return NextResponse.json(
-        { status: false, message: "Access denied. This portal is for administrators only." },
+        { status: false, message: UNSUPPORTED_PORTAL_ROLE_MESSAGE },
         { status: 403 },
       );
     }
