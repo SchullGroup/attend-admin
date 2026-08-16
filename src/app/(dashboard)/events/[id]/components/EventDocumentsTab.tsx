@@ -7,6 +7,7 @@ import { Loader } from "@/components/ui/Loader";
 import { UploadProgress } from "@/components/ui/upload-progress";
 import {
   useClientEventDocuments,
+  useDownloadEventDocument as useDownloadClientEventDocument,
   useUploadEventDocument,
   useDeleteEventDocument,
 } from "@/api/client-events";
@@ -85,6 +86,7 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
   } = useClientEventDocuments(eventId, "", { enabled: !isAdmin });
 
   const adminDownload  = useDownloadEventDocument();
+  const clientDownload = useDownloadClientEventDocument();
   const uploadMutation = useUploadEventDocument();
   const deleteMutation = useDeleteEventDocument();
 
@@ -209,7 +211,17 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
   }
 
   function handleDownload(d: any) {
-    // If the list item has a direct URL, use it without a second request
+    if (!isAdmin && d.id) {
+      clientDownload.mutate({ eventId, documentId: d.id });
+      return;
+    }
+    if (isAdmin && d.id !== "agm-notice-synthetic") {
+      adminDownload.mutate({ eventId, documentId: d.id });
+      return;
+    }
+
+    // The synthetic AGM notice has no persisted document ID, so it cannot use
+    // a counted document endpoint until the backend registers it as a document.
     const directUrl = d.fileUrl ?? d.downloadUrl;
     if (directUrl) {
       const a = document.createElement("a");
@@ -220,12 +232,6 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
       a.click();
       return;
     }
-    // Admin path: fetch detail endpoint to get fileUrl
-    if (isAdmin) {
-      adminDownload.mutate({ eventId, documentId: d.id });
-      return;
-    }
-    // Fallback: open in new tab
     toast.info("No download URL available for this document.");
   }
 
@@ -240,6 +246,7 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
   }
 
   const isBusy = uploading || uploadMutation.isPending;
+  const isDownloading = adminDownload.isPending || clientDownload.isPending;
 
   return (
     <div className="flex flex-col gap-4">
@@ -361,11 +368,11 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
                       <div className="flex items-center gap-1 justify-end">
                         <Button
                           size="sm" variant="ghost" className="h-7 w-7 p-0"
-                          disabled={adminDownload.isPending}
+                          disabled={isDownloading}
                           title="Download"
                           onClick={() => handleDownload(d)}
                         >
-                          {adminDownload.isPending
+                          {isDownloading
                             ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             : <Download className="h-3.5 w-3.5" />
                           }

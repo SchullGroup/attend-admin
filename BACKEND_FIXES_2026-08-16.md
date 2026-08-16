@@ -1,6 +1,26 @@
 # Backend fixes requested - 2026-08-16
 
-This handoff covers six production issues found from `attend-admin`. The frontend contracts and affected APIs have been traced below. Please implement the authoritative fixes in the backend, deploy them to staging, and return request/response evidence for each acceptance test.
+This handoff covers six production issues found from `attend-admin`. The frontend contracts and affected APIs have been traced below. It intentionally lists backend-owned actions and UI-verifiable acceptance checks; environment migration/deployment status is not assumed here.
+
+## Frontend/API alignment already completed
+
+- Event end/cancel still uses the existing lifecycle endpoints. The response type now accepts the optional `zoomMeetingEndStatus` values documented below without requiring them.
+- Guest-code expiry is serialized from the admin's local `datetime-local` input to an ISO-8601 UTC instant before submission.
+- CHN is optional in manual shareholder entry, register CSV upload, and custom AGM shareholder-list header validation. Blank CHN values are omitted from requests.
+- Both innovation challenge create paths send their configured criteria; the judge UI reads `data.criteria` from the scoring endpoint.
+- Global and client event-document downloads now go through backend document endpoints so counters/audits can run. Direct URLs are used only when no persisted document ID exists, such as a synthetic admin AGM-notice row.
+- Event creation already blocks repeat clicks while the request is pending; no duplicate-create UI change is required in this handoff.
+
+## UI verification order
+
+After the backend actions are available in the test environment, verify in this order:
+
+1. End and cancel live Zoom-backed events from **Event Settings** and observe participant disconnection plus the terminal event state.
+2. Create guest codes with label-only, expiry-only, and label plus expiry, then redeem each in the participant/guest UI.
+3. Add a shareholder without CHN manually, import a register CSV without a CHN column, and create an AGM with a custom shareholder file without CHN.
+4. Create an innovation challenge with non-default criteria, assign a judge, and inspect the judge scoring page.
+5. Send a broadcast from the event Broadcast tab and verify history/counters.
+6. Download the same document repeatedly from both the global Documents page and an event Documents tab; refresh and verify the count increments without a `500`.
 
 ## Priority summary
 

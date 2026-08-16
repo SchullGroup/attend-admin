@@ -56,9 +56,10 @@ export interface EventOption {
 export type EventStatus = "DRAFT" | "PUBLISHED" | "UPCOMING" | "LIVE" | "ENDED" | "CANCELLED";
 
 export interface StatusTransitionResponse {
-  id:        string;
-  status:    EventStatus;
-  updatedAt: string;
+  id:                    string;
+  status:                EventStatus;
+  updatedAt:             string;
+  zoomMeetingEndStatus?: "NOT_CONFIGURED" | "NOT_IN_PROGRESS" | "ENDED" | "PENDING_RETRY";
 }
 
 // Zoom Meeting (returned on event detail when enableZoomMeeting was set)
