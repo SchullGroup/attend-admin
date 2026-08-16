@@ -172,6 +172,7 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
   const module          = toEventModule(room.eventType);
   const isAGM           = module === "AGM";
   const isLaunch        = module === "LAUNCH";
+  const isVirtual       = room.format?.toUpperCase() === "VIRTUAL";
   const recentAtt       = attendance.length > 0 ? attendance : (room.recentAttendance ?? []);
   const isStreaming     = room.format?.toLowerCase() !== "in_person";
   const hasZoomMeeting  = !!zoomMeeting?.meetingId;
@@ -264,7 +265,9 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
       <div className="grid grid-cols-3 gap-5">
         {/* Left: Resolutions + Live Polls + Press Kit */}
         <div className="col-span-2 flex flex-col gap-5">
-          <ResolutionsPanel resolutions={room.resolutions} color={color} eventId={eventId} />
+          {isAGM && (
+            <ResolutionsPanel resolutions={room.resolutions} color={color} eventId={eventId} />
+          )}
           {/* Polls (F1) are for non-AGM live events — AGM engagement is
               resolutions/voting, so the panel is hidden there. */}
           {!isAGM && (
@@ -304,37 +307,39 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
             }
           />
 
-          {/* Attendance log */}
-          <Card className="attend-card overflow-hidden">
-            <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
-              <UserCheck className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
-              <h2 className="font-semibold text-[hsl(var(--foreground))]">Recent Check-ins</h2>
-              <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">live</span>
-            </div>
-            <div className="divide-y divide-[hsl(var(--border))]">
-              {recentAtt.length === 0 ? (
-                <p className="px-5 py-6 text-sm text-[hsl(var(--muted-foreground))] text-center italic">
-                  No recent check-ins.
-                </p>
-              ) : recentAtt.map((entry, i) => (
-                <div key={i} className="px-5 py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                      style={{ backgroundColor: color }}
-                    >
-                      {entry.initials || initials(entry.name)}
+          {/* Physical check-in is not applicable to a virtual-only event. */}
+          {!isVirtual && (
+            <Card className="attend-card overflow-hidden">
+              <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+                <UserCheck className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+                <h2 className="font-semibold text-[hsl(var(--foreground))]">Recent Check-ins</h2>
+                <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">live</span>
+              </div>
+              <div className="divide-y divide-[hsl(var(--border))]">
+                {recentAtt.length === 0 ? (
+                  <p className="px-5 py-6 text-sm text-[hsl(var(--muted-foreground))] text-center italic">
+                    No recent check-ins.
+                  </p>
+                ) : recentAtt.map((entry, i) => (
+                  <div key={i} className="px-5 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                        style={{ backgroundColor: color }}
+                      >
+                        {entry.initials || initials(entry.name)}
+                      </div>
+                      <div>
+                        <div className="text-xs font-medium text-[hsl(var(--foreground))]">{entry.name}</div>
+                        <div className="text-xs text-[hsl(var(--muted-foreground))] capitalize">{entry.mode}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-xs font-medium text-[hsl(var(--foreground))]">{entry.name}</div>
-                      <div className="text-xs text-[hsl(var(--muted-foreground))] capitalize">{entry.mode}</div>
-                    </div>
+                    <span className="text-xs text-[hsl(var(--muted-foreground))]">{formatTime(entry.joinedAt)}</span>
                   </div>
-                  <span className="text-xs text-[hsl(var(--muted-foreground))]">{formatTime(entry.joinedAt)}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
+                ))}
+              </div>
+            </Card>
+          )}
 
         </div>
       </div>
