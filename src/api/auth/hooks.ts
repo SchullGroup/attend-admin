@@ -53,12 +53,13 @@ export const useLogout = () => {
   });
 };
 
-export const useGetMe = () => {
+export const useGetMe = (enabled = !!Cookies.get("accessToken")) => {
   return useQuery({
     queryKey: authKeys.me(),
     queryFn: authClient.getMe,
-    // only fetch if access token exists
-    enabled: !!Cookies.get("accessToken"),
+    // Callers such as the dashboard layout can enable this after a silent
+    // refresh makes a token available without remounting the component.
+    enabled,
     retry: false,
   });
 };

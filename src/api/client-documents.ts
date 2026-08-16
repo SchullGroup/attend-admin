@@ -344,37 +344,21 @@ export function useDeleteGlobalDocument() {
   });
 }
 
-/** Download a document — opens the Cloudinary URL directly, or falls back to base64. */
+/** Download through the backend counter endpoint, then save the redirected file response. */
 export function useDownloadGlobalDocument() {
   return useMutation({
-    mutationFn: async (documentId: string) => {
-      const res = await apiClient.get<ApiResponse<GlobalDocumentItem>>(
-        `/api/v1/client/documents/${documentId}`
+    mutationFn: async ({ documentId, filename }: { documentId: string; filename: string }) => {
+      const res = await apiClient.get<Blob>(
+        `/api/v1/client/documents/${documentId}/download`,
+        { responseType: "blob" }
       );
-      return res.data.data;
+      return { blob: res.data, filename };
     },
-    onSuccess: (doc) => {
-      // Prefer Cloudinary URL — just open it
-      const directUrl = (doc as any).fileUrl ?? (doc as any).downloadUrl;
-      if (directUrl) {
-        const a    = document.createElement("a");
-        a.href     = directUrl;
-        a.download = (doc as any).originalFilename || doc.title;
-        a.target   = "_blank";
-        a.rel      = "noopener noreferrer";
-        a.click();
-        return;
-      }
-      // Fall back: decode base64
-      if (!doc?.fileData) return;
-      const binary = atob(doc.fileData);
-      const bytes  = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const blob = new Blob([bytes], { type: doc.mimeType || "application/octet-stream" });
+    onSuccess: ({ blob, filename }) => {
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href     = url;
-      a.download = (doc as any).originalFilename || doc.title;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
     },

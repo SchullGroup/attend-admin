@@ -24,6 +24,7 @@ import {
   useExportInvites,
   AudienceTier,
 } from "@/api/client-events";
+import { popup } from "@/lib/popup-store";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -271,6 +272,16 @@ export function EventLaunchAudienceTab({ eventId }: { eventId: string }) {
     setActiveTier((prev) => (prev === tierId ? null : tierId));
   }
 
+  function confirmDeleteTier(tier: AudienceTier) {
+    popup.confirm(
+      "Delete Audience Tier",
+      `Delete ${tier.name}? Existing invite assignments for this tier may no longer be usable.`,
+      () => deleteTier.mutate({ eventId, tierId: tier.id }),
+      undefined,
+      "Delete Tier"
+    );
+  }
+
   async function handleExport() {
     const result = await exportCsv();
     const csv = result.data;
@@ -368,7 +379,7 @@ export function EventLaunchAudienceTab({ eventId }: { eventId: string }) {
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button
-                      onClick={() => deleteTier.mutate({ eventId, tierId: tier.id })}
+                      onClick={() => confirmDeleteTier(tier)}
                       disabled={deleteTier.isPending}
                       className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-red-50 text-[hsl(var(--muted-foreground))] hover:text-red-600 transition-colors disabled:opacity-50"
                     >

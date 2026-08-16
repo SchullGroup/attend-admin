@@ -27,7 +27,17 @@ export const usePopupStore = create<PopupStore>((set) => ({
   type: "info",
   title: "",
   message: "",
-  openPopup: (params) => set({ isOpen: true, ...params }),
+  openPopup: (params) =>
+    set({
+      isOpen: true,
+      // Confirmation controls belong only to the popup that created them.
+      confirmText: undefined,
+      cancelText: undefined,
+      onConfirm: undefined,
+      onCancel: undefined,
+      autoCloseTimeout: undefined,
+      ...params,
+    }),
   closePopup: () =>
     set((state) => ({
       ...state,

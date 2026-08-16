@@ -16,6 +16,7 @@ import {
   useCreateGuestAccess,
   useRevokeGuestAccess,
 } from "@/api/client-guest-access";
+import { popup } from "@/lib/popup-store";
 
 function fmtWhen(iso?: string | null) {
   if (!iso) return null;
@@ -41,20 +42,27 @@ export function EventGuestAccessCard({ eventId }: { eventId: string }) {
   }
 
   function submit() {
+    const expiryInstant = expiresAt ? new Date(expiresAt).toISOString() : undefined;
     createMutation.mutate(
       {
         eventId,
         payload: {
           ...(label.trim() ? { label: label.trim() } : {}),
-          // Backend expects a plain LocalDateTime ("2026-08-01T18:00:00" —
-          // no millis, no Z). Sending toISOString() ("…T10:45:00.000Z")
-          // made deserialization blow up as a 500 "Unexpected error".
-          // datetime-local inputs give "YYYY-MM-DDTHH:mm" — just add :00.
-          ...(expiresAt ? { expiresAt: expiresAt.length === 16 ? `${expiresAt}:00` : expiresAt } : {}),
+          ...(expiryInstant ? { expiresAt: expiryInstant } : {}),
           ...(maxUses ? { maxUses: parseInt(maxUses, 10) } : {}),
         },
       },
       { onSuccess: () => { setShowForm(false); setLabel(""); setExpiresAt(""); setMaxUses(""); } }
+    );
+  }
+
+  function confirmRevoke(accessId: string, code: string) {
+    popup.confirm(
+      "Revoke Guest Code",
+      `Revoke guest code ${code}? Guests will no longer be able to use it to join this event.`,
+      () => revokeMutation.mutate({ eventId, accessId }),
+      undefined,
+      "Revoke Code"
     );
   }
 
@@ -152,7 +160,7 @@ export function EventGuestAccessCard({ eventId }: { eventId: string }) {
                   size="sm"
                   className="h-7 gap-1 text-xs text-red-600 hover:text-red-700 shrink-0"
                   disabled={revokeMutation.isPending}
-                  onClick={() => revokeMutation.mutate({ eventId, accessId: c.id })}
+                  onClick={() => confirmRevoke(c.id, c.code)}
                 >
                   <Ban className="h-3 w-3" /> Revoke
                 </Button>

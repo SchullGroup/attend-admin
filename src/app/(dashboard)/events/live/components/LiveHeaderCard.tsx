@@ -1,8 +1,43 @@
 import { Building2, Users, UserCheck, Vote, Clock } from "lucide-react";
 import type { LiveRoomDetail } from "@/api/client-live";
 import { formatElapsed } from "./helpers";
+import { toEventModule } from "@/lib/event-module";
 
 export function LiveHeaderCard({ room, color }: { room: LiveRoomDetail; color: string }) {
+  const isVirtual = room.format?.toUpperCase() === "VIRTUAL";
+  const isAGM = toEventModule(room.eventType) === "AGM";
+
+  const stats = [
+    {
+      icon:  Users,
+      label: "Attendees",
+      value: room.attendeeCount.toLocaleString(),
+      sub:   room.capacity ? `of ${room.capacity.toLocaleString()} cap` : "connected",
+    },
+    ...(!isVirtual ? [{
+      icon:  UserCheck,
+      label: "Checked In",
+      value: room.checkedInCount.toLocaleString(),
+      sub:   room.attendeeCount > 0
+        ? `${Math.round((room.checkedInCount / room.attendeeCount) * 100)}% of attendees`
+        : "check-ins",
+    }] : []),
+    ...(isAGM ? [{
+      icon:  Vote,
+      label: "Resolutions",
+      value: room.resolutions.length > 0
+        ? `${room.resolutions.filter((r) => r.status === "CLOSED").length} / ${room.resolutions.length}`
+        : "—",
+      sub:   room.resolutions.length > 0 ? "closed" : "no votes",
+    }] : []),
+    {
+      icon:  Clock,
+      label: "Elapsed",
+      value: formatElapsed(room.elapsedMinutes),
+      sub:   "session time",
+    },
+  ];
+
   return (
     <div
       className="rounded-2xl p-5 text-white"
@@ -29,37 +64,8 @@ export function LiveHeaderCard({ room, color }: { room: LiveRoomDetail; color: s
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3 mt-4">
-        {[
-          {
-            icon:  Users,
-            label: "Attendees",
-            value: room.attendeeCount.toLocaleString(),
-            sub:   room.capacity ? `of ${room.capacity.toLocaleString()} cap` : "connected",
-          },
-          {
-            icon:  UserCheck,
-            label: "Checked In",
-            value: room.checkedInCount.toLocaleString(),
-            sub:   room.attendeeCount > 0
-              ? `${Math.round((room.checkedInCount / room.attendeeCount) * 100)}% of attendees`
-              : "check-ins",
-          },
-          {
-            icon:  Vote,
-            label: "Resolutions",
-            value: room.resolutions.length > 0
-              ? `${room.resolutions.filter((r) => r.status === "CLOSED").length} / ${room.resolutions.length}`
-              : "—",
-            sub:   room.resolutions.length > 0 ? "closed" : "no votes",
-          },
-          {
-            icon:  Clock,
-            label: "Elapsed",
-            value: formatElapsed(room.elapsedMinutes),
-            sub:   "session time",
-          },
-        ].map(({ icon: Icon, label, value, sub }) => (
+      <div className={`grid gap-3 mt-4 ${stats.length === 4 ? "grid-cols-4" : stats.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+        {stats.map(({ icon: Icon, label, value, sub }) => (
           <div key={label} className="bg-white/15 rounded-xl p-3">
             <div className="flex items-center gap-1.5 mb-1.5">
               <Icon className="h-3.5 w-3.5 opacity-70" />

@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api-client";
+import { popup } from "@/lib/popup-store";
 import {
   usePressKit,
   useAdminPressKit,
@@ -143,6 +144,36 @@ export function EventPressKitTab({
     );
   }
 
+  function confirmReleaseAll() {
+    popup.confirm(
+      "Release All Press Materials",
+      `Release all ${embargoedCount} embargoed document${embargoedCount === 1 ? "" : "s"} now? This makes them available immediately.`,
+      () => releaseAllMutation.mutate({ eventId }),
+      undefined,
+      "Release All"
+    );
+  }
+
+  function confirmRelease(doc: PressKitDoc) {
+    popup.confirm(
+      "Release Press Material",
+      `Release ${doc.title} now? The document will become available immediately.`,
+      () => releaseMutation.mutate({ eventId, docId: doc.id }),
+      undefined,
+      "Release Document"
+    );
+  }
+
+  function confirmDelete(doc: PressKitDoc) {
+    popup.confirm(
+      "Delete Press Material",
+      `Delete ${doc.title}? This removes it from the event press kit.`,
+      () => deleteMutation.mutate({ eventId, docId: doc.id }),
+      undefined,
+      "Delete Document"
+    );
+  }
+
   if (isLoading) return <Loader variant="page" text="Loading press kit…" />;
 
   const embargoedCount = (docs ?? []).filter((d) => !d.released).length;
@@ -165,7 +196,7 @@ export function EventPressKitTab({
                 size="sm"
                 className="h-8 text-xs"
                 disabled={releaseAllMutation.isPending}
-                onClick={() => releaseAllMutation.mutate({ eventId })}
+                onClick={confirmReleaseAll}
               >
                 {releaseAllMutation.isPending ? "Releasing…" : `Release All (${embargoedCount})`}
               </Button>
@@ -310,14 +341,14 @@ export function EventPressKitTab({
                     size="sm"
                     className="h-7 text-xs"
                     disabled={releaseMutation.isPending}
-                    onClick={() => releaseMutation.mutate({ eventId, docId: d.id })}
+                    onClick={() => confirmRelease(d)}
                   >
                     Release
                   </Button>
                 )}
                 {!readOnly && (
                   <button
-                    onClick={() => deleteMutation.mutate({ eventId, docId: d.id })}
+                    onClick={() => confirmDelete(d)}
                     disabled={deleteMutation.isPending}
                     className="p-1.5 rounded-lg text-[hsl(var(--muted-foreground))] hover:text-red-500 hover:bg-[hsl(var(--muted))]"
                     title="Delete"

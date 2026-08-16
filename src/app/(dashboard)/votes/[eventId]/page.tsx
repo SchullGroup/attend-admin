@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate, resolveRole } from "@/lib/utils";
 import { useGetMe } from "@/api/auth/hooks";
+import { popup } from "@/lib/popup-store";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -259,6 +260,16 @@ function ResolutionCard({
   const isOpen = res.status?.toUpperCase() === "OPEN";
 
   const totalCombined = (res.combinedForCount ?? 0) + (res.combinedAgainstCount ?? 0) + (res.combinedAbstainCount ?? 0);
+
+  function confirmCloseVoting() {
+    popup.confirm(
+      "Close Voting",
+      `Close voting for “${res.title}”? No more votes will be accepted for this resolution.`,
+      () => closeMutation.mutate({ eventId, resolutionId: res.id }),
+      undefined,
+      "Close Voting"
+    );
+  }
 
   // Candidate Poll (F8) — a slate of nominees voted for/against/abstain independently,
   // sharing one open/close lifecycle and quorum context. See `candidates` below.
@@ -530,7 +541,7 @@ function ResolutionCard({
                   size="sm"
                   variant="destructive"
                   disabled={closeMutation.isPending}
-                  onClick={() => closeMutation.mutate({ eventId, resolutionId: res.id })}
+                  onClick={confirmCloseVoting}
                 >
                   Close Voting
                 </Button>

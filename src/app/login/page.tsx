@@ -19,6 +19,10 @@ import { useLogin } from "@/api/auth/hooks";
 import { toast } from "sonner";
 import Cookies from "js-cookie";
 import { consumeSessionEndReason } from "@/lib/auth-session";
+import {
+  hasAttendAdminRole,
+  UNSUPPORTED_PORTAL_ROLE_MESSAGE,
+} from "@/lib/auth-roles";
 
 const FEATURES = [
   {
@@ -121,6 +125,20 @@ export default function LoginPage() {
   useEffect(() => {
     const reason = consumeSessionEndReason();
     if (reason) toast.error(reason, { duration: 6000 });
+
+    const redirectReason =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("reason")
+        : null;
+    if (redirectReason === "unsupported-role") {
+      toast.error(UNSUPPORTED_PORTAL_ROLE_MESSAGE, { duration: 6000 });
+      window.history.replaceState({}, "", "/login");
+    } else if (redirectReason === "session-invalid") {
+      toast.error("Your session could not be verified. Please sign in again.", {
+        duration: 6000,
+      });
+      window.history.replaceState({}, "", "/login");
+    }
   }, []);
 
   function handleSubmit(e: React.FormEvent) {
@@ -129,27 +147,16 @@ export default function LoginPage() {
       { identifier, password },
       {
         onSuccess: (response) => {
-          // Block attendee-only accounts — this portal is admin-only.
-          // AuthResponse nests the payload in response.data; roles come as string[] (e.g. ["ATTENDEE"])
+          // Defense in depth: the login proxy already rejects unsupported roles
+          // before issuing cookies, but keep the browser-side check as well.
           const inner = (response as any)?.data ?? response;
-          const rolesRaw: string[] = [
-            ...(Array.isArray(inner?.roles) ? inner.roles : []),
-            ...(inner?.role ? [inner.role] : []),
-          ];
-          const normalized = rolesRaw
-            .map((r) =>
-              String(r ?? "")
-                .toLowerCase()
-                .replace(/[-\s]+/g, "_"),
-            )
-            .filter(Boolean);
-          const isAttendeeOnly =
-            normalized.length > 0 && normalized.every((r) => r === "attendee");
-          if (isAttendeeOnly) {
+          if (!hasAttendAdminRole(inner)) {
             Cookies.remove("accessToken");
-            toast.error(
-              "Access denied. This portal is for administrators only.",
-            );
+            if (typeof window !== "undefined") {
+              window.localStorage.removeItem("userLogoUrl");
+              void fetch("/api/auth/logout", { method: "POST" });
+            }
+            toast.error(UNSUPPORTED_PORTAL_ROLE_MESSAGE);
             return;
           }
           toast.success("Login successful");

@@ -36,6 +36,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
+import { popup } from "@/lib/popup-store";
 
 const JUDGE_ROLES = new Set(["judge"]);
 
@@ -395,7 +396,13 @@ function JudgesPanel({ challengeId, readOnly = false }: { challengeId: string; r
                       <Button
                         size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
                         disabled={unassignJudge.isPending}
-                        onClick={() => unassignJudge.mutate({ challengeId, judgeId: j.id })}
+                        onClick={() => popup.confirm(
+                          "Unassign Judge",
+                          `Unassign ${j.name} from this challenge? Their challenge assignments will no longer be available.`,
+                          () => unassignJudge.mutate({ challengeId, judgeId: j.id }),
+                          undefined,
+                          "Unassign"
+                        )}
                         title="Unassign from challenge"
                       >
                         <Trash2 className="h-3.5 w-3.5" />

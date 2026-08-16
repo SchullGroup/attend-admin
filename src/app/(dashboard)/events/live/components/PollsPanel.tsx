@@ -24,6 +24,7 @@ import {
   type Poll,
   type PollOptionResult,
 } from "@/api/client-polls";
+import { popup } from "@/lib/popup-store";
 
 export type PollWsMessage = Extract<
   LiveWsMessage,
@@ -165,6 +166,26 @@ export function PollsPanel({
     );
   }
 
+  function confirmClosePoll(poll: Poll) {
+    popup.confirm(
+      "Close Poll",
+      `Close “${poll.question}”? Attendees will no longer be able to vote.`,
+      () => closeMutation.mutate({ eventId, pollId: poll.id }),
+      undefined,
+      "Close Poll"
+    );
+  }
+
+  function confirmDeletePoll(poll: Poll) {
+    popup.confirm(
+      "Delete Poll",
+      `Delete “${poll.question}”? This cannot be undone.`,
+      () => deleteMutation.mutate({ eventId, pollId: poll.id }),
+      undefined,
+      "Delete Poll"
+    );
+  }
+
   return (
     <Card className="attend-card">
       <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
@@ -262,7 +283,7 @@ export function PollsPanel({
                   size="sm"
                   className="h-7 text-xs shrink-0"
                   disabled={closeMutation.isPending}
-                  onClick={() => closeMutation.mutate({ eventId, pollId: openPoll.id })}
+                  onClick={() => confirmClosePoll(openPoll)}
                 >
                   {closeMutation.isPending ? "Closing…" : "Close Poll"}
                 </Button>
@@ -291,7 +312,7 @@ export function PollsPanel({
                   <p className="text-sm font-medium text-[hsl(var(--foreground))]">{p.question}</p>
                   {!readOnly && p.totalVotes === 0 && (
                     <button
-                      onClick={() => deleteMutation.mutate({ eventId, pollId: p.id })}
+                      onClick={() => confirmDeletePoll(p)}
                       disabled={deleteMutation.isPending}
                       className="text-[hsl(var(--muted-foreground))] hover:text-red-500 shrink-0"
                       title="Delete poll (no votes recorded)"

@@ -84,7 +84,7 @@ export function EventBroadcastTab({ eventId }: Props) {
               </div>
               {channel === "ALL" && (
                 <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1.5">
-                  Sends through all available delivery channels, including the in-app notification bell.
+                  Sends through all available delivery channels. Push and in-app require a matching Attend account.
                 </p>
               )}
             </div>

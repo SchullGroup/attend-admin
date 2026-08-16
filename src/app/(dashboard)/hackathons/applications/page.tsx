@@ -28,6 +28,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { formatDate } from "@/lib/utils";
 import { popup } from "@/lib/popup-store";
 
@@ -425,7 +431,6 @@ function ChallengeApplications({
 }) {
   const [activeStatus, setActiveStatus] = useState("");
   const [activeTrack,  setActiveTrack]  = useState("");
-  const [openMenu,     setOpenMenu]     = useState<string | null>(null);
   const [showExport,   setShowExport]   = useState(false);
   const [exportFrom,   setExportFrom]   = useState("");
   const [exportTo,     setExportTo]     = useState("");
@@ -670,30 +675,25 @@ function ChallengeApplications({
                         View <ChevronRight className="h-3 w-3" />
                       </Button>
                       {!readOnly && (VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).length > 0 && (
-                        <div className="relative">
-                          <Button
-                            size="sm" variant="outline" className="h-7 text-xs gap-1"
-                            onClick={() => setOpenMenu(openMenu === app.id ? null : app.id)}
-                          >
-                            Status <ChevronDown className="h-3 w-3" />
-                          </Button>
-                          {openMenu === app.id && (
-                            <div className="absolute right-0 top-8 z-50 min-w-[170px] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-lg p-1">
-                              {(VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).map((s) => (
-                                <button
-                                  key={s}
-                                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg hover:bg-[hsl(var(--accent))] transition-colors"
-                                  onClick={() => {
-                                    updateStatus.mutate({ challengeId, applicationId: app.id, status: s });
-                                    setOpenMenu(null);
-                                  }}
-                                >
-                                  {statusChip(s)}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
+                              Status <ChevronDown className="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" sideOffset={6} className="min-w-[170px]">
+                            {(VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).map((s) => (
+                              <DropdownMenuItem
+                                key={s}
+                                className="cursor-pointer px-3 py-1.5 text-xs"
+                                disabled={updateStatus.isPending}
+                                onSelect={() => updateStatus.mutate({ challengeId, applicationId: app.id, status: s })}
+                              >
+                                {statusChip(s)}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </div>
                   </td>

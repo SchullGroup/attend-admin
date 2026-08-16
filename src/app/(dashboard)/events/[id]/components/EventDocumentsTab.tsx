@@ -7,6 +7,7 @@ import { Loader } from "@/components/ui/Loader";
 import { UploadProgress } from "@/components/ui/upload-progress";
 import {
   useClientEventDocuments,
+  useDownloadEventDocument as useDownloadClientEventDocument,
   useUploadEventDocument,
   useDeleteEventDocument,
 } from "@/api/client-events";
@@ -16,6 +17,7 @@ import {
 } from "@/api/super-admin";
 import { apiClient } from "@/lib/api-client";
 import { throttledProgress } from "@/lib/utils";
+import { popup } from "@/lib/popup-store";
 import { toast } from "sonner";
 
 // Allowed document type values from the API
@@ -84,6 +86,7 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
   } = useClientEventDocuments(eventId, "", { enabled: !isAdmin });
 
   const adminDownload  = useDownloadEventDocument();
+  const clientDownload = useDownloadClientEventDocument();
   const uploadMutation = useUploadEventDocument();
   const deleteMutation = useDeleteEventDocument();
 
@@ -208,7 +211,17 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
   }
 
   function handleDownload(d: any) {
-    // If the list item has a direct URL, use it without a second request
+    if (!isAdmin && d.id) {
+      clientDownload.mutate({ eventId, documentId: d.id });
+      return;
+    }
+    if (isAdmin && d.id !== "agm-notice-synthetic") {
+      adminDownload.mutate({ eventId, documentId: d.id });
+      return;
+    }
+
+    // The synthetic AGM notice has no persisted document ID, so it cannot use
+    // a counted document endpoint until the backend registers it as a document.
     const directUrl = d.fileUrl ?? d.downloadUrl;
     if (directUrl) {
       const a = document.createElement("a");
@@ -219,16 +232,21 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
       a.click();
       return;
     }
-    // Admin path: fetch detail endpoint to get fileUrl
-    if (isAdmin) {
-      adminDownload.mutate({ eventId, documentId: d.id });
-      return;
-    }
-    // Fallback: open in new tab
     toast.info("No download URL available for this document.");
   }
 
+  function confirmDeleteDocument(d: any) {
+    popup.confirm(
+      "Delete Event Document",
+      `Delete ${d.title || "this document"}? It will no longer be available from this event.`,
+      () => deleteMutation.mutate({ eventId, documentId: d.id }),
+      undefined,
+      "Delete Document"
+    );
+  }
+
   const isBusy = uploading || uploadMutation.isPending;
+  const isDownloading = adminDownload.isPending || clientDownload.isPending;
 
   return (
     <div className="flex flex-col gap-4">
@@ -350,11 +368,11 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
                       <div className="flex items-center gap-1 justify-end">
                         <Button
                           size="sm" variant="ghost" className="h-7 w-7 p-0"
-                          disabled={adminDownload.isPending}
+                          disabled={isDownloading}
                           title="Download"
                           onClick={() => handleDownload(d)}
                         >
-                          {adminDownload.isPending
+                          {isDownloading
                             ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             : <Download className="h-3.5 w-3.5" />
                           }
@@ -365,7 +383,7 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
                             className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
                             disabled={deleteMutation.isPending}
                             title="Delete"
-                            onClick={() => deleteMutation.mutate({ eventId, documentId: d.id })}
+                            onClick={() => confirmDeleteDocument(d)}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>

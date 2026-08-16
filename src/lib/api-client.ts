@@ -1,6 +1,6 @@
 import axios from "axios";
 import Cookies from "js-cookie";
-import { isSessionRevokedError, rememberSessionEndReason } from "@/lib/auth-session";
+import { isSessionEndedError, rememberSessionEndReason } from "@/lib/auth-session";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -128,7 +128,7 @@ apiClient.interceptors.response.use(
 
     if (
       error.response?.status === 401 &&
-      isSessionRevokedError(error)
+      isSessionEndedError(error)
     ) {
       rememberSessionEndReason(error);
       Cookies.remove("accessToken");

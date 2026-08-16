@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDate } from "@/lib/utils";
 import { useClientEventAgenda, useAddAgendaItem, useDeleteAgendaItem, useUpdateAgendaItem } from "@/api/client-events";
+import { popup } from "@/lib/popup-store";
 import type { EventShim, LocalAgendaItem } from "./types";
 
 const FORMAT_ICON = { virtual: Monitor, hybrid: Users2, "in-person": MapPin };
@@ -487,7 +488,13 @@ export function EventOverviewTab({
                           <Pencil className="h-3 w-3" />
                         </button>
                         <button
-                          onClick={() => deleteMutation.mutate({ eventId: event.id, itemId: item.id! })}
+                          onClick={() => popup.confirm(
+                            "Delete Agenda Item",
+                            `Delete “${item.title}” from this event's agenda?`,
+                            () => deleteMutation.mutate({ eventId: event.id, itemId: item.id! }),
+                            undefined,
+                            "Delete Item"
+                          )}
                           disabled={deleteMutation.isPending}
                           className="h-6 w-6 rounded-md flex items-center justify-center text-[hsl(var(--muted-foreground))] hover:text-red-500 hover:bg-red-50 transition-all"
                           title="Remove item"
