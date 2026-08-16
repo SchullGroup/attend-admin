@@ -178,9 +178,24 @@ export function useDeletePoll() {
       );
       return res.data.data;
     },
+    onMutate: async ({ eventId, pollId }) => {
+      await queryClient.cancelQueries({ queryKey: pollKeys.list(eventId) });
+
+      const previousPolls = queryClient.getQueryData<Poll[]>(pollKeys.list(eventId));
+      queryClient.setQueryData<Poll[]>(pollKeys.list(eventId), (polls = []) =>
+        polls.filter((poll) => poll.id !== pollId),
+      );
+
+      return { previousPolls, eventId };
+    },
+    onError: (e, { eventId }, context) => {
+      if (context?.previousPolls) {
+        queryClient.setQueryData(pollKeys.list(eventId), context.previousPolls);
+      }
+      parseAndToastApiError(e, "Failed to delete poll.");
+    },
     onSuccess: (_d, { eventId }) => {
       queryClient.invalidateQueries({ queryKey: pollKeys.list(eventId) });
     },
-    onError: (e) => parseAndToastApiError(e, "Failed to delete poll."),
   });
 }
