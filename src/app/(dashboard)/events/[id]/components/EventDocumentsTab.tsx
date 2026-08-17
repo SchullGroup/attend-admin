@@ -212,7 +212,11 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
 
   function handleDownload(d: any) {
     if (!isAdmin && d.id) {
-      clientDownload.mutate({ eventId, documentId: d.id });
+      clientDownload.mutate({
+        eventId,
+        documentId: d.id,
+        filename: d.originalFilename || d.title || `document-${d.id}`,
+      });
       return;
     }
     if (isAdmin && d.id !== "agm-notice-synthetic") {
