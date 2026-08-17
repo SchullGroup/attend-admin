@@ -14,10 +14,11 @@ export interface QuickAction {
 interface QuickActionsProps {
   items: QuickAction[];
   /** Number of columns — defaults to items.length (up to 4) */
-  cols?: 2 | 3 | 4;
+  cols?: 1 | 2 | 3 | 4;
 }
 
 const COL_CLASS: Record<number, string> = {
+  1: "grid-cols-1",
   2: "grid-cols-2",
   3: "grid-cols-3",
   4: "grid-cols-4",

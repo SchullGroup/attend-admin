@@ -267,6 +267,7 @@ export default function DashboardPage() {
   return (
     <ClientView
       currentUser={currentUser}
+      isViewer={normalizedRole === "viewer"}
       allEvents={allEvents}
       eventsLoading={eventsLoading}
       topRegisters={topRegisters}
