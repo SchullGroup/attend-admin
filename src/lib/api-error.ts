@@ -25,6 +25,7 @@ export function parseAndToastApiError(
     OTP_EXPIRED: "OTP expired. Request a new code and try again.",
     INVALID_OTP: "Invalid OTP. Check the code and try again.",
     TOO_MANY_ATTEMPTS: "Too many incorrect attempts. Request a new OTP.",
+    ZOOM_END_FAILED: "Zoom could not end the linked meeting, so the event status was not changed. Please try again.",
   };
   const codeMessage = typeof responseData?.code === "string"
     ? codeMessages[responseData.code.toUpperCase()]

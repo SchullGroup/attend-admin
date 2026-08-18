@@ -327,7 +327,15 @@ function makeLifecycleMutation(
       onSuccess: (data, id) => {
         queryClient.invalidateQueries({ queryKey: clientEventKeys.detail(id) });
         queryClient.invalidateQueries({ queryKey: clientEventKeys.all });
-        popup.success(successMessage, `Status: ${data?.status ?? "updated"}`, 3000);
+        const zoomOutcome = data?.zoomMeetingEndStatus;
+        const detail = zoomOutcome === "ENDED"
+          ? "The event status was updated and the linked Zoom meeting was ended."
+          : zoomOutcome === "NOT_IN_PROGRESS"
+            ? "The event status was updated. The linked Zoom meeting was not in progress."
+            : zoomOutcome === "NOT_CONFIGURED"
+              ? "The event status was updated. No Zoom meeting was configured."
+              : `Status: ${data?.status ?? "updated"}`;
+        popup.success(successMessage, detail, 3000);
       },
       onError: (error: any) => parseAndToastApiError(error, errorMessage),
     });
@@ -513,42 +521,25 @@ export function useDeleteEventDocument() {
   });
 }
 
-/**
- * Fetch a single document (increments download count) and trigger a browser download.
- * Returns the DocumentItem including base64 fileData.
- */
+/** Download through the counted client document endpoint and save the returned file. */
 export function useDownloadEventDocument() {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ eventId, documentId }: { eventId: string; documentId: string }) => {
-      const res = await apiClient.get<ApiResponse<DocumentItem>>(
-        `/api/v1/client/events/${eventId}/documents/${documentId}`
+    mutationFn: async ({ eventId, documentId, filename }: { eventId: string; documentId: string; filename?: string }) => {
+      const res = await apiClient.get<Blob>(
+        `/api/v1/client/documents/${documentId}/download`,
+        { responseType: "blob" }
       );
-      return res.data.data;
+      return { blob: res.data, eventId, filename: filename || `document-${documentId}` };
     },
-    onSuccess: (doc) => {
-      // Prefer Cloudinary URL — just open it directly
-      const directUrl = doc?.fileUrl ?? doc?.downloadUrl;
-      if (directUrl) {
-        const a    = document.createElement("a");
-        a.href     = directUrl;
-        a.download = doc.originalFilename || doc.title;
-        a.target   = "_blank";
-        a.rel      = "noopener noreferrer";
-        a.click();
-        return;
-      }
-      // Fall back: decode base64
-      if (!doc?.fileData) return;
-      const binary = atob(doc.fileData);
-      const bytes  = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const blob = new Blob([bytes], { type: doc.mimeType || "application/octet-stream" });
+    onSuccess: ({ blob, eventId, filename }) => {
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href     = url;
-      a.download = doc.originalFilename || doc.title;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
+      queryClient.invalidateQueries({ queryKey: clientEventKeys.documents(eventId) });
     },
     onError: (error: any) => parseAndToastApiError(error, "Download failed."),
   });
@@ -778,9 +769,10 @@ export interface BroadcastHistoryResponse {
 }
 
 export interface SendBroadcastRequest {
-  subject?: string;
-  message:  string;
-  channel:  "EMAIL" | "SMS" | "PUSH" | "IN_APP" | "ALL";
+  subject?:        string;
+  message:         string;
+  channel:         "EMAIL" | "SMS" | "PUSH" | "IN_APP" | "ALL";
+  idempotencyKey?: string;
 }
 
 export interface BulkNoticeRequest {

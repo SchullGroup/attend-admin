@@ -17,6 +17,7 @@ import type { RegisterItem } from "@/types/super-admin";
 
 export interface ClientViewProps {
   currentUser:    { fullName?: string } | null | undefined;
+  isViewer:       boolean;
   allEvents:      EventSummaryResponse[];
   eventsLoading:  boolean;
   topRegisters:   RegisterItem[];
@@ -27,6 +28,7 @@ export interface ClientViewProps {
 
 export function ClientView({
   currentUser,
+  isViewer,
   allEvents,
   eventsLoading,
   topRegisters,
@@ -75,12 +77,14 @@ export function ClientView({
 
       {/* Quick Actions */}
       <QuickActions
-        cols={3}
-        items={[
-          { label: "Create Event", href: "/events/create",     icon: PlusCircle,   color: "#374151", bg: "#f3f4f6" },
-          { label: "All Events",   href: "/events",            icon: CalendarDays, color: "#0f766e", bg: "#f0fdfa" },
-          { label: "QR Check-In",  href: "/events/qr-checkin", icon: QrCode,       color: "#7c3aed", bg: "#faf5ff" },
-        ]}
+        cols={isViewer ? 1 : 3}
+        items={isViewer
+          ? [{ label: "All Events", href: "/events", icon: CalendarDays, color: "#0f766e", bg: "#f0fdfa" }]
+          : [
+              { label: "Create Event", href: "/events/create",     icon: PlusCircle,   color: "#374151", bg: "#f3f4f6" },
+              { label: "All Events",   href: "/events",            icon: CalendarDays, color: "#0f766e", bg: "#f0fdfa" },
+              { label: "QR Check-In",  href: "/events/qr-checkin", icon: QrCode,       color: "#7c3aed", bg: "#faf5ff" },
+            ]}
       />
 
       {/* ── Main grid: Events column + Registers ── */}

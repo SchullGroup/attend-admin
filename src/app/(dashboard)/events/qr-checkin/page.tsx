@@ -28,6 +28,11 @@ function eventColor(eventType?: string | null): string {
   return MODULE_COLORS[toEventModule(eventType)];
 }
 
+function isPhysicalCheckInEvent(format?: string | null): boolean {
+  const normalised = (format ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  return normalised === "IN_PERSON" || normalised === "HYBRID";
+}
+
 export interface CheckIn {
   name:      string;
   time:      string;
@@ -442,7 +447,9 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
 export default function QRCheckInPage() {
   const { data: eventsData, isLoading } = useClientEvents("ALL", 0, 100);
   const allEvents  = eventsData?.events ?? [];
-  const liveEvents = allEvents.filter((e) => e.status?.toUpperCase() === "LIVE");
+  const liveEvents = allEvents.filter(
+    (e) => e.status?.toUpperCase() === "LIVE" && isPhysicalCheckInEvent(e.format)
+  );
 
   const [selectedEventId, setSelectedEventId]         = useState<string | null>(null);
   // Keyed by eventId so checkins survive navigating back and forth
@@ -568,7 +575,7 @@ export default function QRCheckInPage() {
           </table>
           {liveEvents.length === 0 && (
             <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
-              No live events available for check-in.
+              No live hybrid or in-person events are available for check-in.
             </div>
           )}
         </div>

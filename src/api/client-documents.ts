@@ -174,7 +174,7 @@ export function useDocumentTypeOptions() {
   });
 }
 
-/** Fetch single document including base64 fileData (increments download count). */
+/** Fetch document metadata. Download counting happens only on the `/download` endpoint. */
 export function useGlobalDocument(documentId: string) {
   return useQuery({
     queryKey: clientDocumentKeys.detail(documentId),
@@ -185,7 +185,7 @@ export function useGlobalDocument(documentId: string) {
       return res.data.data;
     },
     enabled:   !!documentId,
-    staleTime: 0, // always fresh — downloading increments a counter
+    staleTime: 30_000,
   });
 }
 

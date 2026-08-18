@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Bell, Send, FileText, Megaphone, Clock, Users, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,6 +28,7 @@ export function EventBroadcastTab({ eventId }: Props) {
   const [channel, setChannel] = useState<Channel>("EMAIL");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const retryRef = useRef<{ signature: string; key: string } | null>(null);
 
   const { data: recipientCount = 0 } = useBroadcastRecipients(eventId);
   const { data: historyData, isLoading: historyLoading } = useBroadcastHistory(eventId);
@@ -35,16 +36,29 @@ export function EventBroadcastTab({ eventId }: Props) {
 
   const history = historyData?.content ?? [];
   const needsSubject = CHANNEL_CONFIG.find((c) => c.key === channel)?.needsSubject ?? false;
-  const canSend = !!message.trim() && message.length <= 500 && (!needsSubject || !!subject.trim()) && !sendMutation.isPending;
+  const canSend = !!message.trim() && message.length <= 500 && (!needsSubject || (!!subject.trim() && subject.trim().length <= 255)) && !sendMutation.isPending;
 
   function handleSend() {
+    const trimmedSubject = subject.trim();
+    const trimmedMessage = message.trim();
+    const signature = JSON.stringify({ eventId, channel, subject: trimmedSubject, message: trimmedMessage });
+    const idempotencyKey = retryRef.current?.signature === signature
+      ? retryRef.current.key
+      : crypto.randomUUID();
+    retryRef.current = { signature, key: idempotencyKey };
+
     const payload: SendBroadcastRequest = {
       channel,
-      message: message.trim(),
-      ...(needsSubject && subject.trim() ? { subject: subject.trim() } : {}),
+      message: trimmedMessage,
+      idempotencyKey,
+      ...(needsSubject && trimmedSubject ? { subject: trimmedSubject } : {}),
     };
     sendMutation.mutate({ eventId, data: payload }, {
-      onSuccess: () => { setMessage(""); setSubject(""); },
+      onSuccess: () => {
+        retryRef.current = null;
+        setMessage("");
+        setSubject("");
+      },
     });
   }
 
@@ -99,7 +113,11 @@ export function EventBroadcastTab({ eventId }: Props) {
                   placeholder="e.g. Important update about your event"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
+                  maxLength={255}
                 />
+                <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))] text-right">
+                  {subject.length} / 255
+                </p>
               </div>
             )}
 
