@@ -14,6 +14,7 @@ import {
   useAnswerQuestion,
   liveKeys,
   type LiveQuestion,
+  type LiveResolution,
 } from "@/api/client-live";
 import { useLiveWebSocket, type LiveWsMessage } from "@/hooks/use-live-websocket";
 import { useClientEventDetail, useUpdateStreamUrl, clientEventKeys, type ZoomMeetingDto } from "@/api/client-events";
@@ -79,6 +80,7 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
   const pollsQuery  = isSuperAdmin ? adminPolls : clientPolls;
   // Latest POLL_* websocket message, seq-stamped so PollsPanel never misses repeats
   const [pollWsMessage, setPollWsMessage] = useState<{ seq: number; msg: PollWsMessage } | null>(null);
+  const [resolutionTallies, setResolutionTallies] = useState<Record<string, LiveResolution>>({});
   const pollWsSeq = useRef(0);
 
   // Seed local questions from server snapshot (merge so WS additions aren't lost)
@@ -128,6 +130,8 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
     ) {
       pollWsSeq.current += 1;
       setPollWsMessage({ seq: pollWsSeq.current, msg });
+    } else if (msg.type === "RESOLUTION_TALLY_UPDATED") {
+      setResolutionTallies((prev) => ({ ...prev, [msg.payload.id]: msg.payload }));
     }
   });
 
@@ -174,6 +178,10 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
   const isLaunch        = module === "LAUNCH";
   const isVirtual       = room.format?.toUpperCase() === "VIRTUAL";
   const recentAtt       = attendance.length > 0 ? attendance : (room.recentAttendance ?? []);
+  const liveResolutions = room.resolutions.map((resolution) => ({
+    ...resolution,
+    ...resolutionTallies[resolution.id],
+  }));
   const isStreaming     = room.format?.toLowerCase() !== "in_person";
   const hasZoomMeeting  = !!zoomMeeting?.meetingId;
   const zak             = zoomMeeting?.startUrl ? (() => {
@@ -266,7 +274,7 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
         {/* Left: Resolutions + Live Polls + Press Kit */}
         <div className="col-span-2 flex flex-col gap-5">
           {isAGM && (
-            <ResolutionsPanel resolutions={room.resolutions} color={color} eventId={eventId} />
+            <ResolutionsPanel resolutions={liveResolutions} color={color} eventId={eventId} />
           )}
           {/* Polls (F1) are for non-AGM live events — AGM engagement is
               resolutions/voting, so the panel is hidden there. */}

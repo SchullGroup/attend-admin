@@ -312,6 +312,7 @@ export interface AgmConfig {
 
 export interface ProductLaunchConfig {
   productName: string;
+  flyerUrl?: string;
   productCategory?: string;
   targetAudience?: string;
   pressKitUrl?: string;
@@ -841,6 +842,7 @@ export interface CreateProductLaunchEventRequest {
   tagline?:            string;
   productDescription?: string;
   micrositeSlug?:      string;
+  flyerUrl?:           string;
   audienceTargeting?:  "OPEN_REGISTRATION" | "INVITE_ONLY";  // was `audienceMode`
   embargo?: {
     enabled:    boolean;

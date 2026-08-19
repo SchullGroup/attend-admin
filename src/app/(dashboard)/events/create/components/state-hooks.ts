@@ -89,6 +89,7 @@ export function useLaunchState() {
   const [tagline,        setTagline]        = useState("");
   const [productDesc,    setProductDesc]    = useState("");
   const [slug,           setSlug]           = useState("");
+  const [flyerUrl,       setFlyerUrl]       = useState("");
   const [speakers,       setSpeakers]       = useState<SpeakerItem[]>([{ id: genId(), name: "", role: "", bio: "" }]);
   const [embargoEnabled, setEmbargoEnabled] = useState(false);
   const [embargoAt,      setEmbargoAt]      = useState("");
@@ -106,6 +107,7 @@ export function useLaunchState() {
     format, setFormat, venue, setVenue, streamUrl, setStreamUrl,
     capacity, setCapacity,
     productName, setProductName, tagline, setTagline, productDesc, setProductDesc, slug, setSlug,
+    flyerUrl, setFlyerUrl,
     speakers, addSpeaker, removeSpeaker, updateSpeaker,
     embargoEnabled, setEmbargoEnabled, embargoAt, setEmbargoAt,
     audienceMode, setAudienceMode, featured, setFeatured,

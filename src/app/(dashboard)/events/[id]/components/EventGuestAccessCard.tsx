@@ -15,6 +15,7 @@ import {
   useGuestAccessCodes,
   useCreateGuestAccess,
   useRevokeGuestAccess,
+  type GuestAccessRole,
 } from "@/api/client-guest-access";
 import { popup } from "@/lib/popup-store";
 
@@ -32,6 +33,7 @@ export function EventGuestAccessCard({ eventId }: { eventId: string }) {
   const [label,     setLabel]     = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [maxUses,   setMaxUses]   = useState("");
+  const [role,       setRole]       = useState<GuestAccessRole>("OTHER");
   const [copiedId,  setCopiedId]  = useState<string | null>(null);
 
   function copyCode(id: string, code: string) {
@@ -50,9 +52,10 @@ export function EventGuestAccessCard({ eventId }: { eventId: string }) {
           ...(label.trim() ? { label: label.trim() } : {}),
           ...(expiryInstant ? { expiresAt: expiryInstant } : {}),
           ...(maxUses ? { maxUses: parseInt(maxUses, 10) } : {}),
+          role,
         },
       },
-      { onSuccess: () => { setShowForm(false); setLabel(""); setExpiresAt(""); setMaxUses(""); } }
+      { onSuccess: () => { setShowForm(false); setLabel(""); setExpiresAt(""); setMaxUses(""); setRole("OTHER"); } }
     );
   }
 
@@ -92,6 +95,19 @@ export function EventGuestAccessCard({ eventId }: { eventId: string }) {
             className="w-full px-3 py-2 text-sm rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
           />
           <div className="flex items-center gap-3 flex-wrap">
+            <label className="text-xs text-[hsl(var(--muted-foreground))] flex items-center gap-2">
+              Role
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as GuestAccessRole)}
+                className="px-2 py-1 text-xs rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))]"
+              >
+                <option value="OTHER">Other</option>
+                <option value="REGULATOR">Regulator</option>
+                <option value="DIRECTOR">Director</option>
+                <option value="AUDITOR">Auditor</option>
+              </select>
+            </label>
             <label className="text-xs text-[hsl(var(--muted-foreground))] flex items-center gap-2">
               Expires
               <input
@@ -148,7 +164,7 @@ export function EventGuestAccessCard({ eventId }: { eventId: string }) {
               <div className="min-w-0 flex-1">
                 {c.label && <p className="text-xs text-[hsl(var(--foreground))] truncate">{c.label}</p>}
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                  {c.useCount}{c.maxUses ? `/${c.maxUses}` : ""} uses
+                  {c.role.charAt(0) + c.role.slice(1).toLowerCase()} · {c.useCount}{c.maxUses ? `/${c.maxUses}` : ""} uses
                   {c.expiresAt ? ` · expires ${fmtWhen(c.expiresAt)}` : ""}
                 </p>
               </div>

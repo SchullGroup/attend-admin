@@ -187,6 +187,7 @@ function CreateEventInner() {
 
       const productLaunchConfig = selectedModule === "LAUNCH" ? {
         audienceTargeting: audience(launch.audienceMode) as import("@/api/client-events").AudienceTargeting,
+        flyerUrl: launch.flyerUrl || undefined,
         embargo: {
           enabled:   launch.embargoEnabled,
           releaseAt: launch.embargoEnabled ? (launch.embargoAt || undefined) : undefined,
@@ -499,6 +500,7 @@ function CreateEventInner() {
           tagline:            launch.tagline              || undefined,
           productDescription: launch.productDesc          || undefined,
           micrositeSlug:      launch.slug                 || undefined,
+          flyerUrl:           launch.flyerUrl             || undefined,
           audienceTargeting:  audience(launch.audienceMode),
           embargo: {
             enabled:   launch.embargoEnabled,

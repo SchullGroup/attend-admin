@@ -200,6 +200,12 @@ export function EventOverviewTab({
             <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4 flex items-center gap-2">
               <Package className="h-4 w-4 text-[hsl(var(--foreground))]" /> Product Launch Details
             </h2>
+            {productLaunchConfig.flyerUrl && (
+              <a href={productLaunchConfig.flyerUrl} target="_blank" rel="noopener noreferrer" className="mb-4 block overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.35)]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={productLaunchConfig.flyerUrl} alt={`${event.title} flyer`} className="max-h-96 w-full object-contain" />
+              </a>
+            )}
             <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
               {productLaunchConfig.productName && (
                 <div className="py-2.5 flex items-start gap-3">
