@@ -3,7 +3,7 @@
 /**
  * /admin/registers — Register Directory
  *
- * Data source : GET /api/v1/client/registers  (via useRegisters)
+ * Data source : GET /api/v1/client/registers  (via useAllRegisters)
  * Status      : Explicit string from API (PENDING | ACTIVE | SUSPENDED | REJECTED)
  * Lifecycle   : POST /api/v1/client/registers/{id}/approve|reject|suspend|activate
  * Navigation  : All routes prefixed /admin to prevent dashboard framing 404s.
@@ -13,7 +13,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Building2 } from "lucide-react";
 import {
-  useRegisters,
+  useAllRegisters,
   useApproveRegister,
   useRejectRegister,
   useSuspendRegister,
@@ -44,6 +44,11 @@ const STATUS_META: Record<string, { dot: string; label: string }> = {
   REJECTED:  { dot: "#6b7280", label: "Rejected"  },
 };
 
+function getRegisterStatus(register: RegisterItem) {
+  const status = register.status?.trim().toUpperCase();
+  return status && STATUS_META[status] ? status : "PENDING";
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function RegistersPage() {
@@ -62,16 +67,34 @@ export default function RegistersPage() {
   const { data: userResponse } = useGetMe();
   const isClientAdmin = resolveRole(userResponse?.data) === "client_admin";
 
-  // Server-side status filter — "all" sends no status param
-  const statusParam = activeTab === "all" ? "" : activeTab.toUpperCase();
-  const { data, isLoading } = useRegisters(statusParam, 0, 50);
+  // Load the complete paginated directory once, then filter locally. This keeps
+  // every tab accurate even when the backend caps page size or ignores a status
+  // query parameter.
+  const { data, isLoading } = useAllRegisters();
 
   const approveMutation = useApproveRegister();
   const rejectMutation  = useRejectRegister();
   const suspendMutation = useSuspendRegister();
   const activateMutation = useActivateRegister();
 
-  const registers: RegisterItem[] = data?.registers ?? [];
+  const allRegisters: RegisterItem[] = data?.registers ?? [];
+  const registers = activeTab === "all"
+    ? allRegisters
+    : allRegisters.filter(
+        (register) => getRegisterStatus(register) === activeTab.toUpperCase()
+      );
+
+  const tabCounts = allRegisters.reduce<Record<TabValue, number>>(
+    (counts, register) => {
+      counts.all += 1;
+      const status = getRegisterStatus(register).toLowerCase();
+      if (status === "active" || status === "pending" || status === "suspended") {
+        counts[status] += 1;
+      }
+      return counts;
+    },
+    { all: 0, active: 0, pending: 0, suspended: 0 }
+  );
 
   function requestConfirm(id: string, action: "suspend" | "reject") {
     setConfirmId(id);
@@ -118,7 +141,7 @@ export default function RegistersPage() {
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
             }`}
           >
-            {tab.label}
+            {tab.label} <span className="tabular-nums">({tabCounts[tab.value]})</span>
           </button>
         ))}
       </div>
@@ -141,7 +164,7 @@ export default function RegistersPage() {
             </thead>
             <tbody>
               {registers.map((reg) => {
-                const statusKey  = (reg.status ?? "PENDING").toUpperCase();
+                const statusKey  = getRegisterStatus(reg);
                 const statusMeta = STATUS_META[statusKey] ?? STATUS_META["PENDING"];
                 const isActive    = statusKey === "ACTIVE";
                 const isSuspended = statusKey === "SUSPENDED";
