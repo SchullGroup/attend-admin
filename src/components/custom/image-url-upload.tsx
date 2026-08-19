@@ -5,6 +5,14 @@ import { ImageOff, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { parseAndToastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface ImageUrlUploadProps {
   value?: string;
@@ -38,6 +46,7 @@ export function ImageUrlUpload({
   const [uploading, setUploading] = useState(false);
   const [localPreview, setLocalPreview] = useState("");
   const [previewFailed, setPreviewFailed] = useState(false);
+  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
 
   useEffect(() => {
     setPreviewFailed(false);
@@ -58,6 +67,7 @@ export function ImageUrlUpload({
   function removeFlyer() {
     clearLocalPreview();
     onChange("");
+    setRemoveDialogOpen(false);
   }
 
   async function handleFile(file?: File) {
@@ -157,7 +167,7 @@ export function ImageUrlUpload({
                 size="sm"
                 variant="ghost"
                 className="gap-1.5 text-red-600 hover:bg-red-50 hover:text-red-700"
-                onClick={removeFlyer}
+                onClick={() => setRemoveDialogOpen(true)}
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 Remove image
@@ -166,6 +176,25 @@ export function ImageUrlUpload({
           )}
         </div>
       )}
+
+      <Dialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove flyer image?</DialogTitle>
+            <DialogDescription>
+              This will remove the flyer from the event when you save your changes. This action cannot be undone from this form.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRemoveDialogOpen(false)}>
+              Keep image
+            </Button>
+            <Button type="button" variant="destructive" onClick={removeFlyer}>
+              Remove image
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
