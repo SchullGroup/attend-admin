@@ -3,6 +3,7 @@ import { Plus, Trash2, Lock, Globe, Mail, Monitor, MapPin, Video } from "lucide-
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { ImageUrlUpload } from "@/components/custom/image-url-upload";
 import { Toggle, FormatPicker, ReviewRow, OrgChip } from "./shared";
 import type { LaunchState } from "./state-hooks";
 
@@ -124,6 +125,7 @@ export function LaunchStep0({ s, organiserName, showErrors = false }: { s: Launc
 export function LaunchStep1({ s, showErrors = false }: { s: LaunchState; showErrors?: boolean }) {
   return (
     <div className="flex flex-col gap-4">
+      <ImageUrlUpload value={s.flyerUrl} onChange={s.setFlyerUrl} />
       <div>
         <Label className="mb-2 block">Product Name <span className="text-red-500">*</span></Label>
         <Input placeholder="e.g. ZenithDirect 3.0" value={s.productName} onChange={(e) => s.setProductName(e.target.value)}
@@ -246,6 +248,7 @@ export function LaunchReview({ s, organiserName }: { s: LaunchState; organiserNa
         <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] px-4 divide-y divide-[hsl(var(--border))]">
           <ReviewRow label="Product Name" value={s.productName} />
           <ReviewRow label="Tagline" value={s.tagline} />
+          {s.flyerUrl && <ReviewRow label="Flyer" value="Uploaded" />}
           <ReviewRow label="Microsite" value={s.slug ? `attend.ng/launch/${s.slug}` : ""} />
           <ReviewRow label="Embargo" value={s.embargoEnabled ? `Enabled — ${s.embargoAt}` : "Disabled"} />
         </div>

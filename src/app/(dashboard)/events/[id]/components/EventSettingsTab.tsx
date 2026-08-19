@@ -18,6 +18,7 @@ import {
 } from "@/api/client-events";
 import { popup } from "@/lib/popup-store";
 import { EventGuestAccessCard } from "./EventGuestAccessCard";
+import { ImageUrlUpload } from "@/components/custom/image-url-upload";
 
 // ── Label helper ──────────────────────────────────────────────────────────────
 
@@ -43,6 +44,8 @@ interface Props {
   streamUrl?:       string;
   maximumCapacity?: number | null;
   currentStatus:    string;
+  isProductLaunch?: boolean;
+  flyerUrl?:        string;
   featured?:        boolean;
   zoomMeeting?:     ZoomMeetingDto | null;
   onStatusChange:   (status: string) => void;
@@ -62,6 +65,8 @@ export function EventSettingsTab({
   streamUrl:        initialStreamUrl    = "",
   maximumCapacity:  initialCapacity     = null,
   currentStatus,
+  isProductLaunch = false,
+  flyerUrl: initialFlyerUrl = "",
   featured:         initialFeatured     = false,
   zoomMeeting:      initialZoomMeeting  = null,
   onStatusChange,
@@ -80,6 +85,7 @@ export function EventSettingsTab({
   const [zoomMeeting,  setZoomMeeting]  = useState<ZoomMeetingDto | null>(initialZoomMeeting ?? null);
   const [zoomDuration, setZoomDuration] = useState("120");
   const [copiedJoin,   setCopiedJoin]   = useState(false);
+  const [flyerUrl,     setFlyerUrl]     = useState(initialFlyerUrl);
 
   const updateMutation         = useUpdateEvent();
   const publishMutation        = usePublishEvent();
@@ -125,6 +131,7 @@ export function EventSettingsTab({
   const normalizedStatus = currentStatus.toLowerCase();
   const isPublished = normalizedStatus === "published" || normalizedStatus === "live" || normalizedStatus === "ended";
   const isLive = normalizedStatus === "live";
+  const flyerLocked = ["live", "ended", "cancelled"].includes(normalizedStatus);
 
   function handleLifecycle(
     status: "published" | "live" | "ended" | "cancelled",
@@ -173,6 +180,7 @@ export function EventSettingsTab({
         venue:           venueVal.trim()    || undefined,
         streamUrl:       streamVal.trim()   || undefined,
         maximumCapacity: !isNaN(cap) && cap > 0 ? cap : undefined,
+        flyerUrl:         isProductLaunch ? flyerUrl : undefined,
       },
     });
   }
@@ -277,6 +285,15 @@ export function EventSettingsTab({
               placeholder="Leave blank for unlimited"
             />
           </div>
+
+          {isProductLaunch && (
+            <ImageUrlUpload
+              value={flyerUrl}
+              onChange={setFlyerUrl}
+              disabled={flyerLocked}
+              helpText={flyerLocked ? "Flyers cannot be changed once an event is live, ended or cancelled." : undefined}
+            />
+          )}
 
           {/* Organiser — read-only */}
           <div>

@@ -34,6 +34,10 @@ export interface PostAgmSummary {
   resolutionsFailed:            number;
   totalVotesCastShares:         number;
   minutesStatus:                string; // "DRAFT" | "FINALISED" | "NOT_STARTED" etc.
+  totalPresentInPerson:         number;
+  totalPresentByProxy:          number;
+  overallTotalAttendance:       number;
+  totalRegulators:              number;
 }
 
 export interface AgmMinutes {
@@ -92,6 +96,13 @@ export interface StatutoryReturn {
   totalAttended:         number;
   totalVotesCastShares:  number;
   resolutions:           StatutoryReturnResolution[];
+  meetingTime?:                         string | null;
+  totalShareholdersInRegister:          number;
+  totalShareholdingUnitsInRegister:     number;
+  shareholdersPresentInPerson:          number;
+  shareholdersPresentByProxy:           number;
+  totalShareholdingOfPresent:           number;
+  percentageOfShareholdersPresent:      number;
 }
 
 // ---------------------------------------------------------------------------
@@ -285,7 +296,13 @@ export function useSendCertificates() {
         3500
       );
     },
-    onError: (error: any) => parseAndToastApiError(error, "Failed to send certificates."),
+    onError: (error: any) => {
+      if (error?.response?.status === 409) {
+        popup.error("Certificates Disabled", "Attendance certificates are currently disabled.", 3500);
+        return;
+      }
+      parseAndToastApiError(error, "Failed to send certificates.");
+    },
   });
 }
 
@@ -314,6 +331,7 @@ export function formatStatutoryReturnText(r: StatutoryReturn): string {
     `Organisation:      ${r.organisationName}`,
     `Meeting:           ${r.eventName}`,
     `Date:              ${r.eventDate}`,
+    `Meeting Time:      ${r.meetingTime ?? "Not recorded"}`,
     `Venue:             ${r.eventVenue}`,
     "",
     "ATTENDANCE",
@@ -321,6 +339,15 @@ export function formatStatutoryReturnText(r: StatutoryReturn): string {
     `Total Registered:  ${r.totalRegistered.toLocaleString()}`,
     `Total Attended:    ${r.totalAttended.toLocaleString()} (${pct(r.totalAttended, r.totalRegistered)})`,
     `Total Shares Voted: ${r.totalVotesCastShares.toLocaleString()}`,
+    "",
+    "REGISTER-LEVEL ATTENDANCE",
+    "-".repeat(60),
+    `Shareholders in Register:        ${r.totalShareholdersInRegister.toLocaleString()}`,
+    `Shareholding Units in Register:  ${r.totalShareholdingUnitsInRegister.toLocaleString()}`,
+    `Present in Person:               ${r.shareholdersPresentInPerson.toLocaleString()}`,
+    `Present by Proxy:                ${r.shareholdersPresentByProxy.toLocaleString()}`,
+    `Shareholding of Present:         ${r.totalShareholdingOfPresent.toLocaleString()}`,
+    `Shareholders Present:            ${r.percentageOfShareholdersPresent.toFixed(1)}%`,
     "",
     "RESOLUTIONS",
     "-".repeat(60),

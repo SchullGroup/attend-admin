@@ -22,6 +22,8 @@ import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
 
+export type GuestAccessRole = "REGULATOR" | "DIRECTOR" | "AUDITOR" | "OTHER";
+
 export interface GuestAccessCode {
   id:        string;
   code:      string;
@@ -31,12 +33,14 @@ export interface GuestAccessCode {
   useCount:  number;
   revoked:   boolean;
   createdAt?: string;
+  role:       GuestAccessRole;
 }
 
 export interface CreateGuestAccessRequest {
   label?:     string;
   expiresAt?: string;   // ISO
   maxUses?:   number;
+  role?:      GuestAccessRole;
 }
 
 function normalizeCode(raw: any): GuestAccessCode {
@@ -49,6 +53,7 @@ function normalizeCode(raw: any): GuestAccessCode {
     useCount:  raw?.useCount ?? 0,
     revoked:   !!raw?.revoked,
     createdAt: raw?.createdAt,
+    role:      raw?.role ?? "OTHER",
   };
 }
 

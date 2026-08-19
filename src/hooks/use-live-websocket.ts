@@ -11,6 +11,7 @@
 
 import { useEffect, useRef } from "react";
 import Cookies from "js-cookie";
+import type { LiveResolution } from "@/api/client-live";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,6 +68,10 @@ export type LiveWsMessage =
         pollId:       string;
         finalResults: { optionId: string; votes: number; percentage: number }[];
       };
+    }
+  | {
+      type: "RESOLUTION_TALLY_UPDATED";
+      payload: LiveResolution;
     };
 
 // ---------------------------------------------------------------------------

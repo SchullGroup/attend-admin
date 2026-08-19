@@ -120,6 +120,7 @@ export interface UpdateEventRequest {
   agenda?:                    AgendaItemDto[];
   speakers?:                  SpeakerRequest[];
   innovationChallengeConfig?: InnovationChallengeConfigRequest;
+  flyerUrl?:                  string;
 }
 
 // Documents
@@ -601,6 +602,7 @@ export interface EmbargoRequest {
 export interface ProductLaunchConfigRequest {
   embargo?:           EmbargoRequest;
   audienceTargeting?: AudienceTargeting;
+  flyerUrl?:          string;
 }
 
 export interface InnovationChallengeConfigRequest {

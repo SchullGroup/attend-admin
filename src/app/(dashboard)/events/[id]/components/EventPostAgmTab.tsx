@@ -129,11 +129,11 @@ export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
   return (
     <div className="flex flex-col gap-5">
       {/* Summary strip */}
-      <div className="grid grid-cols-4 divide-x divide-[hsl(var(--border))] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
+      <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-[hsl(var(--border))] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
         {[
           { label: "Resolutions Passed", value: summaryLoading ? "…" : `${passed} / ${totalRes}`, icon: Vote, color: "#1a6b3c" },
           { label: "Total Votes Cast",   value: (summary?.totalVotesCastShares ?? totalVotesCast).toLocaleString(), icon: CheckCircle2, color: "#111827" },
-          { label: "Attendees Present",  value: summaryLoading ? "…" : summary ? summary.totalCheckedIn.toLocaleString() : "—", icon: Users, color: "#7c22c9" },
+          { label: "Overall Attendance", value: summaryLoading ? "…" : summary ? (summary.overallTotalAttendance ?? summary.totalCheckedIn).toLocaleString() : "—", icon: Users, color: "#7c22c9" },
           { label: "Minutes Status",     value: summaryLoading ? "…" : (summary?.minutesStatus ?? minutes?.status ?? "Not Started"), icon: BookOpen, color: "#d97706" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="flex items-center gap-3 px-5 py-4">
@@ -147,6 +147,22 @@ export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
           </div>
         ))}
       </div>
+
+      {summary && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label: "Present in Person", value: summary.totalPresentInPerson ?? summary.totalCheckedIn },
+            { label: "Present by Proxy", value: summary.totalPresentByProxy ?? 0 },
+            { label: "Regulators", value: summary.totalRegulators ?? 0 },
+            { label: "Registered", value: summary.totalRegistered ?? 0 },
+          ].map(({ label, value }) => (
+            <div key={label} className="rounded-lg border border-[hsl(var(--border))] px-4 py-3">
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">{label}</p>
+              <p className="text-lg font-bold tabular-nums text-[hsl(var(--foreground))]">{value.toLocaleString()}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Draft minutes */}
       <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
@@ -265,7 +281,7 @@ export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
               </p>
               <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
                 {certEligibility
-                  ? `${certEligibility.totalSent} sent · ${certEligibility.totalPending} pending`
+                  ? `${certEligibility.totalSent} sent · ${certEligibility.totalPending} pending. The server will report if sending is disabled.`
                   : "The backend must return attendance-based eligibility before certificates can be sent"}
               </p>
             </div>
