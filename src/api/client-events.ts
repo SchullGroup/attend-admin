@@ -1306,6 +1306,247 @@ export function useExportInvites(eventId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Invite directory and asynchronous campaigns
+//   /api/v1/client/events/{id}/invites
+// ---------------------------------------------------------------------------
+
+export interface InviteInput {
+  email:     string;
+  firstName?: string;
+  lastName?:  string;
+  phone?:     string;
+  tierId?:    string;
+  tierName?:  string;
+}
+
+/** Fields documented by the invite-list Swagger schema. */
+export interface InviteItem extends InviteInput {}
+
+export interface InviteSummary {
+  total:      number;
+  unsent:     number;
+  queued:     number;
+  sent:       number;
+  delivered:  number;
+  failed:     number;
+  bounced:    number;
+  registered: number;
+  revoked:    number;
+}
+
+export interface InviteListResponse {
+  summary: InviteSummary;
+  items:   InviteItem[];
+  total:   number;
+}
+
+export interface InviteImportJob {
+  id:               string;
+  eventId:          string;
+  originalFilename?: string;
+  status:            string;
+  totalRows:        number;
+  processedRows:    number;
+  acceptedRows:     number;
+  updatedRows:      number;
+  duplicateRows:    number;
+  rejectedRows:     number;
+  errorReportUrl?:  string;
+  startedAt?:       string;
+  completedAt?:     string;
+}
+
+/** Only value currently documented by Swagger. */
+export type InviteCampaignSelection = "ALL_UNSENT";
+
+export interface CreateInviteCampaignRequest {
+  selection:    InviteCampaignSelection;
+  importJobId?: string;
+  tierId?:      string;
+  inviteIds?:   string[];
+}
+
+export interface InviteCampaign {
+  campaignId:   string;
+  eventId:      string;
+  status:       string;
+  selectionType: string;
+  selectedCount: number;
+  queuedCount:   number;
+  sentCount:     number;
+  failedCount:   number;
+  skippedCount:  number;
+  startedAt?:    string;
+  completedAt?:  string;
+}
+
+export interface InviteListFilters {
+  page?:        number;
+  size?:        number;
+  search?:      string;
+  status?:      string;
+  tierId?:      string;
+  importJobId?:  string;
+}
+
+const inviteKeys = {
+  list:     (eventId: string, filters: InviteListFilters) => ["clientEvents", "invites", eventId, filters] as const,
+  campaign: (eventId: string, campaignId: string) => ["clientEvents", "invite-campaign", eventId, campaignId] as const,
+  import:   (eventId: string, jobId: string) => ["clientEvents", "invite-import", eventId, jobId] as const,
+};
+
+function responseData<T>(response: any): T {
+  return ((response?.data as any)?.data ?? response?.data) as T;
+}
+
+export function useListInvites(eventId: string, filters: InviteListFilters = {}) {
+  return useQuery({
+    queryKey: inviteKeys.list(eventId, filters),
+    enabled: !!eventId,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<InviteListResponse>>(
+        `/api/v1/client/events/${eventId}/invites`,
+        { params: Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== undefined && value !== "")) }
+      );
+      const raw = responseData<InviteListResponse>(res);
+      return {
+        summary: raw?.summary ?? { total: 0, unsent: 0, queued: 0, sent: 0, delivered: 0, failed: 0, bounced: 0, registered: 0, revoked: 0 },
+        items: raw?.items ?? [],
+        total: raw?.total ?? 0,
+      } as InviteListResponse;
+    },
+    staleTime: 10_000,
+  });
+}
+
+export function useCreateInvites() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, invites }: { eventId: string; invites: InviteInput[] }) => {
+      const res = await apiClient.post<ApiResponse<unknown>>(
+        `/api/v1/client/events/${eventId}/invites`,
+        { invites }
+      );
+      return responseData<unknown>(res);
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] });
+      popup.success("Invites Added", "The invite list has been updated.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to add invites."),
+  });
+}
+
+export function useImportInvites() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, invites, defaultTierId }: { eventId: string; invites: InviteInput[]; defaultTierId?: string }) => {
+      const res = await apiClient.post<ApiResponse<InviteImportJob>>(
+        `/api/v1/client/events/${eventId}/invites/import`,
+        { invites },
+        { params: defaultTierId ? { defaultTierId } : undefined }
+      );
+      return responseData<InviteImportJob>(res);
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] });
+      popup.success("Import Started", "Your audience import is processing in the background.", 3000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to start invite import."),
+  });
+}
+
+export function useInviteImportProgress(eventId: string, jobId: string | null) {
+  return useQuery({
+    queryKey: inviteKeys.import(eventId, jobId ?? ""),
+    enabled: !!eventId && !!jobId,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<InviteImportJob>>(
+        `/api/v1/client/events/${eventId}/invite-imports/${jobId}`
+      );
+      return responseData<InviteImportJob>(res);
+    },
+    refetchInterval: (query) => {
+      const status = (query.state.data as InviteImportJob | undefined)?.status?.toUpperCase();
+      return status && ["COMPLETED", "FAILED", "CANCELLED"].includes(status) ? false : 3000;
+    },
+  });
+}
+
+export function useCreateInviteCampaign() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, body }: { eventId: string; body: CreateInviteCampaignRequest }) => {
+      const res = await apiClient.post<ApiResponse<InviteCampaign>>(
+        `/api/v1/client/events/${eventId}/invite-campaigns`,
+        body
+      );
+      return responseData<InviteCampaign>(res);
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] });
+      popup.success("Campaign Started", "Invitation delivery has been queued.", 3000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to start invitation campaign."),
+  });
+}
+
+export function useInviteCampaignProgress(eventId: string, campaignId: string | null) {
+  return useQuery({
+    queryKey: inviteKeys.campaign(eventId, campaignId ?? ""),
+    enabled: !!eventId && !!campaignId,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<InviteCampaign>>(
+        `/api/v1/client/events/${eventId}/invite-campaigns/${campaignId}`
+      );
+      return responseData<InviteCampaign>(res);
+    },
+    refetchInterval: (query) => {
+      const status = (query.state.data as InviteCampaign | undefined)?.status?.toUpperCase();
+      return status && ["COMPLETED", "FAILED", "CANCELLED"].includes(status) ? false : 3000;
+    },
+  });
+}
+
+export function useExportAudienceInvites(eventId: string, filters: Omit<InviteListFilters, "page" | "size"> = {}) {
+  return useQuery({
+    queryKey: ["clientEvents", "invites", "export", eventId, filters],
+    enabled: false,
+    queryFn: async () => {
+      const res = await apiClient.get<string>(
+        `/api/v1/client/events/${eventId}/invites/export`,
+        { params: Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== undefined && value !== "")) }
+      );
+      return res.data as string;
+    },
+  });
+}
+
+export function useResendInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, inviteId }: { eventId: string; inviteId: string }) => {
+      const res = await apiClient.post<ApiResponse<string>>(`/api/v1/client/events/${eventId}/invites/${inviteId}/resend`);
+      return responseData<string>(res);
+    },
+    onSuccess: (_, { eventId }) => queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] }),
+    onError: (error: any) => parseAndToastApiError(error, "Failed to resend invite."),
+  });
+}
+
+export function useRevokeInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, inviteId }: { eventId: string; inviteId: string }) => {
+      const res = await apiClient.delete<ApiResponse<string>>(`/api/v1/client/events/${eventId}/invites/${inviteId}`);
+      return responseData<string>(res);
+    },
+    onSuccess: (_, { eventId }) => queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] }),
+    onError: (error: any) => parseAndToastApiError(error, "Failed to revoke invite."),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Waitlist  — /api/v1/client/events/{id}/waitlist
 // ---------------------------------------------------------------------------
 
