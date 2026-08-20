@@ -225,14 +225,14 @@ export function Header() {
   function handleLogout() { logout(); }
 
   return (
-    <header className="sticky top-0 z-30 h-14 flex items-center border-b border-[hsl(var(--border))] bg-[hsl(var(--background)/0.95)] backdrop-blur px-6 gap-4">
+    <header className="sticky top-0 z-30 min-h-14 flex items-center border-b border-[hsl(var(--border))] bg-[hsl(var(--background)/0.95)] backdrop-blur px-6 py-3 gap-4">
 
       {/* Breadcrumbs */}
-      <div className="flex items-center gap-1.5 text-sm min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-sm">
         {breadcrumbs.map((crumb, i) => (
-          <span key={crumb.href} className="flex items-center gap-1.5">
+          <span key={crumb.href} className="flex min-w-0 max-w-full items-center gap-1.5">
             {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />}
-            <span className={i === breadcrumbs.length - 1 ? "font-semibold text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))]"}>
+            <span className={`${i === breadcrumbs.length - 1 ? "font-semibold text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))]"} min-w-0 break-words [overflow-wrap:anywhere]`}>
               {crumb.label}
             </span>
           </span>

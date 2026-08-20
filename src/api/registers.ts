@@ -63,6 +63,7 @@ export const registerKeys = {
   all:       ["registers"] as const,
   list:      (status: string, page: number, size: number) =>
                ["registers", "list", { status, page, size }] as const,
+  directory: (size: number) => ["registers", "directory", { size }] as const,
   detail:    (id: string) => ["register", id] as const,
   events:    (id: string) => ["register", id, "events"] as const,
   documents: (id: string) => ["register", id, "documents"] as const,
@@ -72,22 +73,73 @@ export const registerKeys = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function normalizeRegisterList(raw: any, page: number, size: number): RegistersListResponse {
-  // Swagger primary key: data.registers
+function normalizeRegisterList(payload: any, page: number, size: number): RegistersListResponse {
+  // Some deployments return the page directly while others add one or more
+  // `data` envelopes. Unwrap objects only; an array-valued `data` is the list.
+  const envelope = payload && typeof payload === "object" ? payload : {};
+  let raw = payload;
+  while (
+    raw?.data != null &&
+    !Array.isArray(raw.data) &&
+    typeof raw.data === "object" &&
+    !raw.registers &&
+    !raw.registrars &&
+    !raw.stakeholders &&
+    !raw.pendingRegisters &&
+    !raw.pendingStakeholders &&
+    !raw.content
+  ) {
+    raw = raw.data;
+  }
+
   const registers =
-    raw?.registers    ??
-    raw?.registrars   ??
-    raw?.stakeholders ??
-    raw?.content      ??
+    (Array.isArray(raw) ? raw : undefined)       ??
+    raw?.registers                                 ??
+    raw?.registrars                                ??
+    raw?.stakeholders                              ??
+    raw?.pendingRegisters                          ??
+    raw?.pendingStakeholders                       ??
+    raw?.content                                   ??
+    (Array.isArray(raw?.data) ? raw.data : undefined) ??
     [];
+
+  const responsePage = raw?.page ?? raw?.number ?? envelope?.page ?? envelope?.number ?? page;
+  const responseSize = raw?.size ?? raw?.pageSize ?? envelope?.size ?? envelope?.pageSize ?? size;
+  const totalCount =
+    raw?.totalCount ??
+    raw?.totalElements ??
+    raw?.count ??
+    envelope?.totalCount ??
+    envelope?.totalElements ??
+    envelope?.count ??
+    registers.length;
+  const totalPages =
+    raw?.totalPages ??
+    envelope?.totalPages ??
+    (responseSize > 0 && totalCount > 0 ? Math.ceil(totalCount / responseSize) : undefined);
+
   return {
     registrars:  registers,   // backward-compat alias kept for existing consumers
     registers,
-    totalCount:  raw?.totalCount  ?? raw?.totalElements ?? registers.length,
-    page:        raw?.page        ?? page,
-    size:        raw?.size        ?? size,
-    totalPages:  raw?.totalPages,
+    totalCount,
+    page:        responsePage,
+    size:        responseSize,
+    totalPages,
   };
+}
+
+async function fetchRegisterPage(status: string, page: number, size: number) {
+  const res = await apiClient.get<ApiResponse<any> | any>(
+    "/api/v1/client/registers",
+    {
+      params: {
+        page,
+        size,
+        ...(status ? { status } : {}),
+      },
+    }
+  );
+  return normalizeRegisterList(res.data, page, size);
 }
 
 // ---------------------------------------------------------------------------
@@ -105,18 +157,45 @@ export function useRegisters(status = "", page = 0, size = 50, enabled = true) {
   return useQuery({
     queryKey: registerKeys.list(status, page, size),
     enabled,
-    queryFn:  async () => {
-      const res = await apiClient.get<ApiResponse<any>>(
-        "/api/v1/client/registers",
-        {
-          params: {
-            page,
-            size,
-            ...(status ? { status } : {}),
-          },
-        }
-      );
-      return normalizeRegisterList(res.data.data, page, size);
+    queryFn:  () => fetchRegisterPage(status, page, size),
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Complete register directory used by the All Registers screen.
+ *
+ * The API is paginated and some deployments cap `size` below the requested
+ * value. Fetch every reported page so records after page zero, including
+ * pending approvals, are never omitted from the directory or its tabs.
+ */
+export function useAllRegisters(size = 100, enabled = true) {
+  return useQuery({
+    queryKey: registerKeys.directory(size),
+    enabled,
+    queryFn: async () => {
+      const firstPage = await fetchRegisterPage("", 0, size);
+      const byId = new Map(firstPage.registers.map((register) => [register.id, register]));
+      const reportedPages = firstPage.totalPages ?? 1;
+
+      // A hard upper bound prevents an invalid backend page count from causing
+      // an unbounded request loop while still allowing very large directories.
+      const pageLimit = Math.min(Math.max(reportedPages, 1), 1_000);
+      for (let page = 1; page < pageLimit; page += 1) {
+        const nextPage = await fetchRegisterPage("", page, size);
+        if (nextPage.registers.length === 0) break;
+        nextPage.registers.forEach((register) => byId.set(register.id, register));
+      }
+
+      const registers = Array.from(byId.values());
+      return {
+        registrars: registers,
+        registers,
+        totalCount: Math.max(firstPage.totalCount, registers.length),
+        page: 0,
+        size: registers.length,
+        totalPages: 1,
+      } satisfies RegistersListResponse;
     },
     staleTime: 30_000,
   });

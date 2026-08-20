@@ -256,7 +256,7 @@ export default function RegisterDetailPage() {
   const totalRsvps  = events.reduce((sum, e) => sum + (e.rsvpCount ?? 0), 0);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex min-w-0 flex-col gap-5">
 
       {/* ── Back nav ── */}
       <button
@@ -268,8 +268,8 @@ export default function RegisterDetailPage() {
       </button>
 
       {/* ── Register profile card ── */}
-      <Card className="attend-card p-6">
-        <div className="flex items-start gap-5">
+      <Card className="attend-card min-w-0 overflow-hidden p-6">
+        <div className="flex min-w-0 items-start gap-5">
 
           {/* Avatar */}
           <div
@@ -281,16 +281,20 @@ export default function RegisterDetailPage() {
 
           {/* Name + status */}
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-[hsl(var(--foreground))] truncate">{displayName}</h1>
-            <div className="flex items-center gap-3 mt-1 text-sm text-[hsl(var(--muted-foreground))]">
-              {industry && <span className="truncate max-w-[160px]">{industry}</span>}
+            <h1 className="text-xl font-bold leading-7 text-[hsl(var(--foreground))] whitespace-normal break-words [overflow-wrap:anywhere]">
+              {displayName}
+            </h1>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-[hsl(var(--muted-foreground))]">
+              {industry && <span className="break-words [overflow-wrap:anywhere]">{industry}</span>}
               <div className="flex items-center gap-1.5 shrink-0">
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: statusInfo.dot }} />
                 <span>{statusInfo.label}</span>
               </div>
             </div>
           </div>
-          <RegisterDetailsEditor register={register} canEdit={canEditDetails} />
+          <div className="shrink-0">
+            <RegisterDetailsEditor register={register} canEdit={canEditDetails} />
+          </div>
         </div>
 
         {/* Metadata grid */}
@@ -304,13 +308,13 @@ export default function RegisterDetailPage() {
             { icon: MapPinned,     label: "Address",        value: address  },
           ] as { icon: React.ElementType; label: string; value: string | null }[]).map(
             ({ icon: Icon, label, value }) => (
-              <div key={label} className="flex items-start gap-2">
+              <div key={label} className="flex min-w-0 items-start gap-2">
                 <div className="h-6 w-6 rounded-md bg-[hsl(var(--muted))] flex items-center justify-center shrink-0 mt-0.5">
                   <Icon className="h-3 w-3 text-[hsl(var(--muted-foreground))]" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">{label}</p>
-                  <p className="text-sm font-medium text-[hsl(var(--foreground))] mt-0.5 truncate">
+                  <p className="text-sm font-medium text-[hsl(var(--foreground))] mt-0.5 break-words [overflow-wrap:anywhere]">
                     {value ?? <i className="text-[hsl(var(--muted-foreground))]">—</i>}
                   </p>
                 </div>

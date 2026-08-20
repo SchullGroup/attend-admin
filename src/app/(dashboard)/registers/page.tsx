@@ -3,7 +3,7 @@
 /**
  * /admin/registers — Register Directory
  *
- * Data source : GET /api/v1/client/registers  (via useRegisters)
+ * Data source : GET /api/v1/client/registers  (via useAllRegisters)
  * Status      : Explicit string from API (PENDING | ACTIVE | SUSPENDED | REJECTED)
  * Lifecycle   : POST /api/v1/client/registers/{id}/approve|reject|suspend|activate
  * Navigation  : All routes prefixed /admin to prevent dashboard framing 404s.
@@ -11,9 +11,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Building2 } from "lucide-react";
+import { Building2, Search, X } from "lucide-react";
 import {
-  useRegisters,
+  useAllRegisters,
   useApproveRegister,
   useRejectRegister,
   useSuspendRegister,
@@ -22,6 +22,15 @@ import {
 import type { RegisterItem } from "@/types/super-admin";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Loader } from "@/components/ui/Loader";
 import { useGetMe } from "@/api/auth/hooks";
 import { resolveRole } from "@/lib/utils";
@@ -44,16 +53,23 @@ const STATUS_META: Record<string, { dot: string; label: string }> = {
   REJECTED:  { dot: "#6b7280", label: "Rejected"  },
 };
 
+function getRegisterStatus(register: RegisterItem) {
+  const status = register.status?.trim().toUpperCase();
+  return status && STATUS_META[status] ? status : "PENDING";
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function RegistersPage() {
   const [activeTab,  setActiveTab]  = useState<TabValue>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   /**
-   * Confirm guard for both suspend (double-confirm) and reject (double-confirm).
-   * First click sets confirmId + action, second click executes.
+   * Suspend retains its compact double-confirm interaction. Reject uses a
+   * modal confirmation because it is destructive and easy to trigger in a
+   * dense action row.
    */
-  const [confirmId,     setConfirmId]     = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<"suspend" | "reject" | null>(null);
+  const [suspendConfirmId, setSuspendConfirmId] = useState<string | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<RegisterItem | null>(null);
 
   // Only the organisation's actual Client Admin (owner) may suspend a
   // register — other team roles (Admin, Event Manager, Viewer, Judge) get
@@ -62,25 +78,52 @@ export default function RegistersPage() {
   const { data: userResponse } = useGetMe();
   const isClientAdmin = resolveRole(userResponse?.data) === "client_admin";
 
-  // Server-side status filter — "all" sends no status param
-  const statusParam = activeTab === "all" ? "" : activeTab.toUpperCase();
-  const { data, isLoading } = useRegisters(statusParam, 0, 50);
+  // Load the complete paginated directory once, then filter locally. This keeps
+  // every tab accurate even when the backend caps page size or ignores a status
+  // query parameter.
+  const { data, isLoading } = useAllRegisters();
 
   const approveMutation = useApproveRegister();
   const rejectMutation  = useRejectRegister();
   const suspendMutation = useSuspendRegister();
   const activateMutation = useActivateRegister();
 
-  const registers: RegisterItem[] = data?.registers ?? [];
+  const allRegisters: RegisterItem[] = data?.registers ?? [];
+  const statusFilteredRegisters = activeTab === "all"
+    ? allRegisters
+    : allRegisters.filter(
+        (register) => getRegisterStatus(register) === activeTab.toUpperCase()
+      );
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const registers = normalizedSearchQuery
+    ? statusFilteredRegisters.filter((register) =>
+        [
+          register.name,
+          register.companyName,
+          register.rcNumber,
+          register.industry,
+          register.email,
+          register.phone,
+          register.representativeName,
+          register.representativePhone,
+        ].some((value) => value?.toLowerCase().includes(normalizedSearchQuery))
+      )
+    : statusFilteredRegisters;
 
-  function requestConfirm(id: string, action: "suspend" | "reject") {
-    setConfirmId(id);
-    setConfirmAction(action);
-  }
+  const tabCounts = allRegisters.reduce<Record<TabValue, number>>(
+    (counts, register) => {
+      counts.all += 1;
+      const status = getRegisterStatus(register).toLowerCase();
+      if (status === "active" || status === "pending" || status === "suspended") {
+        counts[status] += 1;
+      }
+      return counts;
+    },
+    { all: 0, active: 0, pending: 0, suspended: 0 }
+  );
 
   function clearConfirm() {
-    setConfirmId(null);
-    setConfirmAction(null);
+    setSuspendConfirmId(null);
   }
 
   function handleTabChange(tab: TabValue) {
@@ -106,6 +149,33 @@ export default function RegistersPage() {
         )}
       </div>
 
+      {/* ── Directory search ── */}
+      <div className="relative mb-4 w-full sm:max-w-md">
+        <Search
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--muted-foreground))]"
+        />
+        <Input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search registers"
+          aria-label="Search registers"
+          className="h-10 pl-9 pr-10"
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            aria-label="Clear register search"
+            title="Clear search"
+            className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
       {/* ── Status filter tabs ── */}
       <div className="flex items-center gap-1 mb-4 bg-[hsl(var(--muted))] rounded-full p-1 w-full">
         {TABS.map((tab) => (
@@ -118,7 +188,7 @@ export default function RegistersPage() {
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
             }`}
           >
-            {tab.label}
+            {tab.label} <span className="tabular-nums">({tabCounts[tab.value]})</span>
           </button>
         ))}
       </div>
@@ -141,15 +211,13 @@ export default function RegistersPage() {
             </thead>
             <tbody>
               {registers.map((reg) => {
-                const statusKey  = (reg.status ?? "PENDING").toUpperCase();
+                const statusKey  = getRegisterStatus(reg);
                 const statusMeta = STATUS_META[statusKey] ?? STATUS_META["PENDING"];
                 const isActive    = statusKey === "ACTIVE";
                 const isSuspended = statusKey === "SUSPENDED";
                 const isPending   = statusKey === "PENDING";
 
-                const isConfirming    = confirmId === reg.id;
-                const isSuspendConf   = isConfirming && confirmAction === "suspend";
-                const isRejectConf    = isConfirming && confirmAction === "reject";
+                const isSuspendConf = suspendConfirmId === reg.id;
 
                 return (
                   <tr key={reg.id} className="attend-table-row">
@@ -204,7 +272,7 @@ export default function RegistersPage() {
                           <Button size="sm" variant="outline" className="h-7 text-xs">View</Button>
                         </Link>
 
-                        {/* PENDING — Approve (single click) + Reject (double-confirm) */}
+                        {/* PENDING — Approve + confirmed Reject */}
                         {isPending && (
                           <>
                             <Button
@@ -215,29 +283,13 @@ export default function RegistersPage() {
                               {approveMutation.isPending ? "…" : "Approve"}
                             </Button>
 
-                            {isRejectConf ? (
-                              <>
-                                <Button
-                                  size="sm" variant="ghost"
-                                  className="h-7 text-xs text-red-600 bg-red-50 font-semibold"
-                                  disabled={rejectMutation.isPending}
-                                  onClick={() => rejectMutation.mutate({ id: reg.id }, { onSuccess: clearConfirm })}
-                                >
-                                  {rejectMutation.isPending ? "…" : "Confirm?"}
-                                </Button>
-                                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={clearConfirm}>
-                                  Cancel
-                                </Button>
-                              </>
-                            ) : (
-                              <Button
-                                size="sm" variant="ghost"
-                                className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                                onClick={() => requestConfirm(reg.id, "reject")}
-                              >
-                                Reject
-                              </Button>
-                            )}
+                            <Button
+                              size="sm" variant="ghost"
+                              className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => setRejectTarget(reg)}
+                            >
+                              Reject
+                            </Button>
                           </>
                         )}
 
@@ -261,7 +313,7 @@ export default function RegistersPage() {
                             <Button
                               size="sm" variant="ghost"
                               className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => requestConfirm(reg.id, "suspend")}
+                              onClick={() => setSuspendConfirmId(reg.id)}
                             >
                               Suspend
                             </Button>
@@ -293,9 +345,18 @@ export default function RegistersPage() {
             <div className="py-14 text-center">
               <Building2 className="h-10 w-10 mx-auto mb-3 text-[hsl(var(--muted-foreground))] opacity-30" />
               <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-1">
-                No registers match this filter
+                {normalizedSearchQuery
+                  ? `No registers found for “${searchQuery.trim()}”`
+                  : "No registers match this filter"}
               </p>
-              {activeTab !== "all" && (
+              {normalizedSearchQuery ? (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="text-xs text-[hsl(var(--primary))] hover:underline mt-1"
+                >
+                  Clear search
+                </button>
+              ) : activeTab !== "all" && (
                 <button
                   onClick={() => handleTabChange("all")}
                   className="text-xs text-[hsl(var(--primary))] hover:underline mt-1"
@@ -307,6 +368,50 @@ export default function RegistersPage() {
           )}
         </Card>
       )}
+
+      <Dialog
+        open={rejectTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !rejectMutation.isPending) setRejectTarget(null);
+        }}
+      >
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-md rounded-lg">
+          <DialogHeader className="pr-6">
+            <DialogTitle>Reject register?</DialogTitle>
+            <DialogDescription className="leading-6">
+              This will reject the enrolment request for{" "}
+              <strong className="font-semibold text-[hsl(var(--foreground))] break-words [overflow-wrap:anywhere]">
+                {rejectTarget?.name || rejectTarget?.companyName || "this register"}
+              </strong>
+              . The register will not be activated.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col-reverse sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={rejectMutation.isPending}
+              onClick={() => setRejectTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!rejectTarget || rejectMutation.isPending}
+              onClick={() => {
+                if (!rejectTarget) return;
+                rejectMutation.mutate(
+                  { id: rejectTarget.id },
+                  { onSuccess: () => setRejectTarget(null) }
+                );
+              }}
+            >
+              {rejectMutation.isPending ? "Rejecting…" : "Reject register"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
