@@ -1,7 +1,8 @@
 "use client";
 
-import { ChangeEvent, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { Download, Mail, Plus, Search, Send, Upload, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   InviteInput,
   useCreateInviteCampaign,
@@ -115,6 +116,7 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [newTierId, setNewTierId] = useState("");
+  const [newTierName, setNewTierName] = useState("");
   const [importJobId, setImportJobId] = useState<string | null>(null);
   const [campaignId, setCampaignId] = useState<string | null>(null);
 
@@ -126,7 +128,17 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
   const createCampaign = useCreateInviteCampaign();
   const importProgress = useInviteImportProgress(eventId, importJobId);
   const campaignProgress = useInviteCampaignProgress(eventId, campaignId);
+  const queryClient = useQueryClient();
   const { refetch: exportInvites, isFetching: exporting } = useExportAudienceInvites(eventId, { search, status, tierId });
+
+  // Campaign delivery is asynchronous. Refresh the invite list whenever the
+  // polled campaign snapshot changes so summary cards do not remain stale
+  // while the mail worker is sending.
+  useEffect(() => {
+    if (campaignProgress.data) {
+      void queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] });
+    }
+  }, [campaignProgress.data, eventId, queryClient]);
 
   const summary = data?.summary;
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
@@ -148,6 +160,7 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
           lastName: lastName.trim() || undefined,
           phone: phone.trim() || undefined,
           tierId: newTierId || undefined,
+          tierName: !newTierId && newTierName.trim() ? newTierName.trim() : undefined,
         }],
       },
       {
@@ -257,6 +270,14 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
                 {tiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}
               </select>
             </div>
+            {!newTierId && (
+              <Input
+                value={newTierName}
+                onChange={(e) => setNewTierName(e.target.value)}
+                placeholder="Tier name (optional, e.g. VIP)"
+                className="mt-3 max-w-sm"
+              />
+            )}
             <Button size="sm" className="mt-3" onClick={handleAddInvite} disabled={!email.trim() || createInvites.isPending}>
               {createInvites.isPending ? "Adding…" : "Add to Invite List"}
             </Button>

@@ -261,8 +261,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     // super admin has no write access to any of those.
     ...(isSuperAdmin && isAGM ? ["Vote Results"] : [
       ...(isAGM ? ["Resolutions"] : []),
-      ...(!isSuperAdmin && isLAUNCH ? ["Audience Tiers", ...(isInviteOnly ? ["Invites"] : []), "Waitlist"] : []),
-      ...(!isSuperAdmin && !isLAUNCH && isInviteOnly ? ["Invites"] : []),
+      // Invite-only Product, General, and Innovation events all use the same
+      // event-level tier and invite APIs. Keep tier management available for
+      // every supported invite-only event, not only Product Launch events.
+      ...(!isSuperAdmin && isInviteOnly ? ["Audience Tiers", "Invites"] : []),
+      ...(!isSuperAdmin && isLAUNCH ? ["Waitlist"] : []),
       // Press Kit (F2) — Product Launch events. Client admin: full CRUD;
       // super admin + Viewer: read-only (super admin reads /admin endpoint).
       ...(isLAUNCH ? ["Press Kit"] : []),
@@ -349,7 +352,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       )}
       {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} isAdmin={isAdmin} readOnly={isViewer} />}
       {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin || isViewer} canControlVoting={isClientAdmin} />}
-      {tab === "Audience Tiers" && !isSuperAdmin && isLAUNCH && <EventLaunchAudienceTab    eventId={id} />}
+      {tab === "Audience Tiers" && !isSuperAdmin && isInviteOnly && <EventLaunchAudienceTab    eventId={id} />}
       {tab === "Invites"        && !isSuperAdmin && isInviteOnly && <EventLaunchInvitesTab     eventId={id} />}
       {tab === "Waitlist"       && !isSuperAdmin && isLAUNCH && <EventLaunchWaitlistTab    eventId={id} />}
       {tab === "Press Kit"      && isLAUNCH && <EventPressKitTab eventId={id} readOnly={isSuperAdmin || isViewer} isSuperAdmin={isSuperAdmin} />}
