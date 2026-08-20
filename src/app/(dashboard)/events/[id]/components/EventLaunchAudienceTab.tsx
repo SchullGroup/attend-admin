@@ -6,10 +6,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Send,
-  Download,
-  Upload,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -19,9 +15,6 @@ import {
   useCreateTier,
   useUpdateTier,
   useDeleteTier,
-  useSendInvite,
-  useBulkInvite,
-  useExportInvites,
   AudienceTier,
 } from "@/api/client-events";
 import { popup } from "@/lib/popup-store";
@@ -128,133 +121,6 @@ function TierFormPanel({
   );
 }
 
-// ── Inline invite panel ───────────────────────────────────────────────────────
-
-function SendInvitePanel({
-  eventId,
-  preselectedTierId,
-  tiers,
-  onClose,
-}: {
-  eventId: string;
-  preselectedTierId: string;
-  tiers: AudienceTier[];
-  onClose: () => void;
-}) {
-  const [mode,    setMode]    = useState<"single" | "bulk">("single");
-  const [email,   setEmail]   = useState("");
-  const [tierId,  setTierId]  = useState(preselectedTierId);
-  const [bulk,    setBulk]    = useState("");
-  const sendInvite = useSendInvite();
-  const bulkInvite = useBulkInvite();
-
-  function handleSingle() {
-    if (!email.trim() || !tierId) return;
-    sendInvite.mutate({ eventId, email: email.trim(), tierId }, {
-      onSuccess: () => { setEmail(""); },
-    });
-  }
-
-  function handleBulk() {
-    if (!tierId || !bulk.trim()) return;
-    const emails = bulk.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
-    bulkInvite.mutate({ eventId, invites: emails.map((e) => ({ email: e, tierId })) }, {
-      onSuccess: () => setBulk(""),
-    });
-  }
-
-  return (
-    <div className="mt-3 p-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Send Invite</p>
-        <button
-          onClick={onClose}
-          className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* Toggle */}
-      <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 w-fit">
-        {(["single", "bulk"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setMode(t)}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-all capitalize ${
-              mode === t
-                ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
-                : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-            }`}
-          >
-            {t === "single" ? "Single" : "Bulk"}
-          </button>
-        ))}
-      </div>
-
-      {/* Tier select */}
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Tier</label>
-        <select
-          value={tierId}
-          onChange={(e) => setTierId(e.target.value)}
-          className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
-        >
-          {tiers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
-      </div>
-
-      {mode === "single" ? (
-        <>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Email Address *</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="attendee@example.com"
-              className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
-            />
-          </div>
-          <Button
-            size="sm"
-            className="gap-1.5 w-fit"
-            onClick={handleSingle}
-            disabled={sendInvite.isPending || !email.trim() || !tierId}
-          >
-            <Send className="h-3.5 w-3.5" />
-            {sendInvite.isPending ? "Sending…" : "Send Invite"}
-          </Button>
-        </>
-      ) : (
-        <>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
-              Emails <span className="font-normal text-[hsl(var(--muted-foreground))]">(one per line or comma-separated)</span>
-            </label>
-            <textarea
-              value={bulk}
-              onChange={(e) => setBulk(e.target.value)}
-              rows={4}
-              placeholder={"alice@example.com\nbob@example.com"}
-              className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] resize-none"
-            />
-          </div>
-          <Button
-            size="sm"
-            className="gap-1.5 w-fit"
-            onClick={handleBulk}
-            disabled={bulkInvite.isPending || !bulk.trim() || !tierId}
-          >
-            <Upload className="h-3.5 w-3.5" />
-            {bulkInvite.isPending ? "Sending…" : "Bulk Upload CSV"}
-          </Button>
-        </>
-      )}
-    </div>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function EventLaunchAudienceTab({ eventId }: { eventId: string }) {
@@ -262,15 +128,8 @@ export function EventLaunchAudienceTab({ eventId }: { eventId: string }) {
   const createTier = useCreateTier();
   const updateTier = useUpdateTier();
   const deleteTier = useDeleteTier();
-  const { refetch: exportCsv, isFetching: exporting } = useExportInvites(eventId);
-
-  const [activeTier,  setActiveTier]  = useState<string | null>(null); // tierId whose invite panel is open
   const [showNewForm, setShowNewForm] = useState(false);
   const [editTier,    setEditTier]    = useState<AudienceTier | null>(null);
-
-  function openInvite(tierId: string) {
-    setActiveTier((prev) => (prev === tierId ? null : tierId));
-  }
 
   function confirmDeleteTier(tier: AudienceTier) {
     popup.confirm(
@@ -282,17 +141,6 @@ export function EventLaunchAudienceTab({ eventId }: { eventId: string }) {
     );
   }
 
-  async function handleExport() {
-    const result = await exportCsv();
-    const csv = result.data;
-    if (!csv) return;
-    const blob = new Blob([csv as string], { type: "text/csv" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href = url; a.download = `invites-${eventId}.csv`; a.click();
-    URL.revokeObjectURL(url);
-  }
-
   if (isLoading) return <Loader variant="inline" text="Loading audience tiers…" />;
 
   return (
@@ -301,15 +149,9 @@ export function EventLaunchAudienceTab({ eventId }: { eventId: string }) {
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">Audience Tiers</h2>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={handleExport} disabled={exporting}>
-              <Download className="h-3.5 w-3.5" />
-              {exporting ? "Exporting…" : "Export"}
-            </Button>
-            <Button size="sm" className="gap-1.5" onClick={() => { setShowNewForm(true); setEditTier(null); }}>
-              <Plus className="h-3.5 w-3.5" /> Add Tier
-            </Button>
-          </div>
+          <Button size="sm" className="gap-1.5" onClick={() => { setShowNewForm(true); setEditTier(null); }}>
+            <Plus className="h-3.5 w-3.5" /> Add Tier
+          </Button>
         </div>
 
         {/* New tier form */}
@@ -363,15 +205,6 @@ export function EventLaunchAudienceTab({ eventId }: { eventId: string }) {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 shrink-0">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5"
-                      onClick={() => openInvite(tier.id)}
-                    >
-                      <Send className="h-3 w-3" />
-                      Send Invite
-                    </Button>
                     <button
                       onClick={() => { setEditTier(tier); setShowNewForm(false); }}
                       className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
@@ -410,37 +243,12 @@ export function EventLaunchAudienceTab({ eventId }: { eventId: string }) {
                   </div>
                 )}
 
-                {/* Invite panel inline */}
-                {activeTier === tier.id && (
-                  <div className="px-5 pb-4 bg-[hsl(var(--card))]">
-                    <SendInvitePanel
-                      eventId={eventId}
-                      preselectedTierId={tier.id}
-                      tiers={tiers}
-                      onClose={() => setActiveTier(null)}
-                    />
-                  </div>
-                )}
               </div>
             ))}
           </div>
         )}
       </Card>
 
-      {/* Add to Invite List — always visible shortcut */}
-      <Card className="attend-card p-5">
-        <h2 className="text-base font-semibold text-[hsl(var(--foreground))] mb-4">Add to Invite List</h2>
-        {tiers.length === 0 ? (
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">Create a tier above before sending invites.</p>
-        ) : (
-          <SendInvitePanel
-            eventId={eventId}
-            preselectedTierId={tiers[0]?.id ?? ""}
-            tiers={tiers}
-            onClose={() => {}}
-          />
-        )}
-      </Card>
     </div>
   );
 }

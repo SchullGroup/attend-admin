@@ -28,6 +28,7 @@ import { EventPostAgmTab }      from "./components/EventPostAgmTab";
 import { EventSettingsTab }     from "./components/EventSettingsTab";
 import { EventStakeholderTab }          from "./components/EventStakeholderTab";
 import { EventLaunchAudienceTab }      from "./components/EventLaunchAudienceTab";
+import { EventLaunchInvitesTab }       from "./components/EventLaunchInvitesTab";
 import { EventLaunchWaitlistTab }      from "./components/EventLaunchWaitlistTab";
 import { EventChallengeApplicationsTab } from "./components/EventChallengeApplicationsTab";
 import { EventChallengeJudgesTab }       from "./components/EventChallengeJudgesTab";
@@ -199,6 +200,19 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const isLAUNCH    = event.module === "LAUNCH";
   const isGENERAL   = event.module === "GENERAL";
   const isHACKATHON = event.module === "HACKATHON";
+  const eventType = String((apiEvent as any).eventType ?? "").toUpperCase();
+  const inviteOnlyEventType =
+    eventType === "PRODUCT_LAUNCH" ||
+    eventType === "GENERAL_EVENT" ||
+    eventType === "INNOVATION_CHALLENGE";
+  const audienceTargeting = String(
+    (apiEvent as any).audienceTargeting ??
+      (apiEvent as any).productLaunchConfig?.audienceTargeting ??
+      (apiEvent as any).innovationChallengeConfig?.audienceTargeting ??
+      (apiEvent as any).generalEventConfig?.audienceTargeting ??
+      ""
+  ).toUpperCase();
+  const isInviteOnly = inviteOnlyEventType && audienceTargeting === "INVITE_ONLY";
   const currentStatus = localStatus ?? event.status?.toLowerCase();
 
   function handleStatusChange(status: string) {
@@ -247,7 +261,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     // super admin has no write access to any of those.
     ...(isSuperAdmin && isAGM ? ["Vote Results"] : [
       ...(isAGM ? ["Resolutions"] : []),
-      ...(!isSuperAdmin && isLAUNCH ? ["Audience Tiers", "Waitlist"] : []),
+      // Invite-only Product, General, and Innovation events all use the same
+      // event-level tier and invite APIs. Keep tier management available for
+      // every supported invite-only event, not only Product Launch events.
+      ...(!isSuperAdmin && isInviteOnly ? ["Audience Tiers", "Invites"] : []),
+      ...(!isSuperAdmin && isLAUNCH ? ["Waitlist"] : []),
       // Press Kit (F2) — Product Launch events. Client admin: full CRUD;
       // super admin + Viewer: read-only (super admin reads /admin endpoint).
       ...(isLAUNCH ? ["Press Kit"] : []),
@@ -334,7 +352,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       )}
       {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} isAdmin={isAdmin} readOnly={isViewer} />}
       {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin || isViewer} canControlVoting={isClientAdmin} />}
-      {tab === "Audience Tiers" && !isSuperAdmin && isLAUNCH && <EventLaunchAudienceTab    eventId={id} />}
+      {tab === "Audience Tiers" && !isSuperAdmin && isInviteOnly && <EventLaunchAudienceTab    eventId={id} />}
+      {tab === "Invites"        && !isSuperAdmin && isInviteOnly && <EventLaunchInvitesTab     eventId={id} />}
       {tab === "Waitlist"       && !isSuperAdmin && isLAUNCH && <EventLaunchWaitlistTab    eventId={id} />}
       {tab === "Press Kit"      && isLAUNCH && <EventPressKitTab eventId={id} readOnly={isSuperAdmin || isViewer} isSuperAdmin={isSuperAdmin} />}
       {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab eventId={id} />}
