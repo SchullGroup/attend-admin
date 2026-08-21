@@ -140,14 +140,6 @@ export function LaunchStep1({ s, showErrors = false }: { s: LaunchState; showErr
           value={s.productDesc} onChange={(e) => s.setProductDesc(e.target.value)}
           className="flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none" />
       </div>
-      <div>
-        <Label className="mb-2 block">Microsite Slug</Label>
-        <div className="flex items-center rounded-lg border border-[hsl(var(--border))] overflow-hidden">
-          <span className="px-3 py-2 text-sm text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))] border-r border-[hsl(var(--border))] shrink-0 whitespace-nowrap">attend.ng/launch/</span>
-          <Input placeholder="zenith-direct-3" value={s.slug} onChange={(e) => s.setSlug(e.target.value)} className="border-0 rounded-none focus-visible:ring-0" />
-        </div>
-        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Public microsite URL auto-generated from your event</p>
-      </div>
     </div>
   );
 }
@@ -249,7 +241,6 @@ export function LaunchReview({ s, organiserName }: { s: LaunchState; organiserNa
           <ReviewRow label="Product Name" value={s.productName} />
           <ReviewRow label="Tagline" value={s.tagline} />
           {s.flyerUrl && <ReviewRow label="Flyer" value="Uploaded" />}
-          <ReviewRow label="Microsite" value={s.slug ? `attend.ng/launch/${s.slug}` : ""} />
           <ReviewRow label="Embargo" value={s.embargoEnabled ? `Enabled — ${s.embargoAt}` : "Disabled"} />
         </div>
       </div>

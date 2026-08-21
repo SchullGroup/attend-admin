@@ -20,6 +20,7 @@ export interface ClientViewProps {
   isViewer:       boolean;
   allEvents:      EventSummaryResponse[];
   eventsLoading:  boolean;
+  registerCount:  number;
   topRegisters:   RegisterItem[];
   liveEvents:     EventSummaryResponse[];
 }
@@ -31,6 +32,7 @@ export function ClientView({
   isViewer,
   allEvents,
   eventsLoading,
+  registerCount,
   topRegisters,
   liveEvents,
 }: ClientViewProps) {
@@ -69,7 +71,7 @@ export function ClientView({
         cols={3}
         bgOpacity="15"
         items={[
-          { label: "Enrolled Registers", value: topRegisters.length, sub: "Active organisations",  icon: Building2,    color: "#374151" },
+          { label: "Enrolled Registers", value: registerCount,       sub: "Active organisations",  icon: Building2,    color: "#374151" },
           { label: "Total Events",       value: allEvents.length,    sub: "Across all organisers", icon: CalendarDays, color: "#111827" },
           { label: "Live Now",           value: liveEvents.length,   sub: liveEvents.length > 0 ? "Active sessions" : "No active sessions", icon: Radio, color: "#dc2626" },
         ]}
