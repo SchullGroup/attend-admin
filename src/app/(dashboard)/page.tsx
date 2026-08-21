@@ -241,6 +241,7 @@ export default function DashboardPage() {
 
   const liveEvents   = allEvents.filter((e) => e.status === "live" || e.status === "LIVE");
   const topRegisters = (registersData?.registers ?? []).slice(0, 5);
+  const registerCount = registersData?.totalCount ?? topRegisters.length;
   const registrars   = registrarsData?.registrars ?? [];
 
   if (isSuperAdmin) {
@@ -270,6 +271,7 @@ export default function DashboardPage() {
       isViewer={normalizedRole === "viewer"}
       allEvents={allEvents}
       eventsLoading={eventsLoading}
+      registerCount={registerCount}
       topRegisters={topRegisters}
       liveEvents={liveEvents}
     />
