@@ -12,6 +12,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
@@ -1319,8 +1320,13 @@ export interface InviteInput {
   tierName?:  string;
 }
 
-/** Fields documented by the invite-list Swagger schema. */
-export interface InviteItem extends InviteInput {}
+/** Invite-directory row returned by GET /invites. */
+export interface InviteItem extends InviteInput {
+  id?:                string;
+  deliveryStatus?:    string;
+  registrationStatus?: string;
+  providerMessageId?: string;
+}
 
 export interface InviteSummary {
   total:      number;
@@ -1348,16 +1354,27 @@ export interface InviteImportJob {
   totalRows:        number;
   processedRows:    number;
   acceptedRows:     number;
+  createdRows:      number;
   updatedRows:      number;
   duplicateRows:    number;
   rejectedRows:     number;
   errorReportUrl?:  string;
   startedAt?:       string;
   completedAt?:     string;
+  lastHeartbeatAt?: string;
+  errorCode?:       string;
+  errorMessage?:    string;
 }
 
-/** Only value currently documented by Swagger. */
-export type InviteCampaignSelection = "ALL_UNSENT";
+export interface InviteUploadSession {
+  uploadId:        string;
+  storageKey:      string;
+  uploadUrl:       string;
+  expiresAt:       string;
+  requiredHeaders: Record<string, string>;
+}
+
+export type InviteCampaignSelection = "ALL_UNSENT" | "SELECTED" | "TIER" | "IMPORT_JOB";
 
 export interface CreateInviteCampaignRequest {
   selection:    InviteCampaignSelection;
@@ -1378,6 +1395,9 @@ export interface InviteCampaign {
   skippedCount:  number;
   startedAt?:    string;
   completedAt?:  string;
+  lastHeartbeatAt?: string;
+  errorCode?:     string;
+  errorMessage?:  string;
 }
 
 export interface InviteListFilters {
@@ -1453,6 +1473,58 @@ export function useImportInvites() {
       popup.success("Import Started", "Your audience import is processing in the background.", 3000);
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to start invite import."),
+  });
+}
+
+/**
+ * Production import path for large CSVs. The file is uploaded directly to the
+ * backend-issued storage URL, then the durable import job is finalized.
+ */
+export function useImportInviteCsv() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      eventId,
+      file,
+      defaultTierId,
+      onUploadProgress,
+    }: {
+      eventId: string;
+      file: File;
+      defaultTierId?: string;
+      onUploadProgress?: (percent: number) => void;
+    }) => {
+      const idempotencyKey = crypto.randomUUID();
+      const sessionResponse = await apiClient.post<ApiResponse<InviteUploadSession>>(
+        `/api/v1/client/events/${eventId}/invite-imports/upload-session`,
+        { filename: file.name, contentType: file.type || "text/csv", sizeBytes: file.size },
+        { headers: { "Idempotency-Key": idempotencyKey } }
+      );
+      const session = responseData<InviteUploadSession>(sessionResponse);
+
+      // Use the global Axios client here. apiClient would attach the Attend
+      // bearer token and its JSON default to a third-party signed storage URL.
+      await axios.put(session.uploadUrl, file, {
+        headers: session.requiredHeaders,
+        onUploadProgress: (progress) => {
+          if (!onUploadProgress) return;
+          const total = progress.total ?? file.size;
+          onUploadProgress(total > 0 ? Math.min(100, Math.round((progress.loaded / total) * 100)) : 0);
+        },
+      });
+
+      const finalizeResponse = await apiClient.post<ApiResponse<InviteImportJob>>(
+        `/api/v1/client/events/${eventId}/invite-imports`,
+        { uploadId: session.uploadId, defaultTierId: defaultTierId || undefined },
+        { headers: { "Idempotency-Key": idempotencyKey } }
+      );
+      return responseData<InviteImportJob>(finalizeResponse);
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] });
+      popup.success("Import Started", "The CSV was uploaded and is processing in the background.", 3000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to upload and start invite import."),
   });
 }
 
