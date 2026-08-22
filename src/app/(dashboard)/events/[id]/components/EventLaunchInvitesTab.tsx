@@ -26,7 +26,7 @@ import { popup } from "@/lib/popup-store";
 
 const PAGE_SIZE = 50;
 const BROWSER_IMPORT_LIMIT = 100;
-const STATUS_OPTIONS = ["UNSENT", "QUEUED", "PROCESSING", "SENT", "DELIVERED", "FAILED", "BOUNCED", "REGISTERED", "REVOKED"];
+const STATUS_OPTIONS = ["NOT_SENT", "QUEUED", "PROCESSING", "SENT", "DELIVERED", "FAILED", "BOUNCED", "REGISTERED", "REVOKED"];
 
 function normalizeHeader(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -298,7 +298,7 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">Invite Directory</h2>
-            <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Add invitees first, then send all unsent invitations as a tracked campaign.</p>
+            <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Add invitees first, then send all not-sent invitations as a tracked campaign.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => fileRef.current?.click()} disabled={importInvites.isPending || importInviteCsv.isPending}>
@@ -435,7 +435,7 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
                     <td>{invite.email}</td>
                     <td>{invite.phone || "—"}</td>
                     <td>{invite.tierName || "—"}</td>
-                    <td><span className="text-xs font-medium">{invite.deliveryStatus?.replace(/_/g, " ") || "UNSENT"}</span></td>
+                    <td><span className="text-xs font-medium">{invite.deliveryStatus?.replace(/_/g, " ") || "NOT SENT"}</span></td>
                     <td><span className="text-xs font-medium">{invite.registrationStatus?.replace(/_/g, " ") || "INVITED"}</span></td>
                     <td className="max-w-[150px] truncate font-mono text-xs" title={invite.providerMessageId}>{invite.providerMessageId || "—"}</td>
                     <td>

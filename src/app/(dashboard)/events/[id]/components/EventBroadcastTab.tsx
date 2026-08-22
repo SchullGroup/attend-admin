@@ -14,6 +14,8 @@ import {
 
 type Channel = "EMAIL" | "SMS" | "PUSH" | "IN_APP" | "ALL";
 
+const MAX_BROADCAST_MESSAGE_LENGTH = 1000;
+
 const CHANNEL_CONFIG: { key: Channel; label: string; icon: React.ElementType; needsSubject: boolean }[] = [
   { key: "SMS",   label: "SMS",          icon: Send,      needsSubject: false },
   { key: "EMAIL", label: "Email",        icon: FileText,  needsSubject: true  },
@@ -36,7 +38,7 @@ export function EventBroadcastTab({ eventId }: Props) {
 
   const history = historyData?.content ?? [];
   const needsSubject = CHANNEL_CONFIG.find((c) => c.key === channel)?.needsSubject ?? false;
-  const canSend = !!message.trim() && message.length <= 500 && (!needsSubject || (!!subject.trim() && subject.trim().length <= 255)) && !sendMutation.isPending;
+  const canSend = !!message.trim() && message.length <= MAX_BROADCAST_MESSAGE_LENGTH && (!needsSubject || (!!subject.trim() && subject.trim().length <= 255)) && !sendMutation.isPending;
 
   function handleSend() {
     const trimmedSubject = subject.trim();
@@ -131,13 +133,14 @@ export function EventBroadcastTab({ eventId }: Props) {
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder={`Write an update for ${recipientCount.toLocaleString()} registered attendees…`}
                 rows={4}
+                maxLength={MAX_BROADCAST_MESSAGE_LENGTH}
                 className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] resize-none"
               />
               <div className="flex items-center justify-between mt-1">
-                <span className={`text-xs ${message.length > 500 ? "text-red-500 font-medium" : "text-[hsl(var(--muted-foreground))]"}`}>
-                  {message.length} / 500
+                <span className={`text-xs ${message.length > MAX_BROADCAST_MESSAGE_LENGTH ? "text-red-500 font-medium" : "text-[hsl(var(--muted-foreground))]"}`}>
+                  {message.length} / {MAX_BROADCAST_MESSAGE_LENGTH}
                 </span>
-                {message.length > 500 && <span className="text-xs text-red-500 font-medium">Too long</span>}
+                {message.length > MAX_BROADCAST_MESSAGE_LENGTH && <span className="text-xs text-red-500 font-medium">Too long</span>}
               </div>
             </div>
 
