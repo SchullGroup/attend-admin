@@ -31,6 +31,34 @@ const DELIVERY_STATUS_OPTIONS = ["NOT_SENT", "QUEUED", "PROCESSING", "SENT", "DE
 const REGISTRATION_STATUS_OPTIONS = ["REGISTERED", "REVOKED"] as const;
 const STATUS_OPTIONS = [...DELIVERY_STATUS_OPTIONS, ...REGISTRATION_STATUS_OPTIONS];
 
+type BadgeStyle = { label: string; bg: string; color: string };
+
+const DELIVERY_BADGE: Record<string, BadgeStyle> = {
+  NOT_SENT:   { label: "Not sent",   bg: "#f3f4f6", color: "#6b7280" },
+  QUEUED:     { label: "Queued",     bg: "#fef9c3", color: "#a16207" },
+  PROCESSING: { label: "Processing", bg: "#fef9c3", color: "#a16207" },
+  SENT:       { label: "Sent",       bg: "#dbeafe", color: "#1d4ed8" },
+  DELIVERED:  { label: "Delivered",  bg: "#dcfce7", color: "#16a34a" },
+  FAILED:     { label: "Failed",     bg: "#fee2e2", color: "#dc2626" },
+  BOUNCED:    { label: "Bounced",    bg: "#ffedd5", color: "#c2410c" },
+};
+
+const REGISTRATION_BADGE: Record<string, BadgeStyle> = {
+  INVITED:    { label: "Invited",    bg: "#f3f4f6", color: "#6b7280" },
+  REGISTERED: { label: "Registered", bg: "#dcfce7", color: "#16a34a" },
+  REVOKED:    { label: "Revoked",    bg: "#fee2e2", color: "#dc2626" },
+};
+
+function InvitePill({ map, value, fallback }: { map: Record<string, BadgeStyle>; value?: string; fallback: string }) {
+  const key = (value ?? fallback).toUpperCase();
+  const c = map[key] ?? { label: (value ?? fallback).replace(/_/g, " "), bg: "#f3f4f6", color: "#6b7280" };
+  return (
+    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: c.bg, color: c.color }}>
+      {c.label}
+    </span>
+  );
+}
+
 function normalizeHeader(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -133,18 +161,34 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
   const queryClient = useQueryClient();
   const { refetch: exportInvites, isFetching: exporting } = useExportAudienceInvites(eventId, { search, status, tierId });
 
+  const importJob = importProgress.data;
+  const campaignJob = campaignProgress.data;
+  const importTerminal = !!importJob && ["COMPLETED", "FAILED", "CANCELLED"].includes(importJob.status?.toUpperCase() ?? "");
+  const campaignTerminal = !!campaignJob && ["COMPLETED", "FAILED", "CANCELLED"].includes(campaignJob.status?.toUpperCase() ?? "");
+
   useEffect(() => {
     setImportJobId(window.localStorage.getItem(`attend:invite-import:${eventId}`));
     setCampaignId(window.localStorage.getItem(`attend:invite-campaign:${eventId}`));
   }, [eventId]);
 
+  // Persist an in-flight import/campaign id so its progress survives a reload,
+  // but drop the key once the job is terminal — otherwise a long-finished job's
+  // banner reappears on every future visit to the event.
   useEffect(() => {
-    if (importJobId) window.localStorage.setItem(`attend:invite-import:${eventId}`, importJobId);
-  }, [eventId, importJobId]);
+    const key = `attend:invite-import:${eventId}`;
+    try {
+      if (importJobId && !importTerminal) window.localStorage.setItem(key, importJobId);
+      else if (importTerminal) window.localStorage.removeItem(key);
+    } catch {}
+  }, [eventId, importJobId, importTerminal]);
 
   useEffect(() => {
-    if (campaignId) window.localStorage.setItem(`attend:invite-campaign:${eventId}`, campaignId);
-  }, [campaignId, eventId]);
+    const key = `attend:invite-campaign:${eventId}`;
+    try {
+      if (campaignId && !campaignTerminal) window.localStorage.setItem(key, campaignId);
+      else if (campaignTerminal) window.localStorage.removeItem(key);
+    } catch {}
+  }, [campaignId, eventId, campaignTerminal]);
 
   // Campaign delivery is asynchronous. Refresh the invite list whenever the
   // polled campaign snapshot changes so summary cards do not remain stale
@@ -172,8 +216,6 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
   // A healthy import moves to PROCESSING within seconds. If it's still sitting at
   // PENDING with nothing processed a while after starting, the server worker has
   // likely stalled — surface that instead of a spinner that never resolves.
-  const importJob = importProgress.data;
-  const importTerminal = !!importJob && ["COMPLETED", "FAILED", "CANCELLED"].includes(importJob.status?.toUpperCase() ?? "");
   const importStalled =
     !!importJob &&
     !importTerminal &&
@@ -192,6 +234,16 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
     if (next.status !== undefined) setStatus(next.status);
     if (next.tierId !== undefined) setTierId(next.tierId);
     setPage(0);
+  }
+
+  function dismissImport() {
+    setImportJobId(null);
+    try { window.localStorage.removeItem(`attend:invite-import:${eventId}`); } catch {}
+  }
+
+  function dismissCampaign() {
+    setCampaignId(null);
+    try { window.localStorage.removeItem(`attend:invite-campaign:${eventId}`); } catch {}
   }
 
   function handleAddInvite() {
@@ -418,7 +470,14 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
           <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950">
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="font-semibold">Import {importProgress.data.status.replace(/_/g, " ")}</span>
-              <span>{importProgress.data.processedRows.toLocaleString()} / {importProgress.data.totalRows.toLocaleString()} processed</span>
+              <div className="flex items-center gap-2">
+                <span>{importProgress.data.processedRows.toLocaleString()} / {importProgress.data.totalRows.toLocaleString()} processed</span>
+                {importTerminal && (
+                  <button type="button" onClick={dismissImport} aria-label="Dismiss import status" className="rounded-md p-1 text-blue-700/70 transition-colors hover:bg-blue-100 hover:text-blue-900">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-blue-100"><div className="h-full bg-blue-600 transition-all" style={{ width: `${progressPercent(importProgress.data.processedRows, importProgress.data.totalRows)}%` }} /></div>
             <p className="mt-2 text-xs">Accepted {importProgress.data.acceptedRows} · Created {importProgress.data.createdRows ?? 0} · Updated {importProgress.data.updatedRows} · Duplicates {importProgress.data.duplicateRows} · Rejected {importProgress.data.rejectedRows}</p>
@@ -437,7 +496,14 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
           <div className="mt-4 rounded-xl border border-purple-200 bg-purple-50 p-4 text-purple-950">
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="font-semibold">Campaign {campaignProgress.data.status.replace(/_/g, " ")}</span>
-              <span>{campaignProgress.data.sentCount.toLocaleString()} / {campaignProgress.data.selectedCount.toLocaleString()} sent</span>
+              <div className="flex items-center gap-2">
+                <span>{campaignProgress.data.sentCount.toLocaleString()} / {campaignProgress.data.selectedCount.toLocaleString()} sent</span>
+                {campaignTerminal && (
+                  <button type="button" onClick={dismissCampaign} aria-label="Dismiss campaign status" className="rounded-md p-1 text-purple-700/70 transition-colors hover:bg-purple-100 hover:text-purple-900">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-purple-100"><div className="h-full bg-purple-600 transition-all" style={{ width: `${progressPercent(campaignProgress.data.sentCount + campaignProgress.data.failedCount + campaignProgress.data.skippedCount, campaignProgress.data.selectedCount)}%` }} /></div>
             <p className="mt-2 text-xs">Queued {campaignProgress.data.queuedCount} · Failed {campaignProgress.data.failedCount} · Skipped {campaignProgress.data.skippedCount}</p>
@@ -480,12 +546,24 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
           <Loader variant="inline" text="Loading invites…" />
         ) : visibleItems.length ? (
           <div className="mt-4 overflow-x-auto rounded-xl border border-[hsl(var(--border))]">
-            <table className="attend-table min-w-[1080px]">
-              <thead><tr><th className="w-10"><input type="checkbox" checked={allVisibleSelected} onChange={(event) => toggleVisibleInvites(event.target.checked)} aria-label="Select all invites on this page" /></th><th>Invitee</th><th>Email</th><th>Phone</th><th>Tier</th><th>Delivery</th><th>Registration</th><th>Provider ID</th><th className="text-right">Actions</th></tr></thead>
+            <table className="w-full min-w-[1080px] text-sm">
+              <thead>
+                <tr className="attend-table-header">
+                  <th className="w-10 px-4 py-3 text-left"><input type="checkbox" checked={allVisibleSelected} onChange={(event) => toggleVisibleInvites(event.target.checked)} aria-label="Select all invites on this page" /></th>
+                  <th className="px-4 py-3 text-left">Invitee</th>
+                  <th className="px-4 py-3 text-left">Email</th>
+                  <th className="px-4 py-3 text-left">Phone</th>
+                  <th className="px-4 py-3 text-left">Tier</th>
+                  <th className="px-4 py-3 text-left">Delivery</th>
+                  <th className="px-4 py-3 text-left">Registration</th>
+                  <th className="px-4 py-3 text-left">Provider ID</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
               <tbody>
                 {visibleItems.map((invite, index) => (
                   <tr key={invite.id ?? `${invite.email}-${index}`} className="attend-table-row">
-                    <td>
+                    <td className="px-4 py-3">
                       {invite.id ? (
                         <input
                           type="checkbox"
@@ -495,14 +573,14 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
                         />
                       ) : null}
                     </td>
-                    <td><span className="font-medium text-[hsl(var(--foreground))]">{[invite.firstName, invite.lastName].filter(Boolean).join(" ") || "—"}</span></td>
-                    <td>{invite.email}</td>
-                    <td>{invite.phone || "—"}</td>
-                    <td>{invite.tierName || "—"}</td>
-                    <td><span className="text-xs font-medium">{invite.deliveryStatus?.replace(/_/g, " ") || "NOT SENT"}</span></td>
-                    <td><span className="text-xs font-medium">{invite.registrationStatus?.replace(/_/g, " ") || "INVITED"}</span></td>
-                    <td className="max-w-[150px] truncate font-mono text-xs" title={invite.providerMessageId}>{invite.providerMessageId || "—"}</td>
-                    <td>
+                    <td className="px-4 py-3"><span className="font-medium text-[hsl(var(--foreground))]">{[invite.firstName, invite.lastName].filter(Boolean).join(" ") || "—"}</span></td>
+                    <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">{invite.email}</td>
+                    <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">{invite.phone || "—"}</td>
+                    <td className="px-4 py-3">{invite.tierName ? <span className="inline-flex items-center rounded-full bg-[hsl(var(--muted))] px-2 py-0.5 text-xs font-medium text-[hsl(var(--foreground))]">{invite.tierName}</span> : <span className="text-[hsl(var(--muted-foreground))]">—</span>}</td>
+                    <td className="px-4 py-3"><InvitePill map={DELIVERY_BADGE} value={invite.deliveryStatus} fallback="NOT_SENT" /></td>
+                    <td className="px-4 py-3"><InvitePill map={REGISTRATION_BADGE} value={invite.registrationStatus} fallback="INVITED" /></td>
+                    <td className="px-4 py-3 max-w-[150px] truncate font-mono text-xs text-[hsl(var(--muted-foreground))]" title={invite.providerMessageId}>{invite.providerMessageId || "—"}</td>
+                    <td className="px-4 py-3">
                       <div className="flex justify-end gap-1.5">
                         {invite.id && invite.registrationStatus !== "REVOKED" && invite.registrationStatus !== "REGISTERED" && (
                           <>
