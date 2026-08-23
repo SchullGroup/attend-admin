@@ -27,6 +27,7 @@ import {
   useChallengeWinnerAnnouncement,
   certificateDownloadUrl,
   isWinnerAnnouncementTerminal,
+  isChallengeEnded,
   type ApplicationStatus,
   type ApplicationItem,
   type JudgeItem,
@@ -1220,6 +1221,7 @@ function WinnerAnnouncementProgress({ progress }: { progress: WinnerAnnouncement
 
 function WinnersTab({ challengeId, readOnly }: { challengeId: string; readOnly?: boolean }) {
   const { data, isLoading, isError, error } = useChallengeWinnerPreview(challengeId);
+  const { data: challenge } = useClientChallengeDetail(challengeId);
   const announce = useAnnounceChallengeWinners();
 
   const [message, setMessage] = useState("");
@@ -1264,12 +1266,13 @@ function WinnersTab({ challengeId, readOnly }: { challengeId: string; readOnly?:
 
   const winners: WinnerTeam[] = data?.winners ?? [];
   const alreadyAnnounced = isWinnerAnnouncementTerminal(progress?.status);
+  const ended = isChallengeEnded(challenge?.status);
   const canAnnounce =
-    !readOnly && winners.length > 0 && (sendEmail || sendInApp) && !!message.trim() && !announce.isPending;
+    !readOnly && ended && winners.length > 0 && (sendEmail || sendInApp) && !!message.trim() && !announce.isPending;
 
   function handleAnnounce() {
     const trimmed = message.trim();
-    if (!trimmed) return;
+    if (!trimmed || !ended) return;
     // One idempotency key per attempt; reused if a retry is needed.
     if (!idemRef.current) idemRef.current = crypto.randomUUID();
     const key = idemRef.current;
@@ -1393,6 +1396,18 @@ function WinnersTab({ challengeId, readOnly }: { challengeId: string; readOnly?:
                 </p>
               </div>
 
+              {!readOnly && !ended && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                  <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>
+                    Winners can only be announced after the challenge has ended. Ending closes applications and scoring and finalizes the results.
+                    {challenge?.status && (
+                      <> Current status: <span className="font-semibold">{challenge.status}</span>.</>
+                    )}
+                  </span>
+                </div>
+              )}
+
               {!readOnly && (
                 <div className="flex flex-wrap items-center gap-4">
                   <label className="flex items-center gap-2 text-sm text-[hsl(var(--foreground))] cursor-pointer">
@@ -1405,7 +1420,7 @@ function WinnersTab({ challengeId, readOnly }: { challengeId: string; readOnly?:
                   </label>
                   <Button onClick={handleAnnounce} disabled={!canAnnounce} className="ml-auto">
                     <Send className="h-3.5 w-3.5 mr-1.5" />
-                    {announce.isPending ? "Announcing…" : alreadyAnnounced ? "Re-run announcement" : "Announce winners"}
+                    {announce.isPending ? "Announcing…" : alreadyAnnounced ? "Re-run announcement" : ended ? "Announce winners" : "End challenge to announce"}
                   </Button>
                 </div>
               )}

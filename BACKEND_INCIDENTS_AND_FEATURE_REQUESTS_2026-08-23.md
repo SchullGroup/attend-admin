@@ -101,23 +101,27 @@ POST /api/v1/client/events/fc79621a-0742-41e5-84c1-9efcae320da7/challenge-winner
 
 ## 3. Feature request — "End Challenge" lifecycle, and gate winner announcement behind it
 
-**Desired behavior.** Congratulations messages and certificates must only be sendable **after the challenge has ended**. "Ending" a challenge should be an explicit, guarded action that finalizes everything.
+**Desired behavior.** Congratulations messages and certificates must only be sendable **after the challenge has ended**. "Ending" a challenge is an explicit, guarded, **terminal** action that finalizes everything.
+
+**Confirmed product decisions** (from the organiser — these are settled, not open questions; they also apply to mobile/web):
+- **Ending is terminal — no re-open.** Once ended, applications and scoring are permanently closed and the winner set is frozen. Announcement is therefore effectively one-shot (re-runs only retry delivery for the same frozen set, they don't recompute winners).
+- **"Scoring complete" = every SHORTLISTED/SELECTED application has ≥1 judge score.** It is *not* required that every assigned judge has scored every assigned application — a single judge score per application clears the gate.
+- **Announcement is hard-gated behind the ended state.** Preview/leaderboard stay visible before ending, but announce is blocked until the challenge is ended.
 
 **Proposed contract (please confirm/adjust).**
 - Endpoint, e.g. `POST /api/v1/client/challenges/{challengeId}/end` (or `/events/{eventId}/end`).
 - Ending atomically:
   1. Closes applications (no new submissions),
   2. Closes scoring (no new/edited scores),
-  3. **Requires all shortlisted/selected applications to be scored** — reject with a stable code (e.g. `SCORING_INCOMPLETE`) and ideally the list of unscored application ids if any remain,
-  4. Transitions the challenge to a terminal status,
+  3. **Requires all shortlisted/selected applications to have ≥1 judge score** — reject with a stable code (e.g. `SCORING_INCOMPLETE`) and ideally the list of unscored application ids if any remain,
+  4. Transitions the challenge to a terminal status and freezes the SELECTED set,
   5. Unlocks the winner preview/announce endpoints.
-- The `preview` and `announce` endpoints should **hard-reject** when the challenge is not yet ended (stable code, e.g. `CHALLENGE_NOT_ENDED`), so the gate is enforced server-side and not just in the admin UI.
+- The `announce` endpoint should **hard-reject** when the challenge is not yet ended (stable code, e.g. `CHALLENGE_NOT_ENDED`), so the gate is enforced server-side and not just in the admin UI.
 
-**Questions for backend (these also affect the mobile/web apps).**
-- What is the challenge status vocabulary, and which value is the terminal "ended" state (`ENDED`? `COMPLETED`?)? Today the challenge detail surfaces values like `LIVE`; the FE needs the canonical set.
-- Definition of "all shortlisted scored": every SHORTLISTED/SELECTED application having **≥1 judge score**, or **every assigned judge** having scored **every** assigned application?
-- Is ending **reversible** (re-open to fix a mistake), or terminal? This determines whether announcement is strictly one-shot.
-- On end, are SELECTED assignments frozen, or can the organiser still adjust winners before announcing?
+**Open question for backend (still blocking — affects mobile/web too).**
+- **What is the exact challenge status vocabulary, and which value is the terminal "ended" state?** Today the challenge detail surfaces values like `LIVE`; we need the canonical set and the precise "ended" string. The FE currently matches a defensive set (`ENDED`/`COMPLETED`/`CLOSED`/`FINISHED`/`CONCLUDED`) and surfaces the live status in the UI so we can confirm the real value on staging — please pin it down so we can match exactly.
+
+**Frontend behavior (shipped, interim).** Until the End-Challenge endpoint exists, the admin UI **shows the winner preview but blocks announcing** until the challenge status reads as ended. The Announce button is disabled with an amber "Winners can only be announced after the challenge has ended…" note that echoes the current status. Once the backend confirms the terminal status value (and, later, ships the explicit End action), we'll align the gate and build the End-Challenge button.
 
 ---
 
@@ -125,7 +129,7 @@ POST /api/v1/client/events/fc79621a-0742-41e5-84c1-9efcae320da7/challenge-winner
 
 These were observed in live applications and should be enforced at submission time on the backend, because they affect the mobile and web apps as well — the admin app only sees the result.
 
-- **i. Member Attend-account / membership integrity.** Team members appear on applications without a consistent Attend-account relationship. Please confirm how `hasAttendAccount` is derived and whether membership should require a real Attend user. *(FE note: we'd like this clarified — see the open question we're raising with the product owner.)*
+- **i. Every team member must have a registered Attend account.** Confirmed with the organiser: members **without** a registered Attend account are currently being added to applications, and this should be **blocked**. Every listed team member must resolve to a real Attend user (or, at minimum, have an accepted invite — see iii) before the application is finalized and shown to the admin. Please reject submissions containing members that don't map to a registered Attend account, with a stable code (e.g. `MEMBER_NOT_REGISTERED`), and confirm how `hasAttendAccount` is derived so the admin UI can display it reliably. This ties directly to the consent requirement in (iii).
 - **ii. Minimum team size not enforced.** With `minTeamSize = 2`, single-member applications are still coming through. Submissions below `minTeamSize` (and above `maxTeamSize`) should be rejected with a clear code.
 - **iii. Member consent before submission.** When a team lead assembles an application on mobile/web, each listed member should have to log in and **accept** membership before the application is finalized and shown to the admin — so no one is added to a team without consenting.
 - **iv. Email uniqueness within a challenge.** The same email is appearing in multiple applications for the same challenge. An email should belong to at most one application per challenge; the backend should reject or de-duplicate, rather than letting a person be split across competing teams.

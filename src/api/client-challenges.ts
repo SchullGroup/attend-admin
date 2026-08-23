@@ -996,6 +996,16 @@ export function isWinnerAnnouncementTerminal(status?: string): boolean {
   return !!status && WINNER_TERMINAL_STATUSES.includes(status.toUpperCase() as WinnerAnnouncementStatus);
 }
 
+// Winners can only be announced once the challenge has ended. The exact terminal
+// status string is still being confirmed with the backend (see the 2026-08-23
+// incident doc), so match a defensive set; the UI surfaces the live status when
+// it doesn't match, so we can confirm the real value on staging.
+const CHALLENGE_ENDED_STATUSES = ["ENDED", "COMPLETED", "CLOSED", "FINISHED", "CONCLUDED"];
+
+export function isChallengeEnded(status?: string): boolean {
+  return !!status && CHALLENGE_ENDED_STATUSES.includes(status.toUpperCase());
+}
+
 /**
  * Public (unauthenticated) certificate PDF download — the backend 302-redirects
  * to a short-lived signed URL. Safe to open directly in a new tab.
