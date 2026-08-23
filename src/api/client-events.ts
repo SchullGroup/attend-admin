@@ -1416,6 +1416,8 @@ export interface InviteListFilters {
   size?:        number;
   search?:      string;
   status?:      string;
+  deliveryStatus?: InviteDeliveryStatus;
+  registrationStatus?: InviteRegistrationStatus;
   tierId?:      string;
   importJobId?:  string;
 }
@@ -1430,6 +1432,37 @@ function responseData<T>(response: any): T {
   return ((response?.data as any)?.data ?? response?.data) as T;
 }
 
+const INVITE_DELIVERY_STATUSES = new Set<InviteDeliveryStatus>([
+  "NOT_SENT",
+  "QUEUED",
+  "PROCESSING",
+  "SENT",
+  "DELIVERED",
+  "FAILED",
+  "BOUNCED",
+]);
+
+function inviteListParams(filters: InviteListFilters) {
+  const params: Record<string, string | number> = {};
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== "") params[key] = value;
+  }
+
+  // The directory selector contains both delivery and registration states.
+  // Send the explicit parameter as well as the legacy `status` alias so the
+  // client works with both deployed API contract versions.
+  if (filters.status) {
+    if (INVITE_DELIVERY_STATUSES.has(filters.status as InviteDeliveryStatus)) {
+      params.deliveryStatus = filters.status;
+    } else {
+      params.registrationStatus = filters.status;
+    }
+  }
+
+  return params;
+}
+
 export function useListInvites(eventId: string, filters: InviteListFilters = {}) {
   return useQuery({
     queryKey: inviteKeys.list(eventId, filters),
@@ -1437,7 +1470,7 @@ export function useListInvites(eventId: string, filters: InviteListFilters = {})
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<InviteListResponse>>(
         `/api/v1/client/events/${eventId}/invites`,
-        { params: Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== undefined && value !== "")) }
+        { params: inviteListParams(filters) }
       );
       const raw = responseData<InviteListResponse>(res);
       return {
@@ -1598,7 +1631,7 @@ export function useExportAudienceInvites(eventId: string, filters: Omit<InviteLi
     queryFn: async () => {
       const res = await apiClient.get<string>(
         `/api/v1/client/events/${eventId}/invites/export`,
-        { params: Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== undefined && value !== "")) }
+        { params: inviteListParams(filters) }
       );
       return res.data as string;
     },

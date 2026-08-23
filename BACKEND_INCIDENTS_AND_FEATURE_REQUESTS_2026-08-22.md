@@ -182,3 +182,55 @@ The preview should return the server-computed selected winners, final positions,
 - Test a failed/bounced resend and a revoked/registered invite.
 - Test broadcast messages at 999, 1,000, and 1,001 characters.
 - Confirm no campaign worker records a generic `PROCESSING_ERROR` for a valid invite.
+
+## 6. New production reproductions - upload session and resend still return `500`
+
+These failures were reproduced from the frontend on **2026-08-23** after the earlier invite-directory issues were recorded. They need to be correlated with backend logs using the reference IDs below.
+
+### 6.1 CSV upload-session creation
+
+**Request**
+
+```text
+POST /api/v1/client/events/a7a68420-8946-4053-91b9-560948f08320/invite-imports/upload-session
+```
+
+**Observed response**
+
+```json
+{
+  "code": "UNEXPECTED_ERROR",
+  "error": "Unexpected error",
+  "message": "Something went wrong. Please try again later.",
+  "referenceId": "841b7cfc-e11c-4ad4-b1ae-ef026d1c858b",
+  "requestTime": "2026-08-23 11:18:30",
+  "requestType": "Outbound",
+  "status": false
+}
+```
+
+**Question for backend/ops:** is this failure coming from the Huawei OBS upload-session or signed-URL generation path? The endpoint creates a short-lived signed upload URL, so please check Huawei OBS credentials, bucket/endpoint configuration, object-key generation, and the exact exception for this reference ID. Also confirm whether the failure occurs before or after the `invite_import_job`/upload-session row is persisted. The frontend should not blindly retry until we know whether an orphaned storage session or database row was created.
+
+### 6.2 Invite resend
+
+**Request**
+
+```text
+POST /api/v1/client/events/e817e086-dcda-4f1d-895c-382b4e050f3b/invites/dce42fec-7611-4aac-bf0d-5a61f8386a9a/resend
+```
+
+**Observed response**
+
+```json
+{
+  "code": "UNEXPECTED_ERROR",
+  "error": "Unexpected error",
+  "message": "Something went wrong. Please try again later.",
+  "referenceId": "3b8d98aa-9b0b-4ffd-bb18-4e24e337a15d",
+  "requestTime": "2026-08-23 11:21:19",
+  "requestType": "Outbound",
+  "status": false
+}
+```
+
+Please trace this reference ID and return the underlying exception. The resend endpoint must return a stable domain error for invalid invite state, provider rejection, or persistence failure rather than `UNEXPECTED_ERROR`. In particular, verify the invite's `registrationStatus`, `deliveryStatus`, and current database check constraint, and confirm whether the resend path is attempting to write `PROCESSING` without the required constraint migration. Also confirm whether a resend is allowed for `FAILED` and `BOUNCED` invites and whether it resets `providerMessageId`.

@@ -27,7 +27,9 @@ import { popup } from "@/lib/popup-store";
 
 const PAGE_SIZE = 50;
 const BROWSER_IMPORT_LIMIT = 100;
-const STATUS_OPTIONS = ["NOT_SENT", "QUEUED", "PROCESSING", "SENT", "DELIVERED", "FAILED", "BOUNCED", "REGISTERED", "REVOKED"];
+const DELIVERY_STATUS_OPTIONS = ["NOT_SENT", "QUEUED", "PROCESSING", "SENT", "DELIVERED", "FAILED", "BOUNCED"] as const;
+const REGISTRATION_STATUS_OPTIONS = ["REGISTERED", "REVOKED"] as const;
+const STATUS_OPTIONS = [...DELIVERY_STATUS_OPTIONS, ...REGISTRATION_STATUS_OPTIONS];
 
 function normalizeHeader(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -154,8 +156,17 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
   }, [campaignProgress.data, eventId, queryClient]);
 
   const summary = data?.summary;
-  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
-  const visibleInviteIds = (data?.items ?? []).map((invite) => invite.id).filter((id): id is string => Boolean(id));
+  const visibleItems = (data?.items ?? []).filter((invite) => {
+    if (!status) return true;
+    if ((DELIVERY_STATUS_OPTIONS as readonly string[]).includes(status)) {
+      return (invite.deliveryStatus ?? "NOT_SENT") === status;
+    }
+    return (invite.registrationStatus ?? "INVITED") === status;
+  });
+  const responseContainsStatusMismatch = Boolean(status) && visibleItems.length !== (data?.items.length ?? 0);
+  const filteredTotal = responseContainsStatusMismatch ? visibleItems.length : (data?.total ?? 0);
+  const totalPages = responseContainsStatusMismatch ? 1 : Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
+  const visibleInviteIds = visibleItems.map((invite) => invite.id).filter((id): id is string => Boolean(id));
   const allVisibleSelected = visibleInviteIds.length > 0 && visibleInviteIds.every((id) => selectedInviteIds.includes(id));
 
   function toggleVisibleInvites(checked: boolean) {
@@ -354,16 +365,23 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
         )}
 
         {showAdd && (
-          <div className="mt-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.25)] p-4">
+          <form
+            className="mt-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.25)] p-4"
+            autoComplete="on"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleAddInvite();
+            }}
+          >
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-semibold">Add one invite</p>
               <button type="button" aria-label="Close add invite form" onClick={() => setShowAdd(false)} className="rounded-md p-1 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]"><X className="h-4 w-4" /></button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" />
-              <Input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" />
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email *" />
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" />
+              <Input name="invite-first-name" autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" />
+              <Input name="invite-last-name" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" />
+              <Input name="invite-email" autoComplete="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email *" />
+              <Input name="invite-phone" autoComplete="tel" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" />
               <select value={newTierId} onChange={(e) => setNewTierId(e.target.value)} className="h-10 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm">
                 <option value="">No/default tier</option>
                 {tiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}
@@ -377,10 +395,10 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
                 className="mt-3 max-w-sm"
               />
             )}
-            <Button size="sm" className="mt-3" onClick={handleAddInvite} disabled={!email.trim() || createInvites.isPending}>
+            <Button type="submit" size="sm" className="mt-3" disabled={!email.trim() || createInvites.isPending}>
               {createInvites.isPending ? "Adding…" : "Add to Invite List"}
             </Button>
-          </div>
+          </form>
         )}
 
         {importProgress.data && (
@@ -411,7 +429,22 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
         <form className="mt-5 grid gap-3 md:grid-cols-[minmax(220px,1fr)_180px_180px_auto]" onSubmit={(event) => { event.preventDefault(); setSearch(searchText.trim()); setPage(0); }}>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
-            <Input value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Search invitees" className="pl-9" />
+            <Input
+              type="search"
+              name="invite-directory-search"
+              autoComplete="off"
+              value={searchText}
+              onChange={(event) => {
+                const value = event.target.value;
+                setSearchText(value);
+                if (value === "") {
+                  setSearch("");
+                  setPage(0);
+                }
+              }}
+              placeholder="Search invitees"
+              className="pl-9"
+            />
           </div>
           <select value={status} onChange={(e) => resetPageAndFilters({ status: e.target.value })} className="h-10 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm">
             <option value="">All statuses</option>
@@ -426,12 +459,12 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
 
         {isLoading ? (
           <Loader variant="inline" text="Loading invites…" />
-        ) : data?.items.length ? (
+        ) : visibleItems.length ? (
           <div className="mt-4 overflow-x-auto rounded-xl border border-[hsl(var(--border))]">
             <table className="attend-table min-w-[1080px]">
               <thead><tr><th className="w-10"><input type="checkbox" checked={allVisibleSelected} onChange={(event) => toggleVisibleInvites(event.target.checked)} aria-label="Select all invites on this page" /></th><th>Invitee</th><th>Email</th><th>Phone</th><th>Tier</th><th>Delivery</th><th>Registration</th><th>Provider ID</th><th className="text-right">Actions</th></tr></thead>
               <tbody>
-                {data.items.map((invite, index) => (
+                {visibleItems.map((invite, index) => (
                   <tr key={invite.id ?? `${invite.email}-${index}`} className="attend-table-row">
                     <td>
                       {invite.id ? (
@@ -504,7 +537,7 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
         )}
 
         <div className="mt-4 flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
-          <span>{(data?.total ?? 0).toLocaleString()} invite(s){isFetching && !isLoading ? " · Refreshing…" : ""}</span>
+          <span>{filteredTotal.toLocaleString()} invite(s){isFetching && !isLoading ? " · Refreshing…" : ""}</span>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>Previous</Button>
             <span>Page {page + 1} of {totalPages}</span>
