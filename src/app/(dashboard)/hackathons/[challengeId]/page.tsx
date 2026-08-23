@@ -1,11 +1,12 @@
 "use client";
-import React, { use, useState } from "react";
+import React, { use, useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Trophy, Users, FileText, Lightbulb, Star, ChevronDown,
   Plus, Trash2, ToggleLeft, ToggleRight, ListOrdered, Target, Award,
   ClipboardList, UserCheck, BookOpen, ChevronRight, ExternalLink, Code,
   Globe, Video, FolderOpen, Settings, Link2, Download, X,
+  Mail, Bell, Send, CheckCircle2, AlertTriangle,
 } from "lucide-react";
 import {
   useClientChallengeDetail,
@@ -21,11 +22,19 @@ import {
   useToggleScoring,
   useExportChallengeApplications,
   useUpdateSubmissionRequirements,
+  useChallengeWinnerPreview,
+  useAnnounceChallengeWinners,
+  useChallengeWinnerAnnouncement,
+  certificateDownloadUrl,
+  isWinnerAnnouncementTerminal,
   type ApplicationStatus,
   type ApplicationItem,
   type JudgeItem,
   type ExportApplicationItem,
   type SubmissionRequirements,
+  type WinnerTeam,
+  type WinnerMember,
+  type WinnerAnnouncement,
 } from "@/api/client-challenges";
 import { AssignmentsSection } from "../components/AssignmentsSection";
 import { ResourcesTab } from "./ResourcesTab";
@@ -1090,6 +1099,319 @@ function LeaderboardTab({ challengeId }: { challengeId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Winners tab — announce challenge winners + issue certificates
+// ---------------------------------------------------------------------------
+
+const winnerPositionColor = (position: number) => {
+  if (position === 1) return "#f59e0b"; // gold
+  if (position === 2) return "#94a3b8"; // silver
+  if (position === 3) return "#d97706"; // bronze
+  return "#7c22c9";                     // brand purple for 4th+
+};
+
+const ordinal = (n: number) => {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+};
+
+function WinnerMemberRow({ member }: { member: WinnerMember }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <div className="min-w-0">
+        <p className="text-sm text-[hsl(var(--foreground))] truncate">{member.name || "Unnamed member"}</p>
+        {member.email && (
+          <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{member.email}</p>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {member.email && (
+          <span title="Will receive the congratulations email" className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#7c22c910] text-[#7c22c9]">
+            <Mail className="h-3 w-3" /> Email
+          </span>
+        )}
+        {member.hasAttendAccount && (
+          <span title="Will receive an in-app notification" className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#16a34a12] text-[#16a34a]">
+            <Bell className="h-3 w-3" /> In-app
+          </span>
+        )}
+        {member.certificateId && (
+          <a
+            href={certificateDownloadUrl(member.certificateId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Download certificate PDF"
+            className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] hover:bg-[#7c22c910] hover:text-[#7c22c9] transition-colors"
+          >
+            <Download className="h-3 w-3" /> Certificate
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WinnerAnnouncementProgress({ progress }: { progress: WinnerAnnouncement }) {
+  const status = progress.status?.toUpperCase();
+  const terminal = isWinnerAnnouncementTerminal(status);
+  const failed = status === "FAILED";
+  const withErrors = status === "COMPLETED_WITH_ERRORS";
+
+  const tone = failed
+    ? { bg: "#dc262612", fg: "#dc2626", label: "Failed", Icon: AlertTriangle }
+    : withErrors
+    ? { bg: "#f59e0b12", fg: "#b45309", label: "Completed with errors", Icon: AlertTriangle }
+    : terminal
+    ? { bg: "#16a34a12", fg: "#16a34a", label: "Completed", Icon: CheckCircle2 }
+    : { bg: "#7c22c912", fg: "#7c22c9", label: "Sending…", Icon: Send };
+
+  const stat = (label: string, value?: number) => (
+    <div className="text-center">
+      <p className="text-lg font-black tabular-nums text-[hsl(var(--foreground))]">{value ?? 0}</p>
+      <p className="text-[11px] text-[hsl(var(--muted-foreground))]">{label}</p>
+    </div>
+  );
+
+  return (
+    <Card className="attend-card overflow-hidden">
+      <div className="px-5 py-3 border-b border-[hsl(var(--border))] flex items-center gap-2" style={{ backgroundColor: tone.bg }}>
+        <tone.Icon className={`h-4 w-4 ${terminal ? "" : "animate-pulse"}`} style={{ color: tone.fg }} />
+        <span className={`text-sm font-semibold ${terminal ? "" : "animate-pulse"}`} style={{ color: tone.fg }}>{tone.label}</span>
+      </div>
+      <div className="px-5 py-4 grid grid-cols-4 gap-3">
+        {stat("Certificates", progress.certificatesIssued)}
+        {stat("Emails sent", progress.emailsSent)}
+        {stat("In-app sent", progress.inAppSent)}
+        {stat("Emails failed", progress.emailsFailed)}
+      </div>
+      {(failed || withErrors) && (progress.errorMessage || progress.errorCode) && (
+        <div className="px-5 pb-3 text-xs text-[#dc2626]">
+          {progress.errorMessage || progress.errorCode}
+        </div>
+      )}
+      {Array.isArray(progress.failures) && progress.failures.length > 0 && (
+        <div className="px-5 pb-4">
+          <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-1.5">Delivery failures</p>
+          <ul className="flex flex-col gap-1">
+            {progress.failures.map((f, i) => (
+              <li key={i} className="text-xs text-[hsl(var(--muted-foreground))]">
+                <span className="text-[hsl(var(--foreground))]">{f.recipient || "Recipient"}</span>
+                {f.reason ? ` — ${f.reason}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function WinnersTab({ challengeId, readOnly }: { challengeId: string; readOnly?: boolean }) {
+  const { data, isLoading, isError, error } = useChallengeWinnerPreview(challengeId);
+  const announce = useAnnounceChallengeWinners();
+
+  const [message, setMessage] = useState("");
+  const [messageDirty, setMessageDirty] = useState(false);
+  const [sendEmail, setSendEmail] = useState(true);
+  const [sendInApp, setSendInApp] = useState(true);
+  const [announcementId, setAnnouncementId] = useState<string | null>(null);
+  const idemRef = useRef<string | null>(null);
+
+  const storageKey = `attend:winnerAnnouncement:${challengeId}`;
+
+  // No "list announcements" endpoint exists, so remember the last announcement
+  // id locally to keep showing its progress across reloads.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) setAnnouncementId(saved);
+    } catch {}
+  }, [storageKey]);
+
+  // Prefill the editable message with the server-generated default (until edited).
+  useEffect(() => {
+    if (!messageDirty && data?.defaultMessage) setMessage(data.defaultMessage);
+  }, [data?.defaultMessage, messageDirty]);
+
+  const { data: progress } = useChallengeWinnerAnnouncement(challengeId, announcementId);
+
+  if (isLoading) return <Loader variant="inline" text="Computing winners…" />;
+
+  if (isError) {
+    const serverMsg = (error as any)?.response?.data?.message;
+    return (
+      <Card className="attend-card px-5 py-12 text-center">
+        <Trophy className="h-8 w-8 mx-auto text-[hsl(var(--muted-foreground))] mb-3" />
+        <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Winners aren’t available yet</p>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1 max-w-md mx-auto">
+          {serverMsg || "Complete judging and move the winning applications to SELECTED, then return here to preview and announce."}
+        </p>
+      </Card>
+    );
+  }
+
+  const winners: WinnerTeam[] = data?.winners ?? [];
+  const alreadyAnnounced = isWinnerAnnouncementTerminal(progress?.status);
+  const canAnnounce =
+    !readOnly && winners.length > 0 && (sendEmail || sendInApp) && !!message.trim() && !announce.isPending;
+
+  function handleAnnounce() {
+    const trimmed = message.trim();
+    if (!trimmed) return;
+    // One idempotency key per attempt; reused if a retry is needed.
+    if (!idemRef.current) idemRef.current = crypto.randomUUID();
+    const key = idemRef.current;
+    popup.confirm(
+      alreadyAnnounced ? "Re-run Announcement?" : "Announce Winners?",
+      `This will send certificates and congratulations to ${data?.totalRecipients ?? "all"} recipient(s) across ${winners.length} winning team${winners.length === 1 ? "" : "s"}. Sending is idempotent — recipients already notified won’t be messaged twice.`,
+      () => {
+        announce.mutate(
+          { challengeId, applicationIds: winners.map((w) => w.applicationId), message: trimmed, sendEmail, sendInApp, idempotencyKey: key },
+          {
+            onSuccess: (res) => {
+              idemRef.current = null;
+              if (res?.announcementId) {
+                setAnnouncementId(res.announcementId);
+                try { localStorage.setItem(storageKey, res.announcementId); } catch {}
+              }
+            },
+          }
+        );
+      },
+      undefined,
+      alreadyAnnounced ? "Re-run" : "Announce",
+      "Cancel"
+    );
+  }
+
+  // Prefer backend-provided counts; fall back to summarizing the members the
+  // backend already returned (display only — not a winner computation).
+  const allMembers = winners.flatMap((t) => t.members ?? []);
+  const summary = [
+    { label: "Winning teams",   value: winners.length },
+    { label: "Recipients",      value: data?.totalRecipients ?? allMembers.length },
+    { label: "With email",      value: data?.emailRecipients ?? allMembers.filter((m) => !!m.email).length },
+    { label: "With in-app",     value: data?.inAppRecipients ?? allMembers.filter((m) => m.hasAttendAccount).length },
+  ];
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Progress (if an announcement has been kicked off) */}
+      {announcementId && progress && <WinnerAnnouncementProgress progress={progress} />}
+
+      {winners.length === 0 ? (
+        <Card className="attend-card px-5 py-12 text-center">
+          <Trophy className="h-8 w-8 mx-auto text-[hsl(var(--muted-foreground))] mb-3" />
+          <p className="text-sm font-semibold text-[hsl(var(--foreground))]">No winners to announce yet</p>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1 max-w-md mx-auto">
+            Move the winning applications to <span className="font-semibold">SELECTED</span> and make sure they’ve been scored on the leaderboard. Unscored selections are excluded automatically.
+          </p>
+        </Card>
+      ) : (
+        <>
+          {/* Summary */}
+          <div className="grid grid-cols-4 gap-3">
+            {summary.map((s) => (
+              <Card key={s.label} className="attend-card px-4 py-3 text-center">
+                <p className="text-xl font-black tabular-nums text-[hsl(var(--foreground))]">
+                  {s.value ?? "—"}
+                </p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">{s.label}</p>
+              </Card>
+            ))}
+          </div>
+
+          {/* Ranked winners */}
+          <div className="flex flex-col gap-3">
+            {winners.map((team) => {
+              const color = winnerPositionColor(team.finalPosition);
+              return (
+                <Card key={team.applicationId} className="attend-card overflow-hidden">
+                  <div className="px-5 py-3 border-b border-[hsl(var(--border))] flex items-center gap-3">
+                    <span
+                      className="h-8 min-w-8 px-2 rounded-full flex items-center justify-center text-white text-xs font-black"
+                      style={{ backgroundColor: color }}
+                    >
+                      {ordinal(team.finalPosition)}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-[hsl(var(--foreground))] truncate">{team.teamName}</p>
+                      {team.ideaTitle && (
+                        <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{team.ideaTitle}</p>
+                      )}
+                    </div>
+                    {team.track && (
+                      <span className="ml-auto text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
+                        {team.track}
+                      </span>
+                    )}
+                  </div>
+                  <div className="px-5 py-2 divide-y divide-[hsl(var(--border))]">
+                    {(team.members ?? []).map((m, i) => (
+                      <WinnerMemberRow key={m.memberId ?? m.email ?? i} member={m} />
+                    ))}
+                    {(!team.members || team.members.length === 0) && (
+                      <p className="py-2 text-xs text-[hsl(var(--muted-foreground))]">No team members on record.</p>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Compose + announce */}
+          <Card className="attend-card overflow-hidden">
+            <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+              <Award className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+              <h2 className="font-semibold text-[hsl(var(--foreground))]">Congratulations message</h2>
+            </div>
+            <div className="px-5 py-5 flex flex-col gap-4">
+              <div>
+                <textarea
+                  value={message}
+                  onChange={(e) => { setMessage(e.target.value); setMessageDirty(true); }}
+                  disabled={readOnly}
+                  rows={5}
+                  maxLength={2000}
+                  placeholder="Congratulations to our winners…"
+                  className="w-full rounded-lg border border-[hsl(var(--border))] bg-transparent px-3 py-2 text-sm text-[hsl(var(--foreground))] outline-none focus:border-[#7c22c9] disabled:opacity-60 resize-y"
+                />
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                  {message.length}/2000 · Prize amounts are intentionally excluded from certificates and messages.
+                </p>
+              </div>
+
+              {!readOnly && (
+                <div className="flex flex-wrap items-center gap-4">
+                  <label className="flex items-center gap-2 text-sm text-[hsl(var(--foreground))] cursor-pointer">
+                    <input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} className="accent-[#7c22c9]" />
+                    <Mail className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" /> Send email
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-[hsl(var(--foreground))] cursor-pointer">
+                    <input type="checkbox" checked={sendInApp} onChange={(e) => setSendInApp(e.target.checked)} className="accent-[#7c22c9]" />
+                    <Bell className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" /> Send in-app
+                  </label>
+                  <Button onClick={handleAnnounce} disabled={!canAnnounce} className="ml-auto">
+                    <Send className="h-3.5 w-3.5 mr-1.5" />
+                    {announce.isPending ? "Announcing…" : alreadyAnnounced ? "Re-run announcement" : "Announce winners"}
+                  </Button>
+                </div>
+              )}
+
+              {readOnly && (
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  You have read-only access. Ask an organisation admin to announce the winners.
+                </p>
+              )}
+            </div>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Settings tab — Submission Requirements
 // ---------------------------------------------------------------------------
 
@@ -1682,7 +2004,7 @@ function AdminLeaderboardTab({ challengeId }: { challengeId: string }) {
 // ---------------------------------------------------------------------------
 const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
 
-const CLIENT_TABS  = ["Overview", "Applications", "Leaderboard", "Judges", "Resources", "Settings"] as const;
+const CLIENT_TABS  = ["Overview", "Applications", "Leaderboard", "Winners", "Judges", "Resources", "Settings"] as const;
 const ADMIN_TABS   = ["Overview", "Leaderboard", "Judges", "Resources"] as const;
 type ClientTab = typeof CLIENT_TABS[number];
 type AdminTab  = typeof ADMIN_TABS[number];
@@ -1837,6 +2159,7 @@ export default function ChallengeDetailPage({
       {!isSuperAdmin && tab === "Overview"     && <OverviewTab     challengeId={challengeId} readOnly={isViewer} />}
       {!isSuperAdmin && tab === "Applications" && <ApplicationsTab challengeId={challengeId} readOnly={isViewer} />}
       {!isSuperAdmin && tab === "Leaderboard"  && <LeaderboardTab  challengeId={challengeId} />}
+      {!isSuperAdmin && tab === "Winners"      && <WinnersTab      challengeId={challengeId} readOnly={isViewer} />}
       {!isSuperAdmin && tab === "Judges"       && <JudgesTab       challengeId={challengeId} readOnly={isViewer} />}
       {!isSuperAdmin && tab === "Resources"    && <ResourcesTab    challengeId={challengeId} readOnly={isViewer} isSuperAdmin={false} />}
       {!isSuperAdmin && !isViewer && tab === "Settings" && <SettingsTab challengeId={challengeId} />}

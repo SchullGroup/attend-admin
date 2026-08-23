@@ -26,6 +26,11 @@ export function parseAndToastApiError(
     INVALID_OTP: "Invalid OTP. Check the code and try again.",
     TOO_MANY_ATTEMPTS: "Too many incorrect attempts. Request a new OTP.",
     ZOOM_END_FAILED: "Zoom could not end the linked meeting, so the event status was not changed. Please try again.",
+    INVITE_NOT_FOUND: "This invite no longer exists. Refresh the list and try again.",
+    INVITE_REVOKED: "This invite is revoked. Restore it before resending.",
+    INVITE_ALREADY_REGISTERED: "This person has already registered — nothing to resend or revoke.",
+    INVITE_PROCESSING: "This invite is currently being sent. Wait for it to finish before retrying.",
+    SCHEMA_MIGRATION_PENDING: "This action is temporarily unavailable pending a server update. Please try again shortly.",
   };
   const codeMessage = typeof responseData?.code === "string"
     ? codeMessages[responseData.code.toUpperCase()]
