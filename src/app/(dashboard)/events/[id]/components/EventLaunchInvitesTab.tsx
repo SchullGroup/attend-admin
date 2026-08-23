@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useRef, useState } from "react";
-import { Ban, Download, Mail, Plus, RefreshCw, Search, Send, Upload, X } from "lucide-react";
+import { Ban, Download, Mail, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import Papa from "papaparse";
 import {
@@ -17,6 +17,7 @@ import {
   useListTiers,
   useResendInvite,
   useRevokeInvite,
+  useUnrevokeInvite,
 } from "@/api/client-events";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -124,6 +125,7 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
   const createCampaign = useCreateInviteCampaign();
   const resendInvite = useResendInvite();
   const revokeInvite = useRevokeInvite();
+  const unrevokeInvite = useUnrevokeInvite();
   const importProgress = useInviteImportProgress(eventId, importJobId);
   const campaignProgress = useInviteCampaignProgress(eventId, campaignId);
   const queryClient = useQueryClient();
@@ -274,6 +276,16 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
       () => revokeInvite.mutate({ eventId, inviteId }),
       undefined,
       "Revoke Invite"
+    );
+  }
+
+  function confirmRestoreInvite(inviteId: string, inviteEmail: string) {
+    popup.confirm(
+      "Restore Invitation",
+      `Restore the invitation for ${inviteEmail}? They will be eligible to register and receive a new invitation email.`,
+      () => unrevokeInvite.mutate({ eventId, inviteId }),
+      undefined,
+      "Restore Invite"
     );
   }
 
@@ -447,7 +459,7 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
                               size="sm"
                               variant="outline"
                               className="h-7 gap-1 px-2 text-xs"
-                              disabled={resendInvite.isPending || revokeInvite.isPending || invite.deliveryStatus === "PROCESSING"}
+                              disabled={resendInvite.isPending || revokeInvite.isPending || unrevokeInvite.isPending || invite.deliveryStatus === "PROCESSING"}
                               onClick={() => resendInvite.mutate({ eventId, inviteId: invite.id! })}
                             >
                               <RefreshCw className={`h-3 w-3 ${resendInvite.isPending && resendInvite.variables?.inviteId === invite.id ? "animate-spin" : ""}`} /> Resend
@@ -457,12 +469,24 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
                               size="sm"
                               variant="outline"
                               className="h-7 gap-1 px-2 text-xs text-red-600 hover:text-red-700"
-                              disabled={resendInvite.isPending || revokeInvite.isPending || invite.deliveryStatus === "PROCESSING"}
+                              disabled={resendInvite.isPending || revokeInvite.isPending || unrevokeInvite.isPending || invite.deliveryStatus === "PROCESSING"}
                               onClick={() => confirmRevokeInvite(invite.id!, invite.email)}
                             >
                               <Ban className="h-3 w-3" /> Revoke
                             </Button>
                           </>
+                        )}
+                        {invite.id && invite.registrationStatus === "REVOKED" && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1 px-2 text-xs"
+                            disabled={resendInvite.isPending || revokeInvite.isPending || unrevokeInvite.isPending || invite.deliveryStatus === "PROCESSING"}
+                            onClick={() => confirmRestoreInvite(invite.id!, invite.email)}
+                          >
+                            <RotateCcw className={`h-3 w-3 ${unrevokeInvite.isPending && unrevokeInvite.variables?.inviteId === invite.id ? "animate-spin" : ""}`} /> Restore
+                          </Button>
                         )}
                       </div>
                     </td>

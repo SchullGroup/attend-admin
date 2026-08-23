@@ -1320,11 +1320,22 @@ export interface InviteInput {
   tierName?:  string;
 }
 
+export type InviteDeliveryStatus =
+  | "NOT_SENT"
+  | "QUEUED"
+  | "PROCESSING"
+  | "SENT"
+  | "DELIVERED"
+  | "BOUNCED"
+  | "FAILED";
+
+export type InviteRegistrationStatus = "INVITED" | "REGISTERED" | "REVOKED" | "EXPIRED";
+
 /** Invite-directory row returned by GET /invites. */
 export interface InviteItem extends InviteInput {
   id?:                string;
-  deliveryStatus?:    string;
-  registrationStatus?: string;
+  deliveryStatus?:    InviteDeliveryStatus;
+  registrationStatus?: InviteRegistrationStatus;
   providerMessageId?: string;
 }
 
@@ -1598,10 +1609,13 @@ export function useResendInvite() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ eventId, inviteId }: { eventId: string; inviteId: string }) => {
-      const res = await apiClient.post<ApiResponse<string>>(`/api/v1/client/events/${eventId}/invites/${inviteId}/resend`);
-      return responseData<string>(res);
+      const res = await apiClient.post<ApiResponse<InviteItem>>(`/api/v1/client/events/${eventId}/invites/${inviteId}/resend`);
+      return responseData<InviteItem>(res);
     },
-    onSuccess: (_, { eventId }) => queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] }),
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] });
+      popup.success("Invitation Sent", "A fresh invitation email was sent.", 2500);
+    },
     onError: (error: any) => parseAndToastApiError(error, "Failed to resend invite."),
   });
 }
@@ -1610,11 +1624,31 @@ export function useRevokeInvite() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ eventId, inviteId }: { eventId: string; inviteId: string }) => {
-      const res = await apiClient.delete<ApiResponse<string>>(`/api/v1/client/events/${eventId}/invites/${inviteId}`);
-      return responseData<string>(res);
+      const res = await apiClient.delete<ApiResponse<InviteItem>>(`/api/v1/client/events/${eventId}/invites/${inviteId}`);
+      return responseData<InviteItem>(res);
     },
-    onSuccess: (_, { eventId }) => queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] }),
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] });
+      popup.success("Invitation Revoked", "This invitation can no longer be used to register.", 2500);
+    },
     onError: (error: any) => parseAndToastApiError(error, "Failed to revoke invite."),
+  });
+}
+
+export function useUnrevokeInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, inviteId }: { eventId: string; inviteId: string }) => {
+      const res = await apiClient.post<ApiResponse<InviteItem>>(
+        `/api/v1/client/events/${eventId}/invites/${inviteId}/unrevoke`
+      );
+      return responseData<InviteItem>(res);
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] });
+      popup.success("Invitation Restored", "The invitee can register and receive invitations again.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to restore invite."),
   });
 }
 

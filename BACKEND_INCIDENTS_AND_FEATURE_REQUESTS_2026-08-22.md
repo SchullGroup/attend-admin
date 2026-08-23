@@ -164,6 +164,16 @@ POST /api/v1/client/events/{eventId}/challenge-winners/preview
 
 The preview should return the server-computed selected winners, final positions, team/member recipients, certificate state, and a generated editable message. It must not expose prize amounts or prize-tier reward text. The send endpoint should accept only the approved message and delivery flags, revalidate the preview/winner state server-side, and persist an idempotency key so retries cannot create duplicate certificates or notifications.
 
+### Final certificate and recipient decisions
+
+- Build both a downloadable PDF certificate and a hosted public verification page for each certificate.
+- Issue a separate certificate to every member of every eligible team, not one shared team certificate.
+- Every application explicitly changed to `SELECTED` is eligible for winner announcement and certificates, regardless of whether its judge-derived final position is first, second, third, or another position.
+- The final leaderboard position is printed on the certificate and shown in the announcement. Tied teams display the same position.
+- Certificate content should include at minimum the member name, team name, challenge/event name, final position, organiser branding, a unique certificate ID, and a verification URL/QR code.
+- Prize amounts, prize-tier names, and reward text must not appear in the preview, PDF, verification page, email, or in-app notification.
+- Public verification must expose only the minimum certificate facts needed to verify authenticity; it must not expose member email addresses or other private application data.
+
 ## Deployment and verification checklist
 
 - Check the two request IDs above in backend logs.
