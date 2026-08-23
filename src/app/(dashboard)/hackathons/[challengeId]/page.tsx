@@ -642,18 +642,24 @@ function ApplicationsTab({ challengeId, readOnly = false }: { challengeId: strin
                         </Button>
                         {openMenu === app.id && (
                           <div className="absolute right-0 top-8 z-50 min-w-[170px] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-lg p-1">
-                            {(VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).map((s) => (
+                            {(VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).map((s) => {
+                              const needsScore = s === "SELECTED" && !(app.hasScore && app.score != null);
+                              return (
                               <button
                                 key={s}
-                                className="w-full text-left px-3 py-1.5 text-xs rounded-lg hover:bg-[hsl(var(--accent))] transition-colors"
+                                disabled={needsScore}
+                                className="w-full text-left px-3 py-1.5 text-xs rounded-lg hover:bg-[hsl(var(--accent))] transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                                 onClick={() => {
+                                  if (needsScore) return;
                                   updateStatus.mutate({ challengeId, applicationId: app.id, status: s });
                                   setOpenMenu(null);
                                 }}
                               >
                                 {statusChip(s)}
+                                {needsScore && <span className="ml-2 text-[10px] text-[hsl(var(--muted-foreground))]">needs score</span>}
                               </button>
-                            ))}
+                              );
+                            })}
                             {(VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).length === 0 && (
                               <p className="px-3 py-2 text-xs text-[hsl(var(--muted-foreground))]">No transitions</p>
                             )}
@@ -912,15 +918,21 @@ function ApplicationDetailPanel({
             <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3">Current: {statusChip(app.status)}</p>
             {validNext.length > 0 ? (
               <div className="flex flex-col gap-2">
-                {validNext.map((s) => (
+                {validNext.map((s) => {
+                  const needsScore = s === "SELECTED" && !(app.hasScore && app.score != null);
+                  return (
                   <button
                     key={s}
-                    onClick={() => onStatusChange(app.id, s)}
-                    className="w-full text-left px-3 py-2 rounded-lg text-xs transition-colors hover:bg-[hsl(var(--accent))] border border-[hsl(var(--border))]"
+                    disabled={needsScore}
+                    onClick={() => { if (!needsScore) onStatusChange(app.id, s); }}
+                    title={needsScore ? "This application must be scored before it can be selected." : undefined}
+                    className="w-full text-left px-3 py-2 rounded-lg text-xs transition-colors hover:bg-[hsl(var(--accent))] border border-[hsl(var(--border))] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                   >
                     Move to {statusChip(s)}
+                    {needsScore && <span className="block mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">Scoring required first</span>}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-xs text-[hsl(var(--muted-foreground))]">No further transitions available.</p>
@@ -1263,7 +1275,7 @@ function WinnersTab({ challengeId, readOnly }: { challengeId: string; readOnly?:
     const key = idemRef.current;
     popup.confirm(
       alreadyAnnounced ? "Re-run Announcement?" : "Announce Winners?",
-      `This will send certificates and congratulations to ${data?.totalRecipients ?? "all"} recipient(s) across ${winners.length} winning team${winners.length === 1 ? "" : "s"}. Sending is idempotent — recipients already notified won’t be messaged twice.`,
+      `This will send certificates and congratulations to ${data?.totalRecipients ?? winners.reduce((n, t) => n + (t.members?.length ?? 0), 0)} recipient(s) across ${winners.length} winning team${winners.length === 1 ? "" : "s"}.`,
       () => {
         announce.mutate(
           { challengeId, applicationIds: winners.map((w) => w.applicationId), message: trimmed, sendEmail, sendInApp, idempotencyKey: key },

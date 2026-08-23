@@ -944,12 +944,49 @@ export interface WinnerAnnouncement {
   emailsSent?:         number;
   emailsFailed?:       number;
   inAppSent?:          number;
+  inAppSkipped?:       number;
   certificatesIssued?: number;
+  certificatesFailed?: number;
+  startedAt?:          string;
+  completedAt?:        string;
   createdAt?:          string;
   errorCode?:          string;
   errorMessage?:       string;
   failures?:           WinnerAnnouncementFailure[];
 }
+
+/**
+ * Normalise the announcement job across the two field-name variants the backend
+ * ships. The job id arrives as `id` (not `announcementId`) on both the 202
+ * announce response and the status poll, and the counters are singular
+ * (`emailSent` / `emailFailed` / `inAppSkipped` / `certificatesFailed`). Keep the
+ * plural/`announcementId` fallbacks so either contract works.
+ */
+function parseWinnerAnnouncement(raw: any, fallbackEventId?: string): WinnerAnnouncement {
+  const r = raw ?? {};
+  return {
+    announcementId:     r.announcementId ?? r.id ?? "",
+    eventId:            r.eventId ?? fallbackEventId,
+    status:             (r.status ?? "PENDING") as WinnerAnnouncementStatus,
+    totalRecipients:    r.totalRecipients,
+    emailsSent:         r.emailsSent         ?? r.emailSent,
+    emailsFailed:       r.emailsFailed       ?? r.emailFailed,
+    inAppSent:          r.inAppSent,
+    inAppSkipped:       r.inAppSkipped,
+    certificatesIssued: r.certificatesIssued,
+    certificatesFailed: r.certificatesFailed,
+    startedAt:          r.startedAt,
+    completedAt:        r.completedAt,
+    createdAt:          r.createdAt ?? r.startedAt,
+    errorCode:          r.errorCode ?? undefined,
+    errorMessage:       r.errorMessage ?? undefined,
+    failures:           Array.isArray(r.failures) ? r.failures : undefined,
+  };
+}
+
+// Stop polling a job that never leaves PENDING/PROCESSING (backend worker stalled)
+// or whose status endpoint keeps erroring, instead of hammering it forever.
+const MAX_ANNOUNCEMENT_POLLS = 40; // ~2 min at 3s
 
 const WINNER_TERMINAL_STATUSES: WinnerAnnouncementStatus[] = [
   "COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED",
@@ -1035,10 +1072,18 @@ export function useAnnounceChallengeWinners() {
         { applicationIds, message, sendEmail, sendInApp },
         { headers: { "Idempotency-Key": idempotencyKey } }
       );
-      return (res.data.data ?? (res.data as any)) as WinnerAnnouncement;
+      return parseWinnerAnnouncement(res.data.data ?? res.data, challengeId);
     },
-    onSuccess: (_data, { challengeId }) => {
+    onSuccess: (data, { challengeId }) => {
       queryClient.invalidateQueries({ queryKey: clientChallengeKeys.winnersPreview(challengeId) });
+      // Seed the status query from the 202 body so progress renders immediately,
+      // even before (or without) the first poll returning.
+      if (data.announcementId) {
+        queryClient.setQueryData(
+          clientChallengeKeys.winnerAnnouncement(challengeId, data.announcementId),
+          data
+        );
+      }
       popup.success(
         "Winner Announcement Started",
         "Certificates and congratulations are being sent. Track progress below.",
@@ -1061,11 +1106,18 @@ export function useChallengeWinnerAnnouncement(challengeId: string, announcement
       const res = await apiClient.get<ApiResponse<WinnerAnnouncement>>(
         `/api/v1/client/events/${challengeId}/challenge-winners/announcements/${announcementId}`
       );
-      return (res.data.data ?? (res.data as any)) as WinnerAnnouncement;
+      return parseWinnerAnnouncement(res.data.data ?? res.data, challengeId);
     },
+    retry: false,
     refetchInterval: (query) => {
       const status = (query.state.data as WinnerAnnouncement | undefined)?.status;
-      return isWinnerAnnouncementTerminal(status) ? false : 3000;
+      if (isWinnerAnnouncementTerminal(status)) return false;
+      // Bound the poll: each success or error advances one of these counters, so
+      // their sum caps total attempts whether the job is stuck PENDING or the
+      // status endpoint is 404-ing.
+      const ticks = query.state.dataUpdateCount + query.state.errorUpdateCount;
+      if (ticks >= MAX_ANNOUNCEMENT_POLLS) return false;
+      return 3000;
     },
   });
 }

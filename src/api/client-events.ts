@@ -1428,6 +1428,10 @@ const inviteKeys = {
   import:   (eventId: string, jobId: string) => ["clientEvents", "invite-import", eventId, jobId] as const,
 };
 
+// ~3 min at 3s — after this a still-PENDING import is treated as stalled and
+// polling stops (the UI surfaces a "may be stuck" note).
+const MAX_IMPORT_POLLS = 60;
+
 function responseData<T>(response: any): T {
   return ((response?.data as any)?.data ?? response?.data) as T;
 }
@@ -1576,6 +1580,7 @@ export function useInviteImportProgress(eventId: string, jobId: string | null) {
   return useQuery({
     queryKey: inviteKeys.import(eventId, jobId ?? ""),
     enabled: !!eventId && !!jobId,
+    retry: false,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<InviteImportJob>>(
         `/api/v1/client/events/${eventId}/invite-imports/${jobId}`
@@ -1584,7 +1589,13 @@ export function useInviteImportProgress(eventId: string, jobId: string | null) {
     },
     refetchInterval: (query) => {
       const status = (query.state.data as InviteImportJob | undefined)?.status?.toUpperCase();
-      return status && ["COMPLETED", "FAILED", "CANCELLED"].includes(status) ? false : 3000;
+      if (status && ["COMPLETED", "FAILED", "CANCELLED"].includes(status)) return false;
+      // Stop polling a job that never leaves PENDING (backend worker stalled) or
+      // whose status endpoint keeps erroring — otherwise this loops forever. The
+      // sum of update + error counts bounds attempts across both cases.
+      const ticks = query.state.dataUpdateCount + query.state.errorUpdateCount;
+      if (ticks >= MAX_IMPORT_POLLS) return false;
+      return 3000;
     },
   });
 }

@@ -169,6 +169,19 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
   const visibleInviteIds = visibleItems.map((invite) => invite.id).filter((id): id is string => Boolean(id));
   const allVisibleSelected = visibleInviteIds.length > 0 && visibleInviteIds.every((id) => selectedInviteIds.includes(id));
 
+  // A healthy import moves to PROCESSING within seconds. If it's still sitting at
+  // PENDING with nothing processed a while after starting, the server worker has
+  // likely stalled — surface that instead of a spinner that never resolves.
+  const importJob = importProgress.data;
+  const importTerminal = !!importJob && ["COMPLETED", "FAILED", "CANCELLED"].includes(importJob.status?.toUpperCase() ?? "");
+  const importStalled =
+    !!importJob &&
+    !importTerminal &&
+    !!importJob.startedAt &&
+    Date.now() - new Date(importJob.startedAt).getTime() > 90_000 &&
+    (importJob.totalRows ?? 0) === 0 &&
+    (importJob.processedRows ?? 0) === 0;
+
   function toggleVisibleInvites(checked: boolean) {
     setSelectedInviteIds((current) => checked
       ? [...new Set([...current, ...visibleInviteIds])]
@@ -411,6 +424,12 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
             <p className="mt-2 text-xs">Accepted {importProgress.data.acceptedRows} · Created {importProgress.data.createdRows ?? 0} · Updated {importProgress.data.updatedRows} · Duplicates {importProgress.data.duplicateRows} · Rejected {importProgress.data.rejectedRows}</p>
             {importProgress.data.errorMessage && <p className="mt-2 text-xs font-medium text-red-700">{importProgress.data.errorCode ? `${importProgress.data.errorCode}: ` : ""}{importProgress.data.errorMessage}</p>}
             {importProgress.data.errorReportUrl && <a className="mt-2 inline-block text-xs font-semibold underline" href={importProgress.data.errorReportUrl} target="_blank" rel="noreferrer">Download rejected-row report</a>}
+            {importStalled && (
+              <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                <p className="font-semibold">This import hasn’t started processing.</p>
+                <p className="mt-0.5">It’s been queued for a while without progress and may be stuck on the server. You can re-upload the file or check back shortly — no invites have been sent for it yet.</p>
+              </div>
+            )}
           </div>
         )}
 
