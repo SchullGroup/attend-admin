@@ -196,6 +196,19 @@ function EndChallengeCard({ challengeId, status }: { challengeId: string; status
   );
 }
 
+/**
+ * Compact inline note explaining why write controls are disabled once a challenge
+ * has ended. `what` names the frozen surface, e.g. "application status changes".
+ */
+function EndedLockNote({ what }: { what: string }) {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] px-3 py-2.5 text-xs text-[hsl(var(--muted-foreground))]">
+      <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+      <span>This challenge has ended — {what} are locked and can no longer be changed.</span>
+    </div>
+  );
+}
+
 function OverviewTab({
   challengeId,
   readOnly = false,
@@ -389,7 +402,8 @@ function OverviewTab({
               <Button
                 size="sm"
                 variant={c.applicationsOpen ? "outline" : "default"}
-                disabled={toggleOpen.isPending}
+                disabled={toggleOpen.isPending || isChallengeEnded(c.status)}
+                title={isChallengeEnded(c.status) ? "Challenge ended — applications are locked" : undefined}
                 className="gap-1.5"
                 onClick={() => toggleOpen.mutate({ challengeId, open: !c.applicationsOpen })}
               >
@@ -424,6 +438,10 @@ function ApplicationsTab({ challengeId, readOnly = false }: { challengeId: strin
 
   const { data, isLoading } = useClientChallengeApplications(challengeId, activeStatus, activeTrack, 0, 100);
   const updateStatus = useUpdateClientApplicationStatus();
+  // Once the challenge has ended the backend locks all status changes (409
+  // CHALLENGE_ENDED); freeze the controls so organisers can't attempt one.
+  const { data: challengeDetail } = useClientChallengeDetail(challengeId);
+  const ended = isChallengeEnded(challengeDetail?.status);
   const { refetch: fetchExport, isFetching: exporting } = useExportChallengeApplications(
     challengeId, exportFrom || undefined, exportTo || undefined
   );
@@ -484,12 +502,14 @@ function ApplicationsTab({ challengeId, readOnly = false }: { challengeId: strin
           updateStatus.mutate({ challengeId, applicationId: appId, status })
         }
         readOnly={readOnly}
+        ended={ended}
       />
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
+      {ended && !readOnly && <EndedLockNote what="application status changes" />}
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
@@ -717,6 +737,8 @@ function ApplicationsTab({ challengeId, readOnly = false }: { challengeId: strin
                           size="sm"
                           variant="outline"
                           className="h-7 text-xs gap-1"
+                          disabled={ended}
+                          title={ended ? "Challenge ended — status is locked" : undefined}
                           onClick={() => setOpenMenu(openMenu === app.id ? null : app.id)}
                         >
                           Status <ChevronDown className="h-3 w-3" />
@@ -774,12 +796,14 @@ function ApplicationDetailPanel({
   onBack,
   onStatusChange,
   readOnly = false,
+  ended = false,
 }: {
   challengeId:    string;
   applicationId:  string;
   onBack:         () => void;
   onStatusChange: (id: string, status: ApplicationStatus) => void;
   readOnly?:      boolean;
+  ended?:         boolean;
 }) {
   const { data: app, isLoading } = useClientChallengeApplication(challengeId, applicationId);
 
@@ -997,7 +1021,9 @@ function ApplicationDetailPanel({
           <Card className="attend-card p-5">
             <h2 className="font-semibold text-[hsl(var(--foreground))] mb-1">Update Status</h2>
             <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3">Current: {statusChip(app.status)}</p>
-            {validNext.length > 0 ? (
+            {ended ? (
+              <EndedLockNote what="application status changes" />
+            ) : validNext.length > 0 ? (
               <div className="flex flex-col gap-2">
                 {validNext.map((s) => {
                   const needsScore = s === "SELECTED" && !(app.hasScore && app.score != null);
@@ -1644,6 +1670,9 @@ function JudgesTab({ challengeId, readOnly = false }: { challengeId: string; rea
 
   const judges: JudgeItem[] = panel?.judges ?? [];
   const scoringOpen         = (challenge as any)?.scoringOpen ?? false;
+  // Ending the challenge closes scoring server-side and rejects re-opening — lock
+  // the toggle to match.
+  const ended               = isChallengeEnded((challenge as any)?.status);
 
   // Org JUDGE members not yet on this challenge (match by email or name)
   const assignedEmails = new Set(judges.map((j) => (j as any).email).filter(Boolean));
@@ -1723,7 +1752,8 @@ function JudgesTab({ challengeId, readOnly = false }: { challengeId: string; rea
           {!readOnly && (
             <Button
               size="sm" variant="outline" className="gap-1.5"
-              disabled={toggleScoring.isPending}
+              disabled={toggleScoring.isPending || ended}
+              title={ended ? "Challenge ended — scoring is locked" : undefined}
               onClick={() => toggleScoring.mutate({ challengeId, open: !scoringOpen })}
             >
               {scoringOpen ? <ToggleRight className="h-4 w-4 text-green-600" /> : <ToggleLeft className="h-4 w-4" />}

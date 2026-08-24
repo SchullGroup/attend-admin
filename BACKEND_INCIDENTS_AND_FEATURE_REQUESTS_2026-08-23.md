@@ -97,6 +97,8 @@ POST /api/v1/client/events/fc79621a-0742-41e5-84c1-9efcae320da7/challenge-winner
 
 **Frontend mitigation (shipped).** The FE now maps `data.id` → tracked announcement id (previously read a non-existent `announcementId`, so progress never rendered), seeds the progress card from the 202 body, and bounds the status poll so a stuck job / missing status endpoint no longer loops forever.
 
+**Update 2026-08-24 (frontend aligned).** Backend confirmed the contract (reply items 72-2): status endpoint path, stable field names (`emailSent`/`emailFailed`/`inAppSent`/`inAppSkipped`/`certificatesIssued`/`certificatesFailed`), the terminal vocab (`COMPLETED`/`COMPLETED_WITH_ERRORS`/`FAILED`), the 10-minute watchdog that auto-fails stuck jobs with `WORKER_NEVER_STARTED`, and the new `GET .../challenge-winners/announcements/latest` (404 when none). The admin UI now **restores progress after a reload via `/latest`** (no client-side id persistence) and maps `WORKER_NEVER_STARTED` to clear copy. The tolerant parser already reads the confirmed field names, so no rename was needed.
+
 ---
 
 ## 3. Feature request — "End Challenge" lifecycle, and gate winner announcement behind it
@@ -122,6 +124,14 @@ POST /api/v1/client/events/fc79621a-0742-41e5-84c1-9efcae320da7/challenge-winner
 - **What is the exact challenge status vocabulary, and which value is the terminal "ended" state?** Today the challenge detail surfaces values like `LIVE`; we need the canonical set and the precise "ended" string. The FE currently matches a defensive set (`ENDED`/`COMPLETED`/`CLOSED`/`FINISHED`/`CONCLUDED`) and surfaces the live status in the UI so we can confirm the real value on staging — please pin it down so we can match exactly.
 
 **Frontend behavior (shipped, interim).** Until the End-Challenge endpoint exists, the admin UI **shows the winner preview but blocks announcing** until the challenge status reads as ended. The Announce button is disabled with an amber "Winners can only be announced after the challenge has ended…" note that echoes the current status. Once the backend confirms the terminal status value (and, later, ships the explicit End action), we'll align the gate and build the End-Challenge button.
+
+**Update 2026-08-24 (frontend aligned).** Backend shipped `POST /api/v1/client/challenges/{challengeId}/end` and pinned the canonical `EventStatus` set (`DRAFT, PUBLISHED, UPCOMING, LIVE, ENDED, CANCELLED`) with `ENDED` as the terminal state (reply item 72-3). The FE now:
+- keys the ended check off **`ENDED` alone** (dropped the defensive `COMPLETED`/`CLOSED`/`FINISHED`/`CONCLUDED` set);
+- ships an **End Challenge** action on the challenge **Overview** tab, client-admin only (super-admin and viewers never see it), behind a strong terminal confirm dialog, with an "already ended" state once status is `ENDED`;
+- surfaces the **`SCORING_INCOMPLETE` (409)** rejection inline, reading `data.unscoredApplicationIds` to show the count and directing the organiser to score them first (no toast for this code — it's shown in-panel);
+- hard-gates announce behind `ENDED` (unchanged) and now **freezes** application status changes, the applications open/close toggle, and the scoring toggle once ended, to avoid `CHALLENGE_ENDED` rejections.
+
+**One small follow-up ask (non-blocking).** For `SCORING_INCOMPLETE`, `data.unscoredApplicationIds` lets us show a count, but the End action lives on the Overview tab which doesn't have the applications list loaded. If the payload could also include a minimal label per id (e.g. `teamName`), we could name the offending teams inline instead of just a count. Not required — current UX points the organiser to the Applications/Leaderboard tab.
 
 ---
 
