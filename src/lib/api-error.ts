@@ -31,6 +31,13 @@ export function parseAndToastApiError(
     INVITE_ALREADY_REGISTERED: "This person has already registered — nothing to resend or revoke.",
     INVITE_PROCESSING: "This invite is currently being sent. Wait for it to finish before retrying.",
     SCHEMA_MIGRATION_PENDING: "This action is temporarily unavailable pending a server update. Please try again shortly.",
+    // Challenge lifecycle (End Challenge + winner announcement gate)
+    CHALLENGE_NOT_ENDED: "Winners can only be announced after the challenge has ended. End the challenge from the Overview tab first.",
+    CHALLENGE_ENDED: "This challenge has ended — applications and scoring are locked and can no longer be changed.",
+    SCORING_INCOMPLETE: "Some shortlisted applications still need at least one judge score before the challenge can end.",
+    APPLICATION_NOT_SCORED: "This application must be scored before it can be selected as a winner.",
+    MEMBER_NOT_REGISTERED: "A listed team member doesn't have a registered Attend account. Every member must have one.",
+    WORKER_NEVER_STARTED: "The background job didn't start in time and was marked failed. Please try again.",
   };
   const codeMessage = typeof responseData?.code === "string"
     ? codeMessages[responseData.code.toUpperCase()]
@@ -96,4 +103,15 @@ export function parseAndToastApiError(
 
   // Tier 4: Default fallback
   toast.error(defaultFallback);
+}
+
+/**
+ * Read the stable backend error code (`response.data.code`), upper-cased, from an
+ * axios error — or undefined if absent. Lets callers branch on a specific code
+ * (e.g. render an inline panel for `SCORING_INCOMPLETE`) while still deferring the
+ * generic toast copy to `parseAndToastApiError`.
+ */
+export function getApiErrorCode(error: any): string | undefined {
+  const code = error?.response?.data?.code;
+  return typeof code === "string" ? code.toUpperCase() : undefined;
 }

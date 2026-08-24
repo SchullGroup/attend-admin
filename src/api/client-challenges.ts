@@ -16,7 +16,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
-import { parseAndToastApiError } from "@/lib/api-error";
+import { parseAndToastApiError, getApiErrorCode } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
 import type { RegisterBranding } from "@/types/super-admin";
 
@@ -353,6 +353,8 @@ export const clientChallengeKeys = {
   winnersPreview: (id: string) => ["clientChallenges", id, "winners", "preview"] as const,
   winnerAnnouncement: (id: string, announcementId: string) =>
                  ["clientChallenges", id, "winners", "announcement", announcementId] as const,
+  winnerAnnouncementLatest: (id: string) =>
+                 ["clientChallenges", id, "winners", "announcement", "latest"] as const,
 };
 
 export const judgePoolKeys = {
@@ -996,14 +998,67 @@ export function isWinnerAnnouncementTerminal(status?: string): boolean {
   return !!status && WINNER_TERMINAL_STATUSES.includes(status.toUpperCase() as WinnerAnnouncementStatus);
 }
 
-// Winners can only be announced once the challenge has ended. The exact terminal
-// status string is still being confirmed with the backend (see the 2026-08-23
-// incident doc), so match a defensive set; the UI surfaces the live status when
-// it doesn't match, so we can confirm the real value on staging.
-const CHALLENGE_ENDED_STATUSES = ["ENDED", "COMPLETED", "CLOSED", "FINISHED", "CONCLUDED"];
-
+// Winners can only be announced once the challenge has ended. The backend pinned
+// the canonical EventStatus vocabulary (DRAFT, PUBLISHED, UPCOMING, LIVE, ENDED,
+// CANCELLED) and confirmed the terminal "ended" state is exactly `ENDED` — so we
+// key off that alone (see the 2026-08-23 incident reply, item 72-3).
 export function isChallengeEnded(status?: string): boolean {
-  return !!status && CHALLENGE_ENDED_STATUSES.includes(status.toUpperCase());
+  return status?.toUpperCase() === "ENDED";
+}
+
+/**
+ * POST /client/challenges/{challengeId}/end
+ *
+ * Explicit, guarded, terminal action. The backend atomically closes applications
+ * and scoring, freezes the SELECTED winner set, and transitions the challenge to
+ * `ENDED` — then unlocks the winner preview/announce endpoints. It is idempotent
+ * (re-ending an already-ended challenge is a no-op) and cannot be reversed.
+ *
+ * Gate: rejects with 409 `SCORING_INCOMPLETE` when any shortlisted/selected
+ * application still lacks a judge score, echoing the offending ids under
+ * `data.unscoredApplicationIds`. That code is surfaced inline by the caller (an
+ * actionable panel), so we deliberately DON'T toast it here; every other error
+ * falls through to the standard toast.
+ */
+export function useEndChallenge() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ challengeId }: { challengeId: string }) => {
+      const res = await apiClient.post<ApiResponse<any>>(
+        `/api/v1/client/challenges/${challengeId}/end`,
+        {}
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      // Ending touches detail (status/applicationsOpen), applications, leaderboard
+      // and unlocks the winner preview — invalidate the whole cache like the other
+      // lifecycle mutations so every tab reflects the terminal state.
+      queryClient.invalidateQueries({ queryKey: clientChallengeKeys.all });
+      popup.success(
+        "Challenge Ended",
+        "Applications and scoring are now locked. You can announce winners.",
+        3500
+      );
+    },
+    onError: (error: any) => {
+      // The scoring-gate rejection is handled inline by the End Challenge panel
+      // (it lists the unscored applications); suppress the duplicate toast.
+      if (getApiErrorCode(error) === "SCORING_INCOMPLETE") return;
+      parseAndToastApiError(error, "Failed to end the challenge.");
+    },
+  });
+}
+
+/**
+ * Pull the unscored application ids off a `SCORING_INCOMPLETE` (409) end-challenge
+ * rejection, tolerating a couple of shapes (`data.unscoredApplicationIds` per the
+ * backend, or a top-level array). Empty array when absent.
+ */
+export function unscoredApplicationIdsFromError(error: any): string[] {
+  const d = error?.response?.data;
+  const ids = d?.data?.unscoredApplicationIds ?? d?.unscoredApplicationIds;
+  return Array.isArray(ids) ? ids.filter((x: any) => typeof x === "string") : [];
 }
 
 /**
@@ -1128,6 +1183,37 @@ export function useChallengeWinnerAnnouncement(challengeId: string, announcement
       const ticks = query.state.dataUpdateCount + query.state.errorUpdateCount;
       if (ticks >= MAX_ANNOUNCEMENT_POLLS) return false;
       return 3000;
+    },
+  });
+}
+
+/**
+ * GET /client/events/{eventId}/challenge-winners/announcements/latest
+ *
+ * Returns the most recently started announcement for the event (404 when none has
+ * ever been started). Lets the admin UI restore an in-flight/last progress card
+ * after a reload WITHOUT persisting the announcement id client-side. 404 is a
+ * normal "no announcement yet" answer, so we swallow it to `null` rather than
+ * error, and don't retry.
+ */
+export function useLatestChallengeWinnerAnnouncement(challengeId: string, opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: clientChallengeKeys.winnerAnnouncementLatest(challengeId),
+    enabled: !!challengeId && (opts?.enabled ?? true),
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get<ApiResponse<WinnerAnnouncement>>(
+          `/api/v1/client/events/${challengeId}/challenge-winners/announcements/latest`
+        );
+        const parsed = parseWinnerAnnouncement(res.data.data ?? res.data, challengeId);
+        return parsed.announcementId ? parsed : null;
+      } catch (err: any) {
+        if (err?.response?.status === 404) return null;
+        throw err;
+      }
     },
   });
 }

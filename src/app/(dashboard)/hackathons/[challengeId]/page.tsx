@@ -25,6 +25,9 @@ import {
   useChallengeWinnerPreview,
   useAnnounceChallengeWinners,
   useChallengeWinnerAnnouncement,
+  useLatestChallengeWinnerAnnouncement,
+  useEndChallenge,
+  unscoredApplicationIdsFromError,
   certificateDownloadUrl,
   isWinnerAnnouncementTerminal,
   isChallengeEnded,
@@ -52,6 +55,7 @@ import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
 import { popup } from "@/lib/popup-store";
+import { getApiErrorCode } from "@/lib/api-error";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -121,6 +125,77 @@ const VALID_TRANSITIONS: Record<string, ApplicationStatus[]> = {
 // ---------------------------------------------------------------------------
 // Overview tab
 // ---------------------------------------------------------------------------
+
+/**
+ * End Challenge — the explicit, terminal lifecycle action. Client-admin only
+ * (super-admin and viewers never see it). Ending closes applications + scoring,
+ * freezes the winner set, and unlocks winner announcement; it can't be undone.
+ * The backend gates it on complete judging, rejecting with 409 SCORING_INCOMPLETE
+ * (+ the unscored application ids), which we surface inline here.
+ */
+function EndChallengeCard({ challengeId, status }: { challengeId: string; status?: string }) {
+  const endChallenge = useEndChallenge();
+  const ended = isChallengeEnded(status);
+  const scoringIncomplete = getApiErrorCode(endChallenge.error) === "SCORING_INCOMPLETE";
+  const unscoredCount = scoringIncomplete ? unscoredApplicationIdsFromError(endChallenge.error).length : 0;
+
+  if (ended) {
+    return (
+      <Card className="attend-card p-5">
+        <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3">Challenge Lifecycle</h2>
+        <div className="flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-xs text-green-800">
+          <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>This challenge has <span className="font-semibold">ended</span>. Applications and scoring are locked and the winner set is frozen. Announce winners from the Winners tab.</span>
+        </div>
+      </Card>
+    );
+  }
+
+  function handleEnd() {
+    popup.confirm(
+      "End this challenge?",
+      "This permanently closes applications and scoring, freezes the winner set, and unlocks winner announcement. It cannot be undone or re-opened.",
+      () => endChallenge.mutate({ challengeId }),
+      undefined,
+      "End Challenge",
+      "Cancel"
+    );
+  }
+
+  return (
+    <Card className="attend-card p-5 border-red-200">
+      <h2 className="font-semibold text-[hsl(var(--foreground))] mb-1 flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-red-500" /> End Challenge
+      </h2>
+      <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3">
+        Closes applications and scoring, finalizes results, and unlocks winner announcement. This is terminal — it can’t be undone.
+      </p>
+
+      {scoringIncomplete && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 mb-3">
+          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>
+            {unscoredCount > 0
+              ? `${unscoredCount} shortlisted application${unscoredCount === 1 ? "" : "s"} still ${unscoredCount === 1 ? "needs" : "need"} at least one judge score before you can end the challenge.`
+              : "Some shortlisted applications still need at least one judge score before you can end the challenge."}
+            {" "}Score them on the <span className="font-semibold">Applications</span> or <span className="font-semibold">Leaderboard</span> tab, then try again.
+          </span>
+        </div>
+      )}
+
+      <Button
+        variant="destructive"
+        className="w-full gap-1.5"
+        disabled={endChallenge.isPending}
+        onClick={handleEnd}
+      >
+        <AlertTriangle className="h-4 w-4" />
+        {endChallenge.isPending ? "Ending…" : "End Challenge"}
+      </Button>
+    </Card>
+  );
+}
+
 function OverviewTab({
   challengeId,
   readOnly = false,
@@ -325,6 +400,11 @@ function OverviewTab({
             )}
           </div>
         </Card>
+
+        {/* End challenge — client-admin only, terminal action */}
+        {!isSuperAdmin && !readOnly && (
+          <EndChallengeCard challengeId={challengeId} status={c.status} />
+        )}
       </div>
     </div>
   );
@@ -1240,11 +1320,22 @@ function WinnersTab({ challengeId, readOnly }: { challengeId: string; readOnly?:
   const [sendInApp, setSendInApp] = useState(true);
   const [announcementId, setAnnouncementId] = useState<string | null>(null);
   const idemRef = useRef<string | null>(null);
+  const restoredRef = useRef(false);
 
-  // Announcement progress is session-only: it shows for the current visit and is
-  // dismissible, but is intentionally NOT persisted across reloads. (There is no
-  // "latest announcement" endpoint yet — see backend doc §2 — and a stuck job
-  // would otherwise pin a "Sending…" card forever.)
+  // Restore the last announcement's progress after a reload WITHOUT persisting the
+  // id client-side: the backend exposes GET .../announcements/latest (see backend
+  // doc §2 / item 72-2). We seed the tracked id from it exactly once per mount —
+  // once any id is set (restored, or from a fresh announce), restoredRef latches so
+  // dismissing the card doesn't immediately re-seed it within the session.
+  const { data: latest } = useLatestChallengeWinnerAnnouncement(challengeId);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    if (announcementId) { restoredRef.current = true; return; }
+    if (latest?.announcementId) {
+      restoredRef.current = true;
+      setAnnouncementId(latest.announcementId);
+    }
+  }, [latest?.announcementId, announcementId]);
 
   // Prefill the editable message with the server-generated default (until edited).
   useEffect(() => {
@@ -1403,7 +1494,7 @@ function WinnersTab({ challengeId, readOnly }: { challengeId: string; readOnly?:
                 <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
                   <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                   <span>
-                    Winners can only be announced after the challenge has ended. Ending closes applications and scoring and finalizes the results.
+                    Winners can only be announced after the challenge has ended. Open the <span className="font-semibold">Overview</span> tab and use <span className="font-semibold">End Challenge</span> to close applications and scoring and finalize the results — this can’t be undone.
                     {challenge?.status && (
                       <> Current status: <span className="font-semibold">{challenge.status}</span>.</>
                     )}
