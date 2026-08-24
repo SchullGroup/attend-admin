@@ -38,6 +38,11 @@ export interface JudgeChallengeItem {
   scoredCount?:     number;
   pendingCount?:    number;
   totalCount?:      number;
+  // Legacy / alias field names the /judging list has shipped over time — normalised
+  // into the canonical *Count fields by useJudgeEvents so the dashboard reads one shape.
+  shortlistedTeams?: number;
+  scoredTeams?:      number;
+  totalApplications?: number;
   /** Register branding (AGM handoff #10), resolved from the register that created this challenge. */
   branding?:        RegisterBranding;
 }
@@ -180,8 +185,19 @@ export function useJudgeEvents() {
         "/api/v1/judge/judging"
       );
       const raw = res.data.data ?? (res.data as any);
-      const challenges: JudgeChallengeItem[] =
+      const rawItems: any[] =
         raw?.challenges ?? (raw as any)?.content ?? (Array.isArray(raw) ? raw : []);
+      // The /judging list has drifted field names over time (e.g. shortlistedTeams →
+      // shortlistedCount, documented in BACKEND_BUGS_2026-07-11 §14c). Normalise the
+      // per-challenge scoring counts across the known aliases so the dashboard's
+      // progress column and aggregate stat cards populate whenever the data is present.
+      const challenges: JudgeChallengeItem[] = rawItems.map((c: any) => ({
+        ...c,
+        shortlistedCount: c.shortlistedCount ?? c.shortlistedTeams ?? c.shortlisted,
+        scoredCount:      c.scoredCount      ?? c.scoredTeams      ?? c.scored,
+        pendingCount:     c.pendingCount     ?? c.pendingTeams     ?? c.pending,
+        totalCount:       c.totalCount       ?? c.totalApplications ?? c.totalTeams,
+      }));
       return { challenges, totalCount: raw?.totalCount ?? challenges.length } as JudgeChallengeListResponse;
     },
     staleTime: 30_000,
