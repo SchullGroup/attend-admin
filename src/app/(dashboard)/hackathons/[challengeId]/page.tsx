@@ -1,6 +1,6 @@
 "use client";
 import React, { use, useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, Trophy, Users, FileText, Lightbulb, Star, ChevronDown,
   Plus, Trash2, ToggleLeft, ToggleRight, ListOrdered, Target, Award,
@@ -1164,7 +1164,7 @@ function WinnerMemberRow({ member }: { member: WinnerMember }) {
   );
 }
 
-function WinnerAnnouncementProgress({ progress }: { progress: WinnerAnnouncement }) {
+function WinnerAnnouncementProgress({ progress, onDismiss }: { progress: WinnerAnnouncement; onDismiss?: () => void }) {
   const status = progress.status?.toUpperCase();
   const terminal = isWinnerAnnouncementTerminal(status);
   const failed = status === "FAILED";
@@ -1190,6 +1190,16 @@ function WinnerAnnouncementProgress({ progress }: { progress: WinnerAnnouncement
       <div className="px-5 py-3 border-b border-[hsl(var(--border))] flex items-center gap-2" style={{ backgroundColor: tone.bg }}>
         <tone.Icon className={`h-4 w-4 ${terminal ? "" : "animate-pulse"}`} style={{ color: tone.fg }} />
         <span className={`text-sm font-semibold ${terminal ? "" : "animate-pulse"}`} style={{ color: tone.fg }}>{tone.label}</span>
+        {onDismiss && (
+          <button
+            onClick={onDismiss}
+            className="ml-auto p-1 rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] transition-colors"
+            aria-label="Dismiss"
+            title="Dismiss"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
       <div className="px-5 py-4 grid grid-cols-4 gap-3">
         {stat("Certificates", progress.certificatesIssued)}
@@ -1231,16 +1241,10 @@ function WinnersTab({ challengeId, readOnly }: { challengeId: string; readOnly?:
   const [announcementId, setAnnouncementId] = useState<string | null>(null);
   const idemRef = useRef<string | null>(null);
 
-  const storageKey = `attend:winnerAnnouncement:${challengeId}`;
-
-  // No "list announcements" endpoint exists, so remember the last announcement
-  // id locally to keep showing its progress across reloads.
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) setAnnouncementId(saved);
-    } catch {}
-  }, [storageKey]);
+  // Announcement progress is session-only: it shows for the current visit and is
+  // dismissible, but is intentionally NOT persisted across reloads. (There is no
+  // "latest announcement" endpoint yet — see backend doc §2 — and a stuck job
+  // would otherwise pin a "Sending…" card forever.)
 
   // Prefill the editable message with the server-generated default (until edited).
   useEffect(() => {
@@ -1285,10 +1289,7 @@ function WinnersTab({ challengeId, readOnly }: { challengeId: string; readOnly?:
           {
             onSuccess: (res) => {
               idemRef.current = null;
-              if (res?.announcementId) {
-                setAnnouncementId(res.announcementId);
-                try { localStorage.setItem(storageKey, res.announcementId); } catch {}
-              }
+              if (res?.announcementId) setAnnouncementId(res.announcementId);
             },
           }
         );
@@ -1312,7 +1313,9 @@ function WinnersTab({ challengeId, readOnly }: { challengeId: string; readOnly?:
   return (
     <div className="flex flex-col gap-5">
       {/* Progress (if an announcement has been kicked off) */}
-      {announcementId && progress && <WinnerAnnouncementProgress progress={progress} />}
+      {announcementId && progress && (
+        <WinnerAnnouncementProgress progress={progress} onDismiss={() => setAnnouncementId(null)} />
+      )}
 
       {winners.length === 0 ? (
         <Card className="attend-card px-5 py-12 text-center">
@@ -2043,6 +2046,8 @@ export default function ChallengeDetailPage({
 }) {
   const { challengeId } = use(params);
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const { data: userResponse } = useGetMe();
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
@@ -2052,8 +2057,26 @@ export default function ChallengeDetailPage({
   // challenge Settings (which is pure write configuration).
   const isViewer        = normalizedRole === "viewer";
 
-  const [clientTab, setClientTab] = useState<ClientTab>("Overview");
-  const [adminTab,  setAdminTab]  = useState<AdminTab>("Overview");
+  const [clientTab, setClientTab] = useState<ClientTab>(() => {
+    const t = searchParams.get("tab");
+    return t && (CLIENT_TABS as readonly string[]).includes(t) ? (t as ClientTab) : "Overview";
+  });
+  const [adminTab,  setAdminTab]  = useState<AdminTab>(() => {
+    const t = searchParams.get("tab");
+    return t && (ADMIN_TABS as readonly string[]).includes(t) ? (t as AdminTab) : "Overview";
+  });
+
+  // Reflect the active tab in the URL (?tab=…) so a reload / shared link lands
+  // on the same tab instead of resetting to Overview.
+  useEffect(() => {
+    const active = isSuperAdmin ? adminTab : clientTab;
+    const current = searchParams.get("tab");
+    if (active !== current) {
+      const params = new URLSearchParams(Array.from(searchParams.entries()));
+      params.set("tab", active);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
+  }, [clientTab, adminTab, isSuperAdmin, searchParams, pathname, router]);
 
   // Always call both hooks (rules of hooks); enabled per role so only the
   // role-appropriate endpoint is actually hit
