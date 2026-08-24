@@ -244,6 +244,9 @@ export function Header() {
       <div ref={searchRef} className="hidden md:flex items-center relative w-full max-w-md">
         <Search className="absolute left-3 h-4 w-4 text-[hsl(var(--muted-foreground))] pointer-events-none z-10" />
         <Input
+          type="search"
+          name="global-navigation-search"
+          autoComplete="off"
           placeholder="Search events, participants, organisations…"
           value={searchInput}
           onChange={(e) => { setSearchInput(e.target.value); setSearchOpen(true); }}

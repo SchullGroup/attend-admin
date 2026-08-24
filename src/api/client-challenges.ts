@@ -16,7 +16,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
-import { parseAndToastApiError } from "@/lib/api-error";
+import { parseAndToastApiError, getApiErrorCode } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
 import type { RegisterBranding } from "@/types/super-admin";
 
@@ -350,6 +350,11 @@ export const clientChallengeKeys = {
                  ["clientChallenges", id, "export", "applications", { from, to }] as const,
   assignmentsPerApp: (challengeId: string, appId: string) =>
                  ["clientChallenges", challengeId, "applications", appId, "assignments"] as const,
+  winnersPreview: (id: string) => ["clientChallenges", id, "winners", "preview"] as const,
+  winnerAnnouncement: (id: string, announcementId: string) =>
+                 ["clientChallenges", id, "winners", "announcement", announcementId] as const,
+  winnerAnnouncementLatest: (id: string) =>
+                 ["clientChallenges", id, "winners", "announcement", "latest"] as const,
 };
 
 export const judgePoolKeys = {
@@ -879,5 +884,336 @@ export function useUpdateSubmissionRequirements() {
       popup.success("Saved", "Submission requirements updated.", 2000);
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to update requirements."),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Winner announcement & certificates  (backend spec: dave-innov.md item 68)
+//
+//   An INNOVATION_CHALLENGE / HACKATHON event IS the challenge, so `challengeId`
+//   here doubles as the eventId used by these client/event-scoped routes.
+//
+//   Winners = applications explicitly moved to SELECTED, intersected with the
+//   final leaderboard placement (ties share a position; unscored SELECTED apps
+//   are silently excluded by the backend). The FE never computes or submits the
+//   winner set — it only approves a message + delivery channels.
+//
+//   Response DTOs are inferred from the spec and parsed tolerantly — confirm the
+//   exact field names against staging once the backend deploys.
+// ---------------------------------------------------------------------------
+
+export interface WinnerMember {
+  memberId?:         string;
+  name:              string;
+  email?:            string;
+  hasAttendAccount?: boolean;        // eligible for in-app notification
+  certificateId?:    string | null;  // present once certificates are issued
+}
+
+export interface WinnerTeam {
+  applicationId: string;
+  teamName:      string;
+  ideaTitle?:    string;
+  track?:        string;
+  finalPosition: number;             // tie-aware (1, 2, 2, 4 …)
+  members:       WinnerMember[];
+}
+
+export interface WinnerPreviewResponse {
+  eventId:          string;
+  eventTitle?:      string;
+  winners:          WinnerTeam[];
+  totalTeams?:      number;
+  totalRecipients?: number;
+  emailRecipients?: number;
+  inAppRecipients?: number;
+  defaultMessage:   string;          // generated, organiser-editable (no prize info)
+}
+
+export type WinnerAnnouncementStatus =
+  | "PENDING" | "PROCESSING" | "COMPLETED" | "COMPLETED_WITH_ERRORS" | "FAILED";
+
+export interface WinnerAnnouncementFailure {
+  recipient?: string;
+  reason?:    string;
+}
+
+export interface WinnerAnnouncement {
+  announcementId:      string;
+  eventId?:            string;
+  status:              WinnerAnnouncementStatus;
+  totalRecipients?:    number;
+  emailsSent?:         number;
+  emailsFailed?:       number;
+  inAppSent?:          number;
+  inAppSkipped?:       number;
+  certificatesIssued?: number;
+  certificatesFailed?: number;
+  startedAt?:          string;
+  completedAt?:        string;
+  createdAt?:          string;
+  errorCode?:          string;
+  errorMessage?:       string;
+  failures?:           WinnerAnnouncementFailure[];
+}
+
+/**
+ * Normalise the announcement job across the two field-name variants the backend
+ * ships. The job id arrives as `id` (not `announcementId`) on both the 202
+ * announce response and the status poll, and the counters are singular
+ * (`emailSent` / `emailFailed` / `inAppSkipped` / `certificatesFailed`). Keep the
+ * plural/`announcementId` fallbacks so either contract works.
+ */
+function parseWinnerAnnouncement(raw: any, fallbackEventId?: string): WinnerAnnouncement {
+  const r = raw ?? {};
+  return {
+    announcementId:     r.announcementId ?? r.id ?? "",
+    eventId:            r.eventId ?? fallbackEventId,
+    status:             (r.status ?? "PENDING") as WinnerAnnouncementStatus,
+    totalRecipients:    r.totalRecipients,
+    emailsSent:         r.emailsSent         ?? r.emailSent,
+    emailsFailed:       r.emailsFailed       ?? r.emailFailed,
+    inAppSent:          r.inAppSent,
+    inAppSkipped:       r.inAppSkipped,
+    certificatesIssued: r.certificatesIssued,
+    certificatesFailed: r.certificatesFailed,
+    startedAt:          r.startedAt,
+    completedAt:        r.completedAt,
+    createdAt:          r.createdAt ?? r.startedAt,
+    errorCode:          r.errorCode ?? undefined,
+    errorMessage:       r.errorMessage ?? undefined,
+    failures:           Array.isArray(r.failures) ? r.failures : undefined,
+  };
+}
+
+// Stop polling a job that never leaves PENDING/PROCESSING (backend worker stalled)
+// or whose status endpoint keeps erroring, instead of hammering it forever.
+const MAX_ANNOUNCEMENT_POLLS = 40; // ~2 min at 3s
+
+const WINNER_TERMINAL_STATUSES: WinnerAnnouncementStatus[] = [
+  "COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED",
+];
+
+export function isWinnerAnnouncementTerminal(status?: string): boolean {
+  return !!status && WINNER_TERMINAL_STATUSES.includes(status.toUpperCase() as WinnerAnnouncementStatus);
+}
+
+// Winners can only be announced once the challenge has ended. The backend pinned
+// the canonical EventStatus vocabulary (DRAFT, PUBLISHED, UPCOMING, LIVE, ENDED,
+// CANCELLED) and confirmed the terminal "ended" state is exactly `ENDED` — so we
+// key off that alone (see the 2026-08-23 incident reply, item 72-3).
+export function isChallengeEnded(status?: string): boolean {
+  return status?.toUpperCase() === "ENDED";
+}
+
+/**
+ * POST /client/challenges/{challengeId}/end
+ *
+ * Explicit, guarded, terminal action. The backend atomically closes applications
+ * and scoring, freezes the SELECTED winner set, and transitions the challenge to
+ * `ENDED` — then unlocks the winner preview/announce endpoints. It is idempotent
+ * (re-ending an already-ended challenge is a no-op) and cannot be reversed.
+ *
+ * Gate: rejects with 409 `SCORING_INCOMPLETE` when any shortlisted/selected
+ * application still lacks a judge score, echoing the offending ids under
+ * `data.unscoredApplicationIds`. That code is surfaced inline by the caller (an
+ * actionable panel), so we deliberately DON'T toast it here; every other error
+ * falls through to the standard toast.
+ */
+export function useEndChallenge() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ challengeId }: { challengeId: string }) => {
+      const res = await apiClient.post<ApiResponse<any>>(
+        `/api/v1/client/challenges/${challengeId}/end`,
+        {}
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      // Ending touches detail (status/applicationsOpen), applications, leaderboard
+      // and unlocks the winner preview — invalidate the whole cache like the other
+      // lifecycle mutations so every tab reflects the terminal state.
+      queryClient.invalidateQueries({ queryKey: clientChallengeKeys.all });
+      popup.success(
+        "Challenge Ended",
+        "Applications and scoring are now locked. You can announce winners.",
+        3500
+      );
+    },
+    onError: (error: any) => {
+      // The scoring-gate rejection is handled inline by the End Challenge panel
+      // (it lists the unscored applications); suppress the duplicate toast.
+      if (getApiErrorCode(error) === "SCORING_INCOMPLETE") return;
+      parseAndToastApiError(error, "Failed to end the challenge.");
+    },
+  });
+}
+
+/**
+ * Pull the unscored application ids off a `SCORING_INCOMPLETE` (409) end-challenge
+ * rejection, tolerating a couple of shapes (`data.unscoredApplicationIds` per the
+ * backend, or a top-level array). Empty array when absent.
+ */
+export function unscoredApplicationIdsFromError(error: any): string[] {
+  const d = error?.response?.data;
+  const ids = d?.data?.unscoredApplicationIds ?? d?.unscoredApplicationIds;
+  return Array.isArray(ids) ? ids.filter((x: any) => typeof x === "string") : [];
+}
+
+/**
+ * Public (unauthenticated) certificate PDF download — the backend 302-redirects
+ * to a short-lived signed URL. Safe to open directly in a new tab.
+ */
+export function certificateDownloadUrl(certificateId: string): string {
+  const base = (apiClient.defaults.baseURL ?? "").replace(/\/$/, "");
+  return `${base}/api/v1/public/certificates/${certificateId}/download`;
+}
+
+/**
+ * POST /client/events/{eventId}/challenge-winners/preview
+ * Read-only server-computed winner set (no side effects). eventId === challengeId.
+ */
+export function useChallengeWinnerPreview(challengeId: string, opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: clientChallengeKeys.winnersPreview(challengeId),
+    queryFn: async () => {
+      const res = await apiClient.post<ApiResponse<WinnerPreviewResponse>>(
+        `/api/v1/client/events/${challengeId}/challenge-winners/preview`,
+        {}
+      );
+      const raw: any = res.data.data ?? res.data;
+      // Backend keys the winning teams under `teams` and the editable copy under
+      // `suggestedMessage`; keep `winners`/`defaultMessage`/array fallbacks for tolerance.
+      const teams =
+        Array.isArray(raw?.teams)   ? raw.teams :
+        Array.isArray(raw?.winners) ? raw.winners :
+        Array.isArray(raw)          ? raw : [];
+      return {
+        eventId:         raw?.eventId ?? challengeId,
+        eventTitle:      raw?.eventTitle ?? "",
+        winners:         teams,
+        totalTeams:      raw?.totalTeams      ?? raw?.teamCount,
+        totalRecipients: raw?.totalRecipients ?? raw?.recipientCount,
+        emailRecipients: raw?.emailRecipients ?? raw?.emailCount,
+        inAppRecipients: raw?.inAppRecipients ?? raw?.inAppCount,
+        defaultMessage:  raw?.suggestedMessage ?? raw?.defaultMessage ?? raw?.message ?? "",
+      } as WinnerPreviewResponse;
+    },
+    enabled: !!challengeId && (opts?.enabled ?? true),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
+
+/**
+ * POST /client/events/{eventId}/challenge-winners/announce
+ * Idempotent send. The FE echoes back the backend-computed winner set
+ * (`applicationIds` from the preview) as the organiser's confirmation, plus the
+ * approved message + delivery flags; the backend revalidates server-side.
+ * Returns 202 + job.
+ */
+export function useAnnounceChallengeWinners() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      challengeId,
+      applicationIds,
+      message,
+      sendEmail,
+      sendInApp,
+      idempotencyKey,
+    }: {
+      challengeId:    string;
+      applicationIds: string[];
+      message:        string;
+      sendEmail:      boolean;
+      sendInApp:      boolean;
+      idempotencyKey: string;
+    }) => {
+      const res = await apiClient.post<ApiResponse<WinnerAnnouncement>>(
+        `/api/v1/client/events/${challengeId}/challenge-winners/announce`,
+        { applicationIds, message, sendEmail, sendInApp },
+        { headers: { "Idempotency-Key": idempotencyKey } }
+      );
+      return parseWinnerAnnouncement(res.data.data ?? res.data, challengeId);
+    },
+    onSuccess: (data, { challengeId }) => {
+      queryClient.invalidateQueries({ queryKey: clientChallengeKeys.winnersPreview(challengeId) });
+      // Seed the status query from the 202 body so progress renders immediately,
+      // even before (or without) the first poll returning.
+      if (data.announcementId) {
+        queryClient.setQueryData(
+          clientChallengeKeys.winnerAnnouncement(challengeId, data.announcementId),
+          data
+        );
+      }
+      popup.success(
+        "Winner Announcement Started",
+        "Certificates and congratulations are being sent. Track progress below.",
+        3000
+      );
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to announce winners."),
+  });
+}
+
+/**
+ * GET /client/events/{eventId}/challenge-winners/announcements/{announcementId}
+ * Polls every 3s until the job reaches a terminal state.
+ */
+export function useChallengeWinnerAnnouncement(challengeId: string, announcementId: string | null) {
+  return useQuery({
+    queryKey: clientChallengeKeys.winnerAnnouncement(challengeId, announcementId ?? ""),
+    enabled: !!challengeId && !!announcementId,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<WinnerAnnouncement>>(
+        `/api/v1/client/events/${challengeId}/challenge-winners/announcements/${announcementId}`
+      );
+      return parseWinnerAnnouncement(res.data.data ?? res.data, challengeId);
+    },
+    retry: false,
+    refetchInterval: (query) => {
+      const status = (query.state.data as WinnerAnnouncement | undefined)?.status;
+      if (isWinnerAnnouncementTerminal(status)) return false;
+      // Bound the poll: each success or error advances one of these counters, so
+      // their sum caps total attempts whether the job is stuck PENDING or the
+      // status endpoint is 404-ing.
+      const ticks = query.state.dataUpdateCount + query.state.errorUpdateCount;
+      if (ticks >= MAX_ANNOUNCEMENT_POLLS) return false;
+      return 3000;
+    },
+  });
+}
+
+/**
+ * GET /client/events/{eventId}/challenge-winners/announcements/latest
+ *
+ * Returns the most recently started announcement for the event (404 when none has
+ * ever been started). Lets the admin UI restore an in-flight/last progress card
+ * after a reload WITHOUT persisting the announcement id client-side. 404 is a
+ * normal "no announcement yet" answer, so we swallow it to `null` rather than
+ * error, and don't retry.
+ */
+export function useLatestChallengeWinnerAnnouncement(challengeId: string, opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: clientChallengeKeys.winnerAnnouncementLatest(challengeId),
+    enabled: !!challengeId && (opts?.enabled ?? true),
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get<ApiResponse<WinnerAnnouncement>>(
+          `/api/v1/client/events/${challengeId}/challenge-winners/announcements/latest`
+        );
+        const parsed = parseWinnerAnnouncement(res.data.data ?? res.data, challengeId);
+        return parsed.announcementId ? parsed : null;
+      } catch (err: any) {
+        if (err?.response?.status === 404) return null;
+        throw err;
+      }
+    },
   });
 }

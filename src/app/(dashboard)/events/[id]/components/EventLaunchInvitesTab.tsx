@@ -1,18 +1,23 @@
 "use client";
 
 import { ChangeEvent, useEffect, useRef, useState } from "react";
-import { Download, Mail, Plus, Search, Send, Upload, X } from "lucide-react";
+import { Ban, Download, Mail, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import Papa from "papaparse";
 import {
   InviteInput,
   useCreateInviteCampaign,
   useCreateInvites,
   useExportAudienceInvites,
+  useImportInviteCsv,
   useImportInvites,
   useInviteCampaignProgress,
   useInviteImportProgress,
   useListInvites,
   useListTiers,
+  useResendInvite,
+  useRevokeInvite,
+  useUnrevokeInvite,
 } from "@/api/client-events";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,72 +26,79 @@ import { Loader } from "@/components/ui/Loader";
 import { popup } from "@/lib/popup-store";
 
 const PAGE_SIZE = 50;
-const STATUS_OPTIONS = ["UNSENT", "QUEUED", "SENT", "DELIVERED", "FAILED", "BOUNCED", "REGISTERED", "REVOKED"];
+const BROWSER_IMPORT_LIMIT = 100;
+const DELIVERY_STATUS_OPTIONS = ["NOT_SENT", "QUEUED", "PROCESSING", "SENT", "DELIVERED", "FAILED", "BOUNCED"] as const;
+const REGISTRATION_STATUS_OPTIONS = ["REGISTERED", "REVOKED"] as const;
+const STATUS_OPTIONS = [...DELIVERY_STATUS_OPTIONS, ...REGISTRATION_STATUS_OPTIONS];
 
-function csvRows(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = "";
-  let quoted = false;
+type BadgeStyle = { label: string; bg: string; color: string };
 
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i];
-    if (char === '"') {
-      if (quoted && text[i + 1] === '"') {
-        cell += '"';
-        i += 1;
-      } else {
-        quoted = !quoted;
-      }
-    } else if (char === "," && !quoted) {
-      row.push(cell.trim());
-      cell = "";
-    } else if ((char === "\n" || char === "\r") && !quoted) {
-      if (char === "\r" && text[i + 1] === "\n") i += 1;
-      row.push(cell.trim());
-      if (row.some(Boolean)) rows.push(row);
-      row = [];
-      cell = "";
-    } else {
-      cell += char;
-    }
-  }
-  row.push(cell.trim());
-  if (row.some(Boolean)) rows.push(row);
-  return rows;
+const DELIVERY_BADGE: Record<string, BadgeStyle> = {
+  NOT_SENT:   { label: "Not sent",   bg: "#f3f4f6", color: "#6b7280" },
+  QUEUED:     { label: "Queued",     bg: "#fef9c3", color: "#a16207" },
+  PROCESSING: { label: "Processing", bg: "#fef9c3", color: "#a16207" },
+  SENT:       { label: "Sent",       bg: "#dbeafe", color: "#1d4ed8" },
+  DELIVERED:  { label: "Delivered",  bg: "#dcfce7", color: "#16a34a" },
+  FAILED:     { label: "Failed",     bg: "#fee2e2", color: "#dc2626" },
+  BOUNCED:    { label: "Bounced",    bg: "#ffedd5", color: "#c2410c" },
+};
+
+const REGISTRATION_BADGE: Record<string, BadgeStyle> = {
+  INVITED:    { label: "Invited",    bg: "#f3f4f6", color: "#6b7280" },
+  REGISTERED: { label: "Registered", bg: "#dcfce7", color: "#16a34a" },
+  REVOKED:    { label: "Revoked",    bg: "#fee2e2", color: "#dc2626" },
+};
+
+function InvitePill({ map, value, fallback }: { map: Record<string, BadgeStyle>; value?: string; fallback: string }) {
+  const key = (value ?? fallback).toUpperCase();
+  const c = map[key] ?? { label: (value ?? fallback).replace(/_/g, " "), bg: "#f3f4f6", color: "#6b7280" };
+  return (
+    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: c.bg, color: c.color }}>
+      {c.label}
+    </span>
+  );
 }
 
 function normalizeHeader(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function parseInviteCsv(text: string): InviteInput[] {
-  const [headerRow, ...dataRows] = csvRows(text.replace(/^\uFEFF/, ""));
-  if (!headerRow) throw new Error("The CSV is empty.");
-
-  const headers = headerRow.map(normalizeHeader);
-  const emailIndex = headers.indexOf("email");
-  if (emailIndex < 0) throw new Error('CSV must include an "email" column.');
-
-  const index = (name: string) => headers.indexOf(name);
-  const value = (row: string[], name: string) => {
-    const position = index(name);
-    return position >= 0 ? row[position]?.trim() || undefined : undefined;
-  };
-
-  const invites = dataRows
-    .map((row) => ({
-      email: row[emailIndex]?.trim() ?? "",
-      firstName: value(row, "firstname"),
-      lastName: value(row, "lastname"),
-      phone: value(row, "phone"),
-      tierId: value(row, "tierid"),
-      tierName: value(row, "tiername"),
-    }))
-    .filter((invite) => invite.email);
-
-  if (invites.length === 0) throw new Error("The CSV does not contain any invite email addresses.");
-  return invites;
+function inspectInviteCsv(file: File): Promise<{ invites: InviteInput[]; exceedsBrowserLimit: boolean }> {
+  return new Promise((resolve, reject) => {
+    Papa.parse<Record<string, string>>(file, {
+      header: true,
+      skipEmptyLines: true,
+      preview: BROWSER_IMPORT_LIMIT + 1,
+      transformHeader: normalizeHeader,
+      complete: ({ data, errors, meta }) => {
+        if (!meta.fields?.includes("email")) {
+          reject(new Error('CSV must include an "email" column.'));
+          return;
+        }
+        const fatal = errors.find((error) => error.type === "Quotes" || error.type === "Delimiter");
+        if (fatal) {
+          reject(new Error(`CSV row ${fatal.row != null ? fatal.row + 2 : ""} could not be parsed: ${fatal.message}`));
+          return;
+        }
+        const invites = data
+          .map((row) => ({
+            email: row.email?.trim() ?? "",
+            firstName: row.firstname?.trim() || undefined,
+            lastName: row.lastname?.trim() || undefined,
+            phone: row.phone?.trim() || undefined,
+            tierId: row.tierid?.trim() || undefined,
+            tierName: row.tiername?.trim() || undefined,
+          }))
+          .filter((invite) => invite.email);
+        if (invites.length === 0) {
+          reject(new Error("The CSV does not contain any invite email addresses."));
+          return;
+        }
+        resolve({ invites, exceedsBrowserLimit: data.length > BROWSER_IMPORT_LIMIT });
+      },
+      error: (error) => reject(error),
+    });
+  });
 }
 
 function downloadCsv(csv: string, eventId: string) {
@@ -101,6 +113,17 @@ function downloadCsv(csv: string, eventId: string) {
 
 function progressPercent(processed: number, total: number) {
   return total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+}
+
+function selectedCountForCampaign(
+  selection: "ALL_UNSENT" | "SELECTED" | "TIER" | "IMPORT_JOB",
+  selectedIds: string[],
+  unsentCount: number,
+  importedCount: number
+) {
+  if (selection === "SELECTED") return selectedIds.length;
+  if (selection === "IMPORT_JOB") return importedCount;
+  return unsentCount;
 }
 
 export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
@@ -119,17 +142,53 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
   const [newTierName, setNewTierName] = useState("");
   const [importJobId, setImportJobId] = useState<string | null>(null);
   const [campaignId, setCampaignId] = useState<string | null>(null);
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
+  const [campaignSelection, setCampaignSelection] = useState<"ALL_UNSENT" | "SELECTED" | "TIER" | "IMPORT_JOB">("ALL_UNSENT");
+  const [selectedInviteIds, setSelectedInviteIds] = useState<string[]>([]);
 
   const filters = { page, size: PAGE_SIZE, search, status, tierId };
   const { data, isLoading, isFetching } = useListInvites(eventId, filters);
   const { data: tiers = [] } = useListTiers(eventId);
   const createInvites = useCreateInvites();
   const importInvites = useImportInvites();
+  const importInviteCsv = useImportInviteCsv();
   const createCampaign = useCreateInviteCampaign();
+  const resendInvite = useResendInvite();
+  const revokeInvite = useRevokeInvite();
+  const unrevokeInvite = useUnrevokeInvite();
   const importProgress = useInviteImportProgress(eventId, importJobId);
   const campaignProgress = useInviteCampaignProgress(eventId, campaignId);
   const queryClient = useQueryClient();
   const { refetch: exportInvites, isFetching: exporting } = useExportAudienceInvites(eventId, { search, status, tierId });
+
+  const importJob = importProgress.data;
+  const campaignJob = campaignProgress.data;
+  const importTerminal = !!importJob && ["COMPLETED", "FAILED", "CANCELLED"].includes(importJob.status?.toUpperCase() ?? "");
+  const campaignTerminal = !!campaignJob && ["COMPLETED", "FAILED", "CANCELLED"].includes(campaignJob.status?.toUpperCase() ?? "");
+
+  useEffect(() => {
+    setImportJobId(window.localStorage.getItem(`attend:invite-import:${eventId}`));
+    setCampaignId(window.localStorage.getItem(`attend:invite-campaign:${eventId}`));
+  }, [eventId]);
+
+  // Persist an in-flight import/campaign id so its progress survives a reload,
+  // but drop the key once the job is terminal — otherwise a long-finished job's
+  // banner reappears on every future visit to the event.
+  useEffect(() => {
+    const key = `attend:invite-import:${eventId}`;
+    try {
+      if (importJobId && !importTerminal) window.localStorage.setItem(key, importJobId);
+      else if (importTerminal) window.localStorage.removeItem(key);
+    } catch {}
+  }, [eventId, importJobId, importTerminal]);
+
+  useEffect(() => {
+    const key = `attend:invite-campaign:${eventId}`;
+    try {
+      if (campaignId && !campaignTerminal) window.localStorage.setItem(key, campaignId);
+      else if (campaignTerminal) window.localStorage.removeItem(key);
+    } catch {}
+  }, [campaignId, eventId, campaignTerminal]);
 
   // Campaign delivery is asynchronous. Refresh the invite list whenever the
   // polled campaign snapshot changes so summary cards do not remain stale
@@ -141,12 +200,50 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
   }, [campaignProgress.data, eventId, queryClient]);
 
   const summary = data?.summary;
-  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
+  const visibleItems = (data?.items ?? []).filter((invite) => {
+    if (!status) return true;
+    if ((DELIVERY_STATUS_OPTIONS as readonly string[]).includes(status)) {
+      return (invite.deliveryStatus ?? "NOT_SENT") === status;
+    }
+    return (invite.registrationStatus ?? "INVITED") === status;
+  });
+  const responseContainsStatusMismatch = Boolean(status) && visibleItems.length !== (data?.items.length ?? 0);
+  const filteredTotal = responseContainsStatusMismatch ? visibleItems.length : (data?.total ?? 0);
+  const totalPages = responseContainsStatusMismatch ? 1 : Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
+  const visibleInviteIds = visibleItems.map((invite) => invite.id).filter((id): id is string => Boolean(id));
+  const allVisibleSelected = visibleInviteIds.length > 0 && visibleInviteIds.every((id) => selectedInviteIds.includes(id));
+
+  // A healthy import moves to PROCESSING within seconds. If it's still sitting at
+  // PENDING with nothing processed a while after starting, the server worker has
+  // likely stalled — surface that instead of a spinner that never resolves.
+  const importStalled =
+    !!importJob &&
+    !importTerminal &&
+    !!importJob.startedAt &&
+    Date.now() - new Date(importJob.startedAt).getTime() > 90_000 &&
+    (importJob.totalRows ?? 0) === 0 &&
+    (importJob.processedRows ?? 0) === 0;
+
+  function toggleVisibleInvites(checked: boolean) {
+    setSelectedInviteIds((current) => checked
+      ? [...new Set([...current, ...visibleInviteIds])]
+      : current.filter((id) => !visibleInviteIds.includes(id)));
+  }
 
   function resetPageAndFilters(next: { status?: string; tierId?: string }) {
     if (next.status !== undefined) setStatus(next.status);
     if (next.tierId !== undefined) setTierId(next.tierId);
     setPage(0);
+  }
+
+  function dismissImport() {
+    setImportJobId(null);
+    try { window.localStorage.removeItem(`attend:invite-import:${eventId}`); } catch {}
+  }
+
+  function dismissCampaign() {
+    setCampaignId(null);
+    try { window.localStorage.removeItem(`attend:invite-campaign:${eventId}`); } catch {}
   }
 
   function handleAddInvite() {
@@ -181,10 +278,25 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
       return;
     }
     try {
-      const invites = parseInviteCsv(await file.text());
-      importInvites.mutate(
-        { eventId, invites, defaultTierId: newTierId || undefined },
-        { onSuccess: (job) => setImportJobId(job.id) }
+      const { invites, exceedsBrowserLimit } = await inspectInviteCsv(file);
+      if (!exceedsBrowserLimit) {
+        importInvites.mutate(
+          { eventId, invites, defaultTierId: newTierId || undefined },
+          { onSuccess: (job) => setImportJobId(job.id) }
+        );
+        return;
+      }
+
+      setUploadPercent(0);
+      importInviteCsv.mutate(
+        { eventId, file, defaultTierId: newTierId || undefined, onUploadProgress: setUploadPercent },
+        {
+          onSuccess: (job) => {
+            setImportJobId(job.id);
+            setUploadPercent(null);
+          },
+          onError: () => setUploadPercent(null),
+        }
       );
     } catch (error) {
       popup.error("CSV Could Not Be Read", error instanceof Error ? error.message : "Check the CSV and try again.", 4000);
@@ -197,16 +309,59 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
   }
 
   function handleCampaign() {
-    if ((summary?.unsent ?? 0) === 0) return;
+    const selectedCount = campaignSelection === "SELECTED"
+      ? selectedInviteIds.length
+      : campaignSelection === "TIER"
+        ? (summary?.unsent ?? 0)
+        : campaignSelection === "IMPORT_JOB"
+          ? (importProgress.data?.acceptedRows ?? 0)
+          : (summary?.unsent ?? 0);
+    if (selectedCount === 0) return;
+    if (campaignSelection === "TIER" && !tierId) {
+      popup.error("Choose a tier", "Select a tier before starting a tier campaign.", 3000);
+      return;
+    }
+    if (campaignSelection === "IMPORT_JOB" && !importJobId) {
+      popup.error("No import job", "Upload an audience CSV before starting an import campaign.", 3000);
+      return;
+    }
     popup.confirm(
-      "Send All Unsent Invites",
-      `Queue invitation emails for ${summary?.unsent.toLocaleString() ?? 0} unsent invite(s)?`,
+      "Start Invitation Campaign",
+      `Queue invitation emails for ${selectedCount.toLocaleString()} invite(s)?`,
       () => createCampaign.mutate(
-        { eventId, body: { selection: "ALL_UNSENT" } },
+        {
+          eventId,
+          body: {
+            selection: campaignSelection,
+            ...(campaignSelection === "SELECTED" ? { inviteIds: selectedInviteIds } : {}),
+            ...(campaignSelection === "TIER" ? { tierId } : {}),
+            ...(campaignSelection === "IMPORT_JOB" && importJobId ? { importJobId } : {}),
+          },
+        },
         { onSuccess: (campaign) => setCampaignId(campaign.campaignId) }
       ),
       undefined,
       "Start Campaign"
+    );
+  }
+
+  function confirmRevokeInvite(inviteId: string, inviteEmail: string) {
+    popup.confirm(
+      "Revoke Invitation",
+      `Revoke the invitation for ${inviteEmail}? They will no longer be able to register with it.`,
+      () => revokeInvite.mutate({ eventId, inviteId }),
+      undefined,
+      "Revoke Invite"
+    );
+  }
+
+  function confirmRestoreInvite(inviteId: string, inviteEmail: string) {
+    popup.confirm(
+      "Restore Invitation",
+      `Restore the invitation for ${inviteEmail}? They will be eligible to register and receive a new invitation email.`,
+      () => unrevokeInvite.mutate({ eventId, inviteId }),
+      undefined,
+      "Restore Invite"
     );
   }
 
@@ -231,11 +386,11 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">Invite Directory</h2>
-            <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Add invitees first, then send all unsent invitations as a tracked campaign.</p>
+            <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Add invitees first, then send all not-sent invitations as a tracked campaign.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => fileRef.current?.click()} disabled={importInvites.isPending}>
-              <Upload className="h-3.5 w-3.5" /> {importInvites.isPending ? "Importing…" : "Import CSV"}
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => fileRef.current?.click()} disabled={importInvites.isPending || importInviteCsv.isPending}>
+              <Upload className="h-3.5 w-3.5" /> {importInvites.isPending || importInviteCsv.isPending ? "Importing…" : "Import CSV"}
             </Button>
             <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleCsv} />
             <Button size="sm" variant="outline" className="gap-1.5" onClick={handleExport} disabled={exporting}>
@@ -244,27 +399,54 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowAdd((value) => !value)}>
               <Plus className="h-3.5 w-3.5" /> Add Invite
             </Button>
-            <Button size="sm" className="gap-1.5" onClick={handleCampaign} disabled={createCampaign.isPending || (summary?.unsent ?? 0) === 0}>
-              <Send className="h-3.5 w-3.5" /> {createCampaign.isPending ? "Starting…" : "Send All Unsent"}
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <select
+                value={campaignSelection}
+                onChange={(event) => setCampaignSelection(event.target.value as typeof campaignSelection)}
+                aria-label="Campaign audience"
+                className="h-9 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-xs"
+              >
+                <option value="ALL_UNSENT">All unsent</option>
+                <option value="SELECTED">Selected ({selectedInviteIds.length})</option>
+                <option value="TIER">Tier</option>
+                <option value="IMPORT_JOB" disabled={!importJobId}>Latest import</option>
+              </select>
+              <Button size="sm" className="gap-1.5" onClick={handleCampaign} disabled={createCampaign.isPending || selectedCountForCampaign(campaignSelection, selectedInviteIds, summary?.unsent ?? 0, importProgress.data?.acceptedRows ?? 0) === 0}>
+                <Send className="h-3.5 w-3.5" /> {createCampaign.isPending ? "Starting…" : "Start Campaign"}
+              </Button>
+            </div>
           </div>
         </div>
 
         <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
-          CSV headers: <span className="font-medium">email</span> (required), firstName, lastName, phone, tierId, tierName. The selected default tier below is used where a row has no tier.
+          CSV headers: <span className="font-medium">email</span> (required), firstName, lastName, phone, tierId, tierName. Files with more than {BROWSER_IMPORT_LIMIT} records upload directly to secure document storage for background processing.
         </p>
 
+        {uploadPercent !== null && (
+          <div className="mt-4 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-cyan-950">
+            <div className="flex items-center justify-between text-sm"><span className="font-semibold">Uploading CSV securely</span><span>{uploadPercent}%</span></div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-cyan-100"><div className="h-full bg-cyan-600 transition-all" style={{ width: `${uploadPercent}%` }} /></div>
+          </div>
+        )}
+
         {showAdd && (
-          <div className="mt-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.25)] p-4">
+          <form
+            className="mt-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.25)] p-4"
+            autoComplete="on"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleAddInvite();
+            }}
+          >
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-semibold">Add one invite</p>
               <button type="button" aria-label="Close add invite form" onClick={() => setShowAdd(false)} className="rounded-md p-1 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]"><X className="h-4 w-4" /></button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" />
-              <Input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" />
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email *" />
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" />
+              <Input name="invite-first-name" autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" />
+              <Input name="invite-last-name" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" />
+              <Input name="invite-email" autoComplete="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email *" />
+              <Input name="invite-phone" autoComplete="tel" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" />
               <select value={newTierId} onChange={(e) => setNewTierId(e.target.value)} className="h-10 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm">
                 <option value="">No/default tier</option>
                 {tiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}
@@ -278,20 +460,35 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
                 className="mt-3 max-w-sm"
               />
             )}
-            <Button size="sm" className="mt-3" onClick={handleAddInvite} disabled={!email.trim() || createInvites.isPending}>
+            <Button type="submit" size="sm" className="mt-3" disabled={!email.trim() || createInvites.isPending}>
               {createInvites.isPending ? "Adding…" : "Add to Invite List"}
             </Button>
-          </div>
+          </form>
         )}
 
         {importProgress.data && (
           <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950">
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="font-semibold">Import {importProgress.data.status.replace(/_/g, " ")}</span>
-              <span>{importProgress.data.processedRows.toLocaleString()} / {importProgress.data.totalRows.toLocaleString()} processed</span>
+              <div className="flex items-center gap-2">
+                <span>{importProgress.data.processedRows.toLocaleString()} / {importProgress.data.totalRows.toLocaleString()} processed</span>
+                {importTerminal && (
+                  <button type="button" onClick={dismissImport} aria-label="Dismiss import status" className="rounded-md p-1 text-blue-700/70 transition-colors hover:bg-blue-100 hover:text-blue-900">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-blue-100"><div className="h-full bg-blue-600 transition-all" style={{ width: `${progressPercent(importProgress.data.processedRows, importProgress.data.totalRows)}%` }} /></div>
-            <p className="mt-2 text-xs">Accepted {importProgress.data.acceptedRows} · Updated {importProgress.data.updatedRows} · Duplicates {importProgress.data.duplicateRows} · Rejected {importProgress.data.rejectedRows}</p>
+            <p className="mt-2 text-xs">Accepted {importProgress.data.acceptedRows} · Created {importProgress.data.createdRows ?? 0} · Updated {importProgress.data.updatedRows} · Duplicates {importProgress.data.duplicateRows} · Rejected {importProgress.data.rejectedRows}</p>
+            {importProgress.data.errorMessage && <p className="mt-2 text-xs font-medium text-red-700">{importProgress.data.errorCode ? `${importProgress.data.errorCode}: ` : ""}{importProgress.data.errorMessage}</p>}
+            {importProgress.data.errorReportUrl && <a className="mt-2 inline-block text-xs font-semibold underline" href={importProgress.data.errorReportUrl} target="_blank" rel="noreferrer">Download rejected-row report</a>}
+            {importStalled && (
+              <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                <p className="font-semibold">This import hasn’t started processing.</p>
+                <p className="mt-0.5">It’s been queued for a while without progress and may be stuck on the server. You can re-upload the file or check back shortly — no invites have been sent for it yet.</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -299,17 +496,40 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
           <div className="mt-4 rounded-xl border border-purple-200 bg-purple-50 p-4 text-purple-950">
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="font-semibold">Campaign {campaignProgress.data.status.replace(/_/g, " ")}</span>
-              <span>{campaignProgress.data.sentCount.toLocaleString()} / {campaignProgress.data.selectedCount.toLocaleString()} sent</span>
+              <div className="flex items-center gap-2">
+                <span>{campaignProgress.data.sentCount.toLocaleString()} / {campaignProgress.data.selectedCount.toLocaleString()} sent</span>
+                {campaignTerminal && (
+                  <button type="button" onClick={dismissCampaign} aria-label="Dismiss campaign status" className="rounded-md p-1 text-purple-700/70 transition-colors hover:bg-purple-100 hover:text-purple-900">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-purple-100"><div className="h-full bg-purple-600 transition-all" style={{ width: `${progressPercent(campaignProgress.data.sentCount + campaignProgress.data.failedCount + campaignProgress.data.skippedCount, campaignProgress.data.selectedCount)}%` }} /></div>
             <p className="mt-2 text-xs">Queued {campaignProgress.data.queuedCount} · Failed {campaignProgress.data.failedCount} · Skipped {campaignProgress.data.skippedCount}</p>
+            {campaignProgress.data.errorMessage && <p className="mt-2 text-xs font-medium text-red-700">{campaignProgress.data.errorCode ? `${campaignProgress.data.errorCode}: ` : ""}{campaignProgress.data.errorMessage}</p>}
           </div>
         )}
 
         <form className="mt-5 grid gap-3 md:grid-cols-[minmax(220px,1fr)_180px_180px_auto]" onSubmit={(event) => { event.preventDefault(); setSearch(searchText.trim()); setPage(0); }}>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
-            <Input value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Search invitees" className="pl-9" />
+            <Input
+              type="search"
+              name="invite-directory-search"
+              autoComplete="off"
+              value={searchText}
+              onChange={(event) => {
+                const value = event.target.value;
+                setSearchText(value);
+                if (value === "") {
+                  setSearch("");
+                  setPage(0);
+                }
+              }}
+              placeholder="Search invitees"
+              className="pl-9"
+            />
           </div>
           <select value={status} onChange={(e) => resetPageAndFilters({ status: e.target.value })} className="h-10 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm">
             <option value="">All statuses</option>
@@ -324,15 +544,82 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
 
         {isLoading ? (
           <Loader variant="inline" text="Loading invites…" />
-        ) : data?.items.length ? (
+        ) : visibleItems.length ? (
           <div className="mt-4 overflow-x-auto rounded-xl border border-[hsl(var(--border))]">
-            <table className="attend-table min-w-[720px]">
-              <thead><tr><th>Invitee</th><th>Email</th><th>Phone</th><th>Tier</th></tr></thead>
+            <table className="w-full min-w-[1080px] text-sm">
+              <thead>
+                <tr className="attend-table-header">
+                  <th className="w-10 px-4 py-3 text-left"><input type="checkbox" checked={allVisibleSelected} onChange={(event) => toggleVisibleInvites(event.target.checked)} aria-label="Select all invites on this page" /></th>
+                  <th className="px-4 py-3 text-left">Invitee</th>
+                  <th className="px-4 py-3 text-left">Email</th>
+                  <th className="px-4 py-3 text-left">Phone</th>
+                  <th className="px-4 py-3 text-left">Tier</th>
+                  <th className="px-4 py-3 text-left">Delivery</th>
+                  <th className="px-4 py-3 text-left">Registration</th>
+                  <th className="px-4 py-3 text-left">Provider ID</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
               <tbody>
-                {data.items.map((invite, index) => (
-                  <tr key={`${invite.email}-${index}`} className="attend-table-row">
-                    <td><span className="font-medium text-[hsl(var(--foreground))]">{[invite.firstName, invite.lastName].filter(Boolean).join(" ") || "—"}</span></td>
-                    <td>{invite.email}</td><td>{invite.phone || "—"}</td><td>{invite.tierName || "—"}</td>
+                {visibleItems.map((invite, index) => (
+                  <tr key={invite.id ?? `${invite.email}-${index}`} className="attend-table-row">
+                    <td className="px-4 py-3">
+                      {invite.id ? (
+                        <input
+                          type="checkbox"
+                          checked={selectedInviteIds.includes(invite.id)}
+                          onChange={(event) => setSelectedInviteIds((current) => event.target.checked ? [...new Set([...current, invite.id!])] : current.filter((id) => id !== invite.id))}
+                          aria-label={`Select ${invite.email}`}
+                        />
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3"><span className="font-medium text-[hsl(var(--foreground))]">{[invite.firstName, invite.lastName].filter(Boolean).join(" ") || "—"}</span></td>
+                    <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">{invite.email}</td>
+                    <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">{invite.phone || "—"}</td>
+                    <td className="px-4 py-3">{invite.tierName ? <span className="inline-flex items-center rounded-full bg-[hsl(var(--muted))] px-2 py-0.5 text-xs font-medium text-[hsl(var(--foreground))]">{invite.tierName}</span> : <span className="text-[hsl(var(--muted-foreground))]">—</span>}</td>
+                    <td className="px-4 py-3"><InvitePill map={DELIVERY_BADGE} value={invite.deliveryStatus} fallback="NOT_SENT" /></td>
+                    <td className="px-4 py-3"><InvitePill map={REGISTRATION_BADGE} value={invite.registrationStatus} fallback="INVITED" /></td>
+                    <td className="px-4 py-3 max-w-[150px] truncate font-mono text-xs text-[hsl(var(--muted-foreground))]" title={invite.providerMessageId}>{invite.providerMessageId || "—"}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-1.5">
+                        {invite.id && invite.registrationStatus !== "REVOKED" && invite.registrationStatus !== "REGISTERED" && (
+                          <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 gap-1 px-2 text-xs"
+                              disabled={resendInvite.isPending || revokeInvite.isPending || unrevokeInvite.isPending || invite.deliveryStatus === "PROCESSING"}
+                              onClick={() => resendInvite.mutate({ eventId, inviteId: invite.id! })}
+                            >
+                              <RefreshCw className={`h-3 w-3 ${resendInvite.isPending && resendInvite.variables?.inviteId === invite.id ? "animate-spin" : ""}`} /> Resend
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 gap-1 px-2 text-xs text-red-600 hover:text-red-700"
+                              disabled={resendInvite.isPending || revokeInvite.isPending || unrevokeInvite.isPending || invite.deliveryStatus === "PROCESSING"}
+                              onClick={() => confirmRevokeInvite(invite.id!, invite.email)}
+                            >
+                              <Ban className="h-3 w-3" /> Revoke
+                            </Button>
+                          </>
+                        )}
+                        {invite.id && invite.registrationStatus === "REVOKED" && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1 px-2 text-xs"
+                            disabled={resendInvite.isPending || revokeInvite.isPending || unrevokeInvite.isPending || invite.deliveryStatus === "PROCESSING"}
+                            onClick={() => confirmRestoreInvite(invite.id!, invite.email)}
+                          >
+                            <RotateCcw className={`h-3 w-3 ${unrevokeInvite.isPending && unrevokeInvite.variables?.inviteId === invite.id ? "animate-spin" : ""}`} /> Restore
+                          </Button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -347,7 +634,7 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
         )}
 
         <div className="mt-4 flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
-          <span>{(data?.total ?? 0).toLocaleString()} invite(s){isFetching && !isLoading ? " · Refreshing…" : ""}</span>
+          <span>{filteredTotal.toLocaleString()} invite(s){isFetching && !isLoading ? " · Refreshing…" : ""}</span>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>Previous</Button>
             <span>Page {page + 1} of {totalPages}</span>

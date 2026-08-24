@@ -14,6 +14,15 @@ import {
 
 type Channel = "EMAIL" | "SMS" | "PUSH" | "IN_APP" | "ALL";
 
+// Email allows a longer body; SMS (and any channel that includes SMS, i.e. ALL)
+// plus push/in-app are capped shorter to stay within SMS-safe length.
+const EMAIL_MESSAGE_LIMIT = 1000;
+const SHORT_MESSAGE_LIMIT = 500;
+
+function messageLimitFor(channel: Channel) {
+  return channel === "EMAIL" ? EMAIL_MESSAGE_LIMIT : SHORT_MESSAGE_LIMIT;
+}
+
 const CHANNEL_CONFIG: { key: Channel; label: string; icon: React.ElementType; needsSubject: boolean }[] = [
   { key: "SMS",   label: "SMS",          icon: Send,      needsSubject: false },
   { key: "EMAIL", label: "Email",        icon: FileText,  needsSubject: true  },
@@ -36,7 +45,8 @@ export function EventBroadcastTab({ eventId }: Props) {
 
   const history = historyData?.content ?? [];
   const needsSubject = CHANNEL_CONFIG.find((c) => c.key === channel)?.needsSubject ?? false;
-  const canSend = !!message.trim() && message.length <= 500 && (!needsSubject || (!!subject.trim() && subject.trim().length <= 255)) && !sendMutation.isPending;
+  const maxMessageLength = messageLimitFor(channel);
+  const canSend = !!message.trim() && message.length <= maxMessageLength && (!needsSubject || (!!subject.trim() && subject.trim().length <= 255)) && !sendMutation.isPending;
 
   function handleSend() {
     const trimmedSubject = subject.trim();
@@ -131,13 +141,15 @@ export function EventBroadcastTab({ eventId }: Props) {
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder={`Write an update for ${recipientCount.toLocaleString()} registered attendees…`}
                 rows={4}
+                maxLength={maxMessageLength}
                 className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] resize-none"
               />
               <div className="flex items-center justify-between mt-1">
-                <span className={`text-xs ${message.length > 500 ? "text-red-500 font-medium" : "text-[hsl(var(--muted-foreground))]"}`}>
-                  {message.length} / 500
+                <span className={`text-xs ${message.length > maxMessageLength ? "text-red-500 font-medium" : "text-[hsl(var(--muted-foreground))]"}`}>
+                  {message.length} / {maxMessageLength}
+                  {(channel === "SMS" || channel === "ALL") && <span className="ml-1.5 text-[hsl(var(--muted-foreground))]">· SMS-safe length</span>}
                 </span>
-                {message.length > 500 && <span className="text-xs text-red-500 font-medium">Too long</span>}
+                {message.length > maxMessageLength && <span className="text-xs text-red-500 font-medium">Too long</span>}
               </div>
             </div>
 

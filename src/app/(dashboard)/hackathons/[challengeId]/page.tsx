@@ -1,11 +1,12 @@
 "use client";
-import React, { use, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { use, useState, useEffect, useRef } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, Trophy, Users, FileText, Lightbulb, Star, ChevronDown,
   Plus, Trash2, ToggleLeft, ToggleRight, ListOrdered, Target, Award,
   ClipboardList, UserCheck, BookOpen, ChevronRight, ExternalLink, Code,
   Globe, Video, FolderOpen, Settings, Link2, Download, X,
+  Mail, Bell, Send, CheckCircle2, AlertTriangle,
 } from "lucide-react";
 import {
   useClientChallengeDetail,
@@ -21,11 +22,23 @@ import {
   useToggleScoring,
   useExportChallengeApplications,
   useUpdateSubmissionRequirements,
+  useChallengeWinnerPreview,
+  useAnnounceChallengeWinners,
+  useChallengeWinnerAnnouncement,
+  useLatestChallengeWinnerAnnouncement,
+  useEndChallenge,
+  unscoredApplicationIdsFromError,
+  certificateDownloadUrl,
+  isWinnerAnnouncementTerminal,
+  isChallengeEnded,
   type ApplicationStatus,
   type ApplicationItem,
   type JudgeItem,
   type ExportApplicationItem,
   type SubmissionRequirements,
+  type WinnerTeam,
+  type WinnerMember,
+  type WinnerAnnouncement,
 } from "@/api/client-challenges";
 import { AssignmentsSection } from "../components/AssignmentsSection";
 import { ResourcesTab } from "./ResourcesTab";
@@ -42,6 +55,7 @@ import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
 import { popup } from "@/lib/popup-store";
+import { getApiErrorCode } from "@/lib/api-error";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -111,6 +125,90 @@ const VALID_TRANSITIONS: Record<string, ApplicationStatus[]> = {
 // ---------------------------------------------------------------------------
 // Overview tab
 // ---------------------------------------------------------------------------
+
+/**
+ * End Challenge — the explicit, terminal lifecycle action. Client-admin only
+ * (super-admin and viewers never see it). Ending closes applications + scoring,
+ * freezes the winner set, and unlocks winner announcement; it can't be undone.
+ * The backend gates it on complete judging, rejecting with 409 SCORING_INCOMPLETE
+ * (+ the unscored application ids), which we surface inline here.
+ */
+function EndChallengeCard({ challengeId, status }: { challengeId: string; status?: string }) {
+  const endChallenge = useEndChallenge();
+  const ended = isChallengeEnded(status);
+  const scoringIncomplete = getApiErrorCode(endChallenge.error) === "SCORING_INCOMPLETE";
+  const unscoredCount = scoringIncomplete ? unscoredApplicationIdsFromError(endChallenge.error).length : 0;
+
+  if (ended) {
+    return (
+      <Card className="attend-card p-5">
+        <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3">Challenge Lifecycle</h2>
+        <div className="flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-xs text-green-800">
+          <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>This challenge has <span className="font-semibold">ended</span>. Applications and scoring are locked and the winner set is frozen. Announce winners from the Winners tab.</span>
+        </div>
+      </Card>
+    );
+  }
+
+  function handleEnd() {
+    popup.confirm(
+      "End this challenge?",
+      "This permanently closes applications and scoring, freezes the winner set, and unlocks winner announcement. It cannot be undone or re-opened.",
+      () => endChallenge.mutate({ challengeId }),
+      undefined,
+      "End Challenge",
+      "Cancel"
+    );
+  }
+
+  return (
+    <Card className="attend-card p-5 border-red-200">
+      <h2 className="font-semibold text-[hsl(var(--foreground))] mb-1 flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-red-500" /> End Challenge
+      </h2>
+      <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3">
+        Closes applications and scoring, finalizes results, and unlocks winner announcement. This is terminal — it can’t be undone.
+      </p>
+
+      {scoringIncomplete && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 mb-3">
+          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>
+            {unscoredCount > 0
+              ? `${unscoredCount} shortlisted application${unscoredCount === 1 ? "" : "s"} still ${unscoredCount === 1 ? "needs" : "need"} at least one judge score before you can end the challenge.`
+              : "Some shortlisted applications still need at least one judge score before you can end the challenge."}
+            {" "}Score them on the <span className="font-semibold">Applications</span> or <span className="font-semibold">Leaderboard</span> tab, then try again.
+          </span>
+        </div>
+      )}
+
+      <Button
+        variant="destructive"
+        className="w-full gap-1.5"
+        disabled={endChallenge.isPending}
+        onClick={handleEnd}
+      >
+        <AlertTriangle className="h-4 w-4" />
+        {endChallenge.isPending ? "Ending…" : "End Challenge"}
+      </Button>
+    </Card>
+  );
+}
+
+/**
+ * Compact inline note explaining why write controls are disabled once a challenge
+ * has ended. `what` names the frozen surface, e.g. "application status changes".
+ */
+function EndedLockNote({ what }: { what: string }) {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] px-3 py-2.5 text-xs text-[hsl(var(--muted-foreground))]">
+      <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+      <span>This challenge has ended — {what} are locked and can no longer be changed.</span>
+    </div>
+  );
+}
+
 function OverviewTab({
   challengeId,
   readOnly = false,
@@ -304,7 +402,8 @@ function OverviewTab({
               <Button
                 size="sm"
                 variant={c.applicationsOpen ? "outline" : "default"}
-                disabled={toggleOpen.isPending}
+                disabled={toggleOpen.isPending || isChallengeEnded(c.status)}
+                title={isChallengeEnded(c.status) ? "Challenge ended — applications are locked" : undefined}
                 className="gap-1.5"
                 onClick={() => toggleOpen.mutate({ challengeId, open: !c.applicationsOpen })}
               >
@@ -315,6 +414,11 @@ function OverviewTab({
             )}
           </div>
         </Card>
+
+        {/* End challenge — client-admin only, terminal action */}
+        {!isSuperAdmin && !readOnly && (
+          <EndChallengeCard challengeId={challengeId} status={c.status} />
+        )}
       </div>
     </div>
   );
@@ -334,6 +438,10 @@ function ApplicationsTab({ challengeId, readOnly = false }: { challengeId: strin
 
   const { data, isLoading } = useClientChallengeApplications(challengeId, activeStatus, activeTrack, 0, 100);
   const updateStatus = useUpdateClientApplicationStatus();
+  // Once the challenge has ended the backend locks all status changes (409
+  // CHALLENGE_ENDED); freeze the controls so organisers can't attempt one.
+  const { data: challengeDetail } = useClientChallengeDetail(challengeId);
+  const ended = isChallengeEnded(challengeDetail?.status);
   const { refetch: fetchExport, isFetching: exporting } = useExportChallengeApplications(
     challengeId, exportFrom || undefined, exportTo || undefined
   );
@@ -394,12 +502,14 @@ function ApplicationsTab({ challengeId, readOnly = false }: { challengeId: strin
           updateStatus.mutate({ challengeId, applicationId: appId, status })
         }
         readOnly={readOnly}
+        ended={ended}
       />
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
+      {ended && !readOnly && <EndedLockNote what="application status changes" />}
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
@@ -627,24 +737,32 @@ function ApplicationsTab({ challengeId, readOnly = false }: { challengeId: strin
                           size="sm"
                           variant="outline"
                           className="h-7 text-xs gap-1"
+                          disabled={ended}
+                          title={ended ? "Challenge ended — status is locked" : undefined}
                           onClick={() => setOpenMenu(openMenu === app.id ? null : app.id)}
                         >
                           Status <ChevronDown className="h-3 w-3" />
                         </Button>
                         {openMenu === app.id && (
                           <div className="absolute right-0 top-8 z-50 min-w-[170px] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-lg p-1">
-                            {(VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).map((s) => (
+                            {(VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).map((s) => {
+                              const needsScore = s === "SELECTED" && !(app.hasScore && app.score != null);
+                              return (
                               <button
                                 key={s}
-                                className="w-full text-left px-3 py-1.5 text-xs rounded-lg hover:bg-[hsl(var(--accent))] transition-colors"
+                                disabled={needsScore}
+                                className="w-full text-left px-3 py-1.5 text-xs rounded-lg hover:bg-[hsl(var(--accent))] transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                                 onClick={() => {
+                                  if (needsScore) return;
                                   updateStatus.mutate({ challengeId, applicationId: app.id, status: s });
                                   setOpenMenu(null);
                                 }}
                               >
                                 {statusChip(s)}
+                                {needsScore && <span className="ml-2 text-[10px] text-[hsl(var(--muted-foreground))]">needs score</span>}
                               </button>
-                            ))}
+                              );
+                            })}
                             {(VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).length === 0 && (
                               <p className="px-3 py-2 text-xs text-[hsl(var(--muted-foreground))]">No transitions</p>
                             )}
@@ -678,12 +796,14 @@ function ApplicationDetailPanel({
   onBack,
   onStatusChange,
   readOnly = false,
+  ended = false,
 }: {
   challengeId:    string;
   applicationId:  string;
   onBack:         () => void;
   onStatusChange: (id: string, status: ApplicationStatus) => void;
   readOnly?:      boolean;
+  ended?:         boolean;
 }) {
   const { data: app, isLoading } = useClientChallengeApplication(challengeId, applicationId);
 
@@ -901,17 +1021,25 @@ function ApplicationDetailPanel({
           <Card className="attend-card p-5">
             <h2 className="font-semibold text-[hsl(var(--foreground))] mb-1">Update Status</h2>
             <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3">Current: {statusChip(app.status)}</p>
-            {validNext.length > 0 ? (
+            {ended ? (
+              <EndedLockNote what="application status changes" />
+            ) : validNext.length > 0 ? (
               <div className="flex flex-col gap-2">
-                {validNext.map((s) => (
+                {validNext.map((s) => {
+                  const needsScore = s === "SELECTED" && !(app.hasScore && app.score != null);
+                  return (
                   <button
                     key={s}
-                    onClick={() => onStatusChange(app.id, s)}
-                    className="w-full text-left px-3 py-2 rounded-lg text-xs transition-colors hover:bg-[hsl(var(--accent))] border border-[hsl(var(--border))]"
+                    disabled={needsScore}
+                    onClick={() => { if (!needsScore) onStatusChange(app.id, s); }}
+                    title={needsScore ? "This application must be scored before it can be selected." : undefined}
+                    className="w-full text-left px-3 py-2 rounded-lg text-xs transition-colors hover:bg-[hsl(var(--accent))] border border-[hsl(var(--border))] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                   >
                     Move to {statusChip(s)}
+                    {needsScore && <span className="block mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">Scoring required first</span>}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-xs text-[hsl(var(--muted-foreground))]">No further transitions available.</p>
@@ -1090,6 +1218,347 @@ function LeaderboardTab({ challengeId }: { challengeId: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Winners tab — announce challenge winners + issue certificates
+// ---------------------------------------------------------------------------
+
+const winnerPositionColor = (position: number) => {
+  if (position === 1) return "#f59e0b"; // gold
+  if (position === 2) return "#94a3b8"; // silver
+  if (position === 3) return "#d97706"; // bronze
+  return "#7c22c9";                     // brand purple for 4th+
+};
+
+const ordinal = (n: number) => {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+};
+
+function WinnerMemberRow({ member }: { member: WinnerMember }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <div className="min-w-0">
+        <p className="text-sm text-[hsl(var(--foreground))] truncate">{member.name || "Unnamed member"}</p>
+        {member.email && (
+          <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{member.email}</p>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {member.email && (
+          <span title="Will receive the congratulations email" className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#7c22c910] text-[#7c22c9]">
+            <Mail className="h-3 w-3" /> Email
+          </span>
+        )}
+        {member.hasAttendAccount && (
+          <span title="Will receive an in-app notification" className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#16a34a12] text-[#16a34a]">
+            <Bell className="h-3 w-3" /> In-app
+          </span>
+        )}
+        {member.certificateId && (
+          <a
+            href={certificateDownloadUrl(member.certificateId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Download certificate PDF"
+            className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] hover:bg-[#7c22c910] hover:text-[#7c22c9] transition-colors"
+          >
+            <Download className="h-3 w-3" /> Certificate
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WinnerAnnouncementProgress({ progress, onDismiss }: { progress: WinnerAnnouncement; onDismiss?: () => void }) {
+  const status = progress.status?.toUpperCase();
+  const terminal = isWinnerAnnouncementTerminal(status);
+  const failed = status === "FAILED";
+  const withErrors = status === "COMPLETED_WITH_ERRORS";
+
+  const tone = failed
+    ? { bg: "#dc262612", fg: "#dc2626", label: "Failed", Icon: AlertTriangle }
+    : withErrors
+    ? { bg: "#f59e0b12", fg: "#b45309", label: "Completed with errors", Icon: AlertTriangle }
+    : terminal
+    ? { bg: "#16a34a12", fg: "#16a34a", label: "Completed", Icon: CheckCircle2 }
+    : { bg: "#7c22c912", fg: "#7c22c9", label: "Sending…", Icon: Send };
+
+  const stat = (label: string, value?: number) => (
+    <div className="text-center">
+      <p className="text-lg font-black tabular-nums text-[hsl(var(--foreground))]">{value ?? 0}</p>
+      <p className="text-[11px] text-[hsl(var(--muted-foreground))]">{label}</p>
+    </div>
+  );
+
+  return (
+    <Card className="attend-card overflow-hidden">
+      <div className="px-5 py-3 border-b border-[hsl(var(--border))] flex items-center gap-2" style={{ backgroundColor: tone.bg }}>
+        <tone.Icon className={`h-4 w-4 ${terminal ? "" : "animate-pulse"}`} style={{ color: tone.fg }} />
+        <span className={`text-sm font-semibold ${terminal ? "" : "animate-pulse"}`} style={{ color: tone.fg }}>{tone.label}</span>
+        {onDismiss && (
+          <button
+            onClick={onDismiss}
+            className="ml-auto p-1 rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] transition-colors"
+            aria-label="Dismiss"
+            title="Dismiss"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+      <div className="px-5 py-4 grid grid-cols-4 gap-3">
+        {stat("Certificates", progress.certificatesIssued)}
+        {stat("Emails sent", progress.emailsSent)}
+        {stat("In-app sent", progress.inAppSent)}
+        {stat("Emails failed", progress.emailsFailed)}
+      </div>
+      {(failed || withErrors) && (progress.errorMessage || progress.errorCode) && (
+        <div className="px-5 pb-3 text-xs text-[#dc2626]">
+          {progress.errorMessage || progress.errorCode}
+        </div>
+      )}
+      {Array.isArray(progress.failures) && progress.failures.length > 0 && (
+        <div className="px-5 pb-4">
+          <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-1.5">Delivery failures</p>
+          <ul className="flex flex-col gap-1">
+            {progress.failures.map((f, i) => (
+              <li key={i} className="text-xs text-[hsl(var(--muted-foreground))]">
+                <span className="text-[hsl(var(--foreground))]">{f.recipient || "Recipient"}</span>
+                {f.reason ? ` — ${f.reason}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function WinnersTab({ challengeId, readOnly }: { challengeId: string; readOnly?: boolean }) {
+  const { data, isLoading, isError, error } = useChallengeWinnerPreview(challengeId);
+  const { data: challenge } = useClientChallengeDetail(challengeId);
+  const announce = useAnnounceChallengeWinners();
+
+  const [message, setMessage] = useState("");
+  const [messageDirty, setMessageDirty] = useState(false);
+  const [sendEmail, setSendEmail] = useState(true);
+  const [sendInApp, setSendInApp] = useState(true);
+  const [announcementId, setAnnouncementId] = useState<string | null>(null);
+  const idemRef = useRef<string | null>(null);
+  const restoredRef = useRef(false);
+
+  // Restore the last announcement's progress after a reload WITHOUT persisting the
+  // id client-side: the backend exposes GET .../announcements/latest (see backend
+  // doc §2 / item 72-2). We seed the tracked id from it exactly once per mount —
+  // once any id is set (restored, or from a fresh announce), restoredRef latches so
+  // dismissing the card doesn't immediately re-seed it within the session.
+  const { data: latest } = useLatestChallengeWinnerAnnouncement(challengeId);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    if (announcementId) { restoredRef.current = true; return; }
+    if (latest?.announcementId) {
+      restoredRef.current = true;
+      setAnnouncementId(latest.announcementId);
+    }
+  }, [latest?.announcementId, announcementId]);
+
+  // Prefill the editable message with the server-generated default (until edited).
+  useEffect(() => {
+    if (!messageDirty && data?.defaultMessage) setMessage(data.defaultMessage);
+  }, [data?.defaultMessage, messageDirty]);
+
+  const { data: progress } = useChallengeWinnerAnnouncement(challengeId, announcementId);
+
+  if (isLoading) return <Loader variant="inline" text="Computing winners…" />;
+
+  if (isError) {
+    const serverMsg = (error as any)?.response?.data?.message;
+    return (
+      <Card className="attend-card px-5 py-12 text-center">
+        <Trophy className="h-8 w-8 mx-auto text-[hsl(var(--muted-foreground))] mb-3" />
+        <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Winners aren’t available yet</p>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1 max-w-md mx-auto">
+          {serverMsg || "Complete judging and move the winning applications to SELECTED, then return here to preview and announce."}
+        </p>
+      </Card>
+    );
+  }
+
+  const winners: WinnerTeam[] = data?.winners ?? [];
+  const alreadyAnnounced = isWinnerAnnouncementTerminal(progress?.status);
+  const ended = isChallengeEnded(challenge?.status);
+  const canAnnounce =
+    !readOnly && ended && winners.length > 0 && (sendEmail || sendInApp) && !!message.trim() && !announce.isPending;
+
+  function handleAnnounce() {
+    const trimmed = message.trim();
+    if (!trimmed || !ended) return;
+    // One idempotency key per attempt; reused if a retry is needed.
+    if (!idemRef.current) idemRef.current = crypto.randomUUID();
+    const key = idemRef.current;
+    popup.confirm(
+      alreadyAnnounced ? "Re-run Announcement?" : "Announce Winners?",
+      `This will send certificates and congratulations to ${data?.totalRecipients ?? winners.reduce((n, t) => n + (t.members?.length ?? 0), 0)} recipient(s) across ${winners.length} winning team${winners.length === 1 ? "" : "s"}.`,
+      () => {
+        announce.mutate(
+          { challengeId, applicationIds: winners.map((w) => w.applicationId), message: trimmed, sendEmail, sendInApp, idempotencyKey: key },
+          {
+            onSuccess: (res) => {
+              idemRef.current = null;
+              if (res?.announcementId) setAnnouncementId(res.announcementId);
+            },
+          }
+        );
+      },
+      undefined,
+      alreadyAnnounced ? "Re-run" : "Announce",
+      "Cancel"
+    );
+  }
+
+  // Prefer backend-provided counts; fall back to summarizing the members the
+  // backend already returned (display only — not a winner computation).
+  const allMembers = winners.flatMap((t) => t.members ?? []);
+  const summary = [
+    { label: "Winning teams",   value: winners.length },
+    { label: "Recipients",      value: data?.totalRecipients ?? allMembers.length },
+    { label: "With email",      value: data?.emailRecipients ?? allMembers.filter((m) => !!m.email).length },
+    { label: "With in-app",     value: data?.inAppRecipients ?? allMembers.filter((m) => m.hasAttendAccount).length },
+  ];
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Progress (if an announcement has been kicked off) */}
+      {announcementId && progress && (
+        <WinnerAnnouncementProgress progress={progress} onDismiss={() => setAnnouncementId(null)} />
+      )}
+
+      {winners.length === 0 ? (
+        <Card className="attend-card px-5 py-12 text-center">
+          <Trophy className="h-8 w-8 mx-auto text-[hsl(var(--muted-foreground))] mb-3" />
+          <p className="text-sm font-semibold text-[hsl(var(--foreground))]">No winners to announce yet</p>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1 max-w-md mx-auto">
+            Move the winning applications to <span className="font-semibold">SELECTED</span> and make sure they’ve been scored on the leaderboard. Unscored selections are excluded automatically.
+          </p>
+        </Card>
+      ) : (
+        <>
+          {/* Summary */}
+          <div className="grid grid-cols-4 gap-3">
+            {summary.map((s) => (
+              <Card key={s.label} className="attend-card px-4 py-3 text-center">
+                <p className="text-xl font-black tabular-nums text-[hsl(var(--foreground))]">
+                  {s.value ?? "—"}
+                </p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">{s.label}</p>
+              </Card>
+            ))}
+          </div>
+
+          {/* Ranked winners */}
+          <div className="flex flex-col gap-3">
+            {winners.map((team) => {
+              const color = winnerPositionColor(team.finalPosition);
+              return (
+                <Card key={team.applicationId} className="attend-card overflow-hidden">
+                  <div className="px-5 py-3 border-b border-[hsl(var(--border))] flex items-center gap-3">
+                    <span
+                      className="h-8 min-w-8 px-2 rounded-full flex items-center justify-center text-white text-xs font-black"
+                      style={{ backgroundColor: color }}
+                    >
+                      {ordinal(team.finalPosition)}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-[hsl(var(--foreground))] truncate">{team.teamName}</p>
+                      {team.ideaTitle && (
+                        <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{team.ideaTitle}</p>
+                      )}
+                    </div>
+                    {team.track && (
+                      <span className="ml-auto text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
+                        {team.track}
+                      </span>
+                    )}
+                  </div>
+                  <div className="px-5 py-2 divide-y divide-[hsl(var(--border))]">
+                    {(team.members ?? []).map((m, i) => (
+                      <WinnerMemberRow key={m.memberId ?? m.email ?? i} member={m} />
+                    ))}
+                    {(!team.members || team.members.length === 0) && (
+                      <p className="py-2 text-xs text-[hsl(var(--muted-foreground))]">No team members on record.</p>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Compose + announce */}
+          <Card className="attend-card overflow-hidden">
+            <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+              <Award className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+              <h2 className="font-semibold text-[hsl(var(--foreground))]">Congratulations message</h2>
+            </div>
+            <div className="px-5 py-5 flex flex-col gap-4">
+              <div>
+                <textarea
+                  value={message}
+                  onChange={(e) => { setMessage(e.target.value); setMessageDirty(true); }}
+                  disabled={readOnly}
+                  rows={5}
+                  maxLength={2000}
+                  placeholder="Congratulations to our winners…"
+                  className="w-full rounded-lg border border-[hsl(var(--border))] bg-transparent px-3 py-2 text-sm text-[hsl(var(--foreground))] outline-none focus:border-[#7c22c9] disabled:opacity-60 resize-y"
+                />
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                  {message.length}/2000 · Prize amounts are intentionally excluded from certificates and messages.
+                </p>
+              </div>
+
+              {!readOnly && !ended && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                  <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>
+                    Winners can only be announced after the challenge has ended. Open the <span className="font-semibold">Overview</span> tab and use <span className="font-semibold">End Challenge</span> to close applications and scoring and finalize the results — this can’t be undone.
+                    {challenge?.status && (
+                      <> Current status: <span className="font-semibold">{challenge.status}</span>.</>
+                    )}
+                  </span>
+                </div>
+              )}
+
+              {!readOnly && (
+                <div className="flex flex-wrap items-center gap-4">
+                  <label className="flex items-center gap-2 text-sm text-[hsl(var(--foreground))] cursor-pointer">
+                    <input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} className="accent-[#7c22c9]" />
+                    <Mail className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" /> Send email
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-[hsl(var(--foreground))] cursor-pointer">
+                    <input type="checkbox" checked={sendInApp} onChange={(e) => setSendInApp(e.target.checked)} className="accent-[#7c22c9]" />
+                    <Bell className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" /> Send in-app
+                  </label>
+                  <Button onClick={handleAnnounce} disabled={!canAnnounce} className="ml-auto">
+                    <Send className="h-3.5 w-3.5 mr-1.5" />
+                    {announce.isPending ? "Announcing…" : alreadyAnnounced ? "Re-run announcement" : ended ? "Announce winners" : "End challenge to announce"}
+                  </Button>
+                </div>
+              )}
+
+              {readOnly && (
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  You have read-only access. Ask an organisation admin to announce the winners.
+                </p>
+              )}
+            </div>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Settings tab — Submission Requirements
 // ---------------------------------------------------------------------------
 
@@ -1201,6 +1670,9 @@ function JudgesTab({ challengeId, readOnly = false }: { challengeId: string; rea
 
   const judges: JudgeItem[] = panel?.judges ?? [];
   const scoringOpen         = (challenge as any)?.scoringOpen ?? false;
+  // Ending the challenge closes scoring server-side and rejects re-opening — lock
+  // the toggle to match.
+  const ended               = isChallengeEnded((challenge as any)?.status);
 
   // Org JUDGE members not yet on this challenge (match by email or name)
   const assignedEmails = new Set(judges.map((j) => (j as any).email).filter(Boolean));
@@ -1280,7 +1752,8 @@ function JudgesTab({ challengeId, readOnly = false }: { challengeId: string; rea
           {!readOnly && (
             <Button
               size="sm" variant="outline" className="gap-1.5"
-              disabled={toggleScoring.isPending}
+              disabled={toggleScoring.isPending || ended}
+              title={ended ? "Challenge ended — scoring is locked" : undefined}
               onClick={() => toggleScoring.mutate({ challengeId, open: !scoringOpen })}
             >
               {scoringOpen ? <ToggleRight className="h-4 w-4 text-green-600" /> : <ToggleLeft className="h-4 w-4" />}
@@ -1682,7 +2155,7 @@ function AdminLeaderboardTab({ challengeId }: { challengeId: string }) {
 // ---------------------------------------------------------------------------
 const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
 
-const CLIENT_TABS  = ["Overview", "Applications", "Leaderboard", "Judges", "Resources", "Settings"] as const;
+const CLIENT_TABS  = ["Overview", "Applications", "Leaderboard", "Winners", "Judges", "Resources", "Settings"] as const;
 const ADMIN_TABS   = ["Overview", "Leaderboard", "Judges", "Resources"] as const;
 type ClientTab = typeof CLIENT_TABS[number];
 type AdminTab  = typeof ADMIN_TABS[number];
@@ -1694,6 +2167,8 @@ export default function ChallengeDetailPage({
 }) {
   const { challengeId } = use(params);
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const { data: userResponse } = useGetMe();
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
@@ -1703,8 +2178,26 @@ export default function ChallengeDetailPage({
   // challenge Settings (which is pure write configuration).
   const isViewer        = normalizedRole === "viewer";
 
-  const [clientTab, setClientTab] = useState<ClientTab>("Overview");
-  const [adminTab,  setAdminTab]  = useState<AdminTab>("Overview");
+  const [clientTab, setClientTab] = useState<ClientTab>(() => {
+    const t = searchParams.get("tab");
+    return t && (CLIENT_TABS as readonly string[]).includes(t) ? (t as ClientTab) : "Overview";
+  });
+  const [adminTab,  setAdminTab]  = useState<AdminTab>(() => {
+    const t = searchParams.get("tab");
+    return t && (ADMIN_TABS as readonly string[]).includes(t) ? (t as AdminTab) : "Overview";
+  });
+
+  // Reflect the active tab in the URL (?tab=…) so a reload / shared link lands
+  // on the same tab instead of resetting to Overview.
+  useEffect(() => {
+    const active = isSuperAdmin ? adminTab : clientTab;
+    const current = searchParams.get("tab");
+    if (active !== current) {
+      const params = new URLSearchParams(Array.from(searchParams.entries()));
+      params.set("tab", active);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
+  }, [clientTab, adminTab, isSuperAdmin, searchParams, pathname, router]);
 
   // Always call both hooks (rules of hooks); enabled per role so only the
   // role-appropriate endpoint is actually hit
@@ -1837,6 +2330,7 @@ export default function ChallengeDetailPage({
       {!isSuperAdmin && tab === "Overview"     && <OverviewTab     challengeId={challengeId} readOnly={isViewer} />}
       {!isSuperAdmin && tab === "Applications" && <ApplicationsTab challengeId={challengeId} readOnly={isViewer} />}
       {!isSuperAdmin && tab === "Leaderboard"  && <LeaderboardTab  challengeId={challengeId} />}
+      {!isSuperAdmin && tab === "Winners"      && <WinnersTab      challengeId={challengeId} readOnly={isViewer} />}
       {!isSuperAdmin && tab === "Judges"       && <JudgesTab       challengeId={challengeId} readOnly={isViewer} />}
       {!isSuperAdmin && tab === "Resources"    && <ResourcesTab    challengeId={challengeId} readOnly={isViewer} isSuperAdmin={false} />}
       {!isSuperAdmin && !isViewer && tab === "Settings" && <SettingsTab challengeId={challengeId} />}

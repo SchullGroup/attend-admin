@@ -344,16 +344,24 @@ function ApplicationDetail({
             <p className="text-xs text-[hsl(var(--muted-foreground))] mb-3">Current: {statusChip(app.status)}</p>
             {validNext.length > 0 ? (
               <div className="flex flex-col gap-2">
-                {validNext.map((s) => (
-                  <button
-                    key={s}
-                    disabled={updateStatus.isPending}
-                    onClick={() => updateStatus.mutate({ challengeId, applicationId: app.id, status: s })}
-                    className="w-full text-left px-3 py-2 rounded-lg text-xs transition-colors hover:bg-[hsl(var(--accent))] border border-[hsl(var(--border))]"
-                  >
-                    Move to {statusChip(s)}
-                  </button>
-                ))}
+                {validNext.map((s) => {
+                  // A team can only be SELECTED (a winner) once it has been scored.
+                  const needsScore = s === "SELECTED" && !(app.hasScore && app.score != null);
+                  return (
+                    <button
+                      key={s}
+                      disabled={updateStatus.isPending || needsScore}
+                      onClick={() => { if (!needsScore) updateStatus.mutate({ challengeId, applicationId: app.id, status: s }); }}
+                      title={needsScore ? "This application must be scored before it can be selected." : undefined}
+                      className="w-full text-left px-3 py-2 rounded-lg text-xs transition-colors hover:bg-[hsl(var(--accent))] border border-[hsl(var(--border))] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                    >
+                      Move to {statusChip(s)}
+                      {needsScore && (
+                        <span className="block mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">Scoring required first</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               <p className="text-xs text-[hsl(var(--muted-foreground))]">No further transitions available.</p>
@@ -682,16 +690,20 @@ function ChallengeApplications({
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" sideOffset={6} className="min-w-[170px]">
-                            {(VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).map((s) => (
-                              <DropdownMenuItem
-                                key={s}
-                                className="cursor-pointer px-3 py-1.5 text-xs"
-                                disabled={updateStatus.isPending}
-                                onSelect={() => updateStatus.mutate({ challengeId, applicationId: app.id, status: s })}
-                              >
-                                {statusChip(s)}
-                              </DropdownMenuItem>
-                            ))}
+                            {(VALID_TRANSITIONS[app.status?.toUpperCase()] ?? []).map((s) => {
+                              const needsScore = s === "SELECTED" && !(app.hasScore && app.score != null);
+                              return (
+                                <DropdownMenuItem
+                                  key={s}
+                                  className="cursor-pointer px-3 py-1.5 text-xs"
+                                  disabled={updateStatus.isPending || needsScore}
+                                  onSelect={(e) => { if (needsScore) { e.preventDefault(); return; } updateStatus.mutate({ challengeId, applicationId: app.id, status: s }); }}
+                                >
+                                  {statusChip(s)}
+                                  {needsScore && <span className="ml-2 text-[10px] text-[hsl(var(--muted-foreground))]">needs score</span>}
+                                </DropdownMenuItem>
+                              );
+                            })}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}

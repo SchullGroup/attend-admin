@@ -12,6 +12,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
@@ -1319,8 +1320,24 @@ export interface InviteInput {
   tierName?:  string;
 }
 
-/** Fields documented by the invite-list Swagger schema. */
-export interface InviteItem extends InviteInput {}
+export type InviteDeliveryStatus =
+  | "NOT_SENT"
+  | "QUEUED"
+  | "PROCESSING"
+  | "SENT"
+  | "DELIVERED"
+  | "BOUNCED"
+  | "FAILED";
+
+export type InviteRegistrationStatus = "INVITED" | "REGISTERED" | "REVOKED" | "EXPIRED";
+
+/** Invite-directory row returned by GET /invites. */
+export interface InviteItem extends InviteInput {
+  id?:                string;
+  deliveryStatus?:    InviteDeliveryStatus;
+  registrationStatus?: InviteRegistrationStatus;
+  providerMessageId?: string;
+}
 
 export interface InviteSummary {
   total:      number;
@@ -1348,16 +1365,27 @@ export interface InviteImportJob {
   totalRows:        number;
   processedRows:    number;
   acceptedRows:     number;
+  createdRows:      number;
   updatedRows:      number;
   duplicateRows:    number;
   rejectedRows:     number;
   errorReportUrl?:  string;
   startedAt?:       string;
   completedAt?:     string;
+  lastHeartbeatAt?: string;
+  errorCode?:       string;
+  errorMessage?:    string;
 }
 
-/** Only value currently documented by Swagger. */
-export type InviteCampaignSelection = "ALL_UNSENT";
+export interface InviteUploadSession {
+  uploadId:        string;
+  storageKey:      string;
+  uploadUrl:       string;
+  expiresAt:       string;
+  requiredHeaders: Record<string, string>;
+}
+
+export type InviteCampaignSelection = "ALL_UNSENT" | "SELECTED" | "TIER" | "IMPORT_JOB";
 
 export interface CreateInviteCampaignRequest {
   selection:    InviteCampaignSelection;
@@ -1378,6 +1406,9 @@ export interface InviteCampaign {
   skippedCount:  number;
   startedAt?:    string;
   completedAt?:  string;
+  lastHeartbeatAt?: string;
+  errorCode?:     string;
+  errorMessage?:  string;
 }
 
 export interface InviteListFilters {
@@ -1385,6 +1416,8 @@ export interface InviteListFilters {
   size?:        number;
   search?:      string;
   status?:      string;
+  deliveryStatus?: InviteDeliveryStatus;
+  registrationStatus?: InviteRegistrationStatus;
   tierId?:      string;
   importJobId?:  string;
 }
@@ -1395,8 +1428,43 @@ const inviteKeys = {
   import:   (eventId: string, jobId: string) => ["clientEvents", "invite-import", eventId, jobId] as const,
 };
 
+// ~3 min at 3s — after this a still-PENDING import is treated as stalled and
+// polling stops (the UI surfaces a "may be stuck" note).
+const MAX_IMPORT_POLLS = 60;
+
 function responseData<T>(response: any): T {
   return ((response?.data as any)?.data ?? response?.data) as T;
+}
+
+const INVITE_DELIVERY_STATUSES = new Set<InviteDeliveryStatus>([
+  "NOT_SENT",
+  "QUEUED",
+  "PROCESSING",
+  "SENT",
+  "DELIVERED",
+  "FAILED",
+  "BOUNCED",
+]);
+
+function inviteListParams(filters: InviteListFilters) {
+  const params: Record<string, string | number> = {};
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== "") params[key] = value;
+  }
+
+  // The directory selector contains both delivery and registration states.
+  // Send the explicit parameter as well as the legacy `status` alias so the
+  // client works with both deployed API contract versions.
+  if (filters.status) {
+    if (INVITE_DELIVERY_STATUSES.has(filters.status as InviteDeliveryStatus)) {
+      params.deliveryStatus = filters.status;
+    } else {
+      params.registrationStatus = filters.status;
+    }
+  }
+
+  return params;
 }
 
 export function useListInvites(eventId: string, filters: InviteListFilters = {}) {
@@ -1406,7 +1474,7 @@ export function useListInvites(eventId: string, filters: InviteListFilters = {})
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<InviteListResponse>>(
         `/api/v1/client/events/${eventId}/invites`,
-        { params: Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== undefined && value !== "")) }
+        { params: inviteListParams(filters) }
       );
       const raw = responseData<InviteListResponse>(res);
       return {
@@ -1456,10 +1524,63 @@ export function useImportInvites() {
   });
 }
 
+/**
+ * Production import path for large CSVs. The file is uploaded directly to the
+ * backend-issued storage URL, then the durable import job is finalized.
+ */
+export function useImportInviteCsv() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      eventId,
+      file,
+      defaultTierId,
+      onUploadProgress,
+    }: {
+      eventId: string;
+      file: File;
+      defaultTierId?: string;
+      onUploadProgress?: (percent: number) => void;
+    }) => {
+      const idempotencyKey = crypto.randomUUID();
+      const sessionResponse = await apiClient.post<ApiResponse<InviteUploadSession>>(
+        `/api/v1/client/events/${eventId}/invite-imports/upload-session`,
+        { filename: file.name, contentType: file.type || "text/csv", sizeBytes: file.size },
+        { headers: { "Idempotency-Key": idempotencyKey } }
+      );
+      const session = responseData<InviteUploadSession>(sessionResponse);
+
+      // Use the global Axios client here. apiClient would attach the Attend
+      // bearer token and its JSON default to a third-party signed storage URL.
+      await axios.put(session.uploadUrl, file, {
+        headers: session.requiredHeaders,
+        onUploadProgress: (progress) => {
+          if (!onUploadProgress) return;
+          const total = progress.total ?? file.size;
+          onUploadProgress(total > 0 ? Math.min(100, Math.round((progress.loaded / total) * 100)) : 0);
+        },
+      });
+
+      const finalizeResponse = await apiClient.post<ApiResponse<InviteImportJob>>(
+        `/api/v1/client/events/${eventId}/invite-imports`,
+        { uploadId: session.uploadId, defaultTierId: defaultTierId || undefined },
+        { headers: { "Idempotency-Key": idempotencyKey } }
+      );
+      return responseData<InviteImportJob>(finalizeResponse);
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] });
+      popup.success("Import Started", "The CSV was uploaded and is processing in the background.", 3000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to upload and start invite import."),
+  });
+}
+
 export function useInviteImportProgress(eventId: string, jobId: string | null) {
   return useQuery({
     queryKey: inviteKeys.import(eventId, jobId ?? ""),
     enabled: !!eventId && !!jobId,
+    retry: false,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<InviteImportJob>>(
         `/api/v1/client/events/${eventId}/invite-imports/${jobId}`
@@ -1468,7 +1589,13 @@ export function useInviteImportProgress(eventId: string, jobId: string | null) {
     },
     refetchInterval: (query) => {
       const status = (query.state.data as InviteImportJob | undefined)?.status?.toUpperCase();
-      return status && ["COMPLETED", "FAILED", "CANCELLED"].includes(status) ? false : 3000;
+      if (status && ["COMPLETED", "FAILED", "CANCELLED"].includes(status)) return false;
+      // Stop polling a job that never leaves PENDING (backend worker stalled) or
+      // whose status endpoint keeps erroring — otherwise this loops forever. The
+      // sum of update + error counts bounds attempts across both cases.
+      const ticks = query.state.dataUpdateCount + query.state.errorUpdateCount;
+      if (ticks >= MAX_IMPORT_POLLS) return false;
+      return 3000;
     },
   });
 }
@@ -1515,7 +1642,7 @@ export function useExportAudienceInvites(eventId: string, filters: Omit<InviteLi
     queryFn: async () => {
       const res = await apiClient.get<string>(
         `/api/v1/client/events/${eventId}/invites/export`,
-        { params: Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== undefined && value !== "")) }
+        { params: inviteListParams(filters) }
       );
       return res.data as string;
     },
@@ -1526,10 +1653,13 @@ export function useResendInvite() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ eventId, inviteId }: { eventId: string; inviteId: string }) => {
-      const res = await apiClient.post<ApiResponse<string>>(`/api/v1/client/events/${eventId}/invites/${inviteId}/resend`);
-      return responseData<string>(res);
+      const res = await apiClient.post<ApiResponse<InviteItem>>(`/api/v1/client/events/${eventId}/invites/${inviteId}/resend`);
+      return responseData<InviteItem>(res);
     },
-    onSuccess: (_, { eventId }) => queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] }),
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] });
+      popup.success("Invitation Sent", "A fresh invitation email was sent.", 2500);
+    },
     onError: (error: any) => parseAndToastApiError(error, "Failed to resend invite."),
   });
 }
@@ -1538,11 +1668,31 @@ export function useRevokeInvite() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ eventId, inviteId }: { eventId: string; inviteId: string }) => {
-      const res = await apiClient.delete<ApiResponse<string>>(`/api/v1/client/events/${eventId}/invites/${inviteId}`);
-      return responseData<string>(res);
+      const res = await apiClient.delete<ApiResponse<InviteItem>>(`/api/v1/client/events/${eventId}/invites/${inviteId}`);
+      return responseData<InviteItem>(res);
     },
-    onSuccess: (_, { eventId }) => queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] }),
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] });
+      popup.success("Invitation Revoked", "This invitation can no longer be used to register.", 2500);
+    },
     onError: (error: any) => parseAndToastApiError(error, "Failed to revoke invite."),
+  });
+}
+
+export function useUnrevokeInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, inviteId }: { eventId: string; inviteId: string }) => {
+      const res = await apiClient.post<ApiResponse<InviteItem>>(
+        `/api/v1/client/events/${eventId}/invites/${inviteId}/unrevoke`
+      );
+      return responseData<InviteItem>(res);
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["clientEvents", "invites", eventId] });
+      popup.success("Invitation Restored", "The invitee can register and receive invitations again.", 2500);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to restore invite."),
   });
 }
 

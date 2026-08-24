@@ -1,6 +1,6 @@
 "use client";
 import { use, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useEventDetail, useEventDocuments, useEventAttendees } from "@/api/super-admin";
 import { useClientEventDetail, useClientEventDocuments, useClientEventAttendees } from "@/api/client-events";
 import { useVoteResults } from "@/api/client-votes";
@@ -97,6 +97,8 @@ function detectIsAdmin(user: { role?: string; roles?: string[] } | null | undefi
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   // ── Role detection ────────────────────────────────────────────────────────
   const { data: userResponse, isLoading: userLoading } = useGetMe();
@@ -132,9 +134,20 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   );
 
   // ── UI state ──────────────────────────────────────────────────────────────
-  const [tab,              setTab]             = useState("Overview");
+  const [tab,              setTab]             = useState(() => searchParams.get("tab") ?? "Overview");
   const [localStatus,      setLocalStatus]     = useState<string | null>(null);
   const [agendaItems,      setAgendaItems]     = useState<LocalAgendaItem[]>([]);
+
+  // Reflect the active tab in the URL (?tab=…) so a reload / shared link lands
+  // on the same tab instead of resetting to Overview.
+  useEffect(() => {
+    const current = searchParams.get("tab");
+    if (tab !== current) {
+      const params = new URLSearchParams(Array.from(searchParams.entries()));
+      params.set("tab", tab);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
+  }, [tab, searchParams, pathname, router]);
 
   // ── Loading / error ───────────────────────────────────────────────────────
   if (eventLoading) return <Loader variant="page" text="Loading Event…" />;
