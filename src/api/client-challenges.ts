@@ -986,9 +986,15 @@ function parseWinnerAnnouncement(raw: any, fallbackEventId?: string): WinnerAnno
   };
 }
 
-// Stop polling a job that never leaves PENDING/PROCESSING (backend worker stalled)
-// or whose status endpoint keeps erroring, instead of hammering it forever.
-const MAX_ANNOUNCEMENT_POLLS = 40; // ~2 min at 3s
+// Poll a winner-announcement job until it reaches a terminal status. A healthy job
+// completes in seconds; a stalled one (backend worker never consumed it) sits at
+// PENDING until the backend watchdog auto-fails it with WORKER_NEVER_STARTED at
+// ~10 min (see backend doc §2). So we poll fast for the first ~2 min, then slowly
+// out PAST the watchdog window — otherwise the UI stops at 2 min and shows a
+// perpetual "Sending…" that never resolves to the real FAILED state.
+const ANNOUNCE_FAST_POLLS    = 40;               // ~2 min at 3s — while it's plausibly working
+const ANNOUNCE_SLOW_INTERVAL = 15_000;           // then every 15s…
+const ANNOUNCE_MAX_POLLS     = ANNOUNCE_FAST_POLLS + 44; // …to ~13 min total (outlasts the 10-min watchdog)
 
 const WINNER_TERMINAL_STATUSES: WinnerAnnouncementStatus[] = [
   "COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED",
@@ -1179,10 +1185,11 @@ export function useChallengeWinnerAnnouncement(challengeId: string, announcement
       if (isWinnerAnnouncementTerminal(status)) return false;
       // Bound the poll: each success or error advances one of these counters, so
       // their sum caps total attempts whether the job is stuck PENDING or the
-      // status endpoint is 404-ing.
+      // status endpoint is 404-ing. Poll fast at first, then back off so we stay
+      // alive past the backend's ~10-min watchdog and observe the eventual FAILED.
       const ticks = query.state.dataUpdateCount + query.state.errorUpdateCount;
-      if (ticks >= MAX_ANNOUNCEMENT_POLLS) return false;
-      return 3000;
+      if (ticks >= ANNOUNCE_MAX_POLLS) return false;
+      return ticks < ANNOUNCE_FAST_POLLS ? 3000 : ANNOUNCE_SLOW_INTERVAL;
     },
   });
 }

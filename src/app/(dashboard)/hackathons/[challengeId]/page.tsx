@@ -1113,7 +1113,7 @@ function LeaderboardTab({ challengeId }: { challengeId: string }) {
 
   const medalColor = (rank: number) => {
     if (rank === 1) return "#f59e0b"; // gold
-    if (rank === 2) return "#94a3b8"; // silver
+    if (rank === 2) return "#64748b"; // silver
     if (rank === 3) return "#d97706"; // bronze
     return "#6b7280";
   };
@@ -1223,7 +1223,7 @@ function LeaderboardTab({ challengeId }: { challengeId: string }) {
 
 const winnerPositionColor = (position: number) => {
   if (position === 1) return "#f59e0b"; // gold
-  if (position === 2) return "#94a3b8"; // silver
+  if (position === 2) return "#64748b"; // silver
   if (position === 3) return "#d97706"; // bronze
   return "#7c22c9";                     // brand purple for 4th+
 };
@@ -1313,6 +1313,14 @@ function WinnerAnnouncementProgress({ progress, onDismiss }: { progress: WinnerA
         {stat("In-app sent", progress.inAppSent)}
         {stat("Emails failed", progress.emailsFailed)}
       </div>
+      {!terminal && (
+        <div className="px-5 pb-4 -mt-1">
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            Delivery runs in the background — you can safely leave this page and come back.
+            If it hasn’t started after a few minutes, it will be marked failed automatically so you can retry.
+          </p>
+        </div>
+      )}
       {(failed || withErrors) && (progress.errorMessage || progress.errorCode) && (
         <div className="px-5 pb-3 text-xs text-[#dc2626]">
           {progress.errorMessage || progress.errorCode}
@@ -2081,7 +2089,7 @@ function AdminLeaderboardTab({ challengeId }: { challengeId: string }) {
 
   const medalColor = (rank: number) => {
     if (rank === 1) return "#f59e0b";
-    if (rank === 2) return "#94a3b8";
+    if (rank === 2) return "#64748b";
     if (rank === 3) return "#d97706";
     return "#6b7280";
   };

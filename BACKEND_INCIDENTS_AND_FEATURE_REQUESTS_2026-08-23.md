@@ -99,6 +99,34 @@ POST /api/v1/client/events/fc79621a-0742-41e5-84c1-9efcae320da7/challenge-winner
 
 **Update 2026-08-24 (frontend aligned).** Backend confirmed the contract (reply items 72-2): status endpoint path, stable field names (`emailSent`/`emailFailed`/`inAppSent`/`inAppSkipped`/`certificatesIssued`/`certificatesFailed`), the terminal vocab (`COMPLETED`/`COMPLETED_WITH_ERRORS`/`FAILED`), the 10-minute watchdog that auto-fails stuck jobs with `WORKER_NEVER_STARTED`, and the new `GET .../challenge-winners/announcements/latest` (404 when none). The admin UI now **restores progress after a reload via `/latest`** (no client-side id persistence) and maps `WORKER_NEVER_STARTED` to clear copy. The tolerant parser already reads the confirmed field names, so no rename was needed.
 
+**Update 2026-08-24 (recurrence — worker still not consuming jobs on staging).** With the End-Challenge flow now in place, an announcement was started against a *properly ended* challenge and is **still stuck at `PENDING` with nothing sent** — same symptom as the original report. This is not a gating problem; the job is accepted and simply never processed.
+
+```text
+GET /api/v1/client/events/756c48f2-45f5-4d31-8e3a-fa078493c2b5/challenge-winners/announcements/4d92e71c-b5e1-45b3-bbc1-7b6b6da94668
+Status 200 OK
+```
+```json
+{
+  "status": "PENDING",
+  "totalRecipients": 2,
+  "emailSent": 0,
+  "inAppSent": 0,
+  "certificatesIssued": 0,
+  "completedAt": null,
+  "errorCode": null,
+  "startedAt": "2026-08-24T09:29:23"
+}
+```
+
+- announcement id: `4d92e71c-b5e1-45b3-bbc1-7b6b6da94668`
+- eventId / challengeId: `756c48f2-45f5-4d31-8e3a-fa078493c2b5`
+- referenceId: `fd6d1081-e24d-4576-af54-7989707ef03f`
+- startedAt: `2026-08-24T09:29:23`
+
+**Ask.** Trace the referenceId and confirm the challenge-winner announcement worker is actually running/consuming on staging. As of this observation neither the send nor the 10-minute `WORKER_NEVER_STARTED` watchdog appears to have fired (`errorCode` was still `null` well past job start). Please confirm the watchdog is deployed and scheduled on staging — if it is, this job should have transitioned to `FAILED`/`WORKER_NEVER_STARTED`; if it hasn't, the watchdog isn't running either.
+
+**Frontend mitigation (shipped 2026-08-24).** The status poll previously stopped at ~2 min (40 × 3s), which is *before* the 10-min watchdog fires — so the card sat on a perpetual "Sending…" and never observed the eventual `FAILED`. The poll now runs fast (3s) for the first ~2 min, then backs off to 15s and continues to ~13 min total, so it outlasts the watchdog and resolves to the real terminal state. The progress card also shows a plain-language note while non-terminal ("delivery runs in the background… will be marked failed automatically if it doesn't start") instead of an unexplained spinner. None of this makes the job send — that remains the worker fix above.
+
 ---
 
 ## 3. Feature request — "End Challenge" lifecycle, and gate winner announcement behind it
@@ -149,3 +177,23 @@ These were observed in live applications and should be enforced at submission ti
 ## 5. Defense-in-depth — reject `SELECTED` for unscored applications
 
 The admin UI now blocks moving an application to `SELECTED` unless it has been scored (this is the winner set, so unscored winners make no sense). Please also enforce this server-side: reject `PUT /api/v1/client/challenges/{challengeId}/applications/{applicationId}/status` with `{ "status": "SELECTED" }` when the application has no score, using a stable code (e.g. `APPLICATION_NOT_SCORED`).
+
+---
+
+## 6. Judge dashboard shows all-zero scoring counts — `/judge/judging` omits per-challenge counts
+
+**Where.** The judge landing dashboard (`/`, judge role) reads `GET /api/v1/judge/judging` and renders, per assigned challenge, a "scored / shortlisted" progress column plus three aggregate stat cards (Assigned, Teams Scored, Pending Scores).
+
+**Observed.** For a judge with 2 assigned challenges — including one (`Idempotency Test`) that is `ENDED` and already has a computed winner — the dashboard shows **Assigned = 2** (correct) but **Teams Scored = 0**, **Pending Scores = 0**, and every row's progress as **0 / 0**. The challenge demonstrably has shortlisted, scored applications (it produced a winner), so the zeros are missing data, not a true state.
+
+**Diagnosis.** `GET /api/v1/judge/judging` returns the assigned-challenge list without reliable per-challenge counts. This matches the 2026-08-16 note where a "summary/count on `/judging`" was flagged as *consider*, never committed — the scoring endpoint was the only blocking contract at the time. The sibling `GET /api/v1/judge/challenges` does return a `summary` block (`activeChallenges`, `teamsToScore`/`shortlisted`, `totalApplications`) and per-row `shortlistedCount` (legacy `shortlistedTeams`), but **no endpoint returns a per-challenge "scored" count for the judge**, so "Teams Scored" / "Pending" cannot be populated client-side without an N+1 over `/scoring`.
+
+**Ask.** On `GET /api/v1/judge/judging`, include per-challenge, **this-judge-relative** counts so the dashboard is meaningful:
+- `shortlistedCount` — teams this judge is expected to score (confirm the canonical name; the FE currently also accepts the legacy `shortlistedTeams`).
+- `scoredCount` — teams this judge has scored.
+- `pendingCount` — `shortlistedCount − scoredCount` (or the authoritative value).
+- Optionally a top-level `summary` mirroring `/judge/challenges` (assigned, scored, pending totals) so the stat cards don't have to sum client-side.
+
+Please confirm the exact field names and whether the counts are per-judge (what the dashboard needs) or challenge-wide.
+
+**Frontend mitigation (shipped 2026-08-24).** `useJudgeEvents` now normalises the per-challenge counts across the known aliases (`shortlistedCount ?? shortlistedTeams ?? shortlisted`, `scoredCount ?? scoredTeams ?? scored`, etc.), so the moment the backend returns any of them the dashboard populates — no further FE change needed. Until `scoredCount`/`pendingCount` are returned, those two metrics will stay at 0 because no field currently carries them.
