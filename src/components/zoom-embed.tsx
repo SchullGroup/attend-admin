@@ -215,7 +215,17 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
             if (adoptedZak) joinZak = adoptedZak;
             onMeetingRefreshed?.(meeting);
           } else {
-            const errBody = await refreshRes.json().catch(() => ({})) as { error?: string };
+            const errBody = await refreshRes.json().catch(() => ({})) as { error?: string; code?: string };
+            // Backend host-pool saturation (2026-08-25): every licensed Zoom
+            // host is already running its maximum concurrent meetings. Surface
+            // a clean, transient "try again shortly" state instead of the raw
+            // per-host SDK error 3000. Contract: HTTP 503 + code NO_HOST_CAPACITY
+            // (the 503 fallback is gated on capacity wording so the route's
+            // own "API URL not configured" 503 can't masquerade as saturation).
+            const isCapacity =
+              errBody.code === "NO_HOST_CAPACITY" ||
+              (refreshRes.status === 503 && /host|capacity|in use/i.test(errBody.error ?? ""));
+            if (isCapacity) throw new Error("NO_HOST_CAPACITY");
             throw new Error(errBody.error ?? `Meeting refresh failed (${refreshRes.status})`);
           }
         } catch (refreshErr: unknown) {
@@ -409,8 +419,16 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center bg-black">
           <AlertTriangle className="h-8 w-8 text-amber-400" />
           <div>
-            <p className="text-sm font-semibold text-white mb-1">Failed to join meeting</p>
-            <p className="text-xs text-gray-400 max-w-xs">{errMsg}</p>
+            <p className="text-sm font-semibold text-white mb-1">
+              {errMsg.includes("NO_HOST_CAPACITY")
+                ? "All live-meeting slots are in use"
+                : "Failed to join meeting"}
+            </p>
+            <p className="text-xs text-gray-400 max-w-xs">
+              {errMsg.includes("NO_HOST_CAPACITY")
+                ? "Every Zoom host is currently running a live meeting. This is temporary — wait a moment and press Try again. Slots free up automatically as other meetings end."
+                : errMsg}
+            </p>
             {/not support start meeting/i.test(errMsg) ? (
               <p className="text-xs text-amber-400 max-w-xs mt-2">
                 The host token doesn&apos;t match this meeting&apos;s host — a backend token issue,
@@ -442,9 +460,12 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
               onClick={() => {
                 // On token errors, retry WITH a forced refresh — going back
                 // to idle and relaunching would reuse the same stale ZAK.
+                // Capacity errors also force-refresh so the backend re-attempts
+                // host-pool assignment immediately (a slot may have freed up).
                 const tokenErr = /\b(200|3265)\b/.test(errMsg) || /token/i.test(errMsg);
+                const capacityErr = errMsg.includes("NO_HOST_CAPACITY");
                 setErrMsg("");
-                if (tokenErr && eventId) handleLaunch(true);
+                if ((tokenErr || capacityErr) && eventId) handleLaunch(true);
                 else setStatus("idle");
               }}
             >

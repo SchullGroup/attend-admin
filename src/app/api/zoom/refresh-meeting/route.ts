@@ -54,8 +54,14 @@ export async function POST(req: NextRequest) {
     const data = await backendRes.json();
 
     if (!backendRes.ok) {
+      // Forward the backend's stable machine code (e.g. NO_HOST_CAPACITY on
+      // Zoom host-pool saturation, 2026-08-25) so the client can render a
+      // specific state instead of a generic failure.
       return NextResponse.json(
-        { error: data?.message ?? `Backend error ${backendRes.status}` },
+        {
+          error: data?.message ?? data?.error ?? `Backend error ${backendRes.status}`,
+          code:  data?.code,
+        },
         { status: backendRes.status }
       );
     }
