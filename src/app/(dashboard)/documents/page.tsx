@@ -479,12 +479,23 @@ export default function DocumentsPage() {
                         disabled={downloadMutation.isPending}
                         onClick={() => {
                           if (isAdmin && doc.fileUrl) {
+                            // `doc.fileUrl` is a pre-signed OBS URL that OBS serves with
+                            // `Content-Disposition: attachment`, so simply opening it
+                            // downloads the file — exactly what happens when the URL is
+                            // pasted into a new tab. Two fixes over the previous version:
+                            // (1) the anchor must be IN THE DOM for `.click()` to fire
+                            // reliably across browsers; (2) the `download` attribute is
+                            // dropped — it is silently ignored for cross-origin URLs and,
+                            // combined with target="_blank", was aborting the request
+                            // (the red-X Network entry). The saved filename now comes from
+                            // OBS's Content-Disposition header.
                             const a = document.createElement("a");
                             a.href = doc.fileUrl;
-                            a.download = doc.originalFilename || doc.title;
                             a.target = "_blank";
                             a.rel = "noopener noreferrer";
+                            document.body.appendChild(a);
                             a.click();
+                            a.remove();
                           } else {
                             downloadMutation.mutate({
                               documentId: doc.id,
