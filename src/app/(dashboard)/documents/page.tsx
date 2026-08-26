@@ -478,17 +478,21 @@ export default function DocumentsPage() {
                         title="Download"
                         disabled={downloadMutation.isPending}
                         onClick={() => {
-                          if (isAdmin && doc.fileUrl) {
-                            // `doc.fileUrl` is a pre-signed OBS URL that OBS serves with
-                            // `Content-Disposition: attachment`, so simply opening it
-                            // downloads the file — exactly what happens when the URL is
-                            // pasted into a new tab. Two fixes over the previous version:
-                            // (1) the anchor must be IN THE DOM for `.click()` to fire
-                            // reliably across browsers; (2) the `download` attribute is
-                            // dropped — it is silently ignored for cross-origin URLs and,
-                            // combined with target="_blank", was aborting the request
-                            // (the red-X Network entry). The saved filename now comes from
-                            // OBS's Content-Disposition header.
+                          // Prefer the pre-signed OBS `fileUrl` from the list for EVERY
+                          // role — super-admin AND client-admin. OBS serves it with
+                          // `Content-Disposition: attachment`, so opening it downloads the
+                          // file (the same thing that works when the URL is pasted into a
+                          // tab). This deliberately bypasses the counted backend endpoint
+                          // (`/client/documents/{id}/download`) for client admins: that
+                          // endpoint redirects to OBS and our XHR blob read can't follow the
+                          // cross-origin redirect without bucket CORS — that was the
+                          // "Download failed" toast. Notes: (1) the anchor must be IN THE
+                          // DOM for `.click()` to fire reliably; (2) the `download`
+                          // attribute is dropped — ignored for cross-origin URLs and, with
+                          // target="_blank", it aborts the request. Filename comes from
+                          // OBS's Content-Disposition header. The mutation stays as a
+                          // fallback for any document that has no signed fileUrl.
+                          if (doc.fileUrl) {
                             const a = document.createElement("a");
                             a.href = doc.fileUrl;
                             a.target = "_blank";
