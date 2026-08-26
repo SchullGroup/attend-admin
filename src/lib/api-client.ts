@@ -83,13 +83,28 @@ export const apiClient = axios.create({
   },
 });
 
+// Absolute URLs pointing at a DIFFERENT host than our API (e.g. Huawei OBS
+// signed URLs, Cloudinary) must NOT carry our Attend bearer token: OBS
+// authenticates via its own query-string signature and can reject a request
+// that also sends an Authorization header, and forwarding our token to a
+// third-party host leaks it. Relative URLs (which axios resolves against
+// baseURL) always target our own API, so they keep the token.
+function isForeignHostUrl(url?: string): boolean {
+  if (!url || !/^https?:\/\//i.test(url)) return false;
+  try {
+    return new URL(url).host !== new URL(API_URL).host;
+  } catch {
+    return false;
+  }
+}
+
 apiClient.interceptors.request.use(
   (config) => {
     const isPublic = publicEndpoints.some((endpoint) =>
       config.url?.includes(endpoint),
     );
 
-    if (!isPublic) {
+    if (!isPublic && !isForeignHostUrl(config.url)) {
       const token = Cookies.get("accessToken");
       if (token && config.headers) {
         config.headers["Authorization"] = `Bearer ${token}`;

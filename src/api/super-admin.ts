@@ -1080,12 +1080,17 @@ export function useDownloadEventDocument() {
     onSuccess: (doc) => {
       // Prefer direct fileUrl; fall back to legacy base64 fileData
       if (doc.fileUrl) {
+        // Cross-origin pre-signed OBS URL: the `download` attribute is ignored
+        // for cross-origin hrefs and, combined with target="_blank", aborts the
+        // request — so drop it and let OBS's `Content-Disposition: attachment`
+        // trigger the save. The anchor must be in the DOM for `.click()` to fire.
         const a = document.createElement("a");
         a.href = doc.fileUrl;
-        a.download = doc.originalFilename || doc.title;
         a.target = "_blank";
         a.rel = "noopener noreferrer";
+        document.body.appendChild(a);
         a.click();
+        a.remove();
       } else if (doc.fileData) {
         const byteChars = atob(doc.fileData);
         const bytes = new Uint8Array(byteChars.length);

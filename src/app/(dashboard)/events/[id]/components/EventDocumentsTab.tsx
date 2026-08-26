@@ -228,12 +228,16 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
     // a counted document endpoint until the backend registers it as a document.
     const directUrl = d.fileUrl ?? d.downloadUrl;
     if (directUrl) {
+      // Cross-origin pre-signed OBS URL: `download` is ignored cross-origin and,
+      // with target="_blank", aborts the request — drop it and rely on OBS's
+      // `Content-Disposition: attachment`. Anchor must be in the DOM to click.
       const a = document.createElement("a");
       a.href = directUrl;
-      a.download = d.originalFilename || d.title;
       a.target = "_blank";
       a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
       a.click();
+      a.remove();
       return;
     }
     toast.info("No download URL available for this document.");
