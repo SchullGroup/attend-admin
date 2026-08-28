@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -23,6 +23,7 @@ import {
   ScrollText,
   Users2,
   Bell,
+  FlaskConical,
 } from "lucide-react";
 import { cn, resolveRole, isSuperAdminRole } from "@/lib/utils";
 import { useGetMe, useLogout } from "@/api/auth/hooks";
@@ -147,6 +148,13 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
+    label: "QA Tools",
+    superAdminOnly: true,
+    items: [
+      { title: "Test Accounts", icon: FlaskConical, href: "/admin/test-users" },
+    ],
+  },
+  {
     label: "System",
     items: [
       { title: "Documents",      icon: FolderOpen, href: "/documents",     judgeHidden: true },
@@ -228,6 +236,15 @@ export function Sidebar() {
     ? (ROLE_LABELS[normalizedRole] ?? currentUser.role)
     : "Administrator";
   const displayInitials = currentUser?.initials || getInitials(displayName);
+
+  // Resolve the footer avatar/logo once. Prefer fresh server values; the login-time
+  // localStorage snapshot (storedLogoUrl) is a last-resort fallback, so it must NOT
+  // shadow the current org's stakeholder logo. Track a load error so we fall back to
+  // the initials avatar instead of a broken-image icon. Reset when the URL changes.
+  const avatarUrl =
+    currentUser?.avatarUrl || currentUser?.logoUrl || stakeholder?.logoUrl || storedLogoUrl || null;
+  const [avatarBroken, setAvatarBroken] = useState(false);
+  useEffect(() => setAvatarBroken(false), [avatarUrl]);
 
   return (
     <aside
@@ -351,10 +368,11 @@ export function Sidebar() {
       {hasToken && (
         <div className="p-3 shrink-0" style={{ borderTop: "1px solid #e2e8f0" }}>
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
-            {(currentUser?.avatarUrl || currentUser?.logoUrl || storedLogoUrl || stakeholder?.logoUrl) ? (
+            {avatarUrl && !avatarBroken ? (
               <img
-                src={(currentUser?.avatarUrl || currentUser?.logoUrl || storedLogoUrl || stakeholder?.logoUrl)!}
+                src={avatarUrl}
                 alt={displayName}
+                onError={() => setAvatarBroken(true)}
                 className="h-8 w-8 rounded-full object-cover shrink-0 ring-2 ring-[hsl(var(--border))]"
               />
             ) : (

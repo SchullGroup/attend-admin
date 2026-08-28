@@ -79,14 +79,26 @@ export function SuperAdminView({
     Array.isArray(usersData)                    ? usersData as any           :
     [];
 
-  // The dashboard-overview endpoint doesn't return activeUsers/suspendedUsers today —
-  // fall back to counting statuses across the loaded users page. This is exact as long
-  // as the users page fully covers totalUsers (dashboard fetches up to 100 at a time);
-  // for orgs with more users than that, it's a best-effort estimate.
+  // Platform-wide active/suspended split is a backend aggregate. The overview endpoint
+  // doesn't return it today, and /admin/users has no account-status filter, so all the FE
+  // has is a single loaded page (dashboard fetches ≤100). Counting statuses across that page
+  // is only truthful when the page actually covers every user — otherwise "100 active" is
+  // just the page size masquerading as a platform total. Track whether the split is exact so
+  // the UI can hide it rather than assert a wrong number.
+  // Backend gap logged: BACKEND_DASHBOARD_USER_STATS_2026-08-28.md
   const activeUsers    = adminDashboard?.activeUsers
     ?? (users.length > 0 ? users.filter((u) => u.status === "ACTIVE").length : 0);
   const suspendedUsers = adminDashboard?.suspendedUsers
     ?? (users.length > 0 ? users.filter((u) => u.status === "SUSPENDED").length : 0);
+  const hasAggregateSplit =
+    adminDashboard?.activeUsers != null || adminDashboard?.suspendedUsers != null;
+  const pageCoversAllUsers = users.length > 0 && totalUsers > 0 && users.length >= totalUsers;
+  const userSplitIsExact   = hasAggregateSplit || pageCoversAllUsers;
+
+  // When the split is only a one-page sample, don't print a precise (wrong) breakdown.
+  const platformUsersSub = userSplitIsExact
+    ? `${activeUsers.toLocaleString()} active · ${suspendedUsers.toLocaleString()} suspended`
+    : "Registered accounts";
 
   // Live events first, then the rest
   const sortedEvents = [
@@ -125,7 +137,7 @@ export function SuperAdminView({
           { label: "Enrolled Registrars", value: enrolledCount,  sub: "Active organisations",  icon: Building2,    color: "#374151" },
           { label: "Published Events",    value: publishedCount, sub: "Open for registration", icon: CheckCircle2, color: "#0f766e" },
           { label: "Live Now",            value: liveCount,      sub: onlineCount > 0 ? `${onlineCount.toLocaleString()} online` : "No active sessions", icon: Radio, color: "#dc2626" },
-          { label: "Platform Users",      value: totalUsers,     sub: `${activeUsers} active · ${suspendedUsers} suspended`, icon: Users, color: "#0891b2" },
+          { label: "Platform Users",      value: totalUsers,     sub: platformUsersSub, icon: Users, color: "#0891b2" },
         ]}
       />
 
@@ -134,8 +146,8 @@ export function SuperAdminView({
         <div className="grid grid-cols-4 gap-4">
           {[
             { label: "Total Events",   value: totalEvents,   icon: CalendarDays, color: "#374151" },
-            { label: "Active Users",   value: activeUsers,   icon: UserCheck,    color: "#16a34a" },
-            { label: "Suspended",      value: suspendedUsers,icon: UserX,        color: "#dc2626" },
+            { label: "Active Users",   value: userSplitIsExact ? activeUsers : null,    icon: UserCheck, color: "#16a34a" },
+            { label: "Suspended",      value: userSplitIsExact ? suspendedUsers : null, icon: UserX,     color: "#dc2626" },
             { label: "KYC Approved",   value: kycApproved,   icon: CheckCircle2, color: "#0f766e" },
           ].map(({ label, value, icon: Icon, color }) => (
             <Card key={label} className="attend-card flex items-center gap-3 p-4">
@@ -146,7 +158,7 @@ export function SuperAdminView({
               <div>
                 <p className="text-xs font-medium text-[hsl(var(--muted-foreground))]">{label}</p>
                 <p className="text-xl font-bold tabular-nums text-[hsl(var(--foreground))] leading-none mt-0.5">
-                  {(value ?? 0).toLocaleString()}
+                  {value == null ? "—" : value.toLocaleString()}
                 </p>
               </div>
             </Card>

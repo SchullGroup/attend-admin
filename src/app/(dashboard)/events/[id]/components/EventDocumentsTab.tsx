@@ -211,26 +211,16 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
   }
 
   function handleDownload(d: any) {
-    if (!isAdmin && d.id) {
-      clientDownload.mutate({
-        eventId,
-        documentId: d.id,
-        filename: d.originalFilename || d.title || `document-${d.id}`,
-      });
-      return;
-    }
-    if (isAdmin && d.id !== "agm-notice-synthetic") {
-      adminDownload.mutate({ eventId, documentId: d.id });
-      return;
-    }
-
-    // The synthetic AGM notice has no persisted document ID, so it cannot use
-    // a counted document endpoint until the backend registers it as a document.
+    // Prefer the pre-signed OBS/Cloudinary URL on the row for EVERY role. OBS serves it
+    // with `Content-Disposition: attachment`, so opening it downloads the file — the same
+    // approach that already works on the global Documents page. This deliberately avoids
+    // the counted `/client/documents/{id}/download` endpoint, whose cross-origin redirect
+    // to OBS an XHR blob read cannot follow without bucket CORS — that was the client-admin
+    // "Download failed" toast.
     const directUrl = d.fileUrl ?? d.downloadUrl;
     if (directUrl) {
-      // Cross-origin pre-signed OBS URL: `download` is ignored cross-origin and,
-      // with target="_blank", aborts the request — drop it and rely on OBS's
-      // `Content-Disposition: attachment`. Anchor must be in the DOM to click.
+      // `download` attr is dropped: ignored for cross-origin hrefs and, with
+      // target="_blank", it aborts the request. Anchor must be in the DOM to click.
       const a = document.createElement("a");
       a.href = directUrl;
       a.target = "_blank";
@@ -240,7 +230,26 @@ export function EventDocumentsTab({ eventId, agmNoticeUrl, isAdmin = false, read
       a.remove();
       return;
     }
-    toast.info("No download URL available for this document.");
+
+    // The synthetic AGM notice never has a persisted id — and if it reached here it has
+    // no URL either, so there is nothing more to try.
+    if (d.id === "agm-notice-synthetic" || !d.id) {
+      toast.info("No download URL available for this document.");
+      return;
+    }
+
+    // Fallback (row carried no URL): go through the role-appropriate endpoint. The admin
+    // mutation fetches the document detail to resolve a fileUrl; the client mutation hits
+    // the counted endpoint.
+    if (isAdmin) {
+      adminDownload.mutate({ eventId, documentId: d.id });
+    } else {
+      clientDownload.mutate({
+        eventId,
+        documentId: d.id,
+        filename: d.originalFilename || d.title || `document-${d.id}`,
+      });
+    }
   }
 
   function confirmDeleteDocument(d: any) {
