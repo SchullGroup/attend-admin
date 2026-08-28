@@ -523,25 +523,89 @@ export function useDeleteEventDocument() {
   });
 }
 
-/** Download through the counted client document endpoint and save the returned file. */
+/**
+ * Download an event document, CORS-safely.
+ *
+ * The per-event documents LIST omits `fileUrl`, so callers reach this hook only for
+ * rows with no direct URL. Rather than XHR-read the counted
+ * `/client/documents/{id}/download` endpoint — which 302-redirects to a pre-signed
+ * Huawei OBS URL that a cross-origin blob read can't follow (the bucket sends no
+ * `Access-Control-Allow-Origin`, so the browser blocks the 200 response) — first
+ * fetch the SINGLE-document detail. That payload carries the pre-signed `fileUrl`
+ * (or legacy base64 `fileData`), exactly like the admin download and the global
+ * Documents page. Opening `fileUrl` is a top-level anchor navigation, which is not
+ * subject to OBS CORS, and OBS's `Content-Disposition: attachment` triggers the save.
+ *
+ * The counted blob endpoint is kept as a fallback: if a given API version doesn't
+ * expose the single-doc detail (404) or omits both url and data, we degrade to the
+ * previous behaviour rather than regress.
+ */
 export function useDownloadEventDocument() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ eventId, documentId, filename }: { eventId: string; documentId: string; filename?: string }) => {
-      const res = await apiClient.get<Blob>(
+      const fallbackName = filename || `document-${documentId}`;
+
+      // Preferred: resolve a direct URL / base64 from the single-document detail.
+      try {
+        const res = await apiClient.get<ApiResponse<DocumentItem>>(
+          `/api/v1/client/events/${eventId}/documents/${documentId}`
+        );
+        const doc = (res.data?.data ?? (res.data as any)) as DocumentItem;
+        const directUrl = doc?.fileUrl ?? doc?.downloadUrl;
+        if (directUrl) return { kind: "url" as const, url: directUrl, eventId };
+        if (doc?.fileData) {
+          return {
+            kind: "base64" as const,
+            base64: doc.fileData,
+            mimeType: doc.mimeType,
+            filename: doc.originalFilename || doc.title || fallbackName,
+            eventId,
+          };
+        }
+      } catch {
+        /* endpoint absent on this API version — fall through to the counted blob path */
+      }
+
+      // Fallback: counted blob endpoint (works if OBS CORS is enabled or the backend
+      // proxies the bytes itself instead of redirecting).
+      const blobRes = await apiClient.get<Blob>(
         `/api/v1/client/documents/${documentId}/download`,
         { responseType: "blob" }
       );
-      return { blob: res.data, eventId, filename: filename || `document-${documentId}` };
+      return { kind: "blob" as const, blob: blobRes.data, filename: fallbackName, eventId };
     },
-    onSuccess: ({ blob, eventId, filename }) => {
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
-      a.href     = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-      queryClient.invalidateQueries({ queryKey: clientEventKeys.documents(eventId) });
+    onSuccess: (result) => {
+      if (result.kind === "url") {
+        // `download` attr is dropped: ignored for cross-origin hrefs and, with
+        // target="_blank", it aborts the request. Anchor must be in the DOM to click.
+        const a = document.createElement("a");
+        a.href = result.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } else if (result.kind === "base64") {
+        const byteChars = atob(result.base64);
+        const bytes = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+        const blob = new Blob([bytes], { type: result.mimeType || "application/octet-stream" });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement("a");
+        a.href = url;
+        a.download = result.filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5_000);
+      } else {
+        const url  = URL.createObjectURL(result.blob);
+        const a    = document.createElement("a");
+        a.href = url;
+        a.download = result.filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      queryClient.invalidateQueries({ queryKey: clientEventKeys.documents(result.eventId) });
     },
     onError: (error: any) => parseAndToastApiError(error, "Download failed."),
   });
