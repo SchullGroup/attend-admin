@@ -41,6 +41,7 @@ import {
   type WinnerAnnouncement,
 } from "@/api/client-challenges";
 import { AssignmentsSection } from "../components/AssignmentsSection";
+import { TabHint } from "../components/ChallengeGuide";
 import { ResourcesTab } from "./ResourcesTab";
 import {
   useAdminChallengeDetail,
@@ -2334,12 +2335,41 @@ export default function ChallengeDetailPage({
       {isSuperAdmin && tab === "Judges"      && <AdminJudgesTab       challengeId={challengeId} />}
       {isSuperAdmin && tab === "Resources"   && <ResourcesTab challengeId={challengeId} readOnly isSuperAdmin />}
 
-      {/* Tab panels — client admin */}
-      {!isSuperAdmin && tab === "Overview"     && <OverviewTab     challengeId={challengeId} readOnly={isViewer} />}
-      {!isSuperAdmin && tab === "Applications" && <ApplicationsTab challengeId={challengeId} readOnly={isViewer} />}
+      {/* Tab panels — client admin. Non-viewer client admins get a one-line
+          "what to do next" hint above each actionable tab. */}
+      {!isSuperAdmin && tab === "Overview" && (
+        <div className="flex flex-col gap-4">
+          {!isViewer && (
+            <TabHint>open applications so teams can apply, then review them on the Applications tab.</TabHint>
+          )}
+          <OverviewTab challengeId={challengeId} readOnly={isViewer} />
+        </div>
+      )}
+      {!isSuperAdmin && tab === "Applications" && (
+        <div className="flex flex-col gap-4">
+          {!isViewer && (
+            <TabHint>move promising teams to Shortlisted, then open Scoring on the Judges tab.</TabHint>
+          )}
+          <ApplicationsTab challengeId={challengeId} readOnly={isViewer} />
+        </div>
+      )}
       {!isSuperAdmin && tab === "Leaderboard"  && <LeaderboardTab  challengeId={challengeId} />}
-      {!isSuperAdmin && tab === "Winners"      && <WinnersTab      challengeId={challengeId} readOnly={isViewer} />}
-      {!isSuperAdmin && tab === "Judges"       && <JudgesTab       challengeId={challengeId} readOnly={isViewer} />}
+      {!isSuperAdmin && tab === "Winners" && (
+        <div className="flex flex-col gap-4">
+          {!isViewer && (
+            <TabHint label="Note">you can announce winners once the challenge has ended and every shortlisted team is scored.</TabHint>
+          )}
+          <WinnersTab challengeId={challengeId} readOnly={isViewer} />
+        </div>
+      )}
+      {!isSuperAdmin && tab === "Judges" && (
+        <div className="flex flex-col gap-4">
+          {!isViewer && (
+            <TabHint>add judges from your org, then turn Scoring On so they can score shortlisted teams.</TabHint>
+          )}
+          <JudgesTab challengeId={challengeId} readOnly={isViewer} />
+        </div>
+      )}
       {!isSuperAdmin && tab === "Resources"    && <ResourcesTab    challengeId={challengeId} readOnly={isViewer} isSuperAdmin={false} />}
       {!isSuperAdmin && !isViewer && tab === "Settings" && <SettingsTab challengeId={challengeId} />}
     </div>

@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
+import { ChallengeGuidePanel } from "./components/ChallengeGuide";
 import type { RegisterBranding } from "@/types/super-admin";
 
 const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
@@ -296,6 +297,10 @@ export default function HackathonsPage() {
           </div>
         </div>
       </div>
+
+      {/* How-it-works walkthrough — client users only (super admin observes,
+          doesn't run challenges). Forced open when there are no challenges yet. */}
+      {!isSuperAdmin && <ChallengeGuidePanel alwaysShow={challenges.length === 0} />}
 
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
