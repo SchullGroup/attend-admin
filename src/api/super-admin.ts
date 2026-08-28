@@ -1299,3 +1299,76 @@ export function useDeclineKyc() {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// QA / load-test account seeding (backend "item 81") — SUPER_ADMIN only.
+//
+// Seeds verified, login-ready, AGM-eligible fake ATTENDEE accounts (and matching
+// ACTIVE shareholder rows when a registerId is supplied) so QA can stress-test
+// login, AGM join, and voting. Non-production only: the backend guards these
+// endpoints behind `app.test-seeding.enabled` (default false) + a profile
+// allowlist, so they return 404 when disabled and 403 for non-SUPER_ADMIN callers.
+//
+// Generated emails use the RFC-2606 reserved domain: {emailPrefix}+{n}@example.com.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SeedTestUsersRequest {
+  /** How many accounts to create (required). */
+  count: number;
+  /** Register that owns the AGM. Omit → users-only (can log in, cannot join an AGM). */
+  registerId?: string;
+  /** Local-part prefix for generated emails. Server default is "loadtest". */
+  emailPrefix?: string;
+  /** Shared password for every seeded account. Server default if omitted. */
+  password?: string;
+  /** Share units (vote weight) written onto each seeded shareholder row. */
+  units?: number;
+}
+
+/**
+ * Response shape is intentionally loose: the backend handoff doc pins the
+ * request fields but not the exact response keys, so the UI reads several
+ * likely shapes and always surfaces the raw payload too.
+ */
+export interface SeedTestUsersResponse {
+  password?: string;
+  sampleEmails?: string[];
+  emailPattern?: string;
+  shareholderRowsCreated?: boolean;
+  [k: string]: any;
+}
+
+/** POST /api/v1/admin/test-users/seed — idempotent (existing emails are skipped). */
+export function useSeedTestUsers() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: SeedTestUsersRequest) => {
+      const res = await apiClient.post<ApiResponse<SeedTestUsersResponse>>(
+        "/api/v1/admin/test-users/seed",
+        payload,
+      );
+      return (res.data?.data ?? res.data) as SeedTestUsersResponse;
+    },
+    // Seeded accounts show up in the All Users list; refresh it. Success/error
+    // messaging and result display are owned by the page (it needs the payload).
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+}
+
+/** DELETE /api/v1/admin/test-users/purge?emailPrefix=loadtest */
+export function usePurgeTestUsers() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (emailPrefix: string) => {
+      const res = await apiClient.delete<ApiResponse<any>>(
+        `/api/v1/admin/test-users/purge?emailPrefix=${encodeURIComponent(emailPrefix)}`,
+      );
+      return res.data?.data ?? res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+}
+
