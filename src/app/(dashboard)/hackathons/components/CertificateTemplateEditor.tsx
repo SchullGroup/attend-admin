@@ -42,6 +42,7 @@ interface Draft {
   templateId?:          string;
   name:                 string;
   artworkUrl:           string;
+  artworkPreviewUrl?:   string; // signed, display-only (see certificate-templates.ts); never saved
   artworkPublicId?:     string;
   artworkResourceType?: string;
   active:               boolean;
@@ -56,6 +57,7 @@ function draftFromTemplate(t: CertificateTemplate | null | undefined): Draft {
     templateId:          t.id || undefined,
     name:                t.name ?? "",
     artworkUrl:          t.artworkUrl ?? "",
+    artworkPreviewUrl:   t.artworkPreviewUrl,
     artworkPublicId:     t.artworkPublicId,
     artworkResourceType: t.artworkResourceType,
     active:              t.active ?? true,
@@ -437,7 +439,7 @@ export function CertificateTemplateEditor({ challengeId, readOnly }: { challenge
   useEffect(() => () => { if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current); }, []);
   // A new source (freshly uploaded, or re-seeded from the saved template) gets a
   // fresh chance to load before we show the failed state.
-  useEffect(() => { setPreviewFailed(false); }, [draft.artworkUrl, localPreview]);
+  useEffect(() => { setPreviewFailed(false); }, [draft.artworkUrl, draft.artworkPreviewUrl, localPreview]);
 
   // Seed the draft from the loaded event template exactly once (don't clobber
   // in-progress edits when the query refetches).
@@ -455,12 +457,15 @@ export function CertificateTemplateEditor({ challengeId, readOnly }: { challenge
     [draft.artworkUrl, draft.artworkResourceType]
   );
 
-  // What the canvas actually renders: the instant on-device blob if we have one,
-  // otherwise the stored URL resolved against the API host (relative paths would
-  // otherwise 404 against the dashboard origin).
+  // What the canvas actually renders, in priority order:
+  //   1. the instant on-device blob of a just-picked image;
+  //   2. the backend's signed `artworkPreviewUrl` — the OBS bucket is private, so
+  //      the canonical artworkUrl 403s in an <img>; this signed variant loads;
+  //   3. the canonical artworkUrl resolved against the API host, as a last resort
+  //      (works only if the object is publicly readable).
   const artworkSrc = useMemo(
-    () => localPreview || resolveArtworkUrl(draft.artworkUrl),
-    [localPreview, draft.artworkUrl]
+    () => localPreview || draft.artworkPreviewUrl || resolveArtworkUrl(draft.artworkUrl),
+    [localPreview, draft.artworkPreviewUrl, draft.artworkUrl]
   );
 
   const usedKeys = useMemo(() => new Set(draft.fields.map((f) => f.key)), [draft.fields]);
@@ -529,6 +534,7 @@ export function CertificateTemplateEditor({ challengeId, readOnly }: { challenge
       setDraft((d) => ({
         ...d,
         artworkUrl:          result.fileUrl,
+        artworkPreviewUrl:   result.previewUrl || undefined,
         artworkPublicId:     result.cloudinaryPublicId,
         artworkResourceType: result.resourceType,
         name: d.name || file.name.replace(/\.[^.]+$/, ""),
@@ -685,7 +691,7 @@ export function CertificateTemplateEditor({ challengeId, readOnly }: { challenge
                   <ImageOff className="h-8 w-8 text-[hsl(var(--muted-foreground))]" />
                   <p className="text-xs font-medium text-[hsl(var(--foreground))]">Artwork preview couldn’t load</p>
                   <p className="text-[11px] text-[hsl(var(--muted-foreground))] max-w-xs">
-                    The uploaded file isn’t loading from storage. You can still position fields, but re-uploading is recommended — if it won’t display here it may not render onto the certificate either.
+                    The artwork is stored privately, so it can’t always be shown here — but it’s saved, and the server renders it onto the issued certificate. You can still position fields. Re-upload only if you want to change the design.
                   </p>
                 </div>
               )}

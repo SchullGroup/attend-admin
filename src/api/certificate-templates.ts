@@ -68,13 +68,17 @@ export type TemplateFieldAlign = "LEFT" | "CENTER" | "RIGHT";
 export const TEMPLATE_ALIGNS: TemplateFieldAlign[] = ["LEFT", "CENTER", "RIGHT"];
 
 // The renderer embeds from a small set of faces (see cert.md §2). The backend is
-// authoritative; these are the styles the handoff names/implies. `fontStyle` is
-// optional — omit it and the renderer uses its own default for the field.
+// authoritative — and as of 2026-08-29 its `fontStyle` enum only defines the BODY
+// family. `HEADING` / `HEADING_BOLD`, which cert.md implied, are NOT defined
+// server-side: sending either makes the WHOLE save fail with a 400 "Request body
+// is missing or malformed" (one unknown enum token aborts Jackson's parse). Proven
+// by Postman isolation — see BACKEND_CERT_TEMPLATE_SAVE_400_2026-08-29.md. So we
+// only offer what actually saves; re-add the heading styles here once the backend
+// enum gains them. `fontStyle` is optional — omit it and the renderer uses its own
+// default for the field.
 export const TEMPLATE_FONT_STYLES = [
   "BODY",
   "BODY_BOLD",
-  "HEADING",
-  "HEADING_BOLD",
 ] as const;
 export type TemplateFontStyle = (typeof TEMPLATE_FONT_STYLES)[number];
 
@@ -106,6 +110,13 @@ export interface CertificateTemplate {
   name:                 string;
   scope?:               CertificateTemplateScope;
   artworkUrl:           string;
+  /**
+   * A short-lived PRE-SIGNED URL for the same artwork, for DISPLAY only. The OBS
+   * bucket is private, so the canonical `artworkUrl` 403s in an `<img>`; the
+   * backend returns this signed variant (AccessKeyId/Expires/Signature, ~1h TTL)
+   * that actually loads. Never persist it — it expires. Save `artworkUrl`.
+   */
+  artworkPreviewUrl?:   string;
   artworkPublicId?:     string;
   artworkResourceType?: string;
   active:               boolean;
@@ -157,6 +168,8 @@ function parseTemplate(raw: any): CertificateTemplate | null {
     name:                raw.name ?? "",
     scope:               (raw.scope ?? undefined) as CertificateTemplateScope | undefined,
     artworkUrl,
+    // Display-only signed URL — the private bucket 403s the canonical artworkUrl in an <img>.
+    artworkPreviewUrl:   raw.artworkPreviewUrl ?? raw.artwork_preview_url ?? undefined,
     artworkPublicId:     raw.artworkPublicId ?? raw.artwork_public_id ?? undefined,
     artworkResourceType: raw.artworkResourceType ?? raw.artwork_resource_type ?? undefined,
     active:              raw.active ?? true,
@@ -353,7 +366,10 @@ export function useDeleteCertificateTemplate() {
  *
  * Unlike the shared logo uploader, this KEEPS `resourceType` — the template POST
  * needs `artworkResourceType`. Persist `fileUrl` (never `previewUrl`, which is a
- * short-lived signed link that would expire out from under the template).
+ * short-lived signed link that would expire out from under the template) — but we
+ * DO return `previewUrl` for immediate DISPLAY: the bucket is private, so the
+ * canonical `fileUrl` 403s in an `<img>`, and `previewUrl` is the signed URL that
+ * actually loads. Show `previewUrl`, save `fileUrl`.
  */
 export function useUploadCertificateArtwork() {
   return useMutation({
@@ -383,6 +399,9 @@ export function useUploadCertificateArtwork() {
         // shape the rest of the app already handles, else a PDF "uploads to
         // nowhere" (fileUrl === "" → the caller silently no-ops).
         fileUrl:            d["fileUrl"] ?? d["secure_url"] ?? d["url"] ?? d["downloadUrl"] ?? "",
+        // Signed, short-lived URL for showing the just-uploaded artwork. Display
+        // only — never saved (see the note above). Empty string if not provided.
+        previewUrl:         d["previewUrl"] ?? d["preview_url"] ?? "",
         cloudinaryPublicId: d["cloudinaryPublicId"] ?? d["public_id"] ?? "",
         resourceType:       d["resourceType"] ?? d["resource_type"] ?? "",
       };

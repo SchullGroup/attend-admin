@@ -1359,6 +1359,14 @@ export function useChallengeParticipationPreview(challengeId: string, opts?: { e
  * (the preview is never submitted back). Idempotent via Idempotency-Key AND at
  * the data layer — members who already hold a certificate are skipped, never
  * sent a second one. Returns 202 + a run job (same shape as winner announce).
+ *
+ * Body — delivery intent. An empty `{}` body 400s with "Request body is missing
+ * or malformed" (2026-08-29): this endpoint mirrors challenge-winners/announce,
+ * whose request DTO carries the delivery flags, and Jackson can't bind the
+ * required fields from `{}`. Unlike winners there is NO organiser `message` (the
+ * participation email is a fixed server-side thank-you) and NO `applicationIds`
+ * (recipients are recomputed on the server), so we send only the two channel
+ * flags. See BACKEND_CERT_PARTICIPATION_ISSUE_400_2026-08-29.md.
  */
 export function useIssueChallengeParticipation() {
   const queryClient = useQueryClient();
@@ -1366,13 +1374,17 @@ export function useIssueChallengeParticipation() {
     mutationFn: async ({
       challengeId,
       idempotencyKey,
+      sendEmail = true,
+      sendInApp = true,
     }: {
       challengeId:    string;
       idempotencyKey: string;
+      sendEmail?:     boolean;
+      sendInApp?:     boolean;
     }) => {
       const res = await apiClient.post<ApiResponse<ParticipationRun>>(
         `/api/v1/client/events/${challengeId}/challenge-participation/issue`,
-        {},
+        { sendEmail, sendInApp },
         { headers: { "Idempotency-Key": idempotencyKey } }
       );
       return parseWinnerAnnouncement(res.data.data ?? res.data, challengeId);
