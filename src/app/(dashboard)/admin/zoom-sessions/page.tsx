@@ -7,13 +7,13 @@ import {
   Radio,
   AlertTriangle,
   Server,
-  Users,
   CheckCircle2,
   Trash2,
   Plus,
   Loader2,
   Info,
   ExternalLink,
+  Code2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -34,6 +34,7 @@ import { useEvents } from "@/api/super-admin";
 import {
   useAdminZoomSessions,
   useReleaseZoomSession,
+  useReleaseZoomSessionsBulk,
   useAssignZoomSession,
   type ZoomSessionRow,
 } from "@/api/admin-zoom-sessions";
@@ -55,11 +56,16 @@ export default function ZoomSessionsPage() {
   // Event picker for manual assignment — only VIRTUAL/HYBRID events consume a host.
   const { data: eventsPage } = useEvents("", 0, 100, isSuperAdmin);
   const releaseMutation = useReleaseZoomSession();
+  const bulkReleaseMutation = useReleaseZoomSessionsBulk();
   const assignMutation = useAssignZoomSession();
 
   // ── Assign form state ───────────────────────────────────────────────────────
   const [assignEventId, setAssignEventId] = useState<string>("");
   const [assignDuration, setAssignDuration] = useState("120");
+
+  // ── Bulk-selection + diagnostics state ──────────────────────────────────────
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [showRaw, setShowRaw] = useState(false);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
   function handleRelease(row: ZoomSessionRow) {
@@ -70,9 +76,52 @@ export default function ZoomSessionsPage() {
         it. Anyone currently connected to that meeting will be <b>disconnected</b>. Only release a
         slot that is stranded or no longer needed.
       </span>,
-      () => releaseMutation.mutate({ eventId: row.eventId }),
+      () =>
+        releaseMutation.mutate(
+          { eventId: row.eventId },
+          {
+            onSuccess: () =>
+              setSelected((prev) => {
+                const next = new Set(prev);
+                next.delete(row.eventId);
+                return next;
+              }),
+          },
+        ),
       undefined,
       "Release slot",
+    );
+  }
+
+  function toggleRow(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // Confirm-guarded release of many slots at once (selection or all-stranded).
+  function handleReleaseMany(ids: string[]) {
+    if (ids.length === 0) {
+      popup.error("Nothing selected", "Tick one or more held slots to release them.");
+      return;
+    }
+    popup.confirm(
+      `Release ${ids.length} Zoom slot${ids.length === 1 ? "" : "s"}?`,
+      <span>
+        This frees <b>{ids.length}</b> pooled host slot{ids.length === 1 ? "" : "s"} so other events
+        can use them. Anyone still connected to those meetings will be <b>disconnected</b>. Release
+        only slots that are stranded or no longer needed.
+      </span>,
+      () =>
+        bulkReleaseMutation.mutate(
+          { eventIds: ids },
+          { onSuccess: () => setSelected(new Set()) },
+        ),
+      undefined,
+      "Release slots",
     );
   }
 
@@ -115,9 +164,19 @@ export default function ZoomSessionsPage() {
     slotsFree: null,
     strandedSlots: null,
   };
+  const capacityReported = sessionsData?.capacityReported ?? false;
+  const rawPayload = sessionsData?.raw ?? null;
   const assignableEvents = (eventsPage?.content ?? []).filter((e) => e.format !== "IN_PERSON");
   const releasing = releaseMutation.isPending;
+  const bulkReleasing = bulkReleaseMutation.isPending;
   const assigning = assignMutation.isPending;
+  const anyBusy = releasing || bulkReleasing;
+
+  // Selection / stranded bookkeeping for the bulk-release actions.
+  const strandedIds = sessions.filter((s) => s.stranded).map((s) => s.eventId);
+  const selectedIds = sessions.filter((s) => selected.has(s.eventId)).map((s) => s.eventId);
+  const allVisibleSelected = sessions.length > 0 && sessions.every((s) => selected.has(s.eventId));
+  const someVisibleSelected = sessions.some((s) => selected.has(s.eventId));
 
   const fmtNum = (n: number | null) => (n == null ? "—" : n.toLocaleString());
 
@@ -188,17 +247,22 @@ export default function ZoomSessionsPage() {
               icon={<Server className="h-4 w-4" />}
               label="Total capacity"
               value={fmtNum(totals.totalCapacity)}
+              note={totals.totalCapacity == null ? "Not reported by backend" : undefined}
             />
             <StatCard
               icon={<Radio className="h-4 w-4" />}
               label="Slots in use"
               value={fmtNum(totals.slotsInUse)}
+              note={!capacityReported ? "Derived from held slots" : undefined}
             />
             <StatCard
               icon={<CheckCircle2 className="h-4 w-4" />}
               label="Slots free"
               value={fmtNum(totals.slotsFree)}
-              tone={totals.slotsFree === 0 ? "danger" : "ok"}
+              tone={
+                totals.slotsFree == null ? "muted" : totals.slotsFree === 0 ? "danger" : "ok"
+              }
+              note={totals.slotsFree == null ? "Needs capacity from backend" : undefined}
             />
             <StatCard
               icon={<AlertTriangle className="h-4 w-4" />}
@@ -270,7 +334,7 @@ export default function ZoomSessionsPage() {
 
           {/* Sessions table */}
           <Card className="attend-card p-0 overflow-hidden">
-            <div className="flex items-center justify-between gap-2 px-6 py-4 border-b border-[hsl(var(--border))]">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4 border-b border-[hsl(var(--border))]">
               <div className="flex items-center gap-2">
                 <Radio className="h-4 w-4 text-[hsl(var(--primary))]" />
                 <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">
@@ -280,6 +344,42 @@ export default function ZoomSessionsPage() {
                   </span>
                 </h2>
               </div>
+              {sessions.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {selectedIds.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleReleaseMany(selectedIds)}
+                      disabled={anyBusy}
+                      className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                    >
+                      {bulkReleasing ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                      Release selected ({selectedIds.length})
+                    </Button>
+                  )}
+                  {strandedIds.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleReleaseMany(strandedIds)}
+                      disabled={anyBusy}
+                      className="gap-1.5 text-amber-700 border-amber-300 hover:bg-amber-50 hover:text-amber-800"
+                    >
+                      {bulkReleasing ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                      )}
+                      Release all stranded ({strandedIds.length})
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
 
             {sessionsLoading ? (
@@ -303,7 +403,25 @@ export default function ZoomSessionsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs font-medium text-[hsl(var(--muted-foreground))] border-b border-[hsl(var(--border))]">
-                      <th className="px-6 py-3">Event</th>
+                      <th className="w-10 pl-6 pr-2 py-3">
+                        <input
+                          type="checkbox"
+                          aria-label="Select all held slots"
+                          className="h-4 w-4 rounded border-[hsl(var(--border))] accent-[hsl(var(--primary))] align-middle cursor-pointer"
+                          checked={allVisibleSelected}
+                          ref={(el) => {
+                            if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected;
+                          }}
+                          onChange={() =>
+                            setSelected(
+                              allVisibleSelected
+                                ? new Set()
+                                : new Set(sessions.map((s) => s.eventId)),
+                            )
+                          }
+                        />
+                      </th>
+                      <th className="px-4 py-3">Event</th>
                       <th className="px-4 py-3">Organizer</th>
                       <th className="px-4 py-3">Host account</th>
                       <th className="px-4 py-3">Meeting</th>
@@ -312,82 +430,100 @@ export default function ZoomSessionsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sessions.map((row) => (
-                      <tr
-                        key={row.eventId}
-                        className={`border-b border-[hsl(var(--border))] last:border-0 ${
-                          row.stranded ? "bg-amber-50/50" : ""
-                        }`}
-                      >
-                        <td className="px-6 py-3">
-                          <div className="font-medium text-[hsl(var(--foreground))]">
-                            {row.eventTitle}
-                          </div>
-                          {row.eventStatus && (
-                            <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                              {row.eventStatus}
+                    {sessions.map((row) => {
+                      const isSel = selected.has(row.eventId);
+                      return (
+                        <tr
+                          key={row.eventId}
+                          className={`border-b border-[hsl(var(--border))] last:border-0 ${
+                            isSel
+                              ? "bg-[hsl(var(--primary)/0.04)]"
+                              : row.stranded
+                                ? "bg-amber-50/50"
+                                : ""
+                          }`}
+                        >
+                          <td className="w-10 pl-6 pr-2 py-3">
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${row.eventTitle}`}
+                              className="h-4 w-4 rounded border-[hsl(var(--border))] accent-[hsl(var(--primary))] align-middle cursor-pointer"
+                              checked={isSel}
+                              onChange={() => toggleRow(row.eventId)}
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-[hsl(var(--foreground))]">
+                              {row.eventTitle}
                             </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
-                          <div>{row.orgName ?? "—"}</div>
-                          {row.registrarName && (
-                            <div className="text-xs mt-0.5">{row.registrarName}</div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
-                          {row.pooledAccount ? (
-                            <code className="text-xs break-all">{row.pooledAccount}</code>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
-                          {row.joinUrl ? (
-                            <a
-                              href={row.joinUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[hsl(var(--primary))] hover:underline"
+                            {row.eventStatus && (
+                              <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                                {row.eventStatus}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
+                            <div>{row.orgName ?? "—"}</div>
+                            {row.registrarName && (
+                              <div className="text-xs mt-0.5">{row.registrarName}</div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
+                            {row.pooledAccount ? (
+                              <code className="text-xs break-all">{row.pooledAccount}</code>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
+                            {row.joinUrl ? (
+                              <a
+                                href={row.joinUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[hsl(var(--primary))] hover:underline"
+                              >
+                                Join <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ) : row.meetingId ? (
+                              <code className="text-xs">{String(row.meetingId)}</code>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-1.5">
+                              {row.live && (
+                                <span className="inline-flex items-center gap-1 text-xs font-medium rounded-full px-2 py-0.5 bg-green-50 text-green-700">
+                                  <Radio className="h-3 w-3" /> Live
+                                </span>
+                              )}
+                              {row.stranded && (
+                                <span className="inline-flex items-center gap-1 text-xs font-medium rounded-full px-2 py-0.5 bg-amber-100 text-amber-800">
+                                  <AlertTriangle className="h-3 w-3" /> Stranded
+                                </span>
+                              )}
+                              {!row.live && !row.stranded && (
+                                <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                                  Held
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-3 text-right">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRelease(row)}
+                              disabled={anyBusy}
+                              className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
                             >
-                              Join <ExternalLink className="h-3 w-3" />
-                            </a>
-                          ) : row.meetingId ? (
-                            <code className="text-xs">{String(row.meetingId)}</code>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-1.5">
-                            {row.live && (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium rounded-full px-2 py-0.5 bg-green-50 text-green-700">
-                                <Radio className="h-3 w-3" /> Live
-                              </span>
-                            )}
-                            {row.stranded && (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium rounded-full px-2 py-0.5 bg-amber-100 text-amber-800">
-                                <AlertTriangle className="h-3 w-3" /> Stranded
-                              </span>
-                            )}
-                            {!row.live && !row.stranded && (
-                              <span className="text-xs text-[hsl(var(--muted-foreground))]">Held</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-3 text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleRelease(row)}
-                            disabled={releasing}
-                            className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Release
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+                              <Trash2 className="h-3.5 w-3.5" /> Release
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -399,10 +535,29 @@ export default function ZoomSessionsPage() {
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600" />
               <span>
                 <b>{totals.strandedSlots}</b> slot(s) are stranded — still held by events that have
-                ended or been cancelled. Release them to free capacity for live events.
+                ended or been cancelled. Use <b>Release all stranded</b> above to free capacity for
+                live events in one click.
               </span>
             </div>
           )}
+
+          {/* Super-admin diagnostic — the exact backend payload. Handy when totals read "—":
+              it shows whether the backend actually returned pool capacity or the FE derived it. */}
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => setShowRaw((v) => !v)}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+            >
+              <Code2 className="h-3.5 w-3.5" />
+              {showRaw ? "Hide" : "Show"} raw response
+            </button>
+            {showRaw && (
+              <pre className="mt-2 max-h-96 overflow-auto rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3 text-xs leading-relaxed text-[hsl(var(--foreground))]">
+                {JSON.stringify(rawPayload, null, 2)}
+              </pre>
+            )}
+          </div>
         </>
       )}
     </div>
@@ -415,11 +570,13 @@ function StatCard({
   label,
   value,
   tone = "muted",
+  note,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   tone?: "muted" | "ok" | "warn" | "danger";
+  note?: string;
 }) {
   const toneCls =
     tone === "danger"
@@ -436,6 +593,11 @@ function StatCard({
         {label}
       </div>
       <div className={`text-2xl font-bold mt-1 ${toneCls}`}>{value}</div>
+      {note && (
+        <div className="mt-0.5 text-[11px] leading-tight text-[hsl(var(--muted-foreground))]">
+          {note}
+        </div>
+      )}
     </Card>
   );
 }

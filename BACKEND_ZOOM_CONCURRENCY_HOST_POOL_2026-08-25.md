@@ -173,3 +173,41 @@ Today the create flow still sends **`enableZoomMeeting` + `zoomDurationMinutes`*
 
 Every Join/preview surface already guards a null/empty `streamUrl` (`StreamPreviewCard` renders a placeholder state; `EventOverviewTab` gates the stream block on `event.streamUrl`). No work needed.
 
+---
+
+## 10. Endpoints are LIVE — two gaps to close — 2026-08-30
+
+The three `/api/v1/admin/zoom-sessions` endpoints from §9.2 are **now deployed** — the super-admin page lit up automatically (zero further FE work, exactly as designed). It's showing **real data**: 69 held slots, 46 of them flagged **stranded**. Two things are still needed from the backend.
+
+### 10.1 GET returns `sessions` but no pool `totals` → capacity/free read "—"
+
+`GET /api/v1/admin/zoom-sessions` returns the `sessions` array but **no `totals` object** (nor a per-host `hosts` list). So the FE can only *derive* what the rows imply:
+
+| Card | Value now | Where it comes from |
+|---|---|---|
+| Slots in use | **69** | `sessions.length` (derived — labelled "Derived from held slots") |
+| Stranded | **46** | count of rows with `stranded: true` |
+| Total capacity | **—** | *unknown* — the pool ceiling isn't in the payload |
+| Slots free | **—** | *can't compute* without capacity (`capacity − inUse`) |
+
+The FE looks for capacity under many keys (`totals.totalCapacity/capacity/poolCapacity/maxConcurrent/totalSlots/total/max`, a `summary`/`pool`/`stats`/`capacity` wrapper, or a per-host `hosts[]` array it can sum) before giving up — none are present, hence the "—" and the "Not reported by backend" hint under the card. (A super-admin **"Show raw response"** toggle on the page dumps the exact payload for confirmation.)
+
+**Ask:** include pool totals on the GET so the ceiling is real, not inferred. Either shape works:
+```jsonc
+// preferred — an explicit totals object
+"totals": { "totalCapacity": 4, "slotsInUse": 2, "slotsFree": 2, "strandedSlots": 1 }
+// OR — a per-host list the FE will sum (capacity defaults to 2/host if omitted)
+"hosts": [ { "email": "host@…", "capacity": 2, "activeCount": 1 }, … ]
+```
+`totalCapacity` is the important one — everything else the FE can still derive. Note the **69 in-use vs 46 stranded** strongly suggests the pool is badly over-subscribed / leaking slots; a real `totalCapacity` is what will make that legible (e.g. "2 of 4 free" vs. today's ambiguous "69 in use").
+
+### 10.2 No bulk-release endpoint → FE fans out individual DELETEs
+
+There are **46 stranded slots** to clear and no batch endpoint, so the new **"Release selected (N)"** / **"Release all stranded (N)"** actions currently loop `DELETE /api/v1/admin/zoom-sessions/{eventId}` client-side in batches of 5 (`Promise.allSettled`, aggregated success/failure toast). It works, but it's 46 round-trips and a partial failure just asks the admin to retry.
+
+**Ask (nice-to-have):** a bulk endpoint, e.g. `POST /api/v1/admin/zoom-sessions/release` with `{ "eventIds": ["…","…"] }` (or `?stranded=true` to sweep all leaked slots server-side in one call). The FE will switch to it the moment it exists; until then the batched-DELETE fallback stays.
+
+### 10.3 Still open — create-event decoupling (§9.3 / §7a) unchanged
+
+Restated because it's the one item **not** resolved by the endpoints shipping: the live admin endpoints don't tell us whether **create-event still needs `enableZoomMeeting` + `zoomDurationMinutes`** (+ placeholder `streamUrl`). We will **not** remove those from `events/create/page.tsx` on a guess — dropping them before the pool owns the create-path would 400 VIRTUAL/HYBRID creation. **Trigger to remove them + make `streamUrl` optional: an explicit backend confirmation that create no longer requires them** (does the pool provision on create, or lazily assign on first launch?). Until we get that yes, no change.
+

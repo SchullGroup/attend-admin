@@ -59,6 +59,10 @@ export interface AdminZoomSessionsData {
   available: boolean;
   sessions:  ZoomSessionRow[];
   totals:    ZoomSessionTotals;
+  /** True when the backend actually reported pool capacity (vs. FE deriving in-use from rows). */
+  capacityReported: boolean;
+  /** The raw unwrapped payload, for the super-admin "show raw response" diagnostic. */
+  raw?: any;
 }
 
 export const adminZoomSessionKeys = {
@@ -109,20 +113,56 @@ function parseZoomSessions(payload: any): AdminZoomSessionsData {
   const rawRows: any[] =
     Array.isArray(p.sessions) ? p.sessions :
     Array.isArray(p.content)  ? p.content  :
+    Array.isArray(p.data)     ? p.data     :
     Array.isArray(p)          ? p          : [];
   const sessions = rawRows
     .map(parseZoomSessionRow)
     .filter((x): x is ZoomSessionRow => !!x);
 
-  const t = p.totals ?? p.summary ?? {};
-  const totalCapacity = numOrNull(t.totalCapacity ?? t.capacity ?? t.total);
+  // Pool totals can arrive under several shapes — a `totals`/`summary`/`pool`/`stats`
+  // object, or only implied by a per-host list. Look everywhere before giving up.
+  const t = p.totals ?? p.summary ?? p.pool ?? p.stats ?? p.capacity ?? {};
+  const hosts: any[] =
+    (Array.isArray(p.hosts) && p.hosts) ||
+    (Array.isArray(p.pool?.hosts) && p.pool.hosts) ||
+    (Array.isArray(t?.hosts) && t.hosts) ||
+    [];
+
+  // From a host list we can sum a real capacity/in-use even if no totals object exists.
+  const hostCapacity = hosts.length
+    ? hosts.reduce((sum, h) => sum + (numOrNull(h?.capacity ?? h?.maxConcurrent ?? h?.slots) ?? 2), 0)
+    : null;
+  const hostInUse = hosts.length
+    ? hosts.reduce((sum, h) => sum + (numOrNull(h?.activeCount ?? h?.active ?? h?.inUse ?? h?.used) ?? 0), 0)
+    : null;
+
+  const reportedCapacity = numOrNull(
+    t.totalCapacity ?? t.capacity ?? t.poolCapacity ?? t.maxConcurrent ?? t.totalSlots ?? t.total ?? t.max,
+  );
+  const totalCapacity = reportedCapacity ?? hostCapacity;
+
+  const reportedInUse = numOrNull(
+    t.slotsInUse ?? t.inUse ?? t.used ?? t.active ?? t.activeMeetings ?? t.usedSlots ?? t.occupied,
+  );
   // Derive from rows whatever the backend didn't spell out, so the summary is never blank.
-  const slotsInUse = numOrNull(t.slotsInUse ?? t.inUse ?? t.used) ?? sessions.length;
-  const strandedSlots = numOrNull(t.strandedSlots ?? t.stranded) ?? sessions.filter((s) => s.stranded).length;
-  const slotsFree = numOrNull(t.slotsFree ?? t.free ?? t.available) ??
+  const slotsInUse = reportedInUse ?? hostInUse ?? sessions.length;
+
+  const strandedSlots =
+    numOrNull(t.strandedSlots ?? t.stranded ?? t.leaked ?? t.orphaned) ??
+    sessions.filter((s) => s.stranded).length;
+
+  const slotsFree =
+    numOrNull(t.slotsFree ?? t.free ?? t.available ?? t.freeSlots ?? t.remaining) ??
     (totalCapacity != null ? Math.max(0, totalCapacity - slotsInUse) : null);
 
-  return { available: true, sessions, totals: { totalCapacity, slotsInUse, slotsFree, strandedSlots } };
+  return {
+    available: true,
+    sessions,
+    totals: { totalCapacity, slotsInUse, slotsFree, strandedSlots },
+    // "Reported" = the backend actually told us a ceiling (either directly or via hosts).
+    capacityReported: reportedCapacity != null || hostCapacity != null,
+    raw: p,
+  };
 }
 
 // --- reads ------------------------------------------------------------------
@@ -146,7 +186,7 @@ export function useAdminZoomSessions(enabled = true) {
       } catch (err: any) {
         const status = err?.response?.status;
         if (status === 404 || status === 501) {
-          return { available: false, sessions: [], totals: emptyTotals() };
+          return { available: false, sessions: [], totals: emptyTotals(), capacityReported: false, raw: null };
         }
         throw err;
       }
@@ -173,6 +213,47 @@ export function useReleaseZoomSession() {
       popup.success("Slot released", "The Zoom host slot was freed for reuse.", 3000);
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to release the Zoom session."),
+  });
+}
+
+/**
+ * Release many slots at once. The backend has no bulk endpoint yet (requested in the
+ * host-pool doc), so we fan out DELETEs in small batches to avoid hammering the API,
+ * then report a single aggregated result. Partial failures are surfaced, not swallowed.
+ */
+export function useReleaseZoomSessionsBulk() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventIds }: { eventIds: string[] }) => {
+      const ids = Array.from(new Set(eventIds.filter(Boolean)));
+      let released = 0;
+      const failed: string[] = [];
+      const BATCH = 5;
+      for (let i = 0; i < ids.length; i += BATCH) {
+        const batch = ids.slice(i, i + BATCH);
+        const results = await Promise.allSettled(
+          batch.map((id) => apiClient.delete<ApiResponse<any>>(`/api/v1/admin/zoom-sessions/${id}`)),
+        );
+        results.forEach((r, idx) => {
+          if (r.status === "fulfilled") released += 1;
+          else failed.push(batch[idx]);
+        });
+      }
+      return { released, failed, total: ids.length };
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: adminZoomSessionKeys.all });
+      if (res.failed.length === 0) {
+        popup.success("Slots released", `Freed ${res.released} Zoom host slot(s) for reuse.`, 3000);
+      } else {
+        popup.error(
+          "Some slots not released",
+          `Released ${res.released} of ${res.total}. ${res.failed.length} could not be released — refresh and try again.`,
+          6000,
+        );
+      }
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to release the selected Zoom sessions."),
   });
 }
 
