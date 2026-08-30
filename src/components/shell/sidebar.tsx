@@ -24,6 +24,7 @@ import {
   Users2,
   Bell,
   FlaskConical,
+  Video,
 } from "lucide-react";
 import { cn, resolveRole, isSuperAdminRole } from "@/lib/utils";
 import { useGetMe, useLogout } from "@/api/auth/hooks";
@@ -148,6 +149,13 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
+    label: "Operations",
+    superAdminOnly: true,
+    items: [
+      { title: "Zoom Sessions", icon: Video, href: "/admin/zoom-sessions" },
+    ],
+  },
+  {
     label: "QA Tools",
     superAdminOnly: true,
     items: [
@@ -175,6 +183,7 @@ const ALL_HREFS = [
   "/registers", "/registers/enrol",
   "/settings/team",
   "/votes", "/notifications",
+  "/admin/zoom-sessions",
 ];
 
 function isActive(href: string, pathname: string): boolean {

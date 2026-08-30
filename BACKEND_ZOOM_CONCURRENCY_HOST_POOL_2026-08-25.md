@@ -117,3 +117,59 @@ Shipped on the frontend:
 Still **ops-owned, not FE** (blocks the feature from actually delivering >2 concurrent):
 
 - The host pool **starts empty** — until ops registers licensed host emails (at minimum `oladotunolorunyomi@meristemng.com`, §5), *every* launch returns `NO_HOST_CAPACITY`. The FE will surface that cleanly, but concurrency won't rise until hosts are registered and S2S admin scopes are confirmed (§5.3).
+
+---
+
+## 9. Frontend follow-up — settings polish, super-admin ops page, create-event decoupling — 2026-08-30
+
+This pass integrated the Zoom items from the `certificate.md` handoff (§7f/§7c/§7a). Nothing here breaks today's contract; the new admin surfaces **degrade gracefully** and light up automatically once the endpoints below ship.
+
+### 9.1 Shipped now (back-compatible against today's backend)
+
+- **Event Settings → Zoom (`EventSettingsTab.tsx`, `client-events.ts`).**
+  - **`forceNew` is now wired.** The existing *Refresh* action calls `forceNew=false` (idempotent — fresh ZAK, no re-assignment). A new, **confirm-guarded** *Regenerate meeting* action calls `forceNew=true` (per §3f it ends + re-assigns, **stranding connected users** — hence the confirm).
+  - **503 → clean copy.** `useCreateEventZoomMeeting` now special-cases a `503` on create to show *"No Zoom host capacity — all shared hosts are in use…"* instead of the generic failure toast (mirrors the §8 launch-flow treatment, now on the settings surface too).
+  - **`ZoomMeetingDto.hostZak`** is read as a tolerant passthrough if present; treated as short-lived (never cached), alongside the existing `startUrl`. A distinct **"Start as Host"** link (`startUrl`) is shown separately from the attendee `joinUrl`.
+
+### 9.2 New super-admin page — **needs backend endpoints to activate**
+
+Built `/(dashboard)/admin/zoom-sessions` (super-admin-gated; new sidebar item under **Operations**). It shows pool totals, every held slot, per-row **Release**, and a manual **Assign** control. **It calls the endpoints below.** They **do not exist yet** — the page detects `404/501` and renders a friendly *"activates once the backend Zoom capacity endpoints are deployed"* state, so shipping these lights it up with **zero further FE changes** (the parser is field-name tolerant / snake_case-friendly).
+
+> This realises the "eventually a UI" half of **§6.1**. Please confirm the paths/shapes or tell us your preferred contract and we'll align.
+
+**(a) `GET /api/v1/admin/zoom-sessions`** — current pool state. Expected envelope (`{ data: … }` or bare):
+```jsonc
+{
+  "sessions": [
+    {
+      "eventId": "…", "eventTitle": "…",
+      "orgName": "…", "registrarName": "…",
+      "pooledAccount": "host@meristemng.com",   // the assigned host email/label
+      "meetingId": 123456789,
+      "joinUrl": "https://…", "startUrl": "https://…",   // startUrl optional
+      "durationMinutes": 120,
+      "eventStatus": "LIVE",
+      "live": true,        // meeting currently in progress
+      "stranded": false,   // slot still held by an ended/cancelled event (capacity leak)
+      "assignedAt": "…", "expiresAt": "…"   // optional
+    }
+  ],
+  "totals": { "totalCapacity": 4, "slotsInUse": 1, "slotsFree": 3, "strandedSlots": 0 }
+}
+```
+The FE derives `slotsInUse`/`strandedSlots`/`slotsFree` from the rows if `totals` is omitted, so a bare `sessions` array (or `{ content: [...] }`) also works — but returning `totals` (esp. `totalCapacity`) is preferred so the summary shows the real ceiling. The `stranded` flag is the key operational signal (it's exactly the leaked-slot condition §3d guards against).
+
+**(b) `DELETE /api/v1/admin/zoom-sessions/{eventId}`** — release the slot that event holds (frees the host; same effect as an admin-initiated slot release from §3d). Confirm-guarded on the FE.
+
+**(c) `POST /api/v1/admin/zoom-sessions/{eventId}/assign?durationMinutes=120`** — manually assign a pooled host to an event. Should return the same **`503 NO_HOST_CAPACITY`** as §3e when saturated; the FE already renders the capacity message for a 503 here.
+
+### 9.3 Deferred FE cleanup — create-event decoupling (§7a), gated on your confirmation
+
+Today the create flow still sends **`enableZoomMeeting` + `zoomDurationMinutes`** (and a placeholder `streamUrl` for virtual/hybrid Zoom events) in `events/create/page.tsx`, because that's what makes *today's* backend auto-provision the meeting. We are **intentionally not removing this yet** — dropping it before the host-pool create-path is live would 400 VIRTUAL/HYBRID creation.
+
+**Ask:** once the pool is deployed, does create-event still need `enableZoomMeeting`/`zoomDurationMinutes`, or does the backend provision (or lazily assign on first launch) on its own? When you confirm it's no longer required, the FE will drop those fields from the create payload and make `streamUrl` optional. Until then, no change.
+
+### 9.4 Verified, no change (§7g)
+
+Every Join/preview surface already guards a null/empty `streamUrl` (`StreamPreviewCard` renders a placeholder state; `EventOverviewTab` gates the stream block on `event.streamUrl`). No work needed.
+

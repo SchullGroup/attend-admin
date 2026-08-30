@@ -106,9 +106,9 @@ export function EventSettingsTab({
     });
   }
 
-  function handleCreateZoom() {
+  function handleCreateZoom(forceNew = false) {
     zoomMutation.mutate(
-      { eventId, durationMinutes: parseInt(zoomDuration, 10) || 120 },
+      { eventId, durationMinutes: parseInt(zoomDuration, 10) || 120, forceNew },
       {
         onSuccess: (data) => {
           setZoomMeeting(data);
@@ -119,6 +119,21 @@ export function EventSettingsTab({
           }
         },
       }
+    );
+  }
+
+  // §7f: a full regenerate mints a brand-new meeting on a (possibly different) pooled
+  // host and REPLACES the current one — everyone already connected is disconnected and
+  // the join URL changes. Guard it behind a confirm; plain "Refresh" (forceNew=false)
+  // stays the safe, idempotent default.
+  function handleRegenerateZoom() {
+    popup.confirm(
+      "Regenerate Zoom meeting?",
+      "This creates a brand-new meeting (possibly on a different host account) and replaces the current one. Anyone already connected will be disconnected and the join URL will change. If you only need a fresh host token, use “Refresh” instead.",
+      () => handleCreateZoom(true),
+      undefined,
+      "Regenerate",
+      "Cancel",
     );
   }
 
@@ -366,7 +381,7 @@ export function EventSettingsTab({
                 </div>
               ))}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <a
                 href={zoomMeeting.joinUrl}
                 target="_blank"
@@ -375,6 +390,17 @@ export function EventSettingsTab({
               >
                 <ExternalLink className="h-3.5 w-3.5" /> Open Join URL
               </a>
+              {zoomMeeting.startUrl && (
+                <a
+                  href={zoomMeeting.startUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-[hsl(var(--foreground))] hover:underline"
+                  title="Host start link — opens the meeting as host. Don't share this; the Join URL is for attendees."
+                >
+                  <ExternalLink className="h-3.5 w-3.5" /> Start as Host
+                </a>
+              )}
               <Button
                 size="sm"
                 variant="outline"
@@ -387,6 +413,7 @@ export function EventSettingsTab({
             </div>
             <p className="text-xs text-[hsl(var(--muted-foreground))]">
               Join URL is automatically set as the stream URL for this event.
+              {zoomMeeting.startUrl && " The host start link is for the organiser only — share only the Join URL with attendees."}
             </p>
 
             {/* Refresh meeting — gets a fresh token (fixes expired ZAK / "code 200" errors) */}
@@ -394,7 +421,7 @@ export function EventSettingsTab({
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-[hsl(var(--foreground))]">Refresh Meeting Token</p>
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                  Fix "Not support start meeting" or "already in progress" errors.
+                  Fix "Not support start meeting" or "already in progress" errors. Keeps the same meeting and join URL.
                 </p>
               </div>
               <Button
@@ -402,10 +429,31 @@ export function EventSettingsTab({
                 variant="outline"
                 className="h-8 gap-1.5 text-xs shrink-0"
                 disabled={zoomMutation.isPending}
-                onClick={handleCreateZoom}
+                onClick={() => handleCreateZoom(false)}
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${zoomMutation.isPending ? "animate-spin" : ""}`} />
                 {zoomMutation.isPending ? "Refreshing…" : "Refresh"}
+              </Button>
+            </div>
+
+            {/* Regenerate meeting — brand-new meeting on a (possibly different) pooled
+                host; strands anyone already connected, so it's confirm-guarded (§7f). */}
+            <div className="flex items-center gap-2 pt-2 border-t border-[hsl(var(--border))]">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-[hsl(var(--foreground))]">Regenerate Meeting</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  Create a new meeting on a fresh host. Disconnects anyone already in the current meeting and changes the join URL.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 text-xs shrink-0 text-[#dc2626] border-[#dc262640] hover:bg-[#dc262610]"
+                disabled={zoomMutation.isPending}
+                onClick={handleRegenerateZoom}
+              >
+                <Video className="h-3.5 w-3.5" />
+                Regenerate
               </Button>
             </div>
           </div>
@@ -429,7 +477,7 @@ export function EventSettingsTab({
                 size="sm"
                 className="h-8 gap-1.5 text-xs bg-[#0B5CFF] hover:bg-[#0B5CFF]/90 text-white ml-auto"
                 disabled={zoomMutation.isPending}
-                onClick={handleCreateZoom}
+                onClick={() => handleCreateZoom(false)}
               >
                 <Video className={`h-3.5 w-3.5 ${zoomMutation.isPending ? "animate-spin" : ""}`} />
                 {zoomMutation.isPending ? "Creating…" : "Create Zoom Meeting"}

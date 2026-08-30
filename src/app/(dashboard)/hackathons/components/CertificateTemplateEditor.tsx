@@ -18,14 +18,17 @@ import {
   defaultFieldForKey,
   fieldKeyLabel,
   resolveArtworkUrl,
+  templateForType,
   A4_LANDSCAPE_RATIO,
   ARTWORK_MAX_BYTES,
   RECIPIENT_NAME_KEY,
   TEMPLATE_ALIGNS,
   TEMPLATE_FONT_STYLES,
+  CERTIFICATE_TYPES,
   type TemplateField,
   type TemplateFieldAlign,
   type CertificateTemplate,
+  type CertificateType,
 } from "@/api/certificate-templates";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -37,6 +40,11 @@ const BRAND = "#7c22c9";
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 const round1 = (n: number) => Math.round(n * 10) / 10;
+
+/** Human label for a certificate type (§9). */
+function certTypeLabel(t: CertificateType): string {
+  return t === "PARTICIPATION" ? "Participation" : "Winner";
+}
 
 interface Draft {
   templateId?:          string;
@@ -387,7 +395,7 @@ function FieldProperties({ field, onChange, onRemove }: {
 }
 
 /**
- * Per-event certificate template editor.
+ * Per-event certificate template editor for ONE certificate type.
  *
  * Upload the organiser's finished artwork (PDF strongly preferred, A4 landscape
  * 1.414), then position the variable fields over it by dragging. Everything is a
@@ -396,8 +404,26 @@ function FieldProperties({ field, onChange, onRemove }: {
  *
  * A per-event template overrides the org-wide (Register) default, which in turn
  * overrides the built-in generated design.
+ *
+ * Rendered by `CertificateTemplateEditor`, which remounts this per `certType`
+ * (`key={certType}`) so all local editing state resets cleanly on a type switch.
+ * `supportsCertificateType` decides whether the type is part of the template's
+ * identity — when false this is exactly the legacy single-template editor and
+ * `certificateType` is never sent (byte-identical to today's request).
  */
-export function CertificateTemplateEditor({ challengeId, readOnly }: { challengeId: string; readOnly?: boolean }) {
+function CertificateTemplateEditorInner({
+  challengeId,
+  readOnly,
+  certType,
+  supportsCertificateType,
+  onDirtyChange,
+}: {
+  challengeId: string;
+  readOnly?: boolean;
+  certType: CertificateType;
+  supportsCertificateType: boolean;
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const { data: resolution, isLoading: loadingTemplate } = useEventCertificateTemplate(challengeId);
   const { data: fieldKeys, isLoading: loadingKeys } = useCertificateFieldKeys();
   const upload = useUploadCertificateArtwork();
@@ -441,16 +467,23 @@ export function CertificateTemplateEditor({ challengeId, readOnly }: { challenge
   // fresh chance to load before we show the failed state.
   useEffect(() => { setPreviewFailed(false); }, [draft.artworkUrl, draft.artworkPreviewUrl, localPreview]);
 
-  // Seed the draft from the loaded event template exactly once (don't clobber
-  // in-progress edits when the query refetches).
+  // Seed the draft from the loaded template for THIS certificate type, exactly once
+  // (don't clobber in-progress edits when the query refetches). On today's backend
+  // certType is always WINNER and templateForType returns resolution.event — identical
+  // to the legacy behaviour.
   useEffect(() => {
     if (seededRef.current || !resolution) return;
     seededRef.current = true;
-    if (resolution.event) {
-      setDraft(draftFromTemplate(resolution.event));
-      setSelectedKey(resolution.event.fields[0]?.key ?? null);
+    const seed = templateForType(resolution, "EVENT", certType);
+    if (seed) {
+      setDraft(draftFromTemplate(seed));
+      setSelectedKey(seed.fields[0]?.key ?? null);
     }
-  }, [resolution]);
+  }, [resolution, certType]);
+
+  // Surface dirtiness to the parent so it can guard a type switch (which remounts
+  // this editor and would otherwise silently discard unsaved edits).
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
   const artworkIsPdf = useMemo(
     () => looksLikePdf(draft.artworkUrl, draft.artworkResourceType),
@@ -469,7 +502,10 @@ export function CertificateTemplateEditor({ challengeId, readOnly }: { challenge
   );
 
   const usedKeys = useMemo(() => new Set(draft.fields.map((f) => f.key)), [draft.fields]);
-  const palette = (fieldKeys ?? []).filter((k) => !usedKeys.has(k.key));
+  // In the PARTICIPATION editor, hide WINNER-only field keys (e.g. FINAL_POSITION) — §9.
+  const palette = (fieldKeys ?? []).filter(
+    (k) => !usedKeys.has(k.key) && !(certType === "PARTICIPATION" && k.winnerOnly)
+  );
   const selected = draft.fields.find((f) => f.key === selectedKey) ?? null;
   const hasRecipientName = usedKeys.has(RECIPIENT_NAME_KEY);
 
@@ -565,6 +601,9 @@ export function CertificateTemplateEditor({ challengeId, readOnly }: { challenge
         artworkResourceType: draft.artworkResourceType,
         active: draft.active,
         fields: draft.fields,
+        // §9: only tag the type when the backend understands it. Omitted otherwise so
+        // the request is byte-identical to today's and can't clobber the sole template.
+        certificateType: supportsCertificateType ? certType : undefined,
       },
     }, { onSuccess: () => setDirty(false) });
   }
@@ -607,10 +646,17 @@ export function CertificateTemplateEditor({ challengeId, readOnly }: { challenge
             <FileText className="h-5 w-5" style={{ color: BRAND }} />
           </div>
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">Certificate design</h2>
+            <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">
+              {supportsCertificateType ? `${certTypeLabel(certType)} certificate design` : "Certificate design"}
+            </h2>
             <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">
-              Upload your finished certificate and place the variable fields on it. Used for both winner and
-              participation certificates. Currently in use: <span className="font-semibold text-[hsl(var(--foreground))]">{effectiveLabel}</span>.
+              Upload your finished certificate and place the variable fields on it.{" "}
+              {supportsCertificateType
+                ? (certType === "PARTICIPATION"
+                    ? "Issued to every eligible participant."
+                    : "Issued to the challenge winners.")
+                : "Used for both winner and participation certificates."}{" "}
+              Currently in use: <span className="font-semibold text-[hsl(var(--foreground))]">{effectiveLabel}</span>.
             </p>
             {resolution?.register && effective !== "REGISTER" && (
               <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
@@ -860,6 +906,101 @@ export function CertificateTemplateEditor({ challengeId, readOnly }: { challenge
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Certificate template editor entry point.
+ *
+ * Feature-detects whether the backend distinguishes certificate types (cert.md §9):
+ * `supportsCertificateType` is true when any field key is `winnerOnly` OR any returned
+ * template carries a `certificateType`. Until that ships (nothing is on staging yet)
+ * this renders EXACTLY today's single editor — no type toggle, and the save body carries
+ * no `certificateType` — so the one existing template can never be clobbered.
+ *
+ * Once it ships, a WINNER | PARTICIPATION toggle appears and each type is edited as its
+ * own template (the inner editor is remounted per type via `key`, so switching never
+ * bleeds one type's draft into the other). A switch with unsaved edits is confirm-guarded.
+ */
+export function CertificateTemplateEditor({ challengeId, readOnly }: { challengeId: string; readOnly?: boolean }) {
+  const { data: resolution, isLoading: loadingTemplate } = useEventCertificateTemplate(challengeId);
+  const { data: fieldKeys, isLoading: loadingKeys } = useCertificateFieldKeys();
+  const [certType, setCertType] = useState<CertificateType>("WINNER");
+  // Tracks the mounted inner editor's unsaved state so a type switch can guard it.
+  const dirtyRef = useRef(false);
+
+  const supportsCertificateType = useMemo(
+    () => !!resolution?.supportsCertificateType || (fieldKeys ?? []).some((k) => k.winnerOnly),
+    [resolution?.supportsCertificateType, fieldKeys]
+  );
+
+  if (loadingTemplate || loadingKeys) return <Loader variant="inline" text="Loading certificate template…" />;
+
+  // Legacy backend: behave exactly as before — single editor, no type in the save body.
+  if (!supportsCertificateType) {
+    return (
+      <CertificateTemplateEditorInner
+        challengeId={challengeId}
+        readOnly={readOnly}
+        certType="WINNER"
+        supportsCertificateType={false}
+      />
+    );
+  }
+
+  function requestType(next: CertificateType) {
+    if (next === certType) return;
+    if (dirtyRef.current) {
+      popup.confirm(
+        "Discard unsaved changes?",
+        `You have unsaved changes to the ${certTypeLabel(certType).toLowerCase()} certificate. Switching will discard them.`,
+        () => { dirtyRef.current = false; setCertType(next); },
+        undefined,
+        "Discard & switch",
+        "Stay",
+      );
+      return;
+    }
+    setCertType(next);
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* WINNER | PARTICIPATION type switch (§9) */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-0.5">
+          {CERTIFICATE_TYPES.map((t) => {
+            const active = t === certType;
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => requestType(t)}
+                aria-pressed={active}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  active ? "text-white shadow-sm" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                }`}
+                style={active ? { backgroundColor: BRAND } : undefined}
+              >
+                {certTypeLabel(t)}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+          Design each certificate type separately. Switching keeps each design independent.
+        </p>
+      </div>
+
+      <CertificateTemplateEditorInner
+        key={certType}
+        challengeId={challengeId}
+        readOnly={readOnly}
+        certType={certType}
+        supportsCertificateType
+        onDirtyChange={(d) => { dirtyRef.current = d; }}
+      />
     </div>
   );
 }

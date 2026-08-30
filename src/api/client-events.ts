@@ -70,6 +70,13 @@ export interface ZoomMeetingDto {
   joinUrl:         string;
   startUrl:        string;
   durationMinutes: number;
+  /**
+   * §7f: the host's ZAK (Zoom Access Key) minted for this meeting on a pooled host
+   * account, letting the organiser start it as host from the dashboard. Short-lived
+   * and re-minted on every create/refresh call, so it is never cached — just passed
+   * through when present. Absent until the §7 backend deploys.
+   */
+  hostZak?:        string;
 }
 
 // Agenda
@@ -1213,15 +1220,22 @@ export function useUpdateStreamUrl() {
  * Create or refresh a Zoom meeting for an existing event.
  * Requires Zoom Server-to-Server OAuth configured on the backend.
  * Only works for VIRTUAL or HYBRID events.
+ *
+ * §7f: `forceNew` (default false) asks the backend to mint a brand-new meeting on a
+ * (possibly different) pooled host rather than refreshing the existing one. A refresh
+ * (`forceNew=false`) is idempotent — it returns a fresh token/hostZak without stranding
+ * anyone. `forceNew=true` STRANDS everyone already connected to the old meeting, so the
+ * caller must confirm-guard it. When the shared host pool is exhausted the backend
+ * answers 503; we surface the real capacity message rather than the generic OAuth hint.
  */
 export function useCreateEventZoomMeeting() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ eventId, durationMinutes = 120 }: { eventId: string; durationMinutes?: number }) => {
+    mutationFn: async ({ eventId, durationMinutes = 120, forceNew = false }: { eventId: string; durationMinutes?: number; forceNew?: boolean }) => {
       const res = await apiClient.post<ApiResponse<ZoomMeetingDto>>(
         `/api/v1/client/events/${eventId}/zoom`,
         null,
-        { params: { durationMinutes } }
+        { params: { durationMinutes, forceNew } }
       );
       return (res.data as any).data as ZoomMeetingDto;
     },
@@ -1229,7 +1243,24 @@ export function useCreateEventZoomMeeting() {
       queryClient.invalidateQueries({ queryKey: clientEventKeys.detail(eventId) });
       popup.success("Zoom Meeting Created", "Zoom meeting has been created for this event.", 3000);
     },
-    onError: (error: any) => parseAndToastApiError(error, "Failed to create Zoom meeting. Check that Zoom OAuth is configured on the server."),
+    onError: (error: any) => {
+      // §7f: the shared Zoom host pool can be exhausted — the backend answers 503.
+      // Surface the real "no host capacity" message (or the backend's own wording)
+      // instead of the generic Zoom-OAuth failure hint.
+      if (error?.response?.status === 503) {
+        const serverMsg =
+          (typeof error?.response?.data?.message === "string" && error.response.data.message) ||
+          (typeof error?.response?.data?.error === "string" && error.response.data.error) ||
+          "";
+        popup.error(
+          "No Zoom host capacity",
+          serverMsg || "All shared Zoom host accounts are in use right now. Please try again in a few minutes.",
+          6000
+        );
+        return;
+      }
+      parseAndToastApiError(error, "Failed to create Zoom meeting. Check that Zoom OAuth is configured on the server.");
+    },
   });
 }
 

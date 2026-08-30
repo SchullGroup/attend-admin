@@ -58,3 +58,13 @@ in [src/api/client-challenges.ts](src/api/client-challenges.ts) (`useIssueChalle
 ## Related
 
 - `BACKEND_CERT_TEMPLATE_SAVE_400_2026-08-29.md` — same generic "malformed" message, same subsystem, different root cause (fontStyle enum). Same ask #3 (specific parse errors) applies.
+
+## Update 2026-08-30 — backend handoff `certificate.md` (2026-08-28) received
+
+The backend's `certificate.md` status doc was shared. It **corroborates the shipped body shape** but still **does not spell out the issue request DTO**:
+
+- §3: "`issue` recomputes the recipient list server-side from current application status, exactly like the winner flow" and "**The preview is never submitted back**." → confirms we correctly send **no `applicationIds`**.
+- §3: the participation email is "a **thank-you, not a congratulation**" with no organiser message. → confirms we correctly send **no `message`**.
+- "exactly like the winner flow" — and the winner `announce` DTO carries `sendEmail`/`sendInApp` — is the basis for the two flags we do send. **The doc never lists the issue body's fields explicitly**, so ask #1 (publish the exact `ParticipationIssueRequest`) still stands.
+- Headline caveat: "**Nothing has been deployed to staging.**" The 400 observed on 2026-08-29 against the live API may therefore have been a pre-deploy/older endpoint rather than the DTO described here. Re-test once this pass is deployed.
+

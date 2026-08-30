@@ -101,14 +101,42 @@ export interface CertificateFieldKey {
   key:       string;
   label?:    string;      // human label for the palette
   required:  boolean;     // RECIPIENT_NAME is the only required one today
+  /**
+   * §9: this field only makes sense on WINNER certificates (e.g. FINAL_POSITION).
+   * The backend flags these once certificate-type separation ships; the participation
+   * editor hides them. Its PRESENCE on any key is ALSO one of the two signals that the
+   * backend understands certificate types at all — see `supportsCertificateType`.
+   */
+  winnerOnly?: boolean;
 }
 
 export type CertificateTemplateScope = "EVENT" | "REGISTER";
+
+/**
+ * §9: a template's certificate type. WINNER is the historical / default kind;
+ * PARTICIPATION is the everyone-who-took-part kind. It becomes part of a template's
+ * identity once the backend's certificate-type separation (cert.md §9/§10) ships —
+ * until then every template is an untyped legacy WINNER and this stays undefined.
+ */
+export type CertificateType = "WINNER" | "PARTICIPATION";
+export const CERTIFICATE_TYPES: CertificateType[] = ["WINNER", "PARTICIPATION"];
+
+/** Normalise a raw certificate-type token to the enum, or undefined if absent/unknown. */
+function parseCertificateType(raw: any): CertificateType | undefined {
+  const s = typeof raw === "string" ? raw.trim().toUpperCase() : "";
+  return s === "WINNER" || s === "PARTICIPATION" ? (s as CertificateType) : undefined;
+}
 
 export interface CertificateTemplate {
   id:                   string;
   name:                 string;
   scope?:               CertificateTemplateScope;
+  /**
+   * §9: which kind of certificate this template renders. Undefined on today's
+   * backend (every template is an untyped legacy WINNER); populated once cert-type
+   * separation ships. Its presence on any returned template flips `supportsCertificateType`.
+   */
+  certificateType?:     CertificateType;
   artworkUrl:           string;
   /**
    * A short-lived PRE-SIGNED URL for the same artwork, for DISPLAY only. The OBS
@@ -126,11 +154,52 @@ export interface CertificateTemplate {
   updatedAt?:           string;
 }
 
-/** GET .../certificate-template returns both scopes with the effective one flagged. */
+/**
+ * GET .../certificate-template returns both scopes with the effective one flagged.
+ *
+ * `event`/`register` are the WINNER (or untyped-legacy) templates at each scope —
+ * keeping those names preserves back-compat with every existing caller. §9 adds the
+ * PARTICIPATION counterparts. Use `templateForType(resolution, scope, type)` rather
+ * than reaching for a field directly.
+ */
 export interface CertificateTemplateResolution {
-  event:          CertificateTemplate | null;
-  register:       CertificateTemplate | null;
-  effectiveScope: CertificateTemplateScope | "BUILTIN";
+  event:                  CertificateTemplate | null;
+  register:               CertificateTemplate | null;
+  eventParticipation:     CertificateTemplate | null;
+  registerParticipation:  CertificateTemplate | null;
+  effectiveScope:         CertificateTemplateScope | "BUILTIN";
+  /**
+   * §9 feature signal: true when any returned template carried an explicit
+   * `certificateType`, i.e. the backend understands cert-type separation. The editor
+   * OR-combines this with the field-key `winnerOnly` signal to decide whether to show
+   * the dual WINNER|PARTICIPATION editor. False ⇒ behave exactly like today (single editor).
+   */
+  supportsCertificateType: boolean;
+}
+
+/** Empty resolution — nothing configured (404) or an unparseable response. */
+function emptyResolution(): CertificateTemplateResolution {
+  return {
+    event: null,
+    register: null,
+    eventParticipation: null,
+    registerParticipation: null,
+    effectiveScope: "BUILTIN",
+    supportsCertificateType: false,
+  };
+}
+
+/** Pick the template for a given (scope, type) out of a resolution. */
+export function templateForType(
+  resolution: CertificateTemplateResolution | undefined,
+  scope: CertificateTemplateScope,
+  type: CertificateType,
+): CertificateTemplate | null {
+  if (!resolution) return null;
+  if (scope === "REGISTER") {
+    return type === "PARTICIPATION" ? resolution.registerParticipation : resolution.register;
+  }
+  return type === "PARTICIPATION" ? resolution.eventParticipation : resolution.event;
 }
 
 export const certificateTemplateKeys = {
@@ -167,6 +236,7 @@ function parseTemplate(raw: any): CertificateTemplate | null {
     id,
     name:                raw.name ?? "",
     scope:               (raw.scope ?? undefined) as CertificateTemplateScope | undefined,
+    certificateType:     parseCertificateType(raw.certificateType ?? raw.certificate_type),
     artworkUrl,
     // Display-only signed URL — the private bucket 403s the canonical artworkUrl in an <img>.
     artworkPreviewUrl:   raw.artworkPreviewUrl ?? raw.artwork_preview_url ?? undefined,
@@ -182,41 +252,79 @@ function parseTemplate(raw: any): CertificateTemplate | null {
 
 function parseResolution(raw: any, _eventId: string): CertificateTemplateResolution {
   const r = raw ?? {};
+
+  // Gather every template the response carries, each with a hint of where it came
+  // from (some response shapes encode scope/type in the KEY rather than on the body).
+  const collected: { parsed: CertificateTemplate; scopeHint?: CertificateTemplateScope; typeHint?: CertificateType }[] = [];
+  const push = (t: any, scopeHint?: CertificateTemplateScope, typeHint?: CertificateType) => {
+    const parsed = parseTemplate(t);
+    if (parsed) collected.push({ parsed, scopeHint, typeHint });
+  };
+
+  if (Array.isArray(r) || Array.isArray(r.templates)) {
+    // { templates: [...] } | [...]  — each template self-describes its scope & type.
+    for (const t of (Array.isArray(r) ? r : r.templates)) push(t);
+  } else if (
+    r.event !== undefined || r.register !== undefined ||
+    r.eventParticipation !== undefined || r.event_participation !== undefined ||
+    r.registerParticipation !== undefined || r.register_participation !== undefined
+  ) {
+    // Keyed object shape. Today's backend sends { event, register } (both WINNER-ish);
+    // a cert-type-aware backend may add participation-keyed siblings.
+    push(r.event, "EVENT", "WINNER");
+    push(r.register, "REGISTER", "WINNER");
+    push(r.eventParticipation ?? r.event_participation, "EVENT", "PARTICIPATION");
+    push(r.registerParticipation ?? r.register_participation, "REGISTER", "PARTICIPATION");
+  } else if (r.winner !== undefined || r.participation !== undefined) {
+    // Nested { winner: { event, register }, participation: { event, register } }.
+    push(r.winner?.event, "EVENT", "WINNER");
+    push(r.winner?.register, "REGISTER", "WINNER");
+    push(r.participation?.event, "EVENT", "PARTICIPATION");
+    push(r.participation?.register, "REGISTER", "PARTICIPATION");
+  } else {
+    // A single bare template object.
+    push(r);
+  }
+
+  // Bucket each into one of the four (scope × type) slots. A template's own `scope` /
+  // `certificateType` win over the positional hint; missing type buckets as WINNER.
   let event: CertificateTemplate | null = null;
   let register: CertificateTemplate | null = null;
+  let eventParticipation: CertificateTemplate | null = null;
+  let registerParticipation: CertificateTemplate | null = null;
+  let sawCertificateType = false;
 
-  if (r.event !== undefined || r.register !== undefined) {
-    // { event, register }
-    event = parseTemplate(r.event);
-    register = parseTemplate(r.register);
-  } else if (Array.isArray(r.templates) || Array.isArray(r)) {
-    // { templates: [...] } | [...]  — discriminate by scope
-    const arr: any[] = Array.isArray(r) ? r : r.templates;
-    for (const t of arr) {
-      const parsed = parseTemplate(t);
-      if (!parsed) continue;
-      if ((parsed.scope ?? "EVENT").toUpperCase() === "REGISTER") register = parsed;
-      else event = parsed;
-    }
-  } else {
-    // single bare template object
-    const parsed = parseTemplate(r);
-    if (parsed) {
-      if ((parsed.scope ?? "EVENT").toUpperCase() === "REGISTER") register = parsed;
-      else event = parsed;
+  for (const { parsed, scopeHint, typeHint } of collected) {
+    if (parsed.certificateType) sawCertificateType = true;
+    const scope: CertificateTemplateScope =
+      (parsed.scope ?? scopeHint ?? "EVENT").toUpperCase() === "REGISTER" ? "REGISTER" : "EVENT";
+    const type: CertificateType = parsed.certificateType ?? typeHint ?? "WINNER";
+    if (scope === "REGISTER") {
+      if (type === "PARTICIPATION") registerParticipation = parsed; else register = parsed;
+    } else {
+      if (type === "PARTICIPATION") eventParticipation = parsed; else event = parsed;
     }
   }
 
   let effectiveScope: CertificateTemplateResolution["effectiveScope"] = "BUILTIN";
-  if (event?.effective) effectiveScope = "EVENT";
-  else if (register?.effective) effectiveScope = "REGISTER";
+  const eventEffective = event?.effective || eventParticipation?.effective;
+  const registerEffective = register?.effective || registerParticipation?.effective;
+  if (eventEffective) effectiveScope = "EVENT";
+  else if (registerEffective) effectiveScope = "REGISTER";
   else if (typeof r.effectiveScope === "string") {
     const s = r.effectiveScope.toUpperCase();
     effectiveScope = s === "EVENT" || s === "REGISTER" ? s : "BUILTIN";
-  } else if (event) effectiveScope = "EVENT";
-  else if (register) effectiveScope = "REGISTER";
+  } else if (event || eventParticipation) effectiveScope = "EVENT";
+  else if (register || registerParticipation) effectiveScope = "REGISTER";
 
-  return { event, register, effectiveScope };
+  return {
+    event,
+    register,
+    eventParticipation,
+    registerParticipation,
+    effectiveScope,
+    supportsCertificateType: sawCertificateType,
+  };
 }
 
 // --- reads ------------------------------------------------------------------
@@ -246,6 +354,7 @@ export function useCertificateFieldKeys(opts?: { enabled?: boolean }) {
           key,
           label: typeof k === "string" ? undefined : k?.label ?? k?.name,
           required: typeof k === "string" ? key === RECIPIENT_NAME_KEY : !!(k?.required),
+          winnerOnly: typeof k === "string" ? undefined : !!(k?.winnerOnly ?? k?.winner_only),
         };
       }).filter((k) => !!k.key);
     },
@@ -272,7 +381,7 @@ export function useEventCertificateTemplate(eventId: string, opts?: { enabled?: 
         return parseResolution(res.data.data ?? res.data, eventId);
       } catch (err: any) {
         if (err?.response?.status === 404) {
-          return { event: null, register: null, effectiveScope: "BUILTIN" };
+          return emptyResolution();
         }
         throw err;
       }
@@ -289,6 +398,14 @@ export interface SaveCertificateTemplateBody {
   artworkResourceType?: string;
   active:               boolean;
   fields:               TemplateField[];
+  /**
+   * §9: which certificate kind this template is. OMIT on today's backend (it has no
+   * concept of it and defaults everything to WINNER — sending it changes nothing but
+   * omitting keeps the request byte-identical to what ships today). The editor only
+   * sets it once `supportsCertificateType` is true, so the WINNER template can never be
+   * silently clobbered by a participation save on a backend that can't tell them apart.
+   */
+  certificateType?:     CertificateType;
 }
 
 /**
