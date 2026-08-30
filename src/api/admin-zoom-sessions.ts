@@ -86,6 +86,47 @@ function numOrNull(v: any): number | null {
   return null;
 }
 
+/**
+ * Coax a display string out of a value that may be a plain string OR a nested
+ * object. A Spring backend commonly returns `organisation: { name }` /
+ * `registrar: { fullName, email }` rather than a flat `orgName` string, so a
+ * flat-only read shows "—" even though the data is present. Tries the usual
+ * label-ish sub-keys before giving up.
+ */
+function asText(v: any): string | undefined {
+  if (v == null) return undefined;
+  if (typeof v === "string") return v.trim() || undefined;
+  if (typeof v === "number") return String(v);
+  if (typeof v === "object") {
+    const s =
+      v.name ?? v.fullName ?? v.displayName ?? v.title ?? v.label ?? v.email ?? v.username ?? v.value;
+    if (typeof s === "string") return s.trim() || undefined;
+    if (typeof s === "number") return String(s);
+  }
+  return undefined;
+}
+
+/** Like asText, but for a host *account* prefer the email/username identifier over a display name. */
+function asAccount(v: any): string | undefined {
+  if (v == null) return undefined;
+  if (typeof v === "string") return v.trim() || undefined;
+  if (typeof v === "object") {
+    const s =
+      v.email ?? v.hostEmail ?? v.username ?? v.account ?? v.name ?? v.displayName ?? v.label ?? v.value;
+    if (typeof s === "string") return s.trim() || undefined;
+  }
+  return undefined;
+}
+
+/** First candidate that yields a usable string (skips empty strings and label-less objects). */
+function pick(fn: (v: any) => string | undefined, ...cands: any[]): string | undefined {
+  for (const c of cands) {
+    const s = fn(c);
+    if (s) return s;
+  }
+  return undefined;
+}
+
 function parseZoomSessionRow(raw: any): ZoomSessionRow | null {
   const r = raw ?? {};
   const eventId = r.eventId ?? r.event_id ?? r.id ?? "";
@@ -93,9 +134,13 @@ function parseZoomSessionRow(raw: any): ZoomSessionRow | null {
   return {
     eventId:         String(eventId),
     eventTitle:      r.eventTitle ?? r.event_title ?? r.title ?? r.eventName ?? "Untitled event",
-    orgName:         r.orgName ?? r.organisationName ?? r.organizationName ?? r.org_name ?? undefined,
-    registrarName:   r.registrarName ?? r.registrar ?? r.registrar_name ?? r.registrarEmail ?? undefined,
-    pooledAccount:   r.pooledAccount ?? r.hostAccount ?? r.hostEmail ?? r.account ?? r.pooled_account ?? undefined,
+    // Organiser identity: the owning organisation, plus the registrar/creator as a sub-line.
+    // Tolerant of flat strings AND nested {name}/{email} objects (see asText).
+    orgName:         pick(asText, r.orgName, r.organisationName, r.organizationName, r.org_name, r.organisation, r.organization, r.org, r.client, r.clientName),
+    registrarName:   pick(asText, r.registrarName, r.registrar, r.registrar_name, r.registrarEmail, r.organizerName, r.organiserName, r.ownerName, r.createdByName, r.createdBy, r.owner, r.organizer, r.organiser),
+    // The assigned pooled host — email preferred (asAccount). §3b persists event→hostEmail,
+    // so it exists server-side; cover the likely flat + nested shapes it might arrive under.
+    pooledAccount:   pick(asAccount, r.pooledAccount, r.hostAccount, r.hostEmail, r.host_email, r.account, r.pooled_account, r.host, r.assignedHost, r.assigned_host, r.hostUser, r.hostUserEmail, r.host_user, r.zoomHost, r.zoomHostEmail, r.zoom_host, r.hostName),
     meetingId:       r.meetingId ?? r.meeting_id ?? r.zoomMeetingId ?? undefined,
     joinUrl:         r.joinUrl ?? r.join_url ?? undefined,
     startUrl:        r.startUrl ?? r.start_url ?? undefined,
