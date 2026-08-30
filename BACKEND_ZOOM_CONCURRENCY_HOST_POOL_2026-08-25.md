@@ -163,11 +163,13 @@ The FE derives `slotsInUse`/`strandedSlots`/`slotsFree` from the rows if `totals
 
 **(c) `POST /api/v1/admin/zoom-sessions/{eventId}/assign?durationMinutes=120`** — manually assign a pooled host to an event. Should return the same **`503 NO_HOST_CAPACITY`** as §3e when saturated; the FE already renders the capacity message for a 503 here.
 
-### 9.3 Deferred FE cleanup — create-event decoupling (§7a), gated on your confirmation
+### 9.3 Create-event decoupling (§7a) — ✅ RESOLVED 2026-08-30 (see §11)
 
-Today the create flow still sends **`enableZoomMeeting` + `zoomDurationMinutes`** (and a placeholder `streamUrl` for virtual/hybrid Zoom events) in `events/create/page.tsx`, because that's what makes *today's* backend auto-provision the meeting. We are **intentionally not removing this yet** — dropping it before the host-pool create-path is live would 400 VIRTUAL/HYBRID creation.
+~~Deferred pending backend confirmation.~~ **The confirmation arrived in the `certificate.md` handoff §7a** and the FE change has shipped. See §11 for the exact trigger quote and what changed. (Original deferral text kept below for history.)
 
-**Ask:** once the pool is deployed, does create-event still need `enableZoomMeeting`/`zoomDurationMinutes`, or does the backend provision (or lazily assign on first launch) on its own? When you confirm it's no longer required, the FE will drop those fields from the create payload and make `streamUrl` optional. Until then, no change.
+> Today the create flow still sends **`enableZoomMeeting` + `zoomDurationMinutes`** (and a placeholder `streamUrl` for virtual/hybrid Zoom events) in `events/create/page.tsx`, because that's what makes *today's* backend auto-provision the meeting. We are **intentionally not removing this yet** — dropping it before the host-pool create-path is live would 400 VIRTUAL/HYBRID creation.
+>
+> **Ask:** once the pool is deployed, does create-event still need `enableZoomMeeting`/`zoomDurationMinutes`, or does the backend provision (or lazily assign on first launch) on its own? When you confirm it's no longer required, the FE will drop those fields from the create payload and make `streamUrl` optional. Until then, no change.
 
 ### 9.4 Verified, no change (§7g)
 
@@ -207,7 +209,52 @@ There are **46 stranded slots** to clear and no batch endpoint, so the new **"Re
 
 **Ask (nice-to-have):** a bulk endpoint, e.g. `POST /api/v1/admin/zoom-sessions/release` with `{ "eventIds": ["…","…"] }` (or `?stranded=true` to sweep all leaked slots server-side in one call). The FE will switch to it the moment it exists; until then the batched-DELETE fallback stays.
 
-### 10.3 Still open — create-event decoupling (§9.3 / §7a) unchanged
+### 10.3 Create-event decoupling (§9.3 / §7a) — ✅ RESOLVED (see §11)
 
-Restated because it's the one item **not** resolved by the endpoints shipping: the live admin endpoints don't tell us whether **create-event still needs `enableZoomMeeting` + `zoomDurationMinutes`** (+ placeholder `streamUrl`). We will **not** remove those from `events/create/page.tsx` on a guess — dropping them before the pool owns the create-path would 400 VIRTUAL/HYBRID creation. **Trigger to remove them + make `streamUrl` optional: an explicit backend confirmation that create no longer requires them** (does the pool provision on create, or lazily assign on first launch?). Until we get that yes, no change.
+Superseded — the `certificate.md` §7a handoff **is** the explicit backend confirmation this section was waiting for (it states the fields *"are removed from `POST /api/v1/client/events`"* and that a stream URL *"is no longer required"*, and answers the open question: slots are claimed lazily via `POST /events/{id}/zoom`, not on create). The FE change shipped on 2026-08-30 — full detail in §11.
 
+
+---
+
+## 11. Create-event decoupling shipped + host-pool management UI — 2026-08-30
+
+Two things landed this pass, both driven by the `certificate.md` handoff §7a/§7c/§7d.
+
+### 11.1 Create-event decoupling (§7a) — shipped ✅
+
+**Trigger (the confirmation §9.3/§10.3 was gated on), quoted verbatim from `certificate.md` §7a:**
+
+> **7a. Event creation no longer burns a slot ⚠️ breaking request-body change** — `enableZoomMeeting` and `zoomDurationMinutes` are **removed from `POST /api/v1/client/events`**. … **Also relaxed**: a stream URL is no longer required to create a VIRTUAL/HYBRID event. … Slots are now claimed only when someone explicitly asks for the link, through `POST /api/v1/client/events/{id}/zoom` — idempotent.
+
+That answers the exact open question from §9.3/§10.3 (*does create provision, or lazily assign?* → **lazily, on `POST /{id}/zoom`**), so the deferral is lifted. Shipped on the FE:
+
+- **`events/create/page.tsx`** — no longer sends `enableZoomMeeting` / `zoomDurationMinutes` on any of the four event paths (AGM / GENERAL / HACKATHON / LAUNCH); `streamUrl` is sent only if the organiser actually typed one (no more placeholder `https://zoom.us` values). `useCreateEventZoomMeeting` is no longer called at creation.
+- **The four step components** (`AgmSteps` / `GeneralSteps` / `HackathonSteps` / `LaunchSteps`) + **`state-hooks.ts`** — removed the "Auto-Create Zoom Meeting" toggle and duration field. The stream-URL field for virtual/hybrid is now a single **optional** input with copy: *"paste a link now, or add one (or generate a Zoom meeting) later from the event's Settings tab."*
+- **`client-events.ts`** — `CreateEventRequest` drops `enableZoomMeeting` / `zoomDurationMinutes`; `streamUrl` documented as optional.
+
+**One residual deployment check (backend-owned):** this assumes §7a is deployed to the environment the admin app points at. If a VIRTUAL/HYBRID create ever 400s complaining about a missing stream URL or Zoom field, that environment hasn't shipped §7a yet — it's a deploy lag, not an FE regression.
+
+### 11.2 Go-live idempotency (§1) — shipped ✅
+
+`useGoLiveEvent` now tolerates a duplicate/late go-live: on error it re-reads the event and, if the status is already `LIVE`, treats the transition as successful instead of surfacing a spurious failure toast.
+
+### 11.3 Host-pool management UI (§7c "existing `GET /api/v1/admin/zoom-hosts`", §7d, §6.1) — shipped ✅ (degrades gracefully)
+
+Built the self-service host pool that §7d describes (*"add the email and have 6 slots without ever having to call us — POST /api/v1/admin/zoom-hosts … capacity rises immediately, no deploy, no dev involvement"*). It lives as a **Host pool** card on the existing `/(dashboard)/admin/zoom-sessions` super-admin page (capacity source above the usage table), backed by a new `src/api/admin-zoom-hosts.ts`.
+
+Endpoints it calls (please **confirm paths + shapes**, same as we did for §9.2 sessions — the FE is field-name tolerant / snake_case-friendly and treats `404/501` as "not deployed yet" so the card shows a friendly inactive state until you ship):
+
+| Endpoint | Purpose | FE body / params |
+|---|---|---|
+| `GET /api/v1/admin/zoom-hosts` | list the pool + per-host capacity/usage | — |
+| `POST /api/v1/admin/zoom-hosts` | add a licensed host | `{ "email": "host@…", "capacity": 2 }` |
+| `PATCH /api/v1/admin/zoom-hosts/{id}` | correct a seat's real capacity | `{ "capacity": 1 }` |
+| `DELETE /api/v1/admin/zoom-hosts/{id}` | remove a host from the pool | — |
+
+- **Expected GET row fields** (tolerant of variants): `id` (falls back to `email` as the key), `email`, `capacity` (defaults to **2** if omitted, per §7d), `activeCount` (0 if unreported), optional `label`. A bare array, or `{ hosts: [...] }` / `{ content: [...] }` / `{ data: [...] }`, all parse.
+- **`{id}` path key:** the FE uses `id` when present, else the `email` (URL-encoded). If your PATCH/DELETE key is strictly one or the other, tell us and we'll pin it.
+- **Capacity caveat surfaced in the UI** (from §7d): "capacity is per-host, defaults to 2; a seat without the *simultaneous meetings* setting only delivers 1 — verify and set the real value."
+
+### 11.4 §10.1 capacity gap — now filled from the host pool (FE)
+
+Because the host-pool GET carries per-host `capacity`, the sessions page now **sums it to display real "Total capacity" and "Slots free"** whenever the sessions GET itself omits `totals` (the §10.1 gap). The card notes "From host pool" when the ceiling came from there rather than the sessions payload. §10.1's ask still stands (returning `totals` on the sessions GET is cleaner and authoritative), but the super-admin no longer sees "—" once at least one host is registered.

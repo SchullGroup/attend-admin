@@ -38,6 +38,8 @@ import {
   useAssignZoomSession,
   type ZoomSessionRow,
 } from "@/api/admin-zoom-sessions";
+import { useAdminZoomHosts } from "@/api/admin-zoom-hosts";
+import { HostPoolCard } from "./HostPoolCard";
 
 export default function ZoomSessionsPage() {
   // ── Role gate (backend enforces SUPER_ADMIN too; this is defence-in-depth) ──
@@ -53,6 +55,14 @@ export default function ZoomSessionsPage() {
     isFetching,
     refetch,
   } = useAdminZoomSessions(isSuperAdmin);
+  // Host pool (capacity source of truth — also fills the totals the sessions
+  // endpoint doesn't report, per host-pool doc §10.1).
+  const {
+    data: hostsData,
+    isLoading: hostsLoading,
+    isFetching: hostsFetching,
+    refetch: refetchHosts,
+  } = useAdminZoomHosts(isSuperAdmin);
   // Event picker for manual assignment — only VIRTUAL/HYBRID events consume a host.
   const { data: eventsPage } = useEvents("", 0, 100, isSuperAdmin);
   const releaseMutation = useReleaseZoomSession();
@@ -166,6 +176,21 @@ export default function ZoomSessionsPage() {
   };
   const capacityReported = sessionsData?.capacityReported ?? false;
   const rawPayload = sessionsData?.raw ?? null;
+
+  // The sessions endpoint may omit pool totals (host-pool doc §10.1). When it does,
+  // fall back to the host pool's summed capacity as the real ceiling, and recompute
+  // "slots free" from it — so the summary reads a real number, not "—".
+  const hostCapacity =
+    hostsData?.available && hostsData.totalCapacity != null ? hostsData.totalCapacity : null;
+  const effectiveCapacity = totals.totalCapacity ?? hostCapacity;
+  const effectiveFree =
+    totals.slotsFree ??
+    (effectiveCapacity != null && totals.slotsInUse != null
+      ? Math.max(0, effectiveCapacity - totals.slotsInUse)
+      : null);
+  const capacityIsReal = capacityReported || hostCapacity != null;
+  // True when the ceiling came from the host pool rather than the sessions payload.
+  const capacityFromHostPool = totals.totalCapacity == null && hostCapacity != null;
   const assignableEvents = (eventsPage?.content ?? []).filter((e) => e.format !== "IN_PERSON");
   const releasing = releaseMutation.isPending;
   const bulkReleasing = bulkReleaseMutation.isPending;
@@ -191,19 +216,22 @@ export default function ZoomSessionsPage() {
           <div>
             <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Zoom Sessions</h1>
             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
-              Live events share a pool of Zoom host accounts. Monitor who holds a slot, free stranded
-              slots, and assign hosts manually.
+              Live events share a pool of Zoom host accounts. Manage the pool, monitor who holds a
+              slot, free stranded slots, and assign hosts manually.
             </p>
           </div>
         </div>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => refetch()}
-          disabled={sessionsLoading || isFetching}
+          onClick={() => {
+            refetch();
+            refetchHosts();
+          }}
+          disabled={sessionsLoading || isFetching || hostsFetching}
           className="gap-2 shrink-0"
         >
-          <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} /> Refresh
+          <RefreshCw className={`h-4 w-4 ${isFetching || hostsFetching ? "animate-spin" : ""}`} /> Refresh
         </Button>
       </div>
 
@@ -246,23 +274,27 @@ export default function ZoomSessionsPage() {
             <StatCard
               icon={<Server className="h-4 w-4" />}
               label="Total capacity"
-              value={fmtNum(totals.totalCapacity)}
-              note={totals.totalCapacity == null ? "Not reported by backend" : undefined}
+              value={fmtNum(effectiveCapacity)}
+              note={
+                effectiveCapacity == null
+                  ? "Not reported by backend"
+                  : capacityFromHostPool
+                    ? "From host pool"
+                    : undefined
+              }
             />
             <StatCard
               icon={<Radio className="h-4 w-4" />}
               label="Slots in use"
               value={fmtNum(totals.slotsInUse)}
-              note={!capacityReported ? "Derived from held slots" : undefined}
+              note={!capacityIsReal ? "Derived from held slots" : undefined}
             />
             <StatCard
               icon={<CheckCircle2 className="h-4 w-4" />}
               label="Slots free"
-              value={fmtNum(totals.slotsFree)}
-              tone={
-                totals.slotsFree == null ? "muted" : totals.slotsFree === 0 ? "danger" : "ok"
-              }
-              note={totals.slotsFree == null ? "Needs capacity from backend" : undefined}
+              value={fmtNum(effectiveFree)}
+              tone={effectiveFree == null ? "muted" : effectiveFree === 0 ? "danger" : "ok"}
+              note={effectiveFree == null ? "Needs capacity from backend" : undefined}
             />
             <StatCard
               icon={<AlertTriangle className="h-4 w-4" />}
@@ -271,6 +303,9 @@ export default function ZoomSessionsPage() {
               tone={totals.strandedSlots && totals.strandedSlots > 0 ? "warn" : "muted"}
             />
           </div>
+
+          {/* Host pool — add/remove licensed seats, correct per-host capacity (§7d) */}
+          <HostPoolCard data={hostsData} isLoading={hostsLoading} />
 
           {/* Assign a host */}
           <Card className="attend-card p-6 mb-6">

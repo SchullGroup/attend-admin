@@ -63,7 +63,8 @@ export interface StatusTransitionResponse {
   zoomMeetingEndStatus?: "NOT_CONFIGURED" | "NOT_IN_PROGRESS" | "ENDED" | "PENDING_RETRY";
 }
 
-// Zoom Meeting (returned on event detail when enableZoomMeeting was set)
+// Zoom Meeting — returned on event detail once a host slot has been claimed for the
+// event (lazily, via POST /events/{id}/zoom), not at creation time (see §7a).
 export interface ZoomMeetingDto {
   meetingId:       number;
   password:        string;
@@ -358,12 +359,47 @@ export const usePublishEvent = makeLifecycleMutation(
   "Publish failed."
 );
 
-/** PUBLISHED → LIVE */
-export const useGoLiveEvent = makeLifecycleMutation(
-  (id) => `/api/v1/client/events/${id}/go-live`,
-  "Event is now Live",
-  "Go-live failed."
-);
+/**
+ * PUBLISHED → LIVE.
+ *
+ * §1 (idempotency): a go-live request can fail in transit or be retried after
+ * the transition already happened server-side. Rather than surface a misleading
+ * "Go-live failed." on a transition that actually succeeded, re-check the
+ * event's current status when the POST errors — if it is already LIVE, the
+ * go-live is treated as successful.
+ */
+export function useGoLiveEvent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      try {
+        const res = await apiClient.post<ApiResponse<StatusTransitionResponse>>(
+          `/api/v1/client/events/${id}/go-live`
+        );
+        return res.data.data;
+      } catch (error) {
+        // Re-check before failing: the event may already be LIVE (retry / lost response).
+        try {
+          const check = await apiClient.get<ApiResponse<{ status?: EventStatus }>>(
+            `/api/v1/client/events/${id}`
+          );
+          if (check.data.data?.status === "LIVE") {
+            return { id, status: "LIVE", updatedAt: new Date().toISOString() } as StatusTransitionResponse;
+          }
+        } catch {
+          // Status re-check failed too — fall through and surface the original error.
+        }
+        throw error;
+      }
+    },
+    onSuccess: (data, id) => {
+      queryClient.invalidateQueries({ queryKey: clientEventKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: clientEventKeys.all });
+      popup.success("Event is now Live", `Status: ${data?.status ?? "LIVE"}`, 3000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Go-live failed."),
+  });
+}
 
 /** LIVE → ENDED */
 export const useEndEvent = makeLifecycleMutation(
@@ -711,7 +747,7 @@ export interface CreateEventRequest {
   endDate?:                    string;       // YYYY-MM-DD — for multi-day events
   startTime:                   string;       // HH:mm (no seconds)
   endTime?:                    string;       // HH:mm (no seconds) — optional end time
-  /** Required when format is VIRTUAL or HYBRID. */
+  /** Optional stream/join URL for VIRTUAL or HYBRID events. Can be added — or a Zoom meeting generated — later from the event's Settings tab. */
   streamUrl?:                  string;
   /** Physical location / venue */
   location?:                   string;
@@ -725,10 +761,6 @@ export interface CreateEventRequest {
   productLaunchConfig?:        ProductLaunchConfigRequest;
   innovationChallengeConfig?:  InnovationChallengeConfigRequest;
   generalEventConfig?:         GeneralEventConfigRequest;
-  /** Auto-create a Zoom meeting for this event */
-  enableZoomMeeting?:          boolean;
-  /** Duration in minutes for the auto-created Zoom meeting (default 120) */
-  zoomDurationMinutes?:        number;
 }
 
 /** Create a new event (client/event-manager). DRAFT status on creation. */
