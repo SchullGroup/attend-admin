@@ -13,6 +13,7 @@ import {
   useCertificateFieldKeys,
   useEventCertificateTemplate,
   useSaveEventCertificateTemplate,
+  useSaveRegisterCertificateTemplate,
   useDeleteCertificateTemplate,
   useUploadCertificateArtwork,
   defaultFieldForKey,
@@ -29,7 +30,9 @@ import {
   type TemplateFieldAlign,
   type CertificateTemplate,
   type CertificateType,
+  type CertificateTemplateScope,
 } from "@/api/certificate-templates";
+import { useClientEventDetail } from "@/api/client-events";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -413,12 +416,18 @@ function FieldProperties({ field, onChange, onRemove }: {
  */
 function CertificateTemplateEditorInner({
   challengeId,
+  registerId,
+  scope,
   readOnly,
   certType,
   supportsCertificateType,
   onDirtyChange,
 }: {
   challengeId: string;
+  /** The org's register id, required to save the org-wide default (§2). */
+  registerId?: string;
+  /** Which tier of the cascade this editor is editing: the per-event override or the org-wide default. */
+  scope: CertificateTemplateScope;
   readOnly?: boolean;
   certType: CertificateType;
   supportsCertificateType: boolean;
@@ -428,7 +437,10 @@ function CertificateTemplateEditorInner({
   const { data: fieldKeys, isLoading: loadingKeys } = useCertificateFieldKeys();
   const upload = useUploadCertificateArtwork();
   const save = useSaveEventCertificateTemplate();
+  const saveRegister = useSaveRegisterCertificateTemplate();
   const del = useDeleteCertificateTemplate();
+  const saving = save.isPending || saveRegister.isPending;
+  const editingOrgDefault = scope === "REGISTER";
 
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -467,19 +479,19 @@ function CertificateTemplateEditorInner({
   // fresh chance to load before we show the failed state.
   useEffect(() => { setPreviewFailed(false); }, [draft.artworkUrl, draft.artworkPreviewUrl, localPreview]);
 
-  // Seed the draft from the loaded template for THIS certificate type, exactly once
-  // (don't clobber in-progress edits when the query refetches). On today's backend
-  // certType is always WINNER and templateForType returns resolution.event — identical
-  // to the legacy behaviour.
+  // Seed the draft from the loaded template for THIS (scope, certificate type), exactly
+  // once (don't clobber in-progress edits when the query refetches). On today's backend
+  // certType is always WINNER; scope selects the event override vs. the org-wide default,
+  // both of which the same GET returns (§2).
   useEffect(() => {
     if (seededRef.current || !resolution) return;
     seededRef.current = true;
-    const seed = templateForType(resolution, "EVENT", certType);
+    const seed = templateForType(resolution, scope, certType);
     if (seed) {
       setDraft(draftFromTemplate(seed));
       setSelectedKey(seed.fields[0]?.key ?? null);
     }
-  }, [resolution, certType]);
+  }, [resolution, scope, certType]);
 
   // Surface dirtiness to the parent so it can guard a type switch (which remounts
   // this editor and would otherwise silently discard unsaved edits).
@@ -592,27 +604,37 @@ function CertificateTemplateEditorInner({
       popup.error("Recipient name required", "Add the Recipient Name field — a certificate can’t be issued without it.");
       return;
     }
-    save.mutate({
-      eventId: challengeId,
-      body: {
-        name: draft.name.trim(),
-        artworkUrl: draft.artworkUrl,
-        artworkPublicId: draft.artworkPublicId,
-        artworkResourceType: draft.artworkResourceType,
-        active: draft.active,
-        fields: draft.fields,
-        // §9: only tag the type when the backend understands it. Omitted otherwise so
-        // the request is byte-identical to today's and can't clobber the sole template.
-        certificateType: supportsCertificateType ? certType : undefined,
-      },
-    }, { onSuccess: () => setDirty(false) });
+    const body = {
+      name: draft.name.trim(),
+      artworkUrl: draft.artworkUrl,
+      artworkPublicId: draft.artworkPublicId,
+      artworkResourceType: draft.artworkResourceType,
+      active: draft.active,
+      fields: draft.fields,
+      // §9: only tag the type when the backend understands it. Omitted otherwise so
+      // the request is byte-identical to today's and can't clobber the sole template.
+      certificateType: supportsCertificateType ? certType : undefined,
+    };
+    const onSuccess = () => setDirty(false);
+    if (editingOrgDefault) {
+      // §2: the org-wide default. Applies to every event without its own template.
+      if (!registerId) {
+        popup.error("Can’t save the organisation default", "Your organisation couldn’t be resolved for this event. Save this as the event’s own template instead.");
+        return;
+      }
+      saveRegister.mutate({ registerId, body }, { onSuccess });
+    } else {
+      save.mutate({ eventId: challengeId, body }, { onSuccess });
+    }
   }
 
   function handleDelete() {
     if (readOnly || !draft.templateId) return;
     popup.confirm(
-      "Delete this template?",
-      "The event will fall back to your organisation’s default design, or the built-in one. This can’t be undone.",
+      editingOrgDefault ? "Delete the organisation default?" : "Delete this template?",
+      editingOrgDefault
+        ? "Every event without its own template will fall back to the built-in generated design. This can’t be undone."
+        : "The event will fall back to your organisation’s default design, or the built-in one. This can’t be undone.",
       () => del.mutate({ templateId: draft.templateId!, eventId: challengeId }, {
         onSuccess: () => {
           setDraft({ ...EMPTY_DRAFT });
@@ -631,7 +653,17 @@ function CertificateTemplateEditorInner({
 
   if (loadingTemplate || loadingKeys) return <Loader variant="inline" text="Loading certificate template…" />;
 
-  const effective = resolution?.effectiveScope ?? "BUILTIN";
+  // Which tier is actually in use for THIS certificate type. The resolution's global
+  // `effectiveScope` is a single value; once §9 type-separation is on, WINNER and
+  // PARTICIPATION can resolve to different tiers, so derive it per-type from which
+  // templates exist. Back-compat: with no type separation, use the reported scope.
+  const registerForType = resolution ? templateForType(resolution, "REGISTER", certType) : null;
+  const effective: CertificateTemplateScope | "BUILTIN" =
+    !resolution
+      ? "BUILTIN"
+      : supportsCertificateType
+        ? (templateForType(resolution, "EVENT", certType) ? "EVENT" : registerForType ? "REGISTER" : "BUILTIN")
+        : resolution.effectiveScope;
   const effectiveLabel =
     effective === "EVENT" ? "This event’s template"
     : effective === "REGISTER" ? "Your organisation’s default template"
@@ -648,6 +680,7 @@ function CertificateTemplateEditorInner({
           <div className="min-w-0">
             <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">
               {supportsCertificateType ? `${certTypeLabel(certType)} certificate design` : "Certificate design"}
+              {editingOrgDefault && <span className="text-[hsl(var(--muted-foreground))] font-normal"> · organisation default</span>}
             </h2>
             <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">
               Upload your finished certificate and place the variable fields on it.{" "}
@@ -658,11 +691,15 @@ function CertificateTemplateEditorInner({
                 : "Used for both winner and participation certificates."}{" "}
               Currently in use: <span className="font-semibold text-[hsl(var(--foreground))]">{effectiveLabel}</span>.
             </p>
-            {resolution?.register && effective !== "REGISTER" && (
+            {editingOrgDefault ? (
+              <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                You’re editing your <span className="font-semibold text-[hsl(var(--foreground))]">organisation’s default</span>. It applies to every event that doesn’t have its own certificate template.
+              </p>
+            ) : registerForType && effective !== "REGISTER" ? (
               <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
                 Your organisation has a default template; a template saved here overrides it for this event only.
               </p>
-            )}
+            ) : null}
           </div>
         </div>
       </Card>
@@ -819,7 +856,9 @@ function CertificateTemplateEditorInner({
           <Upload className="h-8 w-8 mx-auto text-[hsl(var(--muted-foreground))] mb-3" />
           <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Upload your certificate artwork to begin</p>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1 max-w-md mx-auto">
-            Until then, certificates use {effective === "REGISTER" ? "your organisation’s default template" : "the built-in generated design"}.
+            {editingOrgDefault
+              ? "Until you upload one, events without their own template use the built-in generated design."
+              : `Until then, certificates use ${effective === "REGISTER" ? "your organisation’s default template" : "the built-in generated design"}.`}
           </p>
         </Card>
       )}
@@ -897,12 +936,12 @@ function CertificateTemplateEditorInner({
           {draft.templateId && (
             <Button variant="outline" onClick={handleDelete} disabled={del.isPending} className="text-[#dc2626] border-[#dc262640] hover:bg-[#dc262610]">
               <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-              {del.isPending ? "Deleting…" : "Delete template"}
+              {del.isPending ? "Deleting…" : editingOrgDefault ? "Delete default" : "Delete template"}
             </Button>
           )}
-          <Button onClick={handleSave} disabled={save.isPending || !dirty} className="ml-auto">
+          <Button onClick={handleSave} disabled={saving || !dirty} className="ml-auto">
             <Save className="h-3.5 w-3.5 mr-1.5" />
-            {save.isPending ? "Saving…" : dirty ? "Save template" : "Saved"}
+            {saving ? "Saving…" : dirty ? (editingOrgDefault ? "Save organisation default" : "Save template") : "Saved"}
           </Button>
         </div>
       )}
@@ -913,21 +952,40 @@ function CertificateTemplateEditorInner({
 /**
  * Certificate template editor entry point.
  *
- * Feature-detects whether the backend distinguishes certificate types (cert.md §9):
- * `supportsCertificateType` is true when any field key is `winnerOnly` OR any returned
- * template carries a `certificateType`. Until that ships (nothing is on staging yet)
- * this renders EXACTLY today's single editor — no type toggle, and the save body carries
- * no `certificateType` — so the one existing template can never be clobbered.
+ * Two independent axes, each a segmented toggle above the editor:
  *
- * Once it ships, a WINNER | PARTICIPATION toggle appears and each type is edited as its
- * own template (the inner editor is remounted per type via `key`, so switching never
- * bleeds one type's draft into the other). A switch with unsaved edits is confirm-guarded.
+ *  • Scope (cert.md §2): "This event" vs "Organisation default". The per-event
+ *    template overrides the org-wide (Register) default, which overrides the built-in
+ *    design. The org default saves to POST /registers/{registerId}/certificate-template;
+ *    the registerId comes from the event detail (a challenge IS an event on the backend).
+ *    The toggle only appears once a registerId resolves — otherwise this stays
+ *    event-only, exactly as before.
+ *
+ *  • Type (cert.md §9): WINNER vs PARTICIPATION. Feature-detected via
+ *    `supportsCertificateType` (any `winnerOnly` field key, or any returned template
+ *    carrying a `certificateType`). Until that ships nothing sends a `certificateType`,
+ *    so the one existing template can never be clobbered.
+ *
+ * The inner editor is remounted per `${scope}:${certType}` via `key`, so switching either
+ * axis reseeds cleanly and never bleeds one draft into another. A switch with unsaved
+ * edits is confirm-guarded. With neither axis available this is byte-identical to the
+ * original single-template editor.
  */
 export function CertificateTemplateEditor({ challengeId, readOnly }: { challengeId: string; readOnly?: boolean }) {
   const { data: resolution, isLoading: loadingTemplate } = useEventCertificateTemplate(challengeId);
   const { data: fieldKeys, isLoading: loadingKeys } = useCertificateFieldKeys();
+  // A challenge/hackathon IS an event on the backend, so its id doubles as the event id —
+  // GET /events/{id} carries the registerId needed to save the org-wide default (§2). If
+  // this 403s/404s (e.g. it isn't the caller's org) registerId stays undefined and the
+  // org-default toggle simply doesn't appear.
+  const { data: eventDetail } = useClientEventDetail(challengeId);
+  const registerId: string | undefined =
+    eventDetail?.registerId ?? eventDetail?.register?.id ?? eventDetail?.register_id ?? undefined;
+  const canEditOrgDefault = !!registerId;
+
   const [certType, setCertType] = useState<CertificateType>("WINNER");
-  // Tracks the mounted inner editor's unsaved state so a type switch can guard it.
+  const [scope, setScope] = useState<CertificateTemplateScope>("EVENT");
+  // Tracks the mounted inner editor's unsaved state so a type/scope switch can guard it.
   const dirtyRef = useRef(false);
 
   const supportsCertificateType = useMemo(
@@ -937,11 +995,13 @@ export function CertificateTemplateEditor({ challengeId, readOnly }: { challenge
 
   if (loadingTemplate || loadingKeys) return <Loader variant="inline" text="Loading certificate template…" />;
 
-  // Legacy backend: behave exactly as before — single editor, no type in the save body.
-  if (!supportsCertificateType) {
+  // Nothing extra to offer (no cert-type separation AND no resolvable org): render EXACTLY
+  // today's single editor — no toggles, event scope, no certificateType in the save body.
+  if (!supportsCertificateType && !canEditOrgDefault) {
     return (
       <CertificateTemplateEditorInner
         challengeId={challengeId}
+        scope="EVENT"
         readOnly={readOnly}
         certType="WINNER"
         supportsCertificateType={false}
@@ -949,56 +1009,102 @@ export function CertificateTemplateEditor({ challengeId, readOnly }: { challenge
     );
   }
 
-  function requestType(next: CertificateType) {
-    if (next === certType) return;
+  function guardSwitch(run: () => void, what: string) {
     if (dirtyRef.current) {
       popup.confirm(
         "Discard unsaved changes?",
-        `You have unsaved changes to the ${certTypeLabel(certType).toLowerCase()} certificate. Switching will discard them.`,
-        () => { dirtyRef.current = false; setCertType(next); },
+        `You have unsaved changes to the ${what}. Switching will discard them.`,
+        () => { dirtyRef.current = false; run(); },
         undefined,
         "Discard & switch",
         "Stay",
       );
       return;
     }
-    setCertType(next);
+    run();
   }
+  function requestType(next: CertificateType) {
+    if (next === certType) return;
+    guardSwitch(() => setCertType(next), `${certTypeLabel(certType).toLowerCase()} certificate`);
+  }
+  function requestScope(next: CertificateTemplateScope) {
+    if (next === scope) return;
+    guardSwitch(() => setScope(next), scope === "REGISTER" ? "organisation default" : "event template");
+  }
+
+  const scopeOptions: { value: CertificateTemplateScope; label: string }[] = [
+    { value: "EVENT", label: "This event" },
+    { value: "REGISTER", label: "Organisation default" },
+  ];
 
   return (
     <div className="flex flex-col gap-4">
-      {/* WINNER | PARTICIPATION type switch (§9) */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-0.5">
-          {CERTIFICATE_TYPES.map((t) => {
-            const active = t === certType;
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => requestType(t)}
-                aria-pressed={active}
-                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  active ? "text-white shadow-sm" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-                }`}
-                style={active ? { backgroundColor: BRAND } : undefined}
-              >
-                {certTypeLabel(t)}
-              </button>
-            );
-          })}
+      {/* Scope switch: per-event override vs the org-wide default (§2 cascade) */}
+      {canEditOrgDefault && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="inline-flex rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-0.5">
+            {scopeOptions.map(({ value, label }) => {
+              const active = value === scope;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => requestScope(value)}
+                  aria-pressed={active}
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    active ? "text-white shadow-sm" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                  }`}
+                  style={active ? { backgroundColor: BRAND } : undefined}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            {scope === "REGISTER"
+              ? "This design applies to every event without its own template."
+              : "A template here applies to this event only, overriding the organisation default."}
+          </p>
         </div>
-        <p className="text-xs text-[hsl(var(--muted-foreground))]">
-          Design each certificate type separately. Switching keeps each design independent.
-        </p>
-      </div>
+      )}
+
+      {/* WINNER | PARTICIPATION type switch (§9) */}
+      {supportsCertificateType && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="inline-flex rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-0.5">
+            {CERTIFICATE_TYPES.map((t) => {
+              const active = t === certType;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => requestType(t)}
+                  aria-pressed={active}
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    active ? "text-white shadow-sm" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                  }`}
+                  style={active ? { backgroundColor: BRAND } : undefined}
+                >
+                  {certTypeLabel(t)}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            Design each certificate type separately. Switching keeps each design independent.
+          </p>
+        </div>
+      )}
 
       <CertificateTemplateEditorInner
-        key={certType}
+        key={`${scope}:${certType}`}
         challengeId={challengeId}
+        registerId={registerId}
+        scope={scope}
         readOnly={readOnly}
         certType={certType}
-        supportsCertificateType
+        supportsCertificateType={supportsCertificateType}
         onDirtyChange={(d) => { dirtyRef.current = d; }}
       />
     </div>

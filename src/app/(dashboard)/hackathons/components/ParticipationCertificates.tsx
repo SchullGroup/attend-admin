@@ -31,6 +31,14 @@ const SKIP_LABEL: Record<ParticipationSkipReason, string> = {
   NO_EMAIL:       "No email on file",
 };
 
+/** Compact labels + order for the skip-reason breakdown chips under the summary. */
+const SKIP_CHIP_LABEL: Record<ParticipationSkipReason, string> = {
+  IS_WINNER:      "Winners",
+  ALREADY_ISSUED: "Already issued",
+  NO_EMAIL:       "No email",
+};
+const SKIP_REASON_ORDER: ParticipationSkipReason[] = ["IS_WINNER", "ALREADY_ISSUED", "NO_EMAIL"];
+
 /** Progress card for the issuance run. The run body is identical to a winner
  *  announcement, so the shape matches — only the wording differs (issue, not
  *  announce; a thank-you, not a congratulation). */
@@ -207,6 +215,17 @@ export function ParticipationCertificates({ challengeId, readOnly }: { challenge
   const recipientCount = data?.totalRecipients ?? data?.willReceiveCount ?? willReceive.length;
   const skippedCount = data?.skippedCount ?? skipped.length;
 
+  // Why each skipped member is skipped. Prefer the backend's authoritative counts
+  // (the flattened member list can be truncated); fall back to counting the rows we
+  // have. NO_EMAIL is the only actionable one — an organiser can add a missing email.
+  const skipCounts: Record<ParticipationSkipReason, number> = {
+    IS_WINNER:      data?.isWinnerCount      ?? skipped.filter((m) => m.skipReason === "IS_WINNER").length,
+    ALREADY_ISSUED: data?.alreadyIssuedCount ?? skipped.filter((m) => m.skipReason === "ALREADY_ISSUED").length,
+    NO_EMAIL:       data?.noEmailCount       ?? skipped.filter((m) => m.skipReason === "NO_EMAIL").length,
+  };
+  const knownSkip = skipCounts.IS_WINNER + skipCounts.ALREADY_ISSUED + skipCounts.NO_EMAIL;
+  const otherSkip = Math.max(0, skippedCount - knownSkip);
+
   const ended = isChallengeEnded(challenge?.status);
   const alreadyIssued = isWinnerAnnouncementTerminal(progress?.status);
   const canIssue = !readOnly && ended && recipientCount > 0 && !issue.isPending;
@@ -269,6 +288,37 @@ export function ParticipationCertificates({ challengeId, readOnly }: { challenge
               </Card>
             ))}
           </div>
+
+          {/* Why anyone is skipped — a NO_EMAIL count is actionable (add an email). */}
+          {skippedCount > 0 && (knownSkip > 0 || otherSkip > 0) && (
+            <div className="flex flex-wrap items-center gap-2 -mt-2">
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">Skipped because:</span>
+              {SKIP_REASON_ORDER.map((r) => {
+                const n = skipCounts[r];
+                if (!n) return null;
+                const actionable = r === "NO_EMAIL";
+                return (
+                  <span
+                    key={r}
+                    title={SKIP_LABEL[r]}
+                    className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                      actionable
+                        ? "bg-amber-50 text-amber-800 border border-amber-200"
+                        : "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"
+                    }`}
+                  >
+                    {actionable && <AlertTriangle className="h-3 w-3" />}
+                    {SKIP_CHIP_LABEL[r]}: <span className="tabular-nums font-semibold">{n}</span>
+                  </span>
+                );
+              })}
+              {otherSkip > 0 && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
+                  Other: <span className="tabular-nums font-semibold">{otherSkip}</span>
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Eligible applications */}
           <div className="flex flex-col gap-3">
