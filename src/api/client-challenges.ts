@@ -355,6 +355,12 @@ export const clientChallengeKeys = {
                  ["clientChallenges", id, "winners", "announcement", announcementId] as const,
   winnerAnnouncementLatest: (id: string) =>
                  ["clientChallenges", id, "winners", "announcement", "latest"] as const,
+  participationPreview: (id: string) =>
+                 ["clientChallenges", id, "participation", "preview"] as const,
+  participationRun: (id: string, runId: string) =>
+                 ["clientChallenges", id, "participation", "run", runId] as const,
+  participationRunLatest: (id: string) =>
+                 ["clientChallenges", id, "participation", "run", "latest"] as const,
 };
 
 export const judgePoolKeys = {
@@ -1214,6 +1220,235 @@ export function useLatestChallengeWinnerAnnouncement(challengeId: string, opts?:
       try {
         const res = await apiClient.get<ApiResponse<WinnerAnnouncement>>(
           `/api/v1/client/events/${challengeId}/challenge-winners/announcements/latest`
+        );
+        const parsed = parseWinnerAnnouncement(res.data.data ?? res.data, challengeId);
+        return parsed.announcementId ? parsed : null;
+      } catch (err: any) {
+        if (err?.response?.status === 404) return null;
+        throw err;
+      }
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Participation certificates  (backend spec: cert.md §3)
+//
+//   The second certificate type. Winners get a WINNER certificate; everyone
+//   else who genuinely took part gets a PARTICIPATION one — nobody gets both
+//   (enforced by a DB unique constraint, not just an app-layer check).
+//
+//   Eligibility (server-computed): members of applications in SUBMITTED,
+//   UNDER_REVIEW, SHORTLISTED, SELECTED or NOT_PROGRESSED. WITHDRAWN / REJECTED
+//   are excluded; winners are skipped. Cert numbers use ATP- (vs ATD- winners).
+//
+//   Same event-scoped shape as the winner flow — eventId === challengeId — and
+//   the issue "run" body is byte-for-byte the winner announcement status, so we
+//   reuse parseWinnerAnnouncement, the poll cadence and the terminal check. The
+//   only real differences: there's no organiser message (the email is a fixed
+//   thank-you, computed server-side) and the recipient list is never submitted
+//   back — `issue` recomputes it, exactly like winners.
+// ---------------------------------------------------------------------------
+
+export type ParticipationSkipReason = "ALREADY_ISSUED" | "IS_WINNER" | "NO_EMAIL";
+
+export interface ParticipationMember {
+  memberId?:         string;
+  name:              string;
+  email?:            string;
+  hasAttendAccount?: boolean;
+  certificateId?:    string | null;
+  willReceive?:      boolean;               // false ⇒ skipReason explains why
+  skipReason?:       ParticipationSkipReason | null;
+}
+
+export interface ParticipationApplication {
+  applicationId: string;
+  teamName:      string;
+  ideaTitle?:    string;
+  track?:        string;
+  status?:       string;                    // the eligible status it qualified under
+  members:       ParticipationMember[];
+}
+
+export interface ParticipationPreviewResponse {
+  eventId:            string;
+  eventTitle?:        string;
+  applications:       ParticipationApplication[];
+  totalApplications?: number;
+  totalRecipients?:   number;               // members who WILL receive
+  willReceiveCount?:  number;               // alias of totalRecipients
+  skippedCount?:      number;               // members skipped (any reason)
+  alreadyIssuedCount?: number;
+  isWinnerCount?:     number;
+  noEmailCount?:      number;
+}
+
+// The issue "run" is the same job DTO as a winner announcement — reuse the type
+// and its parser wholesale rather than maintaining a parallel copy.
+export type ParticipationRun = WinnerAnnouncement;
+
+/** Normalise a participation preview across the field-name variants the backend may ship. */
+function parseParticipationPreview(raw: any, fallbackEventId: string): ParticipationPreviewResponse {
+  const r = raw ?? {};
+  const apps =
+    Array.isArray(r?.applications) ? r.applications :
+    Array.isArray(r?.teams)        ? r.teams :
+    Array.isArray(r)               ? r : [];
+
+  const applications: ParticipationApplication[] = apps.map((a: any) => {
+    const members = Array.isArray(a?.members) ? a.members : [];
+    return {
+      applicationId: a?.applicationId ?? a?.id ?? "",
+      teamName:      a?.teamName ?? a?.name ?? "—",
+      ideaTitle:     a?.ideaTitle ?? a?.title,
+      track:         a?.track,
+      status:        a?.status,
+      members: members.map((m: any) => ({
+        memberId:         m?.memberId ?? m?.id,
+        name:             m?.name ?? m?.fullName ?? "Unnamed member",
+        email:            m?.email ?? undefined,
+        hasAttendAccount: m?.hasAttendAccount ?? m?.hasAccount,
+        certificateId:    m?.certificateId ?? null,
+        // Default to "will receive" when the backend doesn't say otherwise, but
+        // treat an explicit skipReason as authoritative even if willReceive is absent.
+        willReceive:      m?.willReceive ?? (m?.skipReason ? false : true),
+        skipReason:       (m?.skipReason ?? null) as ParticipationSkipReason | null,
+      })),
+    };
+  });
+
+  return {
+    eventId:            r?.eventId ?? fallbackEventId,
+    eventTitle:         r?.eventTitle ?? "",
+    applications,
+    totalApplications:  r?.totalApplications ?? r?.applicationCount ?? applications.length,
+    totalRecipients:    r?.totalRecipients ?? r?.willReceiveCount ?? r?.recipientCount,
+    willReceiveCount:   r?.willReceiveCount ?? r?.totalRecipients,
+    skippedCount:       r?.skippedCount ?? r?.skipCount,
+    alreadyIssuedCount: r?.alreadyIssuedCount,
+    isWinnerCount:      r?.isWinnerCount,
+    noEmailCount:       r?.noEmailCount,
+  };
+}
+
+/**
+ * POST /client/events/{eventId}/challenge-participation/preview
+ * Read-only server-computed eligibility (no side effects). eventId === challengeId.
+ */
+export function useChallengeParticipationPreview(challengeId: string, opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: clientChallengeKeys.participationPreview(challengeId),
+    queryFn: async () => {
+      const res = await apiClient.post<ApiResponse<ParticipationPreviewResponse>>(
+        `/api/v1/client/events/${challengeId}/challenge-participation/preview`,
+        {}
+      );
+      return parseParticipationPreview(res.data.data ?? res.data, challengeId);
+    },
+    enabled: !!challengeId && (opts?.enabled ?? true),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
+
+/**
+ * POST /client/events/{eventId}/challenge-participation/issue
+ * Requires the challenge to be ENDED. Recomputes the recipient list server-side
+ * (the preview is never submitted back). Idempotent via Idempotency-Key AND at
+ * the data layer — members who already hold a certificate are skipped, never
+ * sent a second one. Returns 202 + a run job (same shape as winner announce).
+ *
+ * Body — delivery intent. An empty `{}` body 400s with "Request body is missing
+ * or malformed" (2026-08-29): this endpoint mirrors challenge-winners/announce,
+ * whose request DTO carries the delivery flags, and Jackson can't bind the
+ * required fields from `{}`. Unlike winners there is NO organiser `message` (the
+ * participation email is a fixed server-side thank-you) and NO `applicationIds`
+ * (recipients are recomputed on the server), so we send only the two channel
+ * flags. See BACKEND_CERT_PARTICIPATION_ISSUE_400_2026-08-29.md.
+ */
+export function useIssueChallengeParticipation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      challengeId,
+      idempotencyKey,
+      sendEmail = true,
+      sendInApp = true,
+    }: {
+      challengeId:    string;
+      idempotencyKey: string;
+      sendEmail?:     boolean;
+      sendInApp?:     boolean;
+    }) => {
+      const res = await apiClient.post<ApiResponse<ParticipationRun>>(
+        `/api/v1/client/events/${challengeId}/challenge-participation/issue`,
+        { sendEmail, sendInApp },
+        { headers: { "Idempotency-Key": idempotencyKey } }
+      );
+      return parseWinnerAnnouncement(res.data.data ?? res.data, challengeId);
+    },
+    onSuccess: (data, { challengeId }) => {
+      queryClient.invalidateQueries({ queryKey: clientChallengeKeys.participationPreview(challengeId) });
+      // Seed the run query from the 202 body so progress renders immediately.
+      if (data.announcementId) {
+        queryClient.setQueryData(
+          clientChallengeKeys.participationRun(challengeId, data.announcementId),
+          data
+        );
+      }
+      popup.success(
+        "Participation Certificates Started",
+        "Thank-you certificates are being issued. Track progress below.",
+        3000
+      );
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to issue participation certificates."),
+  });
+}
+
+/**
+ * GET /client/events/{eventId}/challenge-participation/runs/{runId}
+ * Polls fast-then-slow past the ~10-min watchdog, exactly like the winner job.
+ */
+export function useChallengeParticipationRun(challengeId: string, runId: string | null) {
+  return useQuery({
+    queryKey: clientChallengeKeys.participationRun(challengeId, runId ?? ""),
+    enabled: !!challengeId && !!runId,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<ParticipationRun>>(
+        `/api/v1/client/events/${challengeId}/challenge-participation/runs/${runId}`
+      );
+      return parseWinnerAnnouncement(res.data.data ?? res.data, challengeId);
+    },
+    retry: false,
+    refetchInterval: (query) => {
+      const status = (query.state.data as ParticipationRun | undefined)?.status;
+      if (isWinnerAnnouncementTerminal(status)) return false;
+      const ticks = query.state.dataUpdateCount + query.state.errorUpdateCount;
+      if (ticks >= ANNOUNCE_MAX_POLLS) return false;
+      return ticks < ANNOUNCE_FAST_POLLS ? 3000 : ANNOUNCE_SLOW_INTERVAL;
+    },
+  });
+}
+
+/**
+ * GET /client/events/{eventId}/challenge-participation/runs/latest
+ * Restore the last run's progress card after a reload without persisting the id
+ * client-side. 404 ⇒ null (no run has ever been started).
+ */
+export function useLatestChallengeParticipationRun(challengeId: string, opts?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: clientChallengeKeys.participationRunLatest(challengeId),
+    enabled: !!challengeId && (opts?.enabled ?? true),
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get<ApiResponse<ParticipationRun>>(
+          `/api/v1/client/events/${challengeId}/challenge-participation/runs/latest`
         );
         const parsed = parseWinnerAnnouncement(res.data.data ?? res.data, challengeId);
         return parsed.announcementId ? parsed : null;

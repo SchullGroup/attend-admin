@@ -42,6 +42,8 @@ import {
 } from "@/api/client-challenges";
 import { AssignmentsSection } from "../components/AssignmentsSection";
 import { TabHint } from "../components/ChallengeGuide";
+import { ParticipationCertificates } from "../components/ParticipationCertificates";
+import { CertificateTemplateEditor } from "../components/CertificateTemplateEditor";
 import { ResourcesTab } from "./ResourcesTab";
 import {
   useAdminChallengeDetail,
@@ -2164,7 +2166,7 @@ function AdminLeaderboardTab({ challengeId }: { challengeId: string }) {
 // ---------------------------------------------------------------------------
 const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
 
-const CLIENT_TABS  = ["Overview", "Applications", "Leaderboard", "Winners", "Judges", "Resources", "Settings"] as const;
+const CLIENT_TABS  = ["Overview", "Applications", "Leaderboard", "Winners", "Certificates", "Judges", "Resources", "Settings"] as const;
 const ADMIN_TABS   = ["Overview", "Leaderboard", "Judges", "Resources"] as const;
 type ClientTab = typeof CLIENT_TABS[number];
 type AdminTab  = typeof ADMIN_TABS[number];
@@ -2360,6 +2362,26 @@ export default function ChallengeDetailPage({
             <TabHint label="Note">you can announce winners once the challenge has ended and every shortlisted team is scored.</TabHint>
           )}
           <WinnersTab challengeId={challengeId} readOnly={isViewer} />
+        </div>
+      )}
+      {!isSuperAdmin && tab === "Certificates" && (
+        <div className="flex flex-col gap-6">
+          {!isViewer && (
+            <TabHint label="Tip">upload your certificate artwork below, then issue participation certificates to entrants who didn’t win. The same design is used for winner certificates too.</TabHint>
+          )}
+          <section className="flex flex-col gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-[hsl(var(--foreground))]">Participation certificates</h2>
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                Thank-you certificates for entrants who took part but didn’t win — issued once the challenge has ended.
+              </p>
+            </div>
+            <ParticipationCertificates challengeId={challengeId} readOnly={isViewer} />
+          </section>
+          <div className="border-t border-[hsl(var(--border))]" />
+          <section className="flex flex-col gap-4">
+            <CertificateTemplateEditor challengeId={challengeId} readOnly={isViewer} />
+          </section>
         </div>
       )}
       {!isSuperAdmin && tab === "Judges" && (
