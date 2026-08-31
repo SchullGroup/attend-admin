@@ -13,7 +13,6 @@ import {
   Loader2,
   Info,
   ExternalLink,
-  Code2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -73,9 +72,8 @@ export default function ZoomSessionsPage() {
   const [assignEventId, setAssignEventId] = useState<string>("");
   const [assignDuration, setAssignDuration] = useState("120");
 
-  // ── Bulk-selection + diagnostics state ──────────────────────────────────────
+  // ── Bulk-selection state ─────────────────────────────────────────────────────
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [showRaw, setShowRaw] = useState(false);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
   function handleRelease(row: ZoomSessionRow) {
@@ -175,7 +173,6 @@ export default function ZoomSessionsPage() {
     strandedSlots: null,
   };
   const capacityReported = sessionsData?.capacityReported ?? false;
-  const rawPayload = sessionsData?.raw ?? null;
 
   // The sessions endpoint may omit pool totals (host-pool doc §10.1). When it does,
   // fall back to the host pool's summed capacity as the real ceiling, and recompute
@@ -183,10 +180,13 @@ export default function ZoomSessionsPage() {
   const hostCapacity =
     hostsData?.available && hostsData.totalCapacity != null ? hostsData.totalCapacity : null;
   const effectiveCapacity = totals.totalCapacity ?? hostCapacity;
+  // In-use already excludes stranded (a leak, counted separately), so free must subtract
+  // BOTH to reconcile: in-use + stranded + free = capacity. Releasing a stranded slot
+  // moves it from the stranded bucket into free.
   const effectiveFree =
     totals.slotsFree ??
     (effectiveCapacity != null && totals.slotsInUse != null
-      ? Math.max(0, effectiveCapacity - totals.slotsInUse)
+      ? Math.max(0, effectiveCapacity - totals.slotsInUse - (totals.strandedSlots ?? 0))
       : null);
   const capacityIsReal = capacityReported || hostCapacity != null;
   // True when the ceiling came from the host pool rather than the sessions payload.
@@ -287,7 +287,13 @@ export default function ZoomSessionsPage() {
               icon={<Radio className="h-4 w-4" />}
               label="Slots in use"
               value={fmtNum(totals.slotsInUse)}
-              note={!capacityIsReal ? "Derived from held slots" : undefined}
+              note={
+                totals.strandedSlots && totals.strandedSlots > 0
+                  ? "Active only — excl. stranded"
+                  : !capacityIsReal
+                    ? "Derived from held slots"
+                    : undefined
+              }
             />
             <StatCard
               icon={<CheckCircle2 className="h-4 w-4" />}
@@ -575,24 +581,6 @@ export default function ZoomSessionsPage() {
               </span>
             </div>
           )}
-
-          {/* Super-admin diagnostic — the exact backend payload. Handy when totals read "—":
-              it shows whether the backend actually returned pool capacity or the FE derived it. */}
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={() => setShowRaw((v) => !v)}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
-            >
-              <Code2 className="h-3.5 w-3.5" />
-              {showRaw ? "Hide" : "Show"} raw response
-            </button>
-            {showRaw && (
-              <pre className="mt-2 max-h-96 overflow-auto rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3 text-xs leading-relaxed text-[hsl(var(--foreground))]">
-                {JSON.stringify(rawPayload, null, 2)}
-              </pre>
-            )}
-          </div>
         </>
       )}
     </div>
