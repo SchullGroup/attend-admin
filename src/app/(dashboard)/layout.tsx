@@ -116,9 +116,13 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: "#f6f7fb" }}>
       <Sidebar />
-      <div className="ml-[272px] flex-1 flex flex-col min-h-screen">
+      {/* min-w-0 lets this flex column shrink below its widest child instead of
+          extending past the viewport; overflow-x-hidden on <main> keeps the shell
+          from scrolling sideways — wide tables scroll inside their own
+          overflow-x-auto wrappers, so nothing is clipped out of reach. */}
+      <div className="ml-[272px] flex-1 flex flex-col min-h-screen min-w-0">
         <Header />
-        <main className="flex-1 p-6 overflow-y-auto">{children}</main>
+        <main className="flex-1 min-w-0 p-6 overflow-y-auto overflow-x-hidden">{children}</main>
       </div>
     </div>
   );
