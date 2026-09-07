@@ -6,7 +6,7 @@ import {
   Plus, Trash2, ToggleLeft, ToggleRight, ListOrdered, Target, Award,
   ClipboardList, UserCheck, BookOpen, ChevronRight, ExternalLink, Code,
   Globe, Video, FolderOpen, Settings, Link2, Download, X,
-  Mail, Bell, Send, CheckCircle2, AlertTriangle,
+  Mail, Bell, Send, RefreshCw, CheckCircle2, AlertTriangle,
 } from "lucide-react";
 import {
   useClientChallengeDetail,
@@ -1428,6 +1428,28 @@ function WinnersTab({ challengeId, readOnly }: { challengeId: string; readOnly?:
     );
   }
 
+  // §11 — re-issue winner certificates with the CURRENT artwork and email every
+  // recipient again. Distinct from "Re-run announcement" (which skips anyone
+  // already issued), so it's gated behind its own explicit confirm.
+  function handleRegenerate() {
+    const trimmed = message.trim();
+    if (!alreadyAnnounced || !trimmed) return;
+    const count = data?.totalRecipients ?? winners.reduce((n, t) => n + (t.members?.length ?? 0), 0);
+    popup.confirm(
+      "Re-issue with updated artwork?",
+      `This regenerates certificates for all ${count} recipient(s) with the current artwork and emails every one of them again. Only do this after updating the certificate design.`,
+      () => {
+        announce.mutate(
+          { challengeId, applicationIds: winners.map((w) => w.applicationId), message: trimmed, sendEmail, sendInApp, regenerate: true },
+          { onSuccess: (res) => { if (res?.announcementId) setAnnouncementId(res.announcementId); } }
+        );
+      },
+      undefined,
+      "Re-issue",
+      "Cancel"
+    );
+  }
+
   // Prefer backend-provided counts; fall back to summarizing the members the
   // backend already returned (display only — not a winner computation).
   const allMembers = winners.flatMap((t) => t.members ?? []);
@@ -1549,10 +1571,18 @@ function WinnersTab({ challengeId, readOnly }: { challengeId: string; readOnly?:
                     <input type="checkbox" checked={sendInApp} onChange={(e) => setSendInApp(e.target.checked)} className="accent-[#7c22c9]" />
                     <Bell className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" /> Send in-app
                   </label>
-                  <Button onClick={handleAnnounce} disabled={!canAnnounce} className="ml-auto">
-                    <Send className="h-3.5 w-3.5 mr-1.5" />
-                    {announce.isPending ? "Announcing…" : alreadyAnnounced ? "Re-run announcement" : ended ? "Announce winners" : "End challenge to announce"}
-                  </Button>
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    {alreadyAnnounced && (
+                      <Button variant="outline" onClick={handleRegenerate} disabled={announce.isPending || !message.trim()}>
+                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                        Re-issue with updated artwork
+                      </Button>
+                    )}
+                    <Button onClick={handleAnnounce} disabled={!canAnnounce}>
+                      <Send className="h-3.5 w-3.5 mr-1.5" />
+                      {announce.isPending ? "Announcing…" : alreadyAnnounced ? "Re-run announcement" : ended ? "Announce winners" : "End challenge to announce"}
+                    </Button>
+                  </div>
                 </div>
               )}
 

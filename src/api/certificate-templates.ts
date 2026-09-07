@@ -47,6 +47,22 @@ export const RECIPIENT_NAME_KEY = "RECIPIENT_NAME";
 export const ARTWORK_MAX_BYTES = 1_000_000; // ≈0.95 MiB, leaving room for multipart overhead under the 1 MiB nginx cap
 
 /**
+ * §16 — the renderer embeds the artwork into a PDF, and only PDF / PNG / JPEG can
+ * be embedded. WebP (and AVIF/HEIC/…) upload fine but then render BLANK: a silent
+ * failure until the backend's hard-reject deploys (committed, not yet on staging).
+ * So guard the picker client-side. `ARTWORK_ACCEPT` drives the <input accept>;
+ * `isAcceptedArtwork` is the real gate — it also runs on drag-drop and on browsers
+ * that ignore `accept`, and checks the extension when the MIME is empty/odd.
+ */
+export const ARTWORK_ACCEPT = "application/pdf,image/png,image/jpeg";
+
+export function isAcceptedArtwork(file: File): boolean {
+  const type = (file.type || "").toLowerCase();
+  if (type === "application/pdf" || type === "image/png" || type === "image/jpeg") return true;
+  return /\.(pdf|png|jpe?g)$/i.test(file.name || "");
+}
+
+/**
  * The upload endpoint may return a RELATIVE path (e.g. `/uploads/…`) rather than
  * an absolute URL. Rendered raw in an `<img src>` or CSS `url()`, a relative path
  * resolves against the DASHBOARD origin (localhost:3000) and 404s — the artwork

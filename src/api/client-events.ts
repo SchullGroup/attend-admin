@@ -861,6 +861,8 @@ export interface BroadcastHistoryItem {
   pushSent?:        number;
   inAppSent?:       number;
   skipped:          number;
+  /** §15 — why recipients were skipped (e.g. no phone number, unsubscribed). */
+  failureReason?:   string;
   sentAt:           string;
   timeAgo:          string;
 }

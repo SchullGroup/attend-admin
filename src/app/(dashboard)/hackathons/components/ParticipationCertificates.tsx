@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  GraduationCap, Mail, Bell, Download, Send, CheckCircle2, AlertTriangle, X, Users,
+  GraduationCap, Mail, Bell, Download, Send, RefreshCw, CheckCircle2, AlertTriangle, X, Users,
 } from "lucide-react";
 import {
   useChallengeParticipationPreview,
@@ -27,17 +27,20 @@ const BRAND = "#7c22c9";
 
 const SKIP_LABEL: Record<ParticipationSkipReason, string> = {
   ALREADY_ISSUED: "Already issued",
-  IS_WINNER:      "Winner — gets a winner certificate",
+  IS_WINNER:      "Winner",
   NO_EMAIL:       "No email on file",
 };
 
-/** Compact labels + order for the skip-reason breakdown chips under the summary. */
+/** Compact labels + order for the skip-reason breakdown chips under the summary.
+ *  IS_WINNER is intentionally NOT in the visible order: as of §13 winners ALSO
+ *  receive a participation certificate, so the backend no longer skips them. The
+ *  key stays in the type + SKIP_LABEL for back-compat with older responses. */
 const SKIP_CHIP_LABEL: Record<ParticipationSkipReason, string> = {
   IS_WINNER:      "Winners",
   ALREADY_ISSUED: "Already issued",
   NO_EMAIL:       "No email",
 };
-const SKIP_REASON_ORDER: ParticipationSkipReason[] = ["IS_WINNER", "ALREADY_ISSUED", "NO_EMAIL"];
+const SKIP_REASON_ORDER: ParticipationSkipReason[] = ["ALREADY_ISSUED", "NO_EMAIL"];
 
 /** Progress card for the issuance run. The run body is identical to a winner
  *  announcement, so the shape matches — only the wording differs (issue, not
@@ -243,7 +246,7 @@ export function ParticipationCertificates({ challengeId, readOnly }: { challenge
     const key = idemRef.current;
     popup.confirm(
       alreadyIssued ? "Re-run Issuance?" : "Issue Participation Certificates?",
-      `This will issue thank-you certificates to ${recipientCount} participant(s) who didn’t win. Winners and anyone already issued are skipped automatically.`,
+      `This will issue thank-you certificates to ${recipientCount} eligible participant(s). Anyone already holding a participation certificate is skipped, so re-running is safe.`,
       () => {
         issue.mutate(
           { challengeId, idempotencyKey: key },
@@ -261,6 +264,28 @@ export function ParticipationCertificates({ challengeId, readOnly }: { challenge
     );
   }
 
+  // §11 — push updated artwork onto certificates that are ALREADY issued. Unlike
+  // "Re-run" (which skips anyone already holding a certificate), this regenerates
+  // them and emails every affected participant again, so it's a separate, sterner
+  // action gated behind an explicit confirm.
+  function handleRegenerate() {
+    if (!alreadyIssued) return;
+    const issued = skipCounts.ALREADY_ISSUED;
+    popup.confirm(
+      "Re-issue with updated artwork?",
+      `This regenerates participation certificates with the current artwork and emails every affected participant again${issued > 0 ? `, including the ${issued} already issued` : ""}. Only do this after updating the certificate design.`,
+      () => {
+        issue.mutate(
+          { challengeId, regenerate: true },
+          { onSuccess: (res) => { if (res?.announcementId) setRunId(res.announcementId); } }
+        );
+      },
+      undefined,
+      "Re-issue",
+      "Cancel"
+    );
+  }
+
   return (
     <div className="flex flex-col gap-5">
       {/* Progress (if a run has been kicked off) */}
@@ -274,7 +299,7 @@ export function ParticipationCertificates({ challengeId, readOnly }: { challenge
           <p className="text-sm font-semibold text-[hsl(var(--foreground))]">No eligible participants yet</p>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1 max-w-md mx-auto">
             Participation certificates go to entrants whose applications were submitted and assessed
-            (including those not progressed) — but not winners, withdrawals or rejections.
+            (including those not progressed) — but not withdrawals or rejections.
           </p>
         </Card>
       ) : (
@@ -361,8 +386,8 @@ export function ParticipationCertificates({ challengeId, readOnly }: { challenge
             <div className="px-5 py-5 flex flex-col gap-4">
               <p className="text-sm text-[hsl(var(--muted-foreground))]">
                 Each eligible participant receives a certificate (numbered <span className="font-mono text-xs">ATP-…</span>) and a
-                thank-you email. Winners are never included — nobody gets both. The list is recomputed at issue time,
-                and anyone already holding a certificate is skipped, so re-running is safe.
+                thank-you email. The list is recomputed at issue time, and anyone already holding a
+                participation certificate is skipped, so re-running is safe.
               </p>
 
               {!readOnly && !ended && (
@@ -382,10 +407,18 @@ export function ParticipationCertificates({ challengeId, readOnly }: { challenge
                   <p className="text-xs text-[hsl(var(--muted-foreground))]">
                     {recipientCount} will receive · {skippedCount} skipped
                   </p>
-                  <Button onClick={handleIssue} disabled={!canIssue} className="ml-auto">
-                    <Send className="h-3.5 w-3.5 mr-1.5" />
-                    {issue.isPending ? "Issuing…" : alreadyIssued ? "Re-run issuance" : ended ? "Issue certificates" : "End challenge to issue"}
-                  </Button>
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    {alreadyIssued && (
+                      <Button variant="outline" onClick={handleRegenerate} disabled={issue.isPending}>
+                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                        Re-issue with updated artwork
+                      </Button>
+                    )}
+                    <Button onClick={handleIssue} disabled={!canIssue}>
+                      <Send className="h-3.5 w-3.5 mr-1.5" />
+                      {issue.isPending ? "Issuing…" : alreadyIssued ? "Re-run issuance" : ended ? "Issue certificates" : "End challenge to issue"}
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">
