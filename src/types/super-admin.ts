@@ -205,6 +205,32 @@ export interface StakeholderSummaryResponse {
   online?: boolean;
 }
 
+/**
+ * GET /api/v1/admin/dashboard overview.
+ * Carries platform-wide aggregates that the FE needs to show exact Active/Suspended
+ * counts instead of a one-page sample (see BACKEND_DASHBOARD_USER_STATS_2026-08-28.md).
+ * Field names are field-name-tolerant in the hook, but this interface documents
+ * the preferred canonical names the backend should return.
+ */
+export interface AdminDashboardOverview {
+  totalUsers: number;
+  totalEvents: number;
+  enrolledStakeholders: number;
+  liveEvents: number;
+  liveBanner?: boolean;
+  kycSummary?: { approved: number; pending: number };
+  /** Platform-wide counts — once populated, the FE shows exact figures (zero further FE changes). */
+  activeUsers?: number;
+  activeCount?: number;
+  totalActive?: number;
+  suspendedUsers?: number;
+  suspendedCount?: number;
+  totalSuspended?: number;
+  recentActivity?: any[];
+  activityFeed?: any[];
+  [key: string]: any;
+}
+
 export interface EnrollmentResponse {
   id: string;
   name: string;
@@ -777,6 +803,11 @@ export interface CreateAgmEventRequest {
   shareholderListBase64?:  string;
   shareholderListFilename?: string;
   resolutions?:            AgmResolutionInput[];
+  /**
+   * Optional support contact for this AGM (backend note 2026-09-11 §3).
+   * Omit to inherit: organisation setting → platform default.
+   */
+  supportEmail?:           string;
 }
 
 /** POST /api/v1/admin/events/general — field names match swagger exactly */
@@ -907,3 +938,21 @@ export interface ClientRegisterDetailResponse {
  * New code should use PagedApiResponse<T> which includes `last`.
  */
 export type PagedResponse<T> = PagedApiResponse<T> & { number?: number };
+
+/**
+ * /api/v1/admin/users paged response can carry platform-wide aggregates
+ * alongside the page content (see BACKEND_DASHBOARD_USER_STATS_2026-08-28.md).
+ * The FE reads these tolerantly — populating any one set of field names
+ * makes the correct platform totals appear with zero further changes.
+ */
+export interface UserPagedResponse extends PagedApiResponse<UserSummaryResponse> {
+  activeUsers?: number | null;
+  activeCount?: number | null;
+  totalActive?: number | null;
+  suspendedUsers?: number | null;
+  suspendedCount?: number | null;
+  totalSuspended?: number | null;
+  emailVerifiedUsers?: number | null;
+  emailVerifiedCount?: number | null;
+  verifiedEmailCount?: number | null;
+}

@@ -21,6 +21,7 @@ import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
+import { downscaleImage } from "@/lib/image-downscale";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -246,7 +247,12 @@ export function useUpdateOrganisationInfo() {
 export function useUploadOrgLogo() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async (rawFile: File) => {
+      // Shrink before the wire: a logo is displayed at ~100px, and an unshrunk
+      // phone photo is rejected by the server's body limit before the app sees
+      // it (backend note 2026-09-11 §4). Falls back to the original on failure.
+      const file = await downscaleImage(rawFile);
+
       // Step 1 — upload to Cloudinary via backend proxy
       const form = new FormData();
       form.append("file", file);

@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect } from "react";
 import {
   Upload, Building2, Globe, Mail, Hash, Briefcase,
-  Loader2, Check, X, Palette, AlertTriangle,
+  Loader2, Check, X, Palette, AlertTriangle, LifeBuoy,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import {
   useUpdateBrandingColor,
   type OrgInfoFields,
 } from "@/api/client-organisation";
+import { useSupportEmail, useUpdateSupportEmail } from "@/api/client-settings";
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -365,6 +366,99 @@ function BrandingCard() {
   );
 }
 
+// ─── Support Contact Card ──────────────────────────────────────────────────────
+//
+// The address attendees are pointed at from AGM screens ("Need help?").
+// Resolution is AGM override → this organisation setting → platform default,
+// and it is resolved on every read: correcting a typo here fixes every AGM
+// that has not deliberately overridden it, with no backfill.
+//
+// Note: today this address is returned in API responses only — AGM notices and
+// reminders still sign off with the platform address (backend note §3 / "Not done").
+
+function SupportContactCard() {
+  const { data, isLoading, isError } = useSupportEmail();
+  const updateSupportEmail = useUpdateSupportEmail();
+
+  const saved = data?.supportEmail ?? "";
+  const [value, setValue] = useState("");
+
+  useEffect(() => { setValue(saved); }, [saved]);
+
+  const trimmed = value.trim();
+  const isDirty = trimmed !== saved;
+  const isValid = trimmed === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+  const saving  = updateSupportEmail.isPending;
+
+  function handleSave() {
+    if (!isValid) return;
+    // "" is the documented way to clear the setting and fall back to the
+    // platform address, so an emptied field is a save, not a no-op.
+    updateSupportEmail.mutate(trimmed);
+  }
+
+  return (
+    <Card className="attend-card p-6">
+      <div className="mb-5">
+        <h3 className="font-semibold text-[hsl(var(--foreground))] text-base">Support Contact</h3>
+        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+          The help address shown to attendees on your AGMs
+        </p>
+      </div>
+
+      {isError ? (
+        <PermissionErrorNotice what="your organisation's support contact" />
+      ) : isLoading ? (
+        <FieldSkeleton />
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="supportEmail" className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+              Support Email
+            </Label>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative min-w-[240px] flex-1">
+                <LifeBuoy className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+                <Input
+                  id="supportEmail"
+                  type="email"
+                  value={value}
+                  disabled={saving}
+                  placeholder={data?.platformDefault || "support@experienceattend.com"}
+                  onChange={(e) => setValue(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              {isDirty && (
+                <Button size="sm" className="gap-1.5 shrink-0" disabled={saving || !isValid} onClick={handleSave}>
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  {saving ? "Saving…" : trimmed === "" ? "Clear Address" : "Save Address"}
+                </Button>
+              )}
+            </div>
+            {!isValid && (
+              <p className="text-[11px] text-red-600">Enter a valid email address, or clear the field to use the default.</p>
+            )}
+          </div>
+
+          <div className="rounded-lg bg-[hsl(var(--muted))] px-4 py-3">
+            <p className="text-xs text-[hsl(var(--foreground))]">
+              Attendees currently see{" "}
+              <span className="font-semibold">{data?.effectiveSupportEmail || data?.platformDefault}</span>
+              {!saved && " — the platform default, because no address is set here"}.
+            </p>
+            <p className="text-[11px] text-[hsl(var(--muted-foreground))] mt-1 leading-relaxed">
+              Every AGM inherits this address unless it sets its own. Leave the field empty to fall back to{" "}
+              {data?.platformDefault || "the platform address"}. Sign-up, login and password-reset emails
+              always use the platform address.
+            </p>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export function ClientOrgSettings() {
@@ -372,6 +466,7 @@ export function ClientOrgSettings() {
     <>
       <OrgInfoCard />
       <BrandingCard />
+      <SupportContactCard />
     </>
   );
 }

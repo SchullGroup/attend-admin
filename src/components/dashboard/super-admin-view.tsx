@@ -86,12 +86,11 @@ export function SuperAdminView({
   // just the page size masquerading as a platform total. Track whether the split is exact so
   // the UI can hide it rather than assert a wrong number.
   // Backend gap logged: BACKEND_DASHBOARD_USER_STATS_2026-08-28.md
-  const activeUsers    = adminDashboard?.activeUsers
-    ?? (users.length > 0 ? users.filter((u) => u.status === "ACTIVE").length : 0);
-  const suspendedUsers = adminDashboard?.suspendedUsers
-    ?? (users.length > 0 ? users.filter((u) => u.status === "SUSPENDED").length : 0);
+  const activeUsers    = adminDashboard?.activeUsers    ?? adminDashboard?.activeCount    ?? adminDashboard?.totalActive    ?? (users.length > 0 ? users.filter((u) => u.status === "ACTIVE").length : 0);
+  const suspendedUsers = adminDashboard?.suspendedUsers ?? adminDashboard?.suspendedCount ?? adminDashboard?.totalSuspended ?? (users.length > 0 ? users.filter((u) => u.status === "SUSPENDED").length : 0);
   const hasAggregateSplit =
-    adminDashboard?.activeUsers != null || adminDashboard?.suspendedUsers != null;
+    adminDashboard?.activeUsers    != null || adminDashboard?.activeCount    != null || adminDashboard?.totalActive    != null ||
+    adminDashboard?.suspendedUsers != null || adminDashboard?.suspendedCount != null || adminDashboard?.totalSuspended != null;
   const pageCoversAllUsers = users.length > 0 && totalUsers > 0 && users.length >= totalUsers;
   const userSplitIsExact   = hasAggregateSplit || pageCoversAllUsers;
 

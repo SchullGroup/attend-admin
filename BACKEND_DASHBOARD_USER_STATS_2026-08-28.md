@@ -73,7 +73,71 @@ two extra requests per dashboard load, vs. Option A's zero.)
 
 ## Notes
 
-- Total user count (1,079) is **not** affected — it is already a real aggregate.
+- Total user count (e.g. 1,079) is **not** affected — it is already a real aggregate.
 - Numbers above are illustrative; the backend supplies the true values.
 - No security implication; these are read-only aggregate counts already visible in summary
   form on this dashboard.
+
+## FE status (2026-09-11)
+
+The frontend is **field-name tolerant** on both surfaces — it checks every variant listed
+above via `??` chains, so populating *any one* of the name variants on either endpoint makes
+the correct number appear automatically with **zero further FE changes**:
+
+- **Dashboard** (`super-admin-view.tsx`): reads `adminDashboard.activeUsers` /
+  `activeCount` / `totalActive` and `suspendedUsers` / `suspendedCount` / `totalSuspended`.
+  The `hasAggregateSplit` guard detects any of those (not just the Option A names) to decide
+  whether the breakdown is trustworthy.
+
+- **All Users page** (`participants/page.tsx`): identical `??` chains on the keyed response
+  object for all three metrics (`activeUsers`/`activeCount`/`totalActive`,
+  `suspendedUsers`/`suspendedCount`/`totalSuspended`,
+  `emailVerifiedUsers`/`emailVerifiedCount`/`verifiedEmailCount`).
+
+- Types (`src/types/super-admin.ts`): `UserPagedResponse` and
+  `AdminDashboardOverview` both declare all variants. `useUsers` returns `UserPagedResponse`;
+  `useAdminDashboard` returns `AdminDashboardOverview`.
+
+When no aggregate is present, both surfaces fall back to a `pageCoversAllUsers` guard (single
+loaded page covers every user) before showing counts; otherwise they render "—" rather than a
+misleading one-page estimate.
+
+---
+
+## Update 2026-09-07 — same gap hits the "All Users" (`/participants`) page too
+
+The Super Admin **All Users** page (`GET /api/v1/admin/users`, super-admin view) shows the
+same four figures and had the **same page-count-masquerading-as-total** bug — reported live
+as *"the active and verified count isn't correct"*: with **10,086** total users it displayed
+**"Active 17 · Email Verified 17"**, which was just 17 of the 20 rows on page 1. `Total Users`
+(10,086) was correct (`totalElements`). See [participants/page.tsx](src/app/(dashboard)/participants/page.tsx).
+
+**FE mitigation shipped (2026-09-07):** the page now applies the same `pageCoversAllUsers`
+guard as the dashboard — it shows Active/Suspended/Email-Verified only from a real aggregate
+(field-name-tolerant) or when the single loaded page covers every user; otherwise it renders
+**"—"** (with a tooltip) instead of a wrong number. Display-only; it stops the FE lying but
+**cannot compute** the real figures without backend support.
+
+**Additional field needed beyond Option A/B above:** this page also has an **Email Verified**
+tile, which needs a platform-wide **email-verified** count — a *different* metric from the
+KYC-`verified` count already returned by `GET /api/v1/admin/participants/stats`. Do **not**
+reuse KYC-verified for it.
+
+Preferred backend fix for this surface — add the aggregates to the `GET /api/v1/admin/users`
+paged response (the FE already reads these names tolerantly, so populating any one set makes
+the numbers appear with **zero** further FE changes):
+
+```jsonc
+{
+  "content": [ /* … page rows … */ ],
+  "totalElements": 10086,       // already present + correct
+  "activeUsers":        9910,   // ← add (a.k.a. activeCount / totalActive)
+  "suspendedUsers":       12,   // ← add (a.k.a. suspendedCount / totalSuspended)
+  "emailVerifiedUsers":  8123   // ← add (a.k.a. emailVerifiedCount / verifiedEmailCount)
+}
+```
+
+(Equivalently, add `active` / `suspended` / `emailVerified` to `/api/v1/admin/participants/stats`
+if that endpoint covers the same population as `/admin/users`.) Note the users list has more
+statuses than `ACTIVE`/`SUSPENDED` (an `inactive` state is visible in the UI), so **Active
+cannot be derived** as `total − suspended` on the FE — it must come from the backend.

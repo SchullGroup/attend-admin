@@ -7,6 +7,7 @@ import {
   DashboardStatsResponse,
   PlatformStatsResponse,
   StakeholderSummaryResponse,
+  AdminDashboardOverview,
   EnrollmentResponse,
   EnrollStakeholderRequest,
   RejectEnrollmentRequest,
@@ -14,6 +15,7 @@ import {
   EventSummaryResponse,
   RegistrationSummaryResponse,
   UserSummaryResponse,
+  UserPagedResponse,
   ClientAdminItem,
   GlobalDocumentListResponse,
   PagedResponse,
@@ -67,14 +69,18 @@ export function useDashboardStats(enabled = true) {
 
 /**
  * Full admin dashboard overview — GET /api/v1/admin/dashboard
- * Returns aggregated platform metrics, recent activity, and a KYC summary.
+ * Returns aggregated platform metrics, recent activity, a KYC summary,
+ * and optionally platform-wide active/suspended user counts
+ * (see BACKEND_DASHBOARD_USER_STATS_2026-08-28.md).
  */
 export function useAdminDashboard(enabled = true) {
   return useQuery({
     queryKey: [...superAdminKeys.all, "dashboard"] as const,
     enabled,
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<any>>("/api/v1/admin/dashboard");
+      const res = await apiClient.get<ApiResponse<AdminDashboardOverview>>(
+        "/api/v1/admin/dashboard"
+      );
       return res.data.data ?? res.data;
     },
     staleTime: 60_000,
@@ -156,7 +162,7 @@ export function useUsers(kycStatus = "", page = 0, limit = 20, enabled = true) {
     queryKey: superAdminKeys.users(kycStatus, page, limit),
     enabled,
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<PagedResponse<UserSummaryResponse>>>(
+      const res = await apiClient.get<ApiResponse<UserPagedResponse>>(
         "/api/v1/admin/users",
         {
           params: {
@@ -166,7 +172,7 @@ export function useUsers(kycStatus = "", page = 0, limit = 20, enabled = true) {
           },
         }
       );
-      return res.data.data; // unwrap envelope → PagedResponse<UserSummaryResponse>
+      return (res.data?.data ?? (res.data as any)) as UserPagedResponse;
     },
   });
 }

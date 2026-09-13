@@ -700,6 +700,13 @@ export interface AgmConfigRequest {
   agmNoticeBase64?:         string;
   shareholderListBase64?:   string;
   shareholderListFilename?: string;
+  /**
+   * Per-AGM support contact override (backend note 2026-09-11 §3). Omit to
+   * inherit the organisation setting, which itself falls back to the platform
+   * address. Editable afterwards via
+   * PUT /api/v1/client/events/{id}/settings/support-email.
+   */
+  supportEmail?:            string;
 }
 
 export interface EmbargoRequest {

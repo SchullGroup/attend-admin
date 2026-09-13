@@ -68,9 +68,29 @@ export default function ParticipantsPage() {
   const totalElements = raw?.totalElements ?? raw?.totalCount ?? allUsers.length;
   const totalPages    = raw?.totalPages    ?? Math.ceil(totalElements / LIMIT);
 
-  const activeCount    = allUsers.filter((u) => u.status?.toUpperCase() === "ACTIVE").length;
-  const suspendedCount = allUsers.filter((u) => u.status?.toUpperCase() === "SUSPENDED").length;
-  const verifiedCount  = allUsers.filter((u) => u.emailVerified).length;
+  // Active / Suspended / Email-verified are PLATFORM-WIDE aggregates, but GET /admin/users
+  // returns only one page (LIMIT rows) with no status/verified breakdown — so counting the
+  // loaded page saturates at the page size and lies (e.g. "17 active" out of 10,086, which is
+  // just 17 of the 20 rows on this page). Mirror the dashboard's guard (super-admin-view.tsx +
+  // BACKEND_DASHBOARD_USER_STATS_2026-08-28.md): use a real aggregate when the response carries
+  // one, else the page count ONLY when the single page genuinely covers every user; otherwise
+  // show "—" rather than a wrong number. Field-name-tolerant so the true figures appear
+  // automatically once the backend adds the aggregates.
+  const pageCoversAllUsers = allUsers.length > 0 && totalElements > 0 && allUsers.length >= totalElements;
+
+  const aggActive    = raw?.activeUsers        ?? raw?.activeCount        ?? raw?.totalActive        ?? null;
+  const aggSuspended = raw?.suspendedUsers     ?? raw?.suspendedCount     ?? raw?.totalSuspended     ?? null;
+  const aggVerified  = raw?.emailVerifiedUsers ?? raw?.emailVerifiedCount ?? raw?.verifiedEmailCount ?? null;
+
+  const pageActive    = allUsers.filter((u) => u.status?.toUpperCase() === "ACTIVE").length;
+  const pageSuspended = allUsers.filter((u) => u.status?.toUpperCase() === "SUSPENDED").length;
+  const pageVerified  = allUsers.filter((u) => u.emailVerified).length;
+
+  // number | null — null renders as "—" (unknown, not zero).
+  const activeCount:    number | null = aggActive    ?? (pageCoversAllUsers ? pageActive    : null);
+  const suspendedCount: number | null = aggSuspended ?? (pageCoversAllUsers ? pageSuspended : null);
+  const verifiedCount:  number | null = aggVerified  ?? (pageCoversAllUsers ? pageVerified  : null);
+  const unknownAggregateTitle = "Platform-wide count isn't available from the API yet — showing “—” instead of a misleading one-page estimate.";
 
   return (
     <div>
@@ -91,7 +111,7 @@ export default function ParticipantsPage() {
               <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
             </div>
             <div>
-              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">{activeCount}</div>
+              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]" title={activeCount === null ? unknownAggregateTitle : undefined}>{activeCount ?? "—"}</div>
               <div className="text-xs text-[hsl(var(--muted-foreground))]">Active</div>
             </div>
           </div>
@@ -100,7 +120,7 @@ export default function ParticipantsPage() {
               <Shield className="h-3.5 w-3.5 text-yellow-600" />
             </div>
             <div>
-              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">{suspendedCount}</div>
+              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]" title={suspendedCount === null ? unknownAggregateTitle : undefined}>{suspendedCount ?? "—"}</div>
               <div className="text-xs text-[hsl(var(--muted-foreground))]">Suspended</div>
             </div>
           </div>
@@ -109,7 +129,7 @@ export default function ParticipantsPage() {
               <CheckCircle2 className="h-3.5 w-3.5 text-purple-600" />
             </div>
             <div>
-              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">{verifiedCount}</div>
+              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]" title={verifiedCount === null ? unknownAggregateTitle : undefined}>{verifiedCount ?? "—"}</div>
               <div className="text-xs text-[hsl(var(--muted-foreground))]">Email Verified</div>
             </div>
           </div>
