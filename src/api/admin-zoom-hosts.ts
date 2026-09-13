@@ -57,6 +57,13 @@ export interface AdminZoomHostsData {
   totalCapacity: number | null;
   /** Sum of per-host active meetings, when reported. null when unknown. */
   totalActive:   number | null;
+  /**
+   * True when the backend actually reported per-host usage. When false, every row's
+   * `activeCount` is a 0 placeholder, NOT a measurement — the host-pool table would
+   * then show "0 / 2" for every seat while the overview cards say slots are in use.
+   * Callers should derive per-host usage from the sessions list instead.
+   */
+  usageReported: boolean;
   raw?:          any;
 }
 
@@ -112,7 +119,7 @@ function parseZoomHosts(payload: any): AdminZoomHostsData {
   );
   const totalActive = reportedActive ? hosts.reduce((sum, h) => sum + h.activeCount, 0) : null;
 
-  return { available: true, hosts, totalCapacity, totalActive, raw: p };
+  return { available: true, hosts, totalCapacity, totalActive, usageReported: reportedActive, raw: p };
 }
 
 // --- reads ------------------------------------------------------------------
@@ -137,7 +144,7 @@ export function useAdminZoomHosts(enabled = true) {
       } catch (err: any) {
         const status = err?.response?.status;
         if (status === 404 || status === 501) {
-          return { available: false, hosts: [], totalCapacity: null, totalActive: null, raw: null };
+          return { available: false, hosts: [], totalCapacity: null, totalActive: null, usageReported: false, raw: null };
         }
         throw err;
       }

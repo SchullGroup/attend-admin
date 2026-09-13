@@ -36,9 +36,21 @@ const MAX_CAPACITY = 10; // sane upper bound; a Zoom Business seat realistically
 export function HostPoolCard({
   data,
   isLoading,
+  derivedUsage,
+  unattributedSlots = 0,
 }: {
   data: AdminZoomHostsData | undefined;
   isLoading: boolean;
+  /**
+   * Per-host slots in use, keyed by lower-cased host email, derived from the
+   * sessions list. Used when `GET /api/v1/admin/zoom-hosts` reports no usage of
+   * its own — otherwise every row reads "0 / 2" while the overview cards above
+   * say slots are in use, which reads as a bug in the page rather than a gap in
+   * the payload.
+   */
+  derivedUsage?: Record<string, number>;
+  /** Held slots whose host account is not in the pool list — cannot be attributed to a row. */
+  unattributedSlots?: number;
 }) {
   const addHost = useAddZoomHost();
   const updateCapacity = useUpdateZoomHostCapacity();
@@ -51,6 +63,11 @@ export function HostPoolCard({
 
   const available = data?.available ?? true;
   const hosts = data?.hosts ?? [];
+  // Prefer the backend's own per-host usage; fall back to what the sessions list
+  // tells us about which pooled account is holding each slot.
+  const usageReported = data?.usageReported ?? false;
+  const usageFor = (host: ZoomHostRow): number =>
+    usageReported ? host.activeCount : (derivedUsage?.[host.email.trim().toLowerCase()] ?? 0);
 
   function handleAdd() {
     const email = newEmail.trim();
@@ -269,8 +286,12 @@ export function HostPoolCard({
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-[hsl(var(--muted-foreground))]">
-                          {host.activeCount} / {host.capacity}
+                        <td
+                          className="px-4 py-3 text-[hsl(var(--muted-foreground))]"
+                          title={usageReported ? undefined : "Derived from the live sessions list — the host-pool endpoint does not report per-host usage."}
+                        >
+                          {usageFor(host)} / {host.capacity}
+                          {!usageReported && <span className="ml-1 text-[10px] uppercase tracking-wide opacity-60">est.</span>}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <Button
@@ -289,6 +310,22 @@ export function HostPoolCard({
                 </tbody>
               </table>
             </div>
+          )}
+
+          {!usageReported && hosts.length > 0 && (
+            <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
+              <b>In use</b> is worked out from the live sessions list — the host-pool endpoint
+              does not report per-host usage yet, so these figures are attributed by host email
+              rather than counted by the server.
+            </p>
+          )}
+          {unattributedSlots > 0 && (
+            <p className="mt-2 text-xs text-amber-700">
+              <b>{unattributedSlots}</b> held slot{unattributedSlots === 1 ? " is" : "s are"} not
+              attributed to any host above — either the session names an account that is not in
+              this pool, or it reports no host account at all. Pool usage will not add up to the
+              &ldquo;Slots in use&rdquo; card until that is resolved.
+            </p>
           )}
 
           <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">

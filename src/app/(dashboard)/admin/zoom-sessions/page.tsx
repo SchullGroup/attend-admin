@@ -197,6 +197,26 @@ export default function ZoomSessionsPage() {
   const assigning = assignMutation.isPending;
   const anyBusy = releasing || bulkReleasing;
 
+  // ── Per-host usage, derived ────────────────────────────────────────────────
+  // GET /api/v1/admin/zoom-hosts currently reports no per-host usage, so every row
+  // in the pool table would read "0 / 2" while the cards above say slots are in use.
+  // Attribute each held (non-stranded) slot to its pooled account instead, and count
+  // what cannot be attributed so the discrepancy is stated rather than hidden.
+  const heldSessions = sessions.filter((sess) => !sess.stranded);
+  const poolEmails = new Set(
+    (hostsData?.hosts ?? []).map((h) => h.email.trim().toLowerCase()).filter(Boolean)
+  );
+  const derivedHostUsage: Record<string, number> = {};
+  let unattributedSlots = 0;
+  for (const sess of heldSessions) {
+    const email = sess.pooledAccount?.trim().toLowerCase();
+    if (email && poolEmails.has(email)) {
+      derivedHostUsage[email] = (derivedHostUsage[email] ?? 0) + 1;
+    } else {
+      unattributedSlots += 1;
+    }
+  }
+
   // Selection / stranded bookkeeping for the bulk-release actions.
   const strandedIds = sessions.filter((s) => s.stranded).map((s) => s.eventId);
   const selectedIds = sessions.filter((s) => selected.has(s.eventId)).map((s) => s.eventId);
@@ -311,7 +331,12 @@ export default function ZoomSessionsPage() {
           </div>
 
           {/* Host pool — add/remove licensed seats, correct per-host capacity (§7d) */}
-          <HostPoolCard data={hostsData} isLoading={hostsLoading} />
+          <HostPoolCard
+            data={hostsData}
+            isLoading={hostsLoading}
+            derivedUsage={derivedHostUsage}
+            unattributedSlots={unattributedSlots}
+          />
 
           {/* Assign a host */}
           <Card className="attend-card p-6 mb-6">
