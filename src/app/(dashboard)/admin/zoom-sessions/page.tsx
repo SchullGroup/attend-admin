@@ -36,6 +36,7 @@ import {
   useReleaseZoomSessionsBulk,
   useAssignZoomSession,
   type ZoomSessionRow,
+  type ZoomSessionTotals,
 } from "@/api/admin-zoom-sessions";
 import { useAdminZoomHosts } from "@/api/admin-zoom-hosts";
 import { HostPoolCard } from "./HostPoolCard";
@@ -166,11 +167,13 @@ export default function ZoomSessionsPage() {
   // ── Derived ──────────────────────────────────────────────────────────────────
   const available = sessionsData?.available ?? true;
   const sessions = sessionsData?.sessions ?? [];
-  const totals = sessionsData?.totals ?? {
+  const totals: ZoomSessionTotals = sessionsData?.totals ?? {
     totalCapacity: null,
     slotsInUse: null,
     slotsFree: null,
     strandedSlots: null,
+    slotsHeldOutsidePool: null,
+    ledgerSlotsInUse: null,
   };
   const capacityReported = sessionsData?.capacityReported ?? false;
 
@@ -207,15 +210,27 @@ export default function ZoomSessionsPage() {
     (hostsData?.hosts ?? []).map((h) => h.email.trim().toLowerCase()).filter(Boolean)
   );
   const derivedHostUsage: Record<string, number> = {};
-  let unattributedSlots = 0;
+  let derivedUnattributed = 0;
   for (const sess of heldSessions) {
     const email = sess.pooledAccount?.trim().toLowerCase();
     if (email && poolEmails.has(email)) {
       derivedHostUsage[email] = (derivedHostUsage[email] ?? 0) + 1;
     } else {
-      unattributedSlots += 1;
+      derivedUnattributed += 1;
     }
   }
+
+  // The backend now reports this directly (2026-09-14): seats held by a deactivated host or
+  // by a meeting with no host row at all. Its figure wins — it counts from the meeting rows
+  // rather than from what this page happens to have loaded. Ours stays as the fallback until
+  // those commits deploy.
+  const unattributedSlots = totals.slotsHeldOutsidePool ?? derivedUnattributed;
+  // Non-null only once the deployed build reports it; a mismatch means the pool's counter
+  // has drifted from the meeting rows, which is what makes assignment over-assign.
+  const ledgerDrift =
+    totals.ledgerSlotsInUse != null &&
+    totals.slotsInUse != null &&
+    totals.ledgerSlotsInUse !== totals.slotsInUse;
 
   // Selection / stranded bookkeeping for the bulk-release actions.
   const strandedIds = sessions.filter((s) => s.stranded).map((s) => s.eventId);
@@ -329,6 +344,26 @@ export default function ZoomSessionsPage() {
               tone={totals.strandedSlots && totals.strandedSlots > 0 ? "warn" : "muted"}
             />
           </div>
+
+          {(unattributedSlots > 0 || ledgerDrift) && (
+            <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 flex flex-col gap-1">
+              {unattributedSlots > 0 && (
+                <p>
+                  <b>{unattributedSlots}</b> slot{unattributedSlots === 1 ? " is" : "s are"} held outside the
+                  pool — by a deactivated host, or by a meeting created before the pool existed. While that
+                  is the case, <b>Total capacity is not the real ceiling</b> and slots in use can exceed it.
+                </p>
+              )}
+              {ledgerDrift && (
+                <p>
+                  Pool accounting has drifted: the counter reports <b>{totals.ledgerSlotsInUse}</b> slots in
+                  use, the meeting rows show <b>{totals.slotsInUse}</b>. Assignment reads the counter, so
+                  while it sits low the pool will over-assign. This self-corrects every 2 minutes once the
+                  Zoom reconciliation scope is in place.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Host pool — add/remove licensed seats, correct per-host capacity (§7d) */}
           <HostPoolCard

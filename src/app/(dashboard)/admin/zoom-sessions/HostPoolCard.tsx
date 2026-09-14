@@ -292,6 +292,22 @@ export function HostPoolCard({
                         >
                           {usageFor(host)} / {host.capacity}
                           {!usageReported && <span className="ml-1 text-[10px] uppercase tracking-wide opacity-60">est.</span>}
+                          {!!host.strandedCount && (
+                            <span
+                              className="ml-1 text-[10px] text-amber-700"
+                              title="Slots still held for events that have ended or been cancelled. Cancel them to reclaim the capacity."
+                            >
+                              · {host.strandedCount} stranded
+                            </span>
+                          )}
+                          {host.ledgerDrift && (
+                            <span
+                              className="ml-1 text-[10px] text-amber-700"
+                              title={`The pool's own counter says ${host.ledgerActiveCount ?? "?"}. Assignment reads that counter, so while it disagrees this host may be over-assigned.`}
+                            >
+                              · drift
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <Button

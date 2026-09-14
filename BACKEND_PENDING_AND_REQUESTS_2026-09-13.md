@@ -359,3 +359,8 @@ alongside this file rather than in parallel.
 10. Platform-wide user aggregates, plus `status` and `search` params on `/admin/users` — the tabs and search on a 10,092-row table currently only filter the 20 loaded rows.
 11. Confirmation of the user-status enum (`inactive` is being returned and is not in the contract).
 12. A status line per QA stress-test finding, and the limits that test established.
+
+**Reordered after 2026-09-14:** ahead of everything above sits a production blocker with its
+own document — **`BACKEND_TLS_CHAIN_PROD_2026-09-14.md`**. The prod API serves an incomplete
+TLS certificate chain, so no non-browser client can connect to it at all. Until that is
+fixed, every other item on this list is untestable in production.

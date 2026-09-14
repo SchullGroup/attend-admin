@@ -721,6 +721,12 @@ export interface ProductLaunchConfigRequest {
 }
 
 export interface InnovationChallengeConfigRequest {
+  /**
+   * Optional challenge flyer (backend note 2026-09-14 §5). A plain URL from
+   * POST /api/v1/upload — NOT the signed media-session flow. Returned resolved on the
+   * detail responses, since the bucket is private and the raw stored URL 403s.
+   */
+  flyerUrl?:            string;
   audienceTargeting?:   AudienceTargeting;
   tracks?:              string[];
   problemStatement?:    string;

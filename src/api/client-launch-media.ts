@@ -279,8 +279,15 @@ export function useUploadLaunchMedia() {
       return normalizeAsset(responseData<any>(completeRes));
     },
     onSuccess: (_asset, { eventId }) => {
-      queryClient.invalidateQueries({ queryKey: launchMediaKeys.list(eventId) });
       popup.success("Media Added", "The file is uploaded and live on the launch page.", 2500);
+    },
+    // Refresh on failure as well, not just success. The session step commits the
+    // AWAITING_UPLOAD row before handing back the signed URL (backend note 2026-09-14 §7.1),
+    // so a failed PUT leaves a real orphan row — and there is no server-side sweeper for it.
+    // Invalidating only onSuccess left that row invisible until the refresh timer fired,
+    // which is why a failed upload looked like it had left no trace.
+    onSettled: (_data, _error, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: launchMediaKeys.list(eventId) });
     },
     onError: (error: any) =>
       parseAndToastApiError(

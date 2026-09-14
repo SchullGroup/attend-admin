@@ -42,7 +42,8 @@ export const superAdminKeys = {
   pendingEnrollments: (page: number, limit: number) => [...superAdminKeys.all, "pending-enrollments", page, limit] as const,
   events: (status: string, page: number, limit: number) => [...superAdminKeys.all, "events", status, page, limit] as const,
   eventDetail: (id: string) => [...superAdminKeys.all, "event-detail", id] as const,
-  users: (kycStatus: string, page: number, limit: number) => ["admin", "users", kycStatus, page, limit] as const,
+  users: (kycStatus: string, page: number, limit: number, status = "", search = "") =>
+    ["admin", "users", kycStatus, page, limit, status, search] as const,
   documents: (search: string, eventId: string, type: string, page: number, limit: number) => [...superAdminKeys.all, "documents", search, eventId, type, page, limit] as const,
   recentRegistrations: (page: number, limit: number) => [...superAdminKeys.all, "recent-registrations", page, limit] as const,
   eventDocuments: (id: string) => [...superAdminKeys.all, "event-documents", id] as const,
@@ -157,9 +158,32 @@ export function useEvents(status = "", page = 0, size = 10, enabled = true) {
  * so every tab change produces a structurally different key and React Query
  * fires a fresh targeted request instead of serving a stale cached result.
  */
-export function useUsers(kycStatus = "", page = 0, limit = 20, enabled = true) {
+/**
+ * GET /api/v1/admin/users
+ *
+ * `status` and `search` are server-side as of the backend's 2026-09-14 note: `search`
+ * matches first name, last name, email and phone and is ignored under 2 characters;
+ * `status` takes any UserStatus and returns 400 — not a silently unfiltered list — on an
+ * unparseable value. `totalElements` follows the filters, while the aggregate counts on the
+ * response deliberately do not (they back the header tiles, which must keep reporting the
+ * whole platform while the table below shows one slice).
+ *
+ * Both params are omitted when empty so the request stays identical to the old one against
+ * an API that has not picked up those commits yet.
+ */
+export function useUsers(
+  kycStatus = "",
+  page = 0,
+  limit = 20,
+  enabled = true,
+  filters: { status?: string; search?: string } = {},
+) {
+  const status = filters.status ?? "";
+  // The backend ignores a search term under 2 characters; don't spend a request shape on it.
+  const search = (filters.search ?? "").trim().length >= 2 ? filters.search!.trim() : "";
+
   return useQuery({
-    queryKey: superAdminKeys.users(kycStatus, page, limit),
+    queryKey: superAdminKeys.users(kycStatus, page, limit, status, search),
     enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<UserPagedResponse>>(
@@ -169,6 +193,8 @@ export function useUsers(kycStatus = "", page = 0, limit = 20, enabled = true) {
             page,
             limit,
             ...(kycStatus ? { kycStatus } : {}), // omit key entirely when empty → unfiltered list
+            ...(status ? { status } : {}),
+            ...(search ? { search } : {}),
           },
         }
       );

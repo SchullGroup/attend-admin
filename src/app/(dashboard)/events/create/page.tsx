@@ -204,6 +204,7 @@ function CreateEventInner() {
         minTeamSize:         hack.participationType === "solo" ? 1 : (parseInt(hack.minTeam, 10) || undefined),
         maxTeamSize:         hack.participationType === "solo" ? 1 : (parseInt(hack.maxTeam, 10) || undefined),
         eligibilityCriteria: hack.eligibility || undefined,
+        flyerUrl:            hack.flyerUrl   || undefined,
         maximumEntries:      parseInt(hack.capacity, 10) || undefined,
         prizeTiers:          hack.prizes.filter((p) => p.reward).map((p) => ({ position: p.place, reward: p.reward })),
         judgingCriteria:     hack.criteria.filter((c) => c.label.trim()).map((c) => ({
@@ -376,6 +377,7 @@ function CreateEventInner() {
           minTeamSize:          hack.participationType === "solo" ? 1 : (parseInt(hack.minTeam, 10) || undefined),
           maxTeamSize:          hack.participationType === "solo" ? 1 : (parseInt(hack.maxTeam, 10) || undefined),
           eligibilityCriteria:  hack.eligibility        || undefined,
+          flyerUrl:             hack.flyerUrl           || undefined,
           maximumEntries:       parseInt(hack.capacity, 10) || undefined,
           prizeTiers:           hack.prizes.filter((p) => p.reward).map((p) => ({ position: p.place, reward: p.reward })),
           judgingCriteria:      hack.criteria.map((c) => ({

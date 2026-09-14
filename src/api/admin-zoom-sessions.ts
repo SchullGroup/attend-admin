@@ -52,6 +52,16 @@ export interface ZoomSessionTotals {
   slotsInUse:    number | null;
   slotsFree:     number | null;
   strandedSlots: number | null;
+  /**
+   * Seats held by a deactivated host, or by a meeting with no host row at all (created
+   * before the pool existed, or directly against the S2S account). Confirmed by the backend
+   * 2026-09-14: this is real and expected. When it is non-zero, `totalCapacity` is NOT the
+   * true ceiling and `slotsInUse` may legitimately exceed it — a correct reading, not an
+   * arithmetic error, and the reason the page must state it rather than reconcile it away.
+   */
+  slotsHeldOutsidePool: number | null;
+  /** What the pool's counter believes, for drift visibility against the derived total. */
+  ledgerSlotsInUse:     number | null;
 }
 
 export interface AdminZoomSessionsData {
@@ -71,7 +81,10 @@ export const adminZoomSessionKeys = {
 // --- parsing (tolerant of snake_case / field-name variants) -----------------
 
 function emptyTotals(): ZoomSessionTotals {
-  return { totalCapacity: null, slotsInUse: null, slotsFree: null, strandedSlots: null };
+  return {
+    totalCapacity: null, slotsInUse: null, slotsFree: null, strandedSlots: null,
+    slotsHeldOutsidePool: null, ledgerSlotsInUse: null,
+  };
 }
 
 function toBool(v: any): boolean {
@@ -210,7 +223,14 @@ function parseZoomSessions(payload: any): AdminZoomSessionsData {
   return {
     available: true,
     sessions,
-    totals: { totalCapacity, slotsInUse, slotsFree, strandedSlots },
+    totals: {
+      totalCapacity,
+      slotsInUse,
+      slotsFree,
+      strandedSlots,
+      slotsHeldOutsidePool: numOrNull(t.slotsHeldOutsidePool ?? t.slots_held_outside_pool ?? t.heldOutsidePool),
+      ledgerSlotsInUse:     numOrNull(t.ledgerSlotsInUse ?? t.ledger_slots_in_use),
+    },
     // "Reported" = the backend actually told us a ceiling (either directly or via hosts).
     capacityReported: reportedCapacity != null || hostCapacity != null,
   };

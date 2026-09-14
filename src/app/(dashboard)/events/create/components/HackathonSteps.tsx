@@ -3,6 +3,7 @@ import { Plus, Trash2, Monitor, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { ImageUrlUpload } from "@/components/custom/image-url-upload";
 import { Toggle, FormatPicker, ReviewRow, OrgChip } from "./shared";
 import type { HackState } from "./state-hooks";
 
@@ -140,6 +141,16 @@ export function HackBriefStep({ s, showErrors = false }: { s: HackState; showErr
         <Label className="mb-2 block">Allowed Tech Stack <span className="font-normal text-[hsl(var(--muted-foreground))] text-xs">(optional)</span></Label>
         <Input placeholder="e.g. React, Node.js, Python — or 'Any'" value={s.techStack} onChange={(e) => s.setTechStack(e.target.value)} />
       </div>
+      {/* Optional flyer — the same plain-URL upload product launches use. */}
+      <div className="border-t border-[hsl(var(--border))] pt-5">
+        <ImageUrlUpload
+          value={s.flyerUrl}
+          onChange={s.setFlyerUrl}
+          folder="event-flyers"
+          label="Challenge flyer (optional)"
+          helpText="JPG, PNG or WebP. Shown on the challenge page — leave empty if you don't have artwork yet."
+        />
+      </div>
     </div>
   );
 }
@@ -276,6 +287,7 @@ export function HackReview({ s, organiserName }: { s: HackState; organiserName: 
           {s.deliverable      && <ReviewRow label="Deliverable" value={s.deliverable} />}
           {s.submissionDeadline && <ReviewRow label="Deadline"  value={s.submissionDeadline} />}
           {s.techStack        && <ReviewRow label="Tech Stack"  value={s.techStack} />}
+          {s.flyerUrl         && <ReviewRow label="Flyer"       value="Uploaded" />}
         </div>
       </div>
       <div><p className="attend-section-title mb-2">Teams & Prizes</p>

@@ -512,6 +512,19 @@ export interface SearchParams {
   limit?: number;
 }
 
+/**
+ * The backend enum in full (confirmed 2026-09-14) — six values, not three.
+ * INACTIVE is the default state for every new signup and is usually the largest bucket,
+ * so it must be handled everywhere, not treated as an edge case.
+ */
+export type UserStatus =
+  | "ACTIVE"
+  | "INACTIVE"
+  | "SUSPENDED"
+  | "PENDING"
+  | "REJECTED"
+  | "REVOKED";
+
 export interface UserSummaryResponse {
   id: string;
   email: string;
@@ -521,7 +534,7 @@ export interface UserSummaryResponse {
   role?: string;
   roles?: string[];
   phone?: string | null;
-  status: "ACTIVE" | "SUSPENDED" | "PENDING";
+  status: UserStatus;
   kycStatus?: string | null;
   emailVerified?: boolean;
   stakeholderName?: string | null;
@@ -833,6 +846,8 @@ export interface InnovationCriteriaInput { criterion: string; weight: number; } 
  * judgingCriteria weights must sum to 100 if provided.
  */
 export interface CreateInnovationEventRequest {
+  /** Optional challenge flyer — top-level here, nested under the config on the client path. */
+  flyerUrl?:           string;
   registerId:           string;           // was stakeholderId
   title:                string;
   eventType?:           "INNOVATION_CHALLENGE" | "HACKATHON";
@@ -946,6 +961,13 @@ export type PagedResponse<T> = PagedApiResponse<T> & { number?: number };
  * makes the correct platform totals appear with zero further changes.
  */
 export interface UserPagedResponse extends PagedApiResponse<UserSummaryResponse> {
+  /**
+   * Whole-platform counts that deliberately ignore the active filters — they back the
+   * header tiles, which keep reporting the platform while the table shows one status.
+   * `inactiveUsers` is needed for active + suspended + inactive to reconcile against the
+   * total; without it the tiles look broken in a subtler way.
+   */
+  inactiveUsers?: number | null;
   activeUsers?: number | null;
   activeCount?: number | null;
   totalActive?: number | null;

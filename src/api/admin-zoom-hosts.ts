@@ -39,8 +39,25 @@ export interface ZoomHostRow {
   email:       string;
   /** Per-host concurrent-meeting capacity. Defaults to 2 (§7d). */
   capacity:    number;
-  /** Slots this host is currently using (0 when the backend doesn't report it). */
+  /**
+   * Slots held: a meeting row exists and its event is neither ENDED nor CANCELLED.
+   * As of the backend's 2026-09-14 fix this is derived from the meeting rows themselves
+   * rather than from the pool's own counter, and `/admin/zoom-sessions` totals come from
+   * the same derivation — so the two screens can no longer disagree.
+   */
   activeCount: number;
+  /** Slots held for events that have ended or been cancelled — cancel these to reclaim capacity. */
+  strandedCount?: number;
+  /** capacity − activeCount, as the server computes it. */
+  freeSlots?:     number;
+  /** What the pool's denormalised counter believes it is holding. */
+  ledgerActiveCount?: number;
+  /**
+   * True when the counter and the meeting rows disagree. Left uncorrected this drifts low,
+   * and assignment reads the counter — so a drifting pool believes it has room it does not
+   * have and over-assigns. Surfaced rather than hidden.
+   */
+  ledgerDrift?:   boolean;
   /** Optional human label / display name. */
   label?:      string;
   /** Optional enabled flag, if the backend soft-disables hosts rather than deleting them. */
@@ -94,6 +111,10 @@ function parseZoomHostRow(raw: any): ZoomHostRow | null {
     activeCount: numOrNull(
       r.activeCount ?? r.active_count ?? r.activeMeetings ?? r.inUse ?? r.in_use ?? r.used ?? r.usedSlots ?? r.slotsInUse,
     ) ?? 0,
+    strandedCount:     numOrNull(r.strandedCount ?? r.stranded_count ?? r.stranded) ?? undefined,
+    freeSlots:         numOrNull(r.freeSlots ?? r.free_slots ?? r.free) ?? undefined,
+    ledgerActiveCount: numOrNull(r.ledgerActiveCount ?? r.ledger_active_count) ?? undefined,
+    ledgerDrift:       typeof (r.ledgerDrift ?? r.ledger_drift) === "boolean" ? (r.ledgerDrift ?? r.ledger_drift) : undefined,
     label:       r.label ?? r.name ?? r.displayName ?? undefined,
     enabled:     typeof (r.enabled ?? r.isEnabled ?? r.active) === "boolean" ? (r.enabled ?? r.isEnabled ?? r.active) : undefined,
     raw:         r,

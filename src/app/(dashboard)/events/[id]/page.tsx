@@ -391,7 +391,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         maximumCapacity={(apiEvent as any).maximumCapacity ?? (apiEvent as any).capacity ?? null}
         currentStatus={currentStatus}
         isProductLaunch={isLAUNCH}
-        flyerUrl={(apiEvent as any).productLaunchConfig?.flyerUrl ?? ""}
+        isChallenge={isHACKATHON}
+        flyerUrl={
+          (apiEvent as any).productLaunchConfig?.flyerUrl ??
+          (apiEvent as any).innovationChallengeConfig?.flyerUrl ??
+          ""
+        }
         featured={(apiEvent as any).featured ?? false}
         zoomMeeting={(apiEvent as any).zoomMeeting ?? null}
         onStatusChange={handleStatusChange}
