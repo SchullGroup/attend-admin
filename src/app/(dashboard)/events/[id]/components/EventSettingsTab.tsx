@@ -78,8 +78,10 @@ export function EventSettingsTab({
   zoomMeeting:      initialZoomMeeting  = null,
   onStatusChange,
 }: Props) {
-  // Product launches and challenges both carry an optional flyer; nothing else does.
-  const canHaveFlyer = isProductLaunch || isChallenge;
+  // Every event type carries an optional flyer as of the backend's 2026-09-14 change —
+  // it moved from the per-type config tables onto the event itself. `isProductLaunch` and
+  // `isChallenge` are kept because other parts of this form still branch on them.
+  const canHaveFlyer = true;
 
   const [titleVal,         setTitleVal]         = useState(initialTitle ?? "");
   const [descVal,          setDescVal]          = useState(initialDescription ?? "");

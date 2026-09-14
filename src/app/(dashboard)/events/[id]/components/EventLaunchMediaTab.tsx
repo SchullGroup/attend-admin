@@ -1,7 +1,11 @@
 "use client";
 /**
- * EventLaunchMediaTab — image and video gallery for Product Launch events
- * (backend note 2026-09-11 §2).
+ * EventLaunchMediaTab — image and video gallery, every event type.
+ *
+ * The endpoints are still spelled `launch-media`: that is a historical name, not a
+ * restriction. The backend dropped the PRODUCT_LAUNCH type guard on 2026-09-14 and the rows
+ * key off the event, so AGMs, challenges and general events all use these same paths. The
+ * component name is kept for the same reason the path was — renaming buys nothing.
  *
  * Upload is a direct browser PUT to object storage, so a launch film is not
  * bound by the 25MB API limit or the nginx body limit — only by the 15MB image
@@ -160,7 +164,7 @@ export function EventLaunchMediaTab({
     const label = asset.title || asset.originalFilename || "this asset";
     popup.confirm(
       "Delete Media",
-      `Delete ${label}? The stored file is removed too, and it disappears from the launch page immediately.`,
+      `Delete ${label}? The stored file is removed too, and it disappears from the event page immediately.`,
       () => {
         setDeletingId(asset.id);
         deleteMutation.mutate(
@@ -264,7 +268,7 @@ export function EventLaunchMediaTab({
               <ImageIcon className="mx-auto h-8 w-8 text-[hsl(var(--muted-foreground))] opacity-40" />
               <p className="mt-2 text-sm font-medium text-[hsl(var(--foreground))]">No media yet</p>
               <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                Photos and videos added here appear in the gallery on the launch page.
+                Photos and videos added here appear in the gallery on the event page.
               </p>
             </div>
           ) : (

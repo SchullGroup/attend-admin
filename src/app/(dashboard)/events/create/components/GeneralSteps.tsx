@@ -3,6 +3,7 @@ import { Globe, Mail, Monitor, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { ImageUrlUpload } from "@/components/custom/image-url-upload";
 import { Toggle, FormatPicker, ReviewRow, OrgChip } from "./shared";
 import type { GeneralState } from "./state-hooks";
 
@@ -74,6 +75,17 @@ export function GeneralStep0({ s, organiserName, showErrors = false }: { s: Gene
       <div><Label className="mb-2 block">Capacity</Label>
         <Input type="number" placeholder="e.g. 500" value={s.capacity} onChange={(e) => s.setCapacity(e.target.value)} /></div>
 
+      {/* Optional flyer — top-level field on the event, every type (2026-09-14 §5.2). */}
+      <div className="border-t border-[hsl(var(--border))] pt-5">
+        <ImageUrlUpload
+          value={s.flyerUrl}
+          onChange={s.setFlyerUrl}
+          folder="event-flyers"
+          label="Event flyer (optional)"
+          helpText="JPG, PNG or WebP. Shown on the event page — you can add it later from Settings."
+        />
+      </div>
+
       <div className="flex items-center justify-between rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] px-4 py-3">
         <div>
           <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Featured Event</p>
@@ -124,6 +136,7 @@ export function GeneralReview({ s, organiserName }: { s: GeneralState; organiser
           {s.endTime && <ReviewRow label="End Time" value={s.endTime} />}
           <ReviewRow label="Format"     value={s.format} />
           <ReviewRow label="Capacity"   value={s.capacity || "Unlimited"} />
+          {s.flyerUrl && <ReviewRow label="Flyer" value="Uploaded" />}
           <ReviewRow label="Audience"   value={s.audienceMode === "invite" ? "Invite only" : "Open registration"} />
           {s.featured && <ReviewRow label="Featured" value="Yes" />}
         </div>

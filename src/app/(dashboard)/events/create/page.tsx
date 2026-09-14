@@ -289,6 +289,14 @@ function CreateEventInner() {
           agenda: selectedModule === "AGM" && agm.agendaItems.some((a) => a.title.trim())
             ? agm.agendaItems.filter((a) => a.title.trim()).map((a) => ({ time: a.time, title: a.title, speaker: a.speaker || undefined }))
             : undefined,
+          // Flyer is a single top-level field on the event now, whatever the type
+          // (backend note 2026-09-14 §5.2). The per-config copies still work but are
+          // echoes of this one, so send it here and nowhere else.
+          flyerUrl:
+            (selectedModule === "AGM"       ? agm.flyerUrl     :
+             selectedModule === "LAUNCH"    ? launch.flyerUrl  :
+             selectedModule === "HACKATHON" ? hack.flyerUrl    :
+             general.flyerUrl) || undefined,
           agmConfig,
           productLaunchConfig,
           innovationChallengeConfig,
@@ -310,6 +318,7 @@ function CreateEventInner() {
       setSubmitting(true);
       createAgm.mutate(
         {
+          flyerUrl:             agm.flyerUrl            || undefined,
           registerId:            organiserId,
           title:                 agm.title,
           date:                  agm.date,
@@ -346,6 +355,7 @@ function CreateEventInner() {
           streamUrl:         general.streamUrl || undefined,
           maximumCapacity:   parseInt(general.capacity, 10) || undefined,
           audienceTargeting: audience(general.audienceMode),
+          flyerUrl:          general.flyerUrl || undefined,
         },
         {
           onSuccess: () => { stopSubmitting(); onDone(); },

@@ -821,6 +821,8 @@ export interface CreateAgmEventRequest {
    * Omit to inherit: organisation setting → platform default.
    */
   supportEmail?:           string;
+  /** Optional flyer — top level, every event type, as of 2026-09-14 §5.2. */
+  flyerUrl?:               string;
 }
 
 /** POST /api/v1/admin/events/general — field names match swagger exactly */
@@ -836,6 +838,8 @@ export interface CreateGeneralEventRequest {
   maximumCapacity?:    number;            // swagger key — was `maxCapacity`
   audienceTargeting?:  "OPEN_REGISTRATION" | "INVITE_ONLY";  // was `audienceTargetingChannel: "OPEN"|"INVITE"`
   agenda?:             Array<{ time: string; title: string; speaker?: string }>;
+  /** Optional flyer — top level, every event type, as of 2026-09-14 §5.2. */
+  flyerUrl?:           string;
 }
 
 export interface InnovationPrizeInput    { position: string; reward: string; }  // `position` was `place`
@@ -846,7 +850,7 @@ export interface InnovationCriteriaInput { criterion: string; weight: number; } 
  * judgingCriteria weights must sum to 100 if provided.
  */
 export interface CreateInnovationEventRequest {
-  /** Optional challenge flyer — top-level here, nested under the config on the client path. */
+  /** Optional flyer — top level, every event type, as of 2026-09-14 §5.2. */
   flyerUrl?:           string;
   registerId:           string;           // was stakeholderId
   title:                string;
