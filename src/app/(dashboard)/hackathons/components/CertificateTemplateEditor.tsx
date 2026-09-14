@@ -22,6 +22,8 @@ import {
   templateForType,
   A4_LANDSCAPE_RATIO,
   ARTWORK_MAX_BYTES,
+  ARTWORK_ACCEPT,
+  isAcceptedArtwork,
   RECIPIENT_NAME_KEY,
   TEMPLATE_ALIGNS,
   TEMPLATE_FONT_STYLES,
@@ -556,6 +558,17 @@ function CertificateTemplateEditorInner({
       return;
     }
 
+    // §16 — reject formats the renderer can't embed (WebP/AVIF/HEIC/…) BEFORE
+    // uploading. They upload cleanly today but then render blank, a silent failure
+    // until the backend's hard-reject deploys. Catch it here with a clear message.
+    if (!isAcceptedArtwork(file)) {
+      popup.error(
+        "Unsupported artwork format",
+        `“${file.name}” can’t be embedded in the certificate. WebP, AVIF, HEIC and similar web-optimised formats aren’t supported — upload a PDF (preferred), PNG, or JPEG instead.`
+      );
+      return;
+    }
+
     const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
 
     // Show the picked image straight away (a PDF can't be previewed as an image).
@@ -714,7 +727,7 @@ function CertificateTemplateEditorInner({
       {/* Upload + name */}
       <Card className="attend-card px-5 py-4 flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={onPickFile} />
+          <input ref={fileRef} type="file" accept={ARTWORK_ACCEPT} className="hidden" onChange={onPickFile} />
           <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={readOnly || upload.isPending}>
             <Upload className="h-3.5 w-3.5 mr-1.5" />
             {upload.isPending ? "Uploading…" : draft.artworkUrl ? "Replace artwork" : "Upload artwork"}

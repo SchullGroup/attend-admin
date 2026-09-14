@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ImageOff, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { parseAndToastApiError } from "@/lib/api-error";
+import { downscaleImage } from "@/lib/image-downscale";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -89,8 +90,11 @@ export function ImageUrlUpload({
     setLocalPreview(objectUrl);
     setUploading(true);
     try {
+      // Shrink before upload (backend note 2026-09-11 §4). A flyer is shown far
+      // larger than a logo, so it keeps more resolution than the 1024px default.
+      const upload = await downscaleImage(file, { maxDimension: 1600 });
       const form = new FormData();
-      form.append("file", file);
+      form.append("file", upload);
       const res = await apiClient.post("/api/v1/upload", form, {
         params: { folder },
         headers: { "Content-Type": undefined },

@@ -204,6 +204,13 @@ export function EventBroadcastTab({ eventId }: Props) {
                     {(item.inAppSent ?? 0) > 0 && <span>{item.inAppSent} in-app</span>}
                     {item.skipped > 0   && <span>{item.skipped} skipped</span>}
                   </div>
+                  {/* §15 — explain WHY recipients were skipped (no phone, unsubscribed, …). */}
+                  {item.skipped > 0 && (item.failureReason ?? (item as any).failure_reason ?? (item as any).skipReason) && (
+                    <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                      <span className="font-medium">Skipped:</span>{" "}
+                      {item.failureReason ?? (item as any).failure_reason ?? (item as any).skipReason}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

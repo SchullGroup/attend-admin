@@ -131,6 +131,9 @@ export function useHackState() {
   const [eligibility,        setEligibility]        = useState("");
   const [capacity,           setCapacity]           = useState("");
   const [featured,            setFeatured]            = useState(false);
+  // Optional challenge flyer — same plain-URL field product launches use, accepted on the
+  // challenge config as of the backend's 2026-09-14 note.
+  const [flyerUrl,           setFlyerUrl]           = useState("");
   const [prizes,  setPrizes]  = useState<Prize[]>([
     { id: genId(), place: "1st Place", reward: "" },
     { id: genId(), place: "2nd Place", reward: "" },
@@ -159,6 +162,7 @@ export function useHackState() {
     techStack, setTechStack, participationType, setParticipationType,
     minTeam, setMinTeam, maxTeam, setMaxTeam,
     eligibility, setEligibility, capacity, setCapacity, featured, setFeatured,
+    flyerUrl, setFlyerUrl,
     prizes, addPrize, removePrize, updatePrize,
     criteria, addCriterion, removeCriterion, updateCriterion,
   };

@@ -700,6 +700,13 @@ export interface AgmConfigRequest {
   agmNoticeBase64?:         string;
   shareholderListBase64?:   string;
   shareholderListFilename?: string;
+  /**
+   * Per-AGM support contact override (backend note 2026-09-11 §3). Omit to
+   * inherit the organisation setting, which itself falls back to the platform
+   * address. Editable afterwards via
+   * PUT /api/v1/client/events/{id}/settings/support-email.
+   */
+  supportEmail?:            string;
 }
 
 export interface EmbargoRequest {
@@ -714,6 +721,12 @@ export interface ProductLaunchConfigRequest {
 }
 
 export interface InnovationChallengeConfigRequest {
+  /**
+   * Optional challenge flyer (backend note 2026-09-14 §5). A plain URL from
+   * POST /api/v1/upload — NOT the signed media-session flow. Returned resolved on the
+   * detail responses, since the bucket is private and the raw stored URL 403s.
+   */
+  flyerUrl?:            string;
   audienceTargeting?:   AudienceTargeting;
   tracks?:              string[];
   problemStatement?:    string;
@@ -861,6 +874,8 @@ export interface BroadcastHistoryItem {
   pushSent?:        number;
   inAppSent?:       number;
   skipped:          number;
+  /** §15 — why recipients were skipped (e.g. no phone number, unsubscribed). */
+  failureReason?:   string;
   sentAt:           string;
   timeAgo:          string;
 }

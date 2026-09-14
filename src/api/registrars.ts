@@ -23,6 +23,7 @@ import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
+import { downscaleImage } from "@/lib/image-downscale";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -581,7 +582,9 @@ export function useUpdateRegistrarProfile() {
  */
 export function useUploadToCloudinary() {
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async (rawFile: File) => {
+      // Downscaled client-side first — see the note in useUploadOrgLogo.
+      const file = await downscaleImage(rawFile);
       const form = new FormData();
       form.append("file", file);
       const res = await apiClient.post<ApiResponse<Record<string, string>>>(

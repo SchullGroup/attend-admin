@@ -75,6 +75,21 @@ export function parseAndToastApiError(
     return;
   }
 
+  if (error?.response?.status === 413) {
+    // Two different things return 413 on an upload, and they need different fixes:
+    //  • our API — a JSON ApiResponse with a real message, already handled by the
+    //    message tier above ("That file is too large. The maximum upload size is 25MB.")
+    //  • nginx — an HTML body, rejecting the request before it ever reaches the
+    //    application, because `client_max_body_size` is below the file size.
+    // Only the second falls through to here, so say so rather than telling
+    // someone to shrink a file that is already well under our own limit.
+    toast.error(
+      "The file was rejected by the server before it reached the app — its upload size limit is lower than this file. Try a smaller file, and report this if the file is under 25MB.",
+      { duration: 7000 }
+    );
+    return;
+  }
+
   if (error?.response?.status === 409) {
     toast.error("The requested change conflicts with the resource's current state.");
     return;

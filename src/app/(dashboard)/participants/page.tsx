@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
-  Search, Users, ShieldCheck, Shield, ShieldOff, CheckCircle2,
+  Search, Users, ShieldCheck, Shield, ShieldOff, CheckCircle2, UserMinus,
 } from "lucide-react";
 // CheckCircle2 kept for verified count stat only
 import { useUsers, useSuspendUser, useActivateUser } from "@/api/super-admin";
@@ -14,11 +14,17 @@ import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
 import type { UserSummaryResponse } from "@/types/super-admin";
 
+// The full UserStatus enum (backend note 2026-09-14 §3.3) — six values, not three.
+// INACTIVE ("registered but never verified") is the default for every new signup, so
+// leaving it out meant the largest group of users matched no tab at all.
 const STATUS_FILTERS = [
   { label: "All",       value: "" },
   { label: "Active",    value: "ACTIVE" },
-  { label: "Suspended", value: "SUSPENDED" },
+  { label: "Inactive",  value: "INACTIVE" },
   { label: "Pending",   value: "PENDING" },
+  { label: "Suspended", value: "SUSPENDED" },
+  { label: "Rejected",  value: "REJECTED" },
+  { label: "Revoked",   value: "REVOKED" },
 ];
 
 function useDebounce<T>(value: T, ms = 400): T {
@@ -39,8 +45,13 @@ export default function ParticipantsPage() {
 
   const debouncedSearch = useDebounce(searchInput, 400);
 
-  // GET /api/v1/admin/users — page, limit (no kycStatus filter per spec)
-  const { data, isLoading } = useUsers("", page, LIMIT);
+  // GET /api/v1/admin/users — status and search are server-side as of the backend's
+  // 2026-09-14 note, so the tabs and the search box now filter all 10k+ users rather than
+  // the 20 rows already on screen.
+  const { data, isLoading } = useUsers("", page, LIMIT, true, {
+    status: activeStatus,
+    search: debouncedSearch,
+  });
   const suspendMutation  = useSuspendUser();
   const activateMutation = useActivateUser();
 
@@ -51,12 +62,15 @@ export default function ParticipantsPage() {
     Array.isArray(raw?.content) ? raw.content :
     Array.isArray(raw)          ? raw          : [];
 
-  // Client-side status filter (API doesn't expose status param per spec)
+  // Belt and braces: the same filters applied again client-side. Against an API that has
+  // picked up the new params this is a no-op (every row already matches). Against one that
+  // has not — those commits are not deployed yet — it preserves the old behaviour of
+  // narrowing the loaded page instead of silently showing an unfiltered list under a
+  // "Suspended" tab. Delete once the filtered API is live everywhere.
   const users = activeStatus
     ? allUsers.filter((u) => (u.status ?? "").toUpperCase() === activeStatus)
     : allUsers;
 
-  // Also filter by search client-side if debounced search is present
   const searchedUsers = debouncedSearch.trim().length >= 2
     ? users.filter((u) => {
         const name = `${u.firstName} ${u.lastName}`.toLowerCase();
@@ -68,15 +82,38 @@ export default function ParticipantsPage() {
   const totalElements = raw?.totalElements ?? raw?.totalCount ?? allUsers.length;
   const totalPages    = raw?.totalPages    ?? Math.ceil(totalElements / LIMIT);
 
-  const activeCount    = allUsers.filter((u) => u.status?.toUpperCase() === "ACTIVE").length;
-  const suspendedCount = allUsers.filter((u) => u.status?.toUpperCase() === "SUSPENDED").length;
-  const verifiedCount  = allUsers.filter((u) => u.emailVerified).length;
+  // Active / Suspended / Email-verified are PLATFORM-WIDE aggregates, but GET /admin/users
+  // returns only one page (LIMIT rows) with no status/verified breakdown — so counting the
+  // loaded page saturates at the page size and lies (e.g. "17 active" out of 10,086, which is
+  // just 17 of the 20 rows on this page). Mirror the dashboard's guard (super-admin-view.tsx +
+  // BACKEND_DASHBOARD_USER_STATS_2026-08-28.md): use a real aggregate when the response carries
+  // one, else the page count ONLY when the single page genuinely covers every user; otherwise
+  // show "—" rather than a wrong number. Field-name-tolerant so the true figures appear
+  // automatically once the backend adds the aggregates.
+  const pageCoversAllUsers = allUsers.length > 0 && totalElements > 0 && allUsers.length >= totalElements;
+
+  const aggActive    = raw?.activeUsers        ?? raw?.activeCount        ?? raw?.totalActive        ?? null;
+  const aggInactive  = raw?.inactiveUsers      ?? raw?.inactiveCount      ?? raw?.totalInactive      ?? null;
+  const aggSuspended = raw?.suspendedUsers     ?? raw?.suspendedCount     ?? raw?.totalSuspended     ?? null;
+  const aggVerified  = raw?.emailVerifiedUsers ?? raw?.emailVerifiedCount ?? raw?.verifiedEmailCount ?? null;
+
+  const pageActive    = allUsers.filter((u) => u.status?.toUpperCase() === "ACTIVE").length;
+  const pageInactive  = allUsers.filter((u) => u.status?.toUpperCase() === "INACTIVE").length;
+  const pageSuspended = allUsers.filter((u) => u.status?.toUpperCase() === "SUSPENDED").length;
+  const pageVerified  = allUsers.filter((u) => u.emailVerified).length;
+
+  // number | null — null renders as "—" (unknown, not zero).
+  const activeCount:    number | null = aggActive    ?? (pageCoversAllUsers ? pageActive    : null);
+  const inactiveCount:  number | null = aggInactive  ?? (pageCoversAllUsers ? pageInactive  : null);
+  const suspendedCount: number | null = aggSuspended ?? (pageCoversAllUsers ? pageSuspended : null);
+  const verifiedCount:  number | null = aggVerified  ?? (pageCoversAllUsers ? pageVerified  : null);
+  const unknownAggregateTitle = "Platform-wide count isn't available from the API yet — showing “—” instead of a misleading one-page estimate.";
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Users</h1>
-        <div className="flex items-center gap-6 mt-3">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mt-3">
           <div className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-lg bg-blue-50 flex items-center justify-center">
               <Users className="h-3.5 w-3.5 text-blue-600" />
@@ -91,8 +128,17 @@ export default function ParticipantsPage() {
               <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
             </div>
             <div>
-              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">{activeCount}</div>
+              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]" title={activeCount === null ? unknownAggregateTitle : undefined}>{activeCount ?? "—"}</div>
               <div className="text-xs text-[hsl(var(--muted-foreground))]">Active</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded-lg bg-gray-100 flex items-center justify-center">
+              <UserMinus className="h-3.5 w-3.5 text-gray-500" />
+            </div>
+            <div>
+              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]" title={inactiveCount === null ? unknownAggregateTitle : "Registered but never verified — the default state for a new signup."}>{inactiveCount ?? "—"}</div>
+              <div className="text-xs text-[hsl(var(--muted-foreground))]">Inactive</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -100,7 +146,7 @@ export default function ParticipantsPage() {
               <Shield className="h-3.5 w-3.5 text-yellow-600" />
             </div>
             <div>
-              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">{suspendedCount}</div>
+              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]" title={suspendedCount === null ? unknownAggregateTitle : undefined}>{suspendedCount ?? "—"}</div>
               <div className="text-xs text-[hsl(var(--muted-foreground))]">Suspended</div>
             </div>
           </div>
@@ -109,7 +155,7 @@ export default function ParticipantsPage() {
               <CheckCircle2 className="h-3.5 w-3.5 text-purple-600" />
             </div>
             <div>
-              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]">{verifiedCount}</div>
+              <div className="text-sm font-bold tabular-nums text-[hsl(var(--foreground))]" title={verifiedCount === null ? unknownAggregateTitle : undefined}>{verifiedCount ?? "—"}</div>
               <div className="text-xs text-[hsl(var(--muted-foreground))]">Email Verified</div>
             </div>
           </div>
@@ -127,7 +173,7 @@ export default function ParticipantsPage() {
             className="pl-9"
           />
         </div>
-        <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
+        <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 overflow-x-auto max-w-full">
           {STATUS_FILTERS.map((f) => (
             <button
               key={f.value}

@@ -205,6 +205,32 @@ export interface StakeholderSummaryResponse {
   online?: boolean;
 }
 
+/**
+ * GET /api/v1/admin/dashboard overview.
+ * Carries platform-wide aggregates that the FE needs to show exact Active/Suspended
+ * counts instead of a one-page sample (see BACKEND_DASHBOARD_USER_STATS_2026-08-28.md).
+ * Field names are field-name-tolerant in the hook, but this interface documents
+ * the preferred canonical names the backend should return.
+ */
+export interface AdminDashboardOverview {
+  totalUsers: number;
+  totalEvents: number;
+  enrolledStakeholders: number;
+  liveEvents: number;
+  liveBanner?: boolean;
+  kycSummary?: { approved: number; pending: number };
+  /** Platform-wide counts — once populated, the FE shows exact figures (zero further FE changes). */
+  activeUsers?: number;
+  activeCount?: number;
+  totalActive?: number;
+  suspendedUsers?: number;
+  suspendedCount?: number;
+  totalSuspended?: number;
+  recentActivity?: any[];
+  activityFeed?: any[];
+  [key: string]: any;
+}
+
 export interface EnrollmentResponse {
   id: string;
   name: string;
@@ -486,6 +512,19 @@ export interface SearchParams {
   limit?: number;
 }
 
+/**
+ * The backend enum in full (confirmed 2026-09-14) — six values, not three.
+ * INACTIVE is the default state for every new signup and is usually the largest bucket,
+ * so it must be handled everywhere, not treated as an edge case.
+ */
+export type UserStatus =
+  | "ACTIVE"
+  | "INACTIVE"
+  | "SUSPENDED"
+  | "PENDING"
+  | "REJECTED"
+  | "REVOKED";
+
 export interface UserSummaryResponse {
   id: string;
   email: string;
@@ -495,7 +534,7 @@ export interface UserSummaryResponse {
   role?: string;
   roles?: string[];
   phone?: string | null;
-  status: "ACTIVE" | "SUSPENDED" | "PENDING";
+  status: UserStatus;
   kycStatus?: string | null;
   emailVerified?: boolean;
   stakeholderName?: string | null;
@@ -777,6 +816,11 @@ export interface CreateAgmEventRequest {
   shareholderListBase64?:  string;
   shareholderListFilename?: string;
   resolutions?:            AgmResolutionInput[];
+  /**
+   * Optional support contact for this AGM (backend note 2026-09-11 §3).
+   * Omit to inherit: organisation setting → platform default.
+   */
+  supportEmail?:           string;
 }
 
 /** POST /api/v1/admin/events/general — field names match swagger exactly */
@@ -802,6 +846,8 @@ export interface InnovationCriteriaInput { criterion: string; weight: number; } 
  * judgingCriteria weights must sum to 100 if provided.
  */
 export interface CreateInnovationEventRequest {
+  /** Optional challenge flyer — top-level here, nested under the config on the client path. */
+  flyerUrl?:           string;
   registerId:           string;           // was stakeholderId
   title:                string;
   eventType?:           "INNOVATION_CHALLENGE" | "HACKATHON";
@@ -907,3 +953,28 @@ export interface ClientRegisterDetailResponse {
  * New code should use PagedApiResponse<T> which includes `last`.
  */
 export type PagedResponse<T> = PagedApiResponse<T> & { number?: number };
+
+/**
+ * /api/v1/admin/users paged response can carry platform-wide aggregates
+ * alongside the page content (see BACKEND_DASHBOARD_USER_STATS_2026-08-28.md).
+ * The FE reads these tolerantly — populating any one set of field names
+ * makes the correct platform totals appear with zero further changes.
+ */
+export interface UserPagedResponse extends PagedApiResponse<UserSummaryResponse> {
+  /**
+   * Whole-platform counts that deliberately ignore the active filters — they back the
+   * header tiles, which keep reporting the platform while the table shows one status.
+   * `inactiveUsers` is needed for active + suspended + inactive to reconcile against the
+   * total; without it the tiles look broken in a subtler way.
+   */
+  inactiveUsers?: number | null;
+  activeUsers?: number | null;
+  activeCount?: number | null;
+  totalActive?: number | null;
+  suspendedUsers?: number | null;
+  suspendedCount?: number | null;
+  totalSuspended?: number | null;
+  emailVerifiedUsers?: number | null;
+  emailVerifiedCount?: number | null;
+  verifiedEmailCount?: number | null;
+}

@@ -52,6 +52,16 @@ export interface ZoomSessionTotals {
   slotsInUse:    number | null;
   slotsFree:     number | null;
   strandedSlots: number | null;
+  /**
+   * Seats held by a deactivated host, or by a meeting with no host row at all (created
+   * before the pool existed, or directly against the S2S account). Confirmed by the backend
+   * 2026-09-14: this is real and expected. When it is non-zero, `totalCapacity` is NOT the
+   * true ceiling and `slotsInUse` may legitimately exceed it — a correct reading, not an
+   * arithmetic error, and the reason the page must state it rather than reconcile it away.
+   */
+  slotsHeldOutsidePool: number | null;
+  /** What the pool's counter believes, for drift visibility against the derived total. */
+  ledgerSlotsInUse:     number | null;
 }
 
 export interface AdminZoomSessionsData {
@@ -61,8 +71,6 @@ export interface AdminZoomSessionsData {
   totals:    ZoomSessionTotals;
   /** True when the backend actually reported pool capacity (vs. FE deriving in-use from rows). */
   capacityReported: boolean;
-  /** The raw unwrapped payload, for the super-admin "show raw response" diagnostic. */
-  raw?: any;
 }
 
 export const adminZoomSessionKeys = {
@@ -73,7 +81,10 @@ export const adminZoomSessionKeys = {
 // --- parsing (tolerant of snake_case / field-name variants) -----------------
 
 function emptyTotals(): ZoomSessionTotals {
-  return { totalCapacity: null, slotsInUse: null, slotsFree: null, strandedSlots: null };
+  return {
+    totalCapacity: null, slotsInUse: null, slotsFree: null, strandedSlots: null,
+    slotsHeldOutsidePool: null, ledgerSlotsInUse: null,
+  };
 }
 
 function toBool(v: any): boolean {
@@ -134,13 +145,15 @@ function parseZoomSessionRow(raw: any): ZoomSessionRow | null {
   return {
     eventId:         String(eventId),
     eventTitle:      r.eventTitle ?? r.event_title ?? r.title ?? r.eventName ?? "Untitled event",
-    // Organiser identity: the owning organisation, plus the registrar/creator as a sub-line.
-    // Tolerant of flat strings AND nested {name}/{email} objects (see asText).
-    orgName:         pick(asText, r.orgName, r.organisationName, r.organizationName, r.org_name, r.organisation, r.organization, r.org, r.client, r.clientName),
-    registrarName:   pick(asText, r.registrarName, r.registrar, r.registrar_name, r.registrarEmail, r.organizerName, r.organiserName, r.ownerName, r.createdByName, r.createdBy, r.owner, r.organizer, r.organiser),
-    // The assigned pooled host — email preferred (asAccount). §3b persists event→hostEmail,
-    // so it exists server-side; cover the likely flat + nested shapes it might arrive under.
-    pooledAccount:   pick(asAccount, r.pooledAccount, r.hostAccount, r.hostEmail, r.host_email, r.account, r.pooled_account, r.host, r.assignedHost, r.assigned_host, r.hostUser, r.hostUserEmail, r.host_user, r.zoomHost, r.zoomHostEmail, r.zoom_host, r.hostName),
+    // Organiser identity: the owning organisation (register), plus the managing
+    // stakeholder/registrar as a sub-line. The live backend names these `registerName`
+    // (NB: register, not registrar) and `stakeholderName`. Tolerant of flat strings
+    // AND nested {name}/{email} objects (see asText).
+    orgName:         pick(asText, r.orgName, r.registerName, r.register_name, r.organisationName, r.organizationName, r.org_name, r.register, r.organisation, r.organization, r.org, r.client, r.clientName),
+    registrarName:   pick(asText, r.registrarName, r.stakeholderName, r.stakeholder_name, r.registrar, r.registrar_name, r.stakeholder, r.registrarEmail, r.organizerName, r.organiserName, r.ownerName, r.createdByName, r.createdBy, r.owner, r.organizer, r.organiser),
+    // The assigned pooled host — email preferred (asAccount). The live backend sends
+    // `zoomHostEmail`; §3b persists event→hostEmail, so it always exists server-side.
+    pooledAccount:   pick(asAccount, r.pooledAccount, r.zoomHostEmail, r.zoom_host_email, r.hostAccount, r.hostEmail, r.host_email, r.account, r.pooled_account, r.host, r.assignedHost, r.assigned_host, r.hostUser, r.hostUserEmail, r.host_user, r.zoomHost, r.zoom_host, r.hostName),
     meetingId:       r.meetingId ?? r.meeting_id ?? r.zoomMeetingId ?? undefined,
     joinUrl:         r.joinUrl ?? r.join_url ?? undefined,
     startUrl:        r.startUrl ?? r.start_url ?? undefined,
@@ -189,24 +202,37 @@ function parseZoomSessions(payload: any): AdminZoomSessionsData {
   const reportedInUse = numOrNull(
     t.slotsInUse ?? t.inUse ?? t.used ?? t.active ?? t.activeMeetings ?? t.usedSlots ?? t.occupied,
   );
-  // Derive from rows whatever the backend didn't spell out, so the summary is never blank.
-  const slotsInUse = reportedInUse ?? hostInUse ?? sessions.length;
 
   const strandedSlots =
     numOrNull(t.strandedSlots ?? t.stranded ?? t.leaked ?? t.orphaned) ??
     sessions.filter((s) => s.stranded).length;
 
+  // "In use" means slots serving a *live/active* event. A stranded slot is a leak
+  // (still held by an ended/cancelled event) and is surfaced on its own stat, so it
+  // must NOT inflate in-use. When deriving from rows, count only the non-stranded held
+  // slots; the backend's own count wins if it ever sends one.
+  const derivedActive = sessions.filter((s) => !s.stranded).length;
+  const slotsInUse = reportedInUse ?? hostInUse ?? derivedActive;
+
+  // Free = capacity minus everything still held (active in-use + stranded), so the four
+  // stats reconcile to capacity. Releasing a stranded slot then turns it into a free one.
   const slotsFree =
     numOrNull(t.slotsFree ?? t.free ?? t.available ?? t.freeSlots ?? t.remaining) ??
-    (totalCapacity != null ? Math.max(0, totalCapacity - slotsInUse) : null);
+    (totalCapacity != null ? Math.max(0, totalCapacity - slotsInUse - strandedSlots) : null);
 
   return {
     available: true,
     sessions,
-    totals: { totalCapacity, slotsInUse, slotsFree, strandedSlots },
+    totals: {
+      totalCapacity,
+      slotsInUse,
+      slotsFree,
+      strandedSlots,
+      slotsHeldOutsidePool: numOrNull(t.slotsHeldOutsidePool ?? t.slots_held_outside_pool ?? t.heldOutsidePool),
+      ledgerSlotsInUse:     numOrNull(t.ledgerSlotsInUse ?? t.ledger_slots_in_use),
+    },
     // "Reported" = the backend actually told us a ceiling (either directly or via hosts).
     capacityReported: reportedCapacity != null || hostCapacity != null,
-    raw: p,
   };
 }
 
@@ -231,7 +257,7 @@ export function useAdminZoomSessions(enabled = true) {
       } catch (err: any) {
         const status = err?.response?.status;
         if (status === 404 || status === 501) {
-          return { available: false, sessions: [], totals: emptyTotals(), capacityReported: false, raw: null };
+          return { available: false, sessions: [], totals: emptyTotals(), capacityReported: false };
         }
         throw err;
       }

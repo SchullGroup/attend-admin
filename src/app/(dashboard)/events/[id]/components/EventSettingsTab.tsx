@@ -45,6 +45,12 @@ interface Props {
   maximumCapacity?: number | null;
   currentStatus:    string;
   isProductLaunch?: boolean;
+  /**
+   * Innovation Challenge / Hackathon. Challenge events accept the same optional `flyerUrl`
+   * as product launches from the backend's 2026-09-14 change — before that, UpdateEventRequest
+   * had the field but only ever applied it to launches.
+   */
+  isChallenge?:     boolean;
   flyerUrl?:        string;
   featured?:        boolean;
   zoomMeeting?:     ZoomMeetingDto | null;
@@ -66,11 +72,15 @@ export function EventSettingsTab({
   maximumCapacity:  initialCapacity     = null,
   currentStatus,
   isProductLaunch = false,
+  isChallenge     = false,
   flyerUrl: initialFlyerUrl = "",
   featured:         initialFeatured     = false,
   zoomMeeting:      initialZoomMeeting  = null,
   onStatusChange,
 }: Props) {
+  // Product launches and challenges both carry an optional flyer; nothing else does.
+  const canHaveFlyer = isProductLaunch || isChallenge;
+
   const [titleVal,         setTitleVal]         = useState(initialTitle ?? "");
   const [descVal,          setDescVal]          = useState(initialDescription ?? "");
   const [formatVal,        setFormatVal]        = useState(initialFormat ?? "");
@@ -195,7 +205,7 @@ export function EventSettingsTab({
         venue:           venueVal.trim()    || undefined,
         streamUrl:       streamVal.trim()   || undefined,
         maximumCapacity: !isNaN(cap) && cap > 0 ? cap : undefined,
-        flyerUrl:         isProductLaunch ? flyerUrl : undefined,
+        flyerUrl:         canHaveFlyer ? flyerUrl : undefined,
       },
     });
   }
@@ -301,7 +311,7 @@ export function EventSettingsTab({
             />
           </div>
 
-          {isProductLaunch && (
+          {canHaveFlyer && (
             <ImageUrlUpload
               value={flyerUrl}
               onChange={setFlyerUrl}

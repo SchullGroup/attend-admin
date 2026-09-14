@@ -1136,18 +1136,24 @@ export function useAnnounceChallengeWinners() {
       sendEmail,
       sendInApp,
       idempotencyKey,
+      regenerate,
     }: {
-      challengeId:    string;
-      applicationIds: string[];
-      message:        string;
-      sendEmail:      boolean;
-      sendInApp:      boolean;
-      idempotencyKey: string;
+      challengeId:     string;
+      applicationIds:  string[];
+      message:         string;
+      sendEmail:       boolean;
+      sendInApp:       boolean;
+      idempotencyKey?: string;
+      regenerate?:     boolean;
     }) => {
+      // §11 — `regenerate=true` re-issues certificates with the CURRENT artwork to
+      // everyone (including already-issued recipients) and emails them all again.
+      // The Idempotency-Key is ignored on a regenerate, so omit it; on the normal
+      // path it still guards against a double-send.
       const res = await apiClient.post<ApiResponse<WinnerAnnouncement>>(
-        `/api/v1/client/events/${challengeId}/challenge-winners/announce`,
+        `/api/v1/client/events/${challengeId}/challenge-winners/announce${regenerate ? "?regenerate=true" : ""}`,
         { applicationIds, message, sendEmail, sendInApp },
-        { headers: { "Idempotency-Key": idempotencyKey } }
+        regenerate || !idempotencyKey ? undefined : { headers: { "Idempotency-Key": idempotencyKey } }
       );
       return parseWinnerAnnouncement(res.data.data ?? res.data, challengeId);
     },
@@ -1232,15 +1238,16 @@ export function useLatestChallengeWinnerAnnouncement(challengeId: string, opts?:
 }
 
 // ---------------------------------------------------------------------------
-// Participation certificates  (backend spec: cert.md §3)
+// Participation certificates  (backend spec: cert.md §3, updated by final.md §13)
 //
-//   The second certificate type. Winners get a WINNER certificate; everyone
-//   else who genuinely took part gets a PARTICIPATION one — nobody gets both
-//   (enforced by a DB unique constraint, not just an app-layer check).
+//   The second certificate type. Everyone who genuinely took part gets a
+//   PARTICIPATION certificate. As of §13 winners ALSO receive one — the old
+//   "nobody gets both" DB unique constraint was removed, so a winner can hold
+//   both a WINNER (ATD-) and a PARTICIPATION (ATP-) certificate.
 //
 //   Eligibility (server-computed): members of applications in SUBMITTED,
 //   UNDER_REVIEW, SHORTLISTED, SELECTED or NOT_PROGRESSED. WITHDRAWN / REJECTED
-//   are excluded; winners are skipped. Cert numbers use ATP- (vs ATD- winners).
+//   are excluded. Cert numbers use ATP- (vs ATD- winners).
 //
 //   Same event-scoped shape as the winner flow — eventId === challengeId — and
 //   the issue "run" body is byte-for-byte the winner announcement status, so we
@@ -1250,6 +1257,8 @@ export function useLatestChallengeWinnerAnnouncement(challengeId: string, opts?:
 //   back — `issue` recomputes it, exactly like winners.
 // ---------------------------------------------------------------------------
 
+// IS_WINNER is retained for back-compat only: as of final.md §13 winners also
+// receive a participation certificate, so the backend no longer skips them.
 export type ParticipationSkipReason = "ALREADY_ISSUED" | "IS_WINNER" | "NO_EMAIL";
 
 export interface ParticipationMember {
@@ -1376,16 +1385,21 @@ export function useIssueChallengeParticipation() {
       idempotencyKey,
       sendEmail = true,
       sendInApp = true,
+      regenerate,
     }: {
-      challengeId:    string;
-      idempotencyKey: string;
-      sendEmail?:     boolean;
-      sendInApp?:     boolean;
+      challengeId:     string;
+      idempotencyKey?: string;
+      sendEmail?:      boolean;
+      sendInApp?:      boolean;
+      regenerate?:     boolean;
     }) => {
+      // §11 — see useAnnounceChallengeWinners. `regenerate=true` re-issues with the
+      // current artwork to everyone already holding a certificate and re-emails
+      // them; the Idempotency-Key is ignored on a regenerate, so omit it.
       const res = await apiClient.post<ApiResponse<ParticipationRun>>(
-        `/api/v1/client/events/${challengeId}/challenge-participation/issue`,
+        `/api/v1/client/events/${challengeId}/challenge-participation/issue${regenerate ? "?regenerate=true" : ""}`,
         { sendEmail, sendInApp },
-        { headers: { "Idempotency-Key": idempotencyKey } }
+        regenerate || !idempotencyKey ? undefined : { headers: { "Idempotency-Key": idempotencyKey } }
       );
       return parseWinnerAnnouncement(res.data.data ?? res.data, challengeId);
     },
