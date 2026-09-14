@@ -38,7 +38,8 @@ that leaf to a trusted root is not included in the handshake, so a client with o
 certificates in its trust store cannot build a path from your certificate to anything it
 trusts.
 
-Confirm in one command:
+Confirm in one command (or run `scripts/tls-chain-check.sh` in the admin repo, which reports
+this plus what is terminating TLS and where the hostname resolves):
 
 ```bash
 echo | openssl s_client -showcerts -servername attend-backend-prod.experienceattend.com \
@@ -78,25 +79,70 @@ why it reached production.
 The diagnostic rule: when the same certificate is accepted by browsers and rejected by
 everything else, the certificate is fine and the **chain** is broken.
 
-## 4. Fix — prod nginx
+## 4. Fix — Huawei Cloud WAF, **not** nginx
 
-```nginx
-ssl_certificate      /etc/letsencrypt/live/<domain>/fullchain.pem;   # NOT cert.pem
-ssl_certificate_key  /etc/letsencrypt/live/<domain>/privkey.pem;
+> **Updated after measuring the live host.** The original version of this document said to fix
+> nginx. That is wrong for this host, and following it wastes a DevOps cycle: the prod nginx
+> was updated and the error did not change, because **nginx does not terminate TLS here.**
+
+Measured output:
+
+```
+attend-backend-prod.experienceattend.com
+  Certificates sent : 1
+  Verify return code: 21 (unable to verify the first certificate)
+  Chain as served   : 0 s:CN=*.experienceattend.com
+                        i:C=AT, O=ZeroSSL GmbH, CN=ZeroSSL RSA DV SSL CA 2
+  Resolves to       : 8aad511ebb6948bf946eb9e241776eef.vip1.huaweicloudwaf.com
+                      159.138.177.218  159.138.177.91  159.138.177.215  159.138.177.63
+  Server            : CW
+  Leaf validity     : notBefore=Aug 7 2026  notAfter=Feb 21 2027
+
+attend-api.schulltech.com   (staging, for contrast)
+  Certificates sent : 4
+  Verify return code: 0 (ok)
+  Resolves to       : 54.215.201.4
+  Server            : nginx/1.28.3 (Ubuntu)
 ```
 
-```bash
-nginx -t && systemctl reload nginx
+The prod hostname resolves to **Huawei Cloud WAF** (`vip1.huaweicloudwaf.com`, `Server: CW`).
+The WAF terminates TLS and presents **its own uploaded certificate** — a ZeroSSL wildcard for
+`*.experienceattend.com`. Whatever `ssl_certificate` the origin nginx points at never reaches
+a client. Staging has no WAF in front, which is exactly why its chain is complete and it works.
+
+The uploaded certificate is the **leaf alone**; the ZeroSSL intermediate was not included.
+
+### What to change
+
+Huawei Cloud console → **WAF** → Website Settings → `attend-backend-prod.experienceattend.com`
+→ **Certificate** → replace. The certificate body must contain the leaf **followed by** the
+intermediate, in that order:
+
+```
+-----BEGIN CERTIFICATE-----     <- certificate.crt   (CN=*.experienceattend.com)
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----     <- ca_bundle.crt     (ZeroSSL RSA DV SSL CA 2)
+-----END CERTIFICATE-----
 ```
 
-`cert.pem` is the leaf on its own; `fullchain.pem` is the leaf plus the intermediate.
-Pointing `ssl_certificate` at the former is the usual cause of this error and is normally the
-entire fix. If the certificate came from a commercial CA rather than Let's Encrypt, the
-equivalent is concatenating the CA's intermediate bundle onto the leaf, in that order, into
-the file `ssl_certificate` points at.
+ZeroSSL issues both files in the same download; `ca_bundle.crt` is the part that was dropped.
+Nothing needs reissuing — this is a re-upload of material already held. Apply, allow a minute
+for the WAF to propagate, then re-run `scripts/tls-chain-check.sh` in the admin repo: expect
+**2 or more certificates** and **Verify return code: 0**.
 
-Re-run the `openssl` command in §2 afterwards and expect `2` or more. No application
-redeploy is required; this is a TLS-termination change only.
+### Two consequences of it being a wildcard behind a shared WAF
+
+1. **Every other `*.experienceattend.com` host on that WAF listener serves the same incomplete
+   chain** and fails for the same non-browser clients. Worth checking them in the same pass.
+2. Once TLS verifies, the WAF is still a WAF. Server-to-server callers (our Netlify functions,
+   monitoring, webhooks) do not look like browsers, so if requests start being challenged or
+   blocked after this, that is the next thing to examine — a different problem with a similar
+   shape.
+
+### If the origin nginx was already changed
+
+Leave it changed — a complete chain on the origin is correct regardless, and it matters for
+the WAF-to-origin leg and for any future direct access. It simply is not what fixes this.
 
 ## 5. What it currently breaks
 

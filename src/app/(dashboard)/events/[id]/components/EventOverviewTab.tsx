@@ -104,6 +104,15 @@ export function EventOverviewTab({
   const productLaunchConfig       = (event as any).productLaunchConfig      as Record<string, any> | undefined;
   const innovationChallengeConfig = (event as any).innovationChallengeConfig as Record<string, any> | undefined;
   const agmConfig                 = (event as any).agmConfig                as Record<string, any> | undefined;
+  // The flyer is a top-level field on the event as of the backend's 2026-09-14 change;
+  // the per-config copies are echoes kept for compatibility, so they are only a fallback
+  // for a response from before that. Every event type can have one now.
+  const flyerUrl = (
+    (event as any).flyerUrl ??
+    productLaunchConfig?.flyerUrl ??
+    innovationChallengeConfig?.flyerUrl ??
+    undefined
+  ) as string | undefined;
   const featured                  = (event as any).featured                 as boolean | undefined;
   const endDate                   = (event as any).endDate                  as string | undefined;
 
@@ -119,6 +128,19 @@ export function EventOverviewTab({
     <div className="grid grid-cols-3 gap-5">
       {/* ── Left column ── */}
       <div className="col-span-2 flex flex-col gap-5">
+
+        {/* Flyer — any event type carries one now, so it sits above the type-specific cards */}
+        {flyerUrl && (
+          <a
+            href={flyerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.35)]"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={flyerUrl} alt={`${event.title} flyer`} className="max-h-96 w-full object-contain" />
+          </a>
+        )}
 
         {/* Attendees / Capacity / Fill rate strip */}
         <div className="grid grid-cols-3 divide-x divide-[hsl(var(--border))] rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] overflow-hidden">
@@ -200,12 +222,6 @@ export function EventOverviewTab({
             <h2 className="font-semibold text-[hsl(var(--foreground))] mb-4 flex items-center gap-2">
               <Package className="h-4 w-4 text-[hsl(var(--foreground))]" /> Product Launch Details
             </h2>
-            {productLaunchConfig.flyerUrl && (
-              <a href={productLaunchConfig.flyerUrl} target="_blank" rel="noopener noreferrer" className="mb-4 block overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.35)]">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={productLaunchConfig.flyerUrl} alt={`${event.title} flyer`} className="max-h-96 w-full object-contain" />
-              </a>
-            )}
             <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
               {productLaunchConfig.productName && (
                 <div className="py-2.5 flex items-start gap-3">

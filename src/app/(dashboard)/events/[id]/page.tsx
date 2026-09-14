@@ -283,10 +283,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       // Press Kit (F2) — Product Launch events. Client admin: full CRUD;
       // super admin + Viewer: read-only (super admin reads /admin endpoint).
       ...(isLAUNCH ? ["Press Kit"] : []),
-      // Media gallery (§2, backend note 2026-09-11) — Product Launch events.
-      // Client admin only: there is no /admin read path for the gallery, so
-      // super admin would just get a 403 from the client endpoint.
-      ...(!isSuperAdmin && isLAUNCH ? ["Media"] : []),
+      // Media gallery — every event type as of the backend's 2026-09-14 change. The
+      // `launch-media` path is a historical name, not a restriction: the type guard was
+      // dropped, and the rows key off the event. Client admin only, because there is still
+      // no /admin read path for the gallery.
+      ...(!isSuperAdmin ? ["Media"] : []),
       // Broadcast is a write operation — hidden for super admin and Viewer (read-only)
       ...(!isSuperAdmin && !isViewer ? ["Broadcast"] : []),
       ...(isAGM ? ["Vote Results", "Post-AGM"] : []),
@@ -374,7 +375,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {tab === "Invites"        && !isSuperAdmin && isInviteOnly && <EventLaunchInvitesTab     eventId={id} />}
       {tab === "Waitlist"       && !isSuperAdmin && isLAUNCH && <EventLaunchWaitlistTab    eventId={id} />}
       {tab === "Press Kit"      && isLAUNCH && <EventPressKitTab eventId={id} readOnly={isSuperAdmin || isViewer} isSuperAdmin={isSuperAdmin} />}
-      {tab === "Media"          && !isSuperAdmin && isLAUNCH && <EventLaunchMediaTab eventId={id} readOnly={isViewer} />}
+      {tab === "Media"          && !isSuperAdmin && <EventLaunchMediaTab eventId={id} readOnly={isViewer} />}
       {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab eventId={id} />}
       {tab === "Vote Results"       && isAGM && <EventVoteResultsTab voteResults={isSuperAdmin ? adminVoteResultsData : voteResultsData} />}
       {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} voteResults={voteResultsData} eventId={id} />}
@@ -393,6 +394,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         isProductLaunch={isLAUNCH}
         isChallenge={isHACKATHON}
         flyerUrl={
+          // Top-level is the storage now; the per-config copies are echoes kept for
+          // compatibility, so they are only a fallback for a pre-2026-09-14 response.
+          (apiEvent as any).flyerUrl ??
           (apiEvent as any).productLaunchConfig?.flyerUrl ??
           (apiEvent as any).innovationChallengeConfig?.flyerUrl ??
           ""

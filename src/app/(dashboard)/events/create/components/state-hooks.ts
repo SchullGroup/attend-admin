@@ -18,6 +18,7 @@ export function useAgmState() {
   const [capacity,            setCapacity]            = useState("");
   const [rsvpEnabled,         setRsvpEnabled]         = useState(true);
   const [featured,            setFeatured]            = useState(false);
+  const [flyerUrl,            setFlyerUrl]            = useState("");
   // AGM Notice — Cloudinary URL upload
   const [noticeFile,          setNoticeFile]          = useState("");
   const [noticeUrl,           setNoticeUrl]           = useState("");
@@ -53,6 +54,7 @@ export function useAgmState() {
     date, setDate, time, setTime, endTime, setEndTime,
     format, setFormat, venue, setVenue, streamUrl, setStreamUrl,
     capacity, setCapacity, rsvpEnabled, setRsvpEnabled, featured, setFeatured,
+    flyerUrl, setFlyerUrl,
     noticeFile, setNoticeFile, noticeUrl, setNoticeUrl,
     noticeFileSize, setNoticeFileSize, noticeUploading, setNoticeUploading,
     noticeFileBase64, setNoticeFileBase64,
@@ -182,11 +184,13 @@ export function useGeneralState() {
   const [capacity,            setCapacity]            = useState("");
   const [audienceMode,        setAudienceMode]        = useState<"open" | "invite">("open");
   const [featured,            setFeatured]            = useState(false);
+  const [flyerUrl,            setFlyerUrl]            = useState("");
   return {
     title, setTitle, description, setDescription,
     date, setDate, time, setTime, endTime, setEndTime,
     format, setFormat, venue, setVenue, streamUrl, setStreamUrl,
     capacity, setCapacity, audienceMode, setAudienceMode, featured, setFeatured,
+    flyerUrl, setFlyerUrl,
   };
 }
 

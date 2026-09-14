@@ -717,15 +717,12 @@ export interface EmbargoRequest {
 export interface ProductLaunchConfigRequest {
   embargo?:           EmbargoRequest;
   audienceTargeting?: AudienceTargeting;
+  /** @deprecated Echo of the event's top-level `flyerUrl`. Prefer that; both land in one field. */
   flyerUrl?:          string;
 }
 
 export interface InnovationChallengeConfigRequest {
-  /**
-   * Optional challenge flyer (backend note 2026-09-14 §5). A plain URL from
-   * POST /api/v1/upload — NOT the signed media-session flow. Returned resolved on the
-   * detail responses, since the bucket is private and the raw stored URL 403s.
-   */
+  /** @deprecated Echo of the event's top-level `flyerUrl`. Prefer that; both land in one field. */
   flyerUrl?:            string;
   audienceTargeting?:   AudienceTargeting;
   tracks?:              string[];
@@ -751,6 +748,13 @@ export interface GeneralEventConfigRequest {
 export type AudienceTargeting = "OPEN_REGISTRATION" | "INVITE_ONLY" | "RESTRICT_BY_EMAIL_DOMAIN";
 
 export interface CreateEventRequest {
+  /**
+   * Optional flyer, top level, ANY event type (backend note 2026-09-14 §5.2). The flyer used
+   * to live on each event type's own config table; it is now a single column on the event.
+   * The per-config `flyerUrl` fields still work and land in the same place — they are echoes
+   * now, not storage — so sending it here is the one shape that works for every type.
+   */
+  flyerUrl?:                   string;
   registerId:                  string;
   eventType:                   "AGM_EGM" | "PRODUCT_LAUNCH" | "INNOVATION_CHALLENGE" | "HACKATHON" | "GENERAL_EVENT";
   title:                       string;

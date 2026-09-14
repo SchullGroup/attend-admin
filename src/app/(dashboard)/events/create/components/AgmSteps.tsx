@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { UploadProgress } from "@/components/ui/upload-progress";
 import { apiClient } from "@/lib/api-client";
 import { cn, throttledProgress } from "@/lib/utils";
+import { ImageUrlUpload } from "@/components/custom/image-url-upload";
 import { Toggle, FormatPicker, ReviewRow, OrgChip } from "./shared";
 import type { AgmState } from "./state-hooks";
 
@@ -90,6 +91,17 @@ export function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState
           </div>
           <Toggle checked={s.rsvpEnabled} onChange={s.setRsvpEnabled} color="#374151" />
         </div>
+      </div>
+
+      {/* Optional flyer — top-level field on the event, every type (2026-09-14 §5.2). */}
+      <div className="border-t border-[hsl(var(--border))] pt-5">
+        <ImageUrlUpload
+          value={s.flyerUrl}
+          onChange={s.setFlyerUrl}
+          folder="event-flyers"
+          label="Event flyer (optional)"
+          helpText="JPG, PNG or WebP. Shown on the event page — you can add it later from Settings."
+        />
       </div>
 
       <div className="flex items-center justify-between rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] px-4 py-3">
@@ -519,6 +531,7 @@ export function AgmReview({ s, organiserName }: { s: AgmState; organiserName: st
           {s.venue && <ReviewRow label="Venue" value={s.venue} />}
           {s.streamUrl && <ReviewRow label="Stream URL" value={s.streamUrl} />}
           {s.capacity && <ReviewRow label="Capacity" value={s.capacity} />}
+          {s.flyerUrl && <ReviewRow label="Flyer" value="Uploaded" />}
           <ReviewRow label="RSVP Enabled" value={s.rsvpEnabled ? "Yes" : "No"} />
           {s.featured && <ReviewRow label="Featured" value="Yes" />}
         </div>

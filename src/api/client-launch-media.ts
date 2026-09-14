@@ -1,7 +1,11 @@
 "use client";
 
 /**
- * client-launch-media.ts — Product Launch media gallery (backend note 2026-09-11 §2)
+ * client-launch-media.ts — event media gallery (backend note 2026-09-11 §2, generalised 09-14)
+ *
+ * `launch-media` in the paths is historical. The PRODUCT_LAUNCH type guard was dropped on
+ * 2026-09-14: these endpoints serve every event type, and `launchMedia[]` on the participant
+ * event detail populates for all of them.
  *
  * Client admin:
  *   POST   /api/v1/client/events/{eventId}/launch-media/upload-session   → signed PUT URL
@@ -279,7 +283,7 @@ export function useUploadLaunchMedia() {
       return normalizeAsset(responseData<any>(completeRes));
     },
     onSuccess: (_asset, { eventId }) => {
-      popup.success("Media Added", "The file is uploaded and live on the launch page.", 2500);
+      popup.success("Media Added", "The file is uploaded and live on the event page.", 2500);
     },
     // Refresh on failure as well, not just success. The session step commits the
     // AWAITING_UPLOAD row before handing back the signed URL (backend note 2026-09-14 §7.1),
