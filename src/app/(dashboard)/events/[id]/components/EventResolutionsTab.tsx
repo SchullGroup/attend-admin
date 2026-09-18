@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PlusCircle, Trash2, Loader2, ShieldCheck, CheckCircle2, Play, Square, BarChart2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -110,12 +110,32 @@ export function EventResolutionsTab({
   const [agmNewRows, setAgmNewRows] = useState<AgmNewRow[]>([]);
   const addResolutionMutation = useAddResolution();
 
+  // The draft form renders below every saved resolution, so on a long list "Add
+  // Resolution" appeared to do nothing — the new card was off-screen. Remember which
+  // row was just added and bring it into view.
+  const pendingFocusId = useRef<string | null>(null);
+
   function addAgmRow() {
+    const id = uid();
+    pendingFocusId.current = id;
     setAgmNewRows((prev) => [...prev, {
-      id: uid(), title: "", description: "", specialResolution: false,
+      id, title: "", description: "", specialResolution: false,
       defaultDurationSeconds: undefined, resolutionType: "STANDARD", candidates: [],
     }]);
   }
+
+  // Runs after the new card has rendered, so the element exists to scroll to.
+  useEffect(() => {
+    const id = pendingFocusId.current;
+    if (!id) return;
+    pendingFocusId.current = null;
+
+    const card = document.getElementById(`agm-new-row-${id}`);
+    if (!card) return;
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    // preventScroll so focusing the input does not fight the smooth scroll above.
+    card.querySelector<HTMLInputElement>("input[data-resolution-title]")?.focus({ preventScroll: true });
+  }, [agmNewRows.length]);
   function removeAgmRow(id: string) {
     setAgmNewRows((prev) => prev.filter((r) => r.id !== id));
   }
@@ -483,6 +503,7 @@ export function EventResolutionsTab({
           {!isSuperAdmin && agmNewRows.map((row, idx) => (
             <div
               key={row.id}
+              id={`agm-new-row-${row.id}`}
               className="rounded-xl border border-[hsl(var(--primary)/0.25)] bg-[hsl(var(--primary)/0.02)] p-4 flex flex-col gap-3"
             >
               <div className="flex items-center justify-between">
@@ -501,6 +522,7 @@ export function EventResolutionsTab({
               <div>
                 <Label className="mb-1.5">Resolution title <span className="text-red-500">*</span></Label>
                 <Input
+                  data-resolution-title
                   placeholder="e.g. Adoption of Financial Statements"
                   value={row.title}
                   onChange={(e) => updateAgmRow(row.id, "title", e.target.value)}

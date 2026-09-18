@@ -66,10 +66,16 @@ export default function EnrolRegistrarPage() {
   const [showErrors, setShowErrors] = useState(false);
 
   // Validation
+  // Every field here is mandatory. Industry, RC number, website and phone carried no
+  // asterisk and no validation, which read as optional — they are not.
   const errors = {
     name:     !form.name.trim(),
+    industry: !form.industry.trim(),
+    rcNumber: !form.rcNumber.trim(),
+    website:  !form.website.trim(),
     repName:  !form.repName.trim(),
     repEmail: !form.repEmail.trim(),
+    repPhone: !form.repPhone.trim(),
     password: !form.password.trim(),
   };
   const hasErrors = Object.values(errors).some(Boolean);
@@ -90,14 +96,14 @@ export default function EnrolRegistrarPage() {
         companyName:         form.name.trim(),
         representativeName:  form.repName.trim(),
         representativeEmail: form.repEmail.trim(),
-        representativePhone: form.repPhone || undefined,
+        representativePhone: form.repPhone,
         password:            form.password.trim(),
         plan:                form.plan,
         // Digits-only from the input — "RC" prefixed here so it always
         // saves consistently no matter how it was typed.
-        rcNumber:            withIdPrefix("RC", form.rcNumber, { space: true }) || null,
-        industry:            form.industry        || null,
-        website:             form.website.trim()  || null,
+        rcNumber:            withIdPrefix("RC", form.rcNumber, { space: true }),
+        industry:            form.industry,
+        website:             form.website.trim(),
       },
       {
         onSuccess: () => {
@@ -140,13 +146,16 @@ export default function EnrolRegistrarPage() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Industry</label>
+              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
+                Industry <span className="text-red-500">*</span>
+              </label>
               <CustomSelect
                 value={form.industry}
                 onChange={(v) => handleChange("industry", v)}
                 placeholder="Select industry…"
                 options={INDUSTRY_OPTIONS.map((i) => ({ label: i, value: i }))}
               />
+              {showErrors && errors.industry && <p className="text-xs text-red-500">Industry is required.</p>}
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -162,7 +171,9 @@ export default function EnrolRegistrarPage() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">RC Number</label>
+              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
+                RC Number <span className="text-red-500">*</span>
+              </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[hsl(var(--muted-foreground))] pointer-events-none">
                   RC
@@ -173,20 +184,24 @@ export default function EnrolRegistrarPage() {
                   value={form.rcNumber}
                   onChange={(e) => handleChange("rcNumber", digitsOnly(e.target.value))}
                   placeholder="287640"
-                  className={cn(fieldClass(false), "pl-9")}
+                  className={cn(fieldClass(showErrors && errors.rcNumber), "pl-9")}
                 />
               </div>
+              {showErrors && errors.rcNumber && <p className="text-xs text-red-500">RC number is required.</p>}
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Website</label>
+              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
+                Website <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 value={form.website}
                 onChange={(e) => handleChange("website", e.target.value)}
                 placeholder="e.g. https://dataport.ng"
-                className={fieldClass(false)}
+                className={fieldClass(showErrors && errors.website)}
               />
+              {showErrors && errors.website && <p className="text-xs text-red-500">Website is required.</p>}
             </div>
 
           </div>
@@ -227,11 +242,14 @@ export default function EnrolRegistrarPage() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Representative Phone</label>
+              <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
+                Representative Phone <span className="text-red-500">*</span>
+              </label>
               <PhoneInput
                 value={form.repPhone}
                 onChange={(e164) => handleChange("repPhone", e164)}
               />
+              {showErrors && errors.repPhone && <p className="text-xs text-red-500">Representative phone is required.</p>}
             </div>
 
             <div className="flex flex-col gap-1.5">

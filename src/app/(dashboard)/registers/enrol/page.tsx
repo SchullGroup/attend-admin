@@ -42,10 +42,10 @@ const INDUSTRY_OPTIONS = [
 interface EnrolForm {
   name:                string;   // → name          (required)
   email:               string;   // → email         (required)
-  rcNumber:            string;   // → rcNumber      (nullable — send null if blank)
-  industry:            string;   // → industry      (nullable — send null if blank)
-  representativeName:  string;   // → representativeName  (optional)
-  representativePhone: string;   // → representativePhone (optional)
+  rcNumber:            string;   // → rcNumber
+  industry:            string;   // → industry
+  representativeName:  string;   // → representativeName
+  representativePhone: string;   // → representativePhone
 }
 
 const EMPTY_FORM: EnrolForm = {
@@ -87,11 +87,17 @@ export default function EnrolRegisterPage() {
   } | null>(null);
 
   // ── Validation ────────────────────────────────────────────────────────────
+  // Every field on this form is mandatory. The hints that used to mark four of them
+  // as not required were wrong, and let people submit records the backend rejected.
   const errors = {
-    name:  !form.name.trim(),
-    email: !form.email.trim(),
+    name:                !form.name.trim(),
+    email:               !form.email.trim(),
+    industry:            !form.industry.trim(),
+    rcNumber:            !form.rcNumber.trim(),
+    representativeName:  !form.representativeName.trim(),
+    representativePhone: !form.representativePhone.trim(),
   };
-  const hasErrors = errors.name || errors.email;
+  const hasErrors = Object.values(errors).some(Boolean);
 
   function handleChange<K extends keyof EnrolForm>(field: K, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -112,10 +118,10 @@ export default function EnrolRegisterPage() {
       // so it always saves consistently no matter how it was typed.
       // form.representativePhone is already a full E.164 string from
       // PhoneInput.
-      rcNumber:            withIdPrefix("RC", form.rcNumber, { space: true }) || null,
-      industry:            form.industry                   || null,
-      representativeName:  form.representativeName.trim()  || undefined,
-      representativePhone: form.representativePhone         || undefined,
+      rcNumber:            withIdPrefix("RC", form.rcNumber, { space: true }),
+      industry:            form.industry,
+      representativeName:  form.representativeName.trim(),
+      representativePhone: form.representativePhone,
     };
 
     enrollMutation.mutate(payload, {
@@ -185,21 +191,28 @@ export default function EnrolRegisterPage() {
             )}
           </div>
 
-          {/* industry — optional, nullable */}
+          {/* industry — required */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Industry</label>
+            <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
+              Industry <span className="text-red-500">*</span>
+            </label>
             <CustomSelect
               value={form.industry}
               onChange={(v) => handleChange("industry", v)}
-              placeholder="Select industry… (optional)"
+              placeholder="Select industry…"
               options={INDUSTRY_OPTIONS.map((i) => ({ label: i, value: i }))}
             />
+            {showErrors && errors.industry && (
+              <p className="text-xs text-red-500">Industry is required.</p>
+            )}
           </div>
 
-          {/* rcNumber — optional, nullable. Numbers only; "RC" is added
-              automatically on submit so it always saves consistently. */}
+          {/* rcNumber — required. Numbers only; "RC" is added automatically on
+              submit so it always saves consistently. */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">RC Number</label>
+            <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
+              RC Number <span className="text-red-500">*</span>
+            </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[hsl(var(--muted-foreground))] pointer-events-none">
                 RC
@@ -209,35 +222,44 @@ export default function EnrolRegisterPage() {
                 inputMode="numeric"
                 value={form.rcNumber}
                 onChange={(e) => handleChange("rcNumber", digitsOnly(e.target.value))}
-                placeholder="125384 (optional)"
-                className={cn(fieldClass(false), "pl-9")}
+                placeholder="125384"
+                className={cn(fieldClass(showErrors && errors.rcNumber), "pl-9")}
               />
             </div>
+            {showErrors && errors.rcNumber && (
+              <p className="text-xs text-red-500">RC number is required.</p>
+            )}
           </div>
 
-          {/* representativeName — optional */}
+          {/* representativeName — required */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
-              Representative Name
+              Representative Name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={form.representativeName}
               onChange={(e) => handleChange("representativeName", e.target.value)}
-              placeholder="e.g. Dr. Adaeze Okonkwo (optional)"
-              className={fieldClass(false)}
+              placeholder="e.g. Dr. Adaeze Okonkwo"
+              className={fieldClass(showErrors && errors.representativeName)}
             />
+            {showErrors && errors.representativeName && (
+              <p className="text-xs text-red-500">Representative name is required.</p>
+            )}
           </div>
 
-          {/* representativePhone — optional */}
+          {/* representativePhone — required */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
-              Representative Phone
+              Representative Phone <span className="text-red-500">*</span>
             </label>
             <PhoneInput
               value={form.representativePhone}
               onChange={(e164) => handleChange("representativePhone", e164)}
             />
+            {showErrors && errors.representativePhone && (
+              <p className="text-xs text-red-500">Representative phone is required.</p>
+            )}
           </div>
 
         </div>
