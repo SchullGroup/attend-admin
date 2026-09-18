@@ -1,6 +1,24 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+
+/**
+ * Prefer real browser back-navigation so someone who arrived from a searched or
+ * filtered register list returns to that exact state. router.push("/registers")
+ * always rebuilt a bare list with no query string, which is why a search was lost
+ * the moment you viewed a register and came back.
+ *
+ * NOTE: this is the detail page the directory's View button actually opens
+ * (/admin/registers/{id}). The sibling at (dashboard)/registers/[id] is a separate
+ * implementation — both need this, they are not the same component.
+ */
+function handleBack(router: ReturnType<typeof useRouter>) {
+  if (typeof window !== "undefined" && window.history.length > 1) {
+    router.back();
+    return;
+  }
+  router.push("/registers");
+}
 import Link from "next/link";
 import {
   ArrowLeft, Building2, CalendarX, Eye, Monitor,
@@ -227,7 +245,7 @@ export default function RegisterDetailPage() {
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
           This register may have been removed or you may not have access.
         </p>
-        <Button variant="outline" className="mt-4 gap-2" onClick={() => router.push("/registers")}>
+        <Button variant="outline" className="mt-4 gap-2" onClick={() => handleBack(router)}>
           <ArrowLeft className="h-4 w-4" /> Back to Registers
         </Button>
       </div>
@@ -260,7 +278,7 @@ export default function RegisterDetailPage() {
 
       {/* ── Back nav ── */}
       <button
-        onClick={() => router.push("/registers")}
+        onClick={() => handleBack(router)}
         className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors w-fit"
       >
         <ArrowLeft className="h-3.5 w-3.5" />

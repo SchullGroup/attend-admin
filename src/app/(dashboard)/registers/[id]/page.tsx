@@ -22,6 +22,19 @@ import {
   Download, AlertTriangle, CalendarCheck, Calendar, Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+/**
+ * Prefer real browser back-navigation so someone who arrived here from a filtered
+ * or searched register list returns to that exact list state. router.push() always
+ * built a fresh /admin/registers with no query string, which is why a search was
+ * lost the moment you viewed a register and came back.
+ */
+function handleBack(router: ReturnType<typeof useRouter>) {
+  if (typeof window !== "undefined" && window.history.length > 1) {
+    router.back();
+    return;
+  }
+  router.push("/admin/registers");
+}
 import { formatDate } from "@/lib/utils";
 import { RegisterDocumentItem } from "@/types/super-admin";
 
@@ -97,7 +110,7 @@ export default function RegisterDetailPage({ params }: { params: Promise<{ id: s
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
           This register may have been removed or you may not have access.
         </p>
-        <Button variant="outline" className="mt-4 gap-2" onClick={() => router.push("/admin/registers")}>
+        <Button variant="outline" className="mt-4 gap-2" onClick={() => handleBack(router)}>
           <ArrowLeft className="h-4 w-4" /> Back to Registers
         </Button>
       </div>
@@ -135,7 +148,7 @@ export default function RegisterDetailPage({ params }: { params: Promise<{ id: s
 
       {/* ── Back nav ── */}
       <button
-        onClick={() => router.push("/admin/registers")}
+        onClick={() => handleBack(router)}
         className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors w-fit"
       >
         <ArrowLeft className="h-3.5 w-3.5" />

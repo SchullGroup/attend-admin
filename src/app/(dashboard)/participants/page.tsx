@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Search, Users, ShieldCheck, Shield, ShieldOff, CheckCircle2, UserMinus,
 } from "lucide-react";
@@ -37,13 +38,38 @@ function useDebounce<T>(value: T, ms = 400): T {
 }
 
 export default function ParticipantsPage() {
-  const [searchInput,    setSearchInput]    = useState("");
-  const [activeStatus,   setActiveStatus]   = useState("");
+  // Filter state lives in the URL, not just in component state — opening a row and
+  // coming back remounts this component, and local state would be gone. The query
+  // string survives browser back and a reload.
+  const router       = useRouter();
+  const pathname     = usePathname();
+  const searchParams = useSearchParams();
+
+  const [searchInput,    setSearchInput]    = useState(() => searchParams.get("q") ?? "");
+  const [activeStatus,   setActiveStatus]   = useState(
+    () => (STATUS_FILTERS.some((f) => f.value && f.value === searchParams.get("status"))
+      ? searchParams.get("status")!
+      : "")
+  );
   const [confirmId,      setConfirmId]      = useState<string | null>(null);
-  const [page,           setPage]           = useState(0);
+  const [page,           setPage]           = useState(() => {
+    const p = Number(searchParams.get("page"));
+    return Number.isInteger(p) && p > 0 ? p : 0;
+  });
   const LIMIT = 20;
 
   const debouncedSearch = useDebounce(searchInput, 400);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (searchInput)  params.set("q", searchInput);       else params.delete("q");
+    if (activeStatus) params.set("status", activeStatus); else params.delete("status");
+    if (page > 0)     params.set("page", String(page));   else params.delete("page");
+    const next = params.toString();
+    if (next !== searchParams.toString()) {
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    }
+  }, [searchInput, activeStatus, page, pathname, router, searchParams]);
 
   // GET /api/v1/admin/users — status and search are server-side as of the backend's
   // 2026-09-14 note, so the tabs and the search box now filter all 10k+ users rather than

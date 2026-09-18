@@ -30,6 +30,19 @@ import { DateCell } from "@/components/ui/date-cell";
 import { CustomSelect } from "@/components/custom/custom-select";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { formatDate, digitsOnly, withIdPrefix, formatRcNumber } from "@/lib/utils";
+
+/**
+ * Prefer real browser back-navigation so someone who arrived from a filtered list
+ * returns to that exact state. router.push() always rebuilt a bare /registrars,
+ * dropping whatever filter or search was applied.
+ */
+function handleBack(router: ReturnType<typeof useRouter>) {
+  if (typeof window !== "undefined" && window.history.length > 1) {
+    router.back();
+    return;
+  }
+  router.push("/registrars");
+}
 import { getEventModule, MODULE_COLORS } from "@/lib/event-module";
 
 const PLAN_OPTIONS = [
@@ -74,7 +87,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <p className="text-lg font-semibold text-[hsl(var(--foreground))]">Registrar not found</p>
-        <Button variant="outline" className="mt-4 gap-2" onClick={() => router.push("/registrars")}>
+        <Button variant="outline" className="mt-4 gap-2" onClick={() => handleBack(router)}>
           <ArrowLeft className="h-4 w-4" /> Back to Registrars
         </Button>
       </div>
@@ -112,7 +125,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
     <div className="flex flex-col gap-6">
 
       {/* ── Back nav ── */}
-      <button onClick={() => router.push("/registrars")}
+      <button onClick={() => handleBack(router)}
         className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors w-fit">
         <ArrowLeft className="h-3.5 w-3.5" /> All Registrars
       </button>

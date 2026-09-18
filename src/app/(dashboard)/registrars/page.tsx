@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Building2, Users, CalendarDays, Eye, ImageOff } from "lucide-react";
 import {
   useRegistrars,
@@ -32,8 +33,28 @@ const TABS = [
 function getDisplayName(r: RegistrarItem)  { return r.companyName || r.name || "—"; }
 
 export default function RegistrarsPage() {
-  const [activeTab, setActiveTab] = useState("all");
+  // Filter state lives in the URL, not just in component state — opening a row and
+  // coming back remounts this component, and local state would be gone. The query
+  // string survives browser back and a reload.
+  const router       = useRouter();
+  const pathname     = usePathname();
+  const searchParams = useSearchParams();
+
+  const [activeTab, setActiveTab] = useState(
+    () => (TABS.some((t) => t.value === searchParams.get("status"))
+      ? searchParams.get("status")!
+      : "all")
+  );
   const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (activeTab !== "all") params.set("status", activeTab); else params.delete("status");
+    const next = params.toString();
+    if (next !== searchParams.toString()) {
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    }
+  }, [activeTab, pathname, router, searchParams]);
 
   const { data: userResponse } = useGetMe();
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
