@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PlusCircle, Trash2, Loader2, ShieldCheck, CheckCircle2, Play, Square, BarChart2, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -110,12 +110,35 @@ export function EventResolutionsTab({
   const [agmNewRows, setAgmNewRows] = useState<AgmNewRow[]>([]);
   const addResolutionMutation = useAddResolution();
 
+  // Draft rows render ABOVE the saved list, newest first, so "Add Resolution" always
+  // opens the form in the same place — directly under the button — no matter how long
+  // the list grows. Previously they were appended below every saved resolution, which
+  // on a long AGM meant the form opened somewhere off the bottom of the page.
+  const pendingFocusId = useRef<string | null>(null);
+
   function addAgmRow() {
-    setAgmNewRows((prev) => [...prev, {
-      id: uid(), title: "", description: "", specialResolution: false,
+    const id = uid();
+    pendingFocusId.current = id;
+    setAgmNewRows((prev) => [{
+      id, title: "", description: "", specialResolution: false,
       defaultDurationSeconds: undefined, resolutionType: "STANDARD", candidates: [],
-    }]);
+    }, ...prev]);
   }
+
+  // Runs after the new card has rendered, so the element exists to scroll to.
+  useEffect(() => {
+    const id = pendingFocusId.current;
+    if (!id) return;
+    pendingFocusId.current = null;
+
+    const card = document.getElementById(`agm-new-row-${id}`);
+    if (!card) return;
+    // "nearest" is a no-op when the card is already visible — which it now is in the
+    // normal case, since the form opens right under the button the user just clicked.
+    card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    // preventScroll so focusing the input does not fight the smooth scroll above.
+    card.querySelector<HTMLInputElement>("input[data-resolution-title]")?.focus({ preventScroll: true });
+  }, [agmNewRows.length]);
   function removeAgmRow(id: string) {
     setAgmNewRows((prev) => prev.filter((r) => r.id !== id));
   }
@@ -310,6 +333,171 @@ export function EventResolutionsTab({
 
         <div className="flex flex-col gap-3">
 
+          {/* Unsaved new resolution rows */}
+          {!isSuperAdmin && agmNewRows.map((row) => (
+            <div
+              key={row.id}
+              id={`agm-new-row-${row.id}`}
+              className="rounded-xl border border-[hsl(var(--primary)/0.25)] bg-[hsl(var(--primary)/0.02)] p-4 flex flex-col gap-3"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[hsl(var(--primary))]">
+                  NEW RESOLUTION
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeAgmRow(row.id)}
+                  className="text-[hsl(var(--muted-foreground))] hover:text-red-500 transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <div>
+                <Label className="mb-1.5">Resolution title <span className="text-red-500">*</span></Label>
+                <Input
+                  data-resolution-title
+                  placeholder="e.g. Adoption of Financial Statements"
+                  value={row.title}
+                  onChange={(e) => updateAgmRow(row.id, "title", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Label className="mb-1.5">Description <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span></Label>
+                <textarea
+                  rows={2}
+                  placeholder="Additional context for shareholders…"
+                  value={row.description}
+                  onChange={(e) => updateAgmRow(row.id, "description", e.target.value)}
+                  className="flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none"
+                />
+              </div>
+
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={row.specialResolution}
+                  onChange={(e) => updateAgmRow(row.id, "specialResolution", e.target.checked)}
+                  className="h-4 w-4 rounded border-[hsl(var(--border))] accent-amber-600"
+                />
+                <span className="text-sm text-[hsl(var(--foreground))]">
+                  Special resolution{" "}
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">(requires 75% majority)</span>
+                </span>
+              </label>
+
+              <div>
+                <Label className="mb-1.5">Resolution type</Label>
+                <div className="inline-flex rounded-lg border border-[hsl(var(--border))] p-0.5 bg-[hsl(var(--muted)/0.3)]">
+                  <button
+                    type="button"
+                    onClick={() => setAgmRowType(row.id, "STANDARD")}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                      row.resolutionType === "STANDARD"
+                        ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
+                        : "text-[hsl(var(--muted-foreground))]"
+                    }`}
+                  >
+                    Standard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAgmRowType(row.id, "CANDIDATE")}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                      row.resolutionType === "CANDIDATE"
+                        ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
+                        : "text-[hsl(var(--muted-foreground))]"
+                    }`}
+                  >
+                    Candidate Poll
+                  </button>
+                </div>
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                  Candidate Poll lets shareholders vote For/Against/Abstain on each nominee independently, under one open/close window — e.g. &quot;Election of President&quot;.
+                </p>
+              </div>
+
+              {row.resolutionType === "CANDIDATE" && (
+                <div className="flex flex-col gap-2 rounded-lg border border-[hsl(var(--border))] p-3 bg-[hsl(var(--background))]">
+                  <div className="flex items-center justify-between">
+                    <Label>
+                      Candidates <span className="text-red-500">*</span>{" "}
+                      <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(min. 2)</span>
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={() => addCandidateRow(row.id)}
+                      className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline"
+                    >
+                      + Add candidate
+                    </button>
+                  </div>
+                  {row.candidates.map((c, ci) => (
+                    <div key={c.id} className="flex items-center gap-2">
+                      <span className="text-xs text-[hsl(var(--muted-foreground))] w-4 shrink-0">{ci + 1}.</span>
+                      <Input
+                        placeholder="Candidate name"
+                        value={c.name}
+                        onChange={(e) => updateCandidateRow(row.id, c.id, "name", e.target.value)}
+                        className="flex-1"
+                      />
+                      <Input
+                        placeholder="Bio (optional)"
+                        value={c.bio}
+                        onChange={(e) => updateCandidateRow(row.id, c.id, "bio", e.target.value)}
+                        className="flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeCandidateRow(row.id, c.id)}
+                        className="text-[hsl(var(--muted-foreground))] hover:text-red-500 transition-colors shrink-0"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  {row.candidates.length === 0 && (
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] italic">No candidates added yet.</p>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <Label className="mb-1.5">Default vote duration (seconds) <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span></Label>
+                <Input
+                  type="number"
+                  min={10}
+                  placeholder="e.g. 120"
+                  value={row.defaultDurationSeconds ?? ""}
+                  onChange={(e) =>
+                    setAgmNewRows((prev) =>
+                      prev.map((r) =>
+                        r.id === row.id
+                          ? { ...r, defaultDurationSeconds: e.target.value ? parseInt(e.target.value, 10) : undefined }
+                          : r
+                      )
+                    )
+                  }
+                />
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <Button
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  disabled={addResolutionMutation.isPending}
+                  onClick={() => persistAgmRow(row)}
+                >
+                  {addResolutionMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : null}
+                  Save Resolution
+                </Button>
+              </div>
+            </div>
+          ))}
+
           {/* Live / static resolution list */}
           {displayList.map((res, idx) => {
             const statusUp  = res.status?.toUpperCase();
@@ -478,169 +666,6 @@ export function EventResolutionsTab({
               </div>
             );
           })}
-
-          {/* Unsaved new resolution rows */}
-          {!isSuperAdmin && agmNewRows.map((row, idx) => (
-            <div
-              key={row.id}
-              className="rounded-xl border border-[hsl(var(--primary)/0.25)] bg-[hsl(var(--primary)/0.02)] p-4 flex flex-col gap-3"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[hsl(var(--primary))]">
-                  NEW RES. {displayList.length + idx + 1}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeAgmRow(row.id)}
-                  className="text-[hsl(var(--muted-foreground))] hover:text-red-500 transition-colors"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              <div>
-                <Label className="mb-1.5">Resolution title <span className="text-red-500">*</span></Label>
-                <Input
-                  placeholder="e.g. Adoption of Financial Statements"
-                  value={row.title}
-                  onChange={(e) => updateAgmRow(row.id, "title", e.target.value)}
-                />
-              </div>
-
-              <div>
-                <Label className="mb-1.5">Description <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span></Label>
-                <textarea
-                  rows={2}
-                  placeholder="Additional context for shareholders…"
-                  value={row.description}
-                  onChange={(e) => updateAgmRow(row.id, "description", e.target.value)}
-                  className="flex w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] resize-none"
-                />
-              </div>
-
-              <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={row.specialResolution}
-                  onChange={(e) => updateAgmRow(row.id, "specialResolution", e.target.checked)}
-                  className="h-4 w-4 rounded border-[hsl(var(--border))] accent-amber-600"
-                />
-                <span className="text-sm text-[hsl(var(--foreground))]">
-                  Special resolution{" "}
-                  <span className="text-xs text-[hsl(var(--muted-foreground))]">(requires 75% majority)</span>
-                </span>
-              </label>
-
-              <div>
-                <Label className="mb-1.5">Resolution type</Label>
-                <div className="inline-flex rounded-lg border border-[hsl(var(--border))] p-0.5 bg-[hsl(var(--muted)/0.3)]">
-                  <button
-                    type="button"
-                    onClick={() => setAgmRowType(row.id, "STANDARD")}
-                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                      row.resolutionType === "STANDARD"
-                        ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
-                        : "text-[hsl(var(--muted-foreground))]"
-                    }`}
-                  >
-                    Standard
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAgmRowType(row.id, "CANDIDATE")}
-                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                      row.resolutionType === "CANDIDATE"
-                        ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
-                        : "text-[hsl(var(--muted-foreground))]"
-                    }`}
-                  >
-                    Candidate Poll
-                  </button>
-                </div>
-                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                  Candidate Poll lets shareholders vote For/Against/Abstain on each nominee independently, under one open/close window — e.g. &quot;Election of President&quot;.
-                </p>
-              </div>
-
-              {row.resolutionType === "CANDIDATE" && (
-                <div className="flex flex-col gap-2 rounded-lg border border-[hsl(var(--border))] p-3 bg-[hsl(var(--background))]">
-                  <div className="flex items-center justify-between">
-                    <Label>
-                      Candidates <span className="text-red-500">*</span>{" "}
-                      <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(min. 2)</span>
-                    </Label>
-                    <button
-                      type="button"
-                      onClick={() => addCandidateRow(row.id)}
-                      className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline"
-                    >
-                      + Add candidate
-                    </button>
-                  </div>
-                  {row.candidates.map((c, ci) => (
-                    <div key={c.id} className="flex items-center gap-2">
-                      <span className="text-xs text-[hsl(var(--muted-foreground))] w-4 shrink-0">{ci + 1}.</span>
-                      <Input
-                        placeholder="Candidate name"
-                        value={c.name}
-                        onChange={(e) => updateCandidateRow(row.id, c.id, "name", e.target.value)}
-                        className="flex-1"
-                      />
-                      <Input
-                        placeholder="Bio (optional)"
-                        value={c.bio}
-                        onChange={(e) => updateCandidateRow(row.id, c.id, "bio", e.target.value)}
-                        className="flex-1"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeCandidateRow(row.id, c.id)}
-                        className="text-[hsl(var(--muted-foreground))] hover:text-red-500 transition-colors shrink-0"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                  {row.candidates.length === 0 && (
-                    <p className="text-xs text-[hsl(var(--muted-foreground))] italic">No candidates added yet.</p>
-                  )}
-                </div>
-              )}
-
-              <div>
-                <Label className="mb-1.5">Default vote duration (seconds) <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span></Label>
-                <Input
-                  type="number"
-                  min={10}
-                  placeholder="e.g. 120"
-                  value={row.defaultDurationSeconds ?? ""}
-                  onChange={(e) =>
-                    setAgmNewRows((prev) =>
-                      prev.map((r) =>
-                        r.id === row.id
-                          ? { ...r, defaultDurationSeconds: e.target.value ? parseInt(e.target.value, 10) : undefined }
-                          : r
-                      )
-                    )
-                  }
-                />
-              </div>
-
-              <div className="flex justify-end pt-1">
-                <Button
-                  size="sm"
-                  className="h-7 text-xs gap-1"
-                  disabled={addResolutionMutation.isPending}
-                  onClick={() => persistAgmRow(row)}
-                >
-                  {addResolutionMutation.isPending ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : null}
-                  Save Resolution
-                </Button>
-              </div>
-            </div>
-          ))}
 
           {isEmpty && (
             <p className="text-sm text-[hsl(var(--muted-foreground))] py-6 text-center">

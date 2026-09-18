@@ -9,8 +9,9 @@
  * Navigation  : All routes prefixed /admin to prevent dashboard framing 404s.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Building2, Search, X } from "lucide-react";
 import {
   useAllRegisters,
@@ -61,8 +62,20 @@ function getRegisterStatus(register: RegisterItem) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function RegistersPage() {
-  const [activeTab,  setActiveTab]  = useState<TabValue>("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  // Search and tab live in the URL, not just in component state. Without this,
+  // opening a register and coming back dropped you on an unfiltered list — the
+  // component remounts and local state is gone. The query string survives both
+  // browser back and a reload, so the list comes back exactly as it was left.
+  const router       = useRouter();
+  const pathname     = usePathname();
+  const searchParams = useSearchParams();
+
+  const [activeTab,  setActiveTab]  = useState<TabValue>(
+    () => (TABS.some((t) => t.value === searchParams.get("status")) 
+      ? (searchParams.get("status") as TabValue)
+      : "all")
+  );
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q") ?? "");
   /**
    * Suspend retains its compact double-confirm interaction. Reject uses a
    * modal confirmation because it is destructive and easy to trigger in a
@@ -125,6 +138,17 @@ export default function RegistersPage() {
   function clearConfirm() {
     setSuspendConfirmId(null);
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (searchQuery) params.set("q", searchQuery); else params.delete("q");
+    if (activeTab !== "all") params.set("status", activeTab); else params.delete("status");
+
+    const next = params.toString();
+    if (next !== searchParams.toString()) {
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    }
+  }, [searchQuery, activeTab, pathname, router, searchParams]);
 
   function handleTabChange(tab: TabValue) {
     setActiveTab(tab);

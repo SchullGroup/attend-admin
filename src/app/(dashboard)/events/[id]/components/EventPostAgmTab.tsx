@@ -10,8 +10,6 @@ import {
   useAgmMinutes,
   useSaveDraftMinutes,
   useFinaliseMinutes,
-  useCertificateEligibility,
-  useSendCertificates,
   useExportAttendanceRegister,
   useExportVoteAuditLog,
   useStatutoryReturn,
@@ -58,9 +56,6 @@ export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
 
   const isFinalised = (minutes?.status ?? "").toUpperCase() === "FINALISED";
 
-  // ── Certificates ─────────────────────────────────────────────────────────
-  const { data: certEligibility, isLoading: certLoading } = useCertificateEligibility(eventId);
-  const sendCertificates = useSendCertificates();
 
   // ── Exports ──────────────────────────────────────────────────────────────
   const [exportingLegacy, setExportingLegacy] = useState(false);
@@ -254,40 +249,6 @@ export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
         </div>
       </div>
 
-      {/* Certificates */}
-      <Card className="attend-card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-[hsl(var(--foreground))] flex items-center gap-2">
-            <Award className="h-4 w-4 text-[hsl(var(--muted-foreground))]" /> Attendance Certificates
-          </h2>
-          <Button
-            size="sm" variant="outline"
-            disabled={sendCertificates.isPending || certLoading || (certEligibility?.totalPending ?? 0) === 0}
-            onClick={() => sendCertificates.mutate(eventId)}
-          >
-            {sendCertificates.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Send All Certificates"}
-          </Button>
-        </div>
-        {certLoading ? (
-          <div className="h-16 rounded-xl bg-[hsl(var(--muted))] animate-pulse" />
-        ) : (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-[hsl(var(--muted)/0.4)]">
-            <CheckCircle2 className="h-5 w-5 text-[hsl(var(--primary))] shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-[hsl(var(--foreground))]">
-                {certEligibility
-                  ? `${certEligibility.totalEligible.toLocaleString()} of ${(summary?.totalCheckedIn ?? certEligibility.totalEligible).toLocaleString()} attendees present are eligible for certificates`
-                  : "Certificate eligibility data is unavailable"}
-              </p>
-              <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
-                {certEligibility
-                  ? `${certEligibility.totalSent} sent · ${certEligibility.totalPending} pending. The server will report if sending is disabled.`
-                  : "The backend must return attendance-based eligibility before certificates can be sent"}
-              </p>
-            </div>
-          </div>
-        )}
-      </Card>
     </div>
   );
 }
