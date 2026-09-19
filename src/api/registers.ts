@@ -577,6 +577,22 @@ export function useRegisterShareholders(registerId: string, page = 0, size = 50,
   });
 }
 
+/**
+ * Single add. There is no separate single-add endpoint — this is the same
+ * array endpoint as the CSV path with one row, confirmed by backend 2026-09-18.
+ *
+ * That matters for error handling: a row the server will not accept comes back
+ * as HTTP 200 with `skipped: 1` and an `errors` array, NOT as a 4xx. Reported
+ * as success it looks like the shareholder saved when nothing was written. So
+ * the skip is converted into a thrown error here, which keeps the form open with
+ * the typed values intact instead of clearing it on a phantom success.
+ *
+ * The documented skip reason is a row with neither email nor phone; our form
+ * requires a valid email, so this should be unreachable — it is here because
+ * "should be unreachable" is exactly how the last silent failure got in.
+ */
+const SHAREHOLDER_SKIPPED = "__shareholderSkipped";
+
 export function useAddShareholder() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -587,17 +603,47 @@ export function useAddShareholder() {
       registerId:  string;
       shareholder: ShareholderUploadItem;
     }) => {
+      if (!shareholder.email?.trim() && !shareholder.phone?.trim()) {
+        throw Object.assign(new Error("A shareholder needs at least an email address or a phone number."), {
+          [SHAREHOLDER_SKIPPED]: true,
+        });
+      }
+
       const res = await apiClient.post<ApiResponse<any>>(
         `/api/v1/client/registers/${registerId}/shareholders`,
         { shareholders: [shareholder], replace: false }
       );
-      return (res.data.data ?? (res.data as any));
+      const d = (res.data.data ?? (res.data as any)) as any;
+
+      if ((d?.skipped ?? 0) > 0) {
+        const errs: string[] = d?.errors ?? [];
+        const detail = errs.length
+          ? errs.slice(0, 2).join(" ")
+          : "The row needs at least an email address or a phone number.";
+        throw Object.assign(new Error(detail), { [SHAREHOLDER_SKIPPED]: true });
+      }
+
+      return d;
     },
-    onSuccess: (_, { registerId }) => {
+    onSuccess: (data, { registerId }) => {
       queryClient.invalidateQueries({ queryKey: shareholderKeys.all(registerId) });
-      popup.success("Shareholder Added", "The shareholder has been enrolled.", 2500);
+      const d = data as any;
+      const updated = (d?.updated ?? 0) > 0 && (d?.inserted ?? 0) === 0;
+      popup.success(
+        updated ? "Shareholder Updated" : "Shareholder Added",
+        updated
+          ? "An existing shareholder matched, so their record was updated."
+          : "The shareholder has been enrolled.",
+        2500
+      );
     },
-    onError: (error: any) => parseAndToastApiError(error, "Failed to add shareholder."),
+    onError: (error: any) => {
+      if (error?.[SHAREHOLDER_SKIPPED]) {
+        popup.error("Shareholder Not Saved", error.message);
+        return;
+      }
+      parseAndToastApiError(error, "Failed to add shareholder.");
+    },
   });
 }
 

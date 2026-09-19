@@ -764,6 +764,31 @@ export interface KycBreakdownItem {
   color?:     string;
 }
 
+/**
+ * Per-method verification tallies, added 2026-09-18.
+ *
+ * NOT a partition and NOT comparable to `byStatus`: `ninVerified` is set by a
+ * selfie match against the NIMC photo and never moves `User.kycStatus`, so one
+ * user can be counted in all three tallies and can be NIN-verified while sitting
+ * in `NO_KYC`. Backend confirmed this is deliberate — NIN is the Innovation /
+ * Launch RSVP-time check, `kycStatus` is the AGM shareholder ladder.
+ */
+export interface KycMethodCounts {
+  bvnVerified:  number;
+  ninVerified:  number;
+  chnProvided:  number;
+}
+
+export interface KycBreakdownResult {
+  items:            KycBreakdownItem[];
+  /** Population the buckets were counted over. Reconciles with `totalElements` on /admin/users. */
+  totalConsidered?: number;
+  /** e.g. "ALL_USERS_EXCLUDING_SUPER_ADMIN" — rendered so a screenshot is never ambiguous. */
+  scope?:           string;
+  byStatus?:        Record<string, number>;
+  byMethod?:        KycMethodCounts;
+}
+
 export interface EventFormatItem {
   format: string;
   count:  number;
@@ -841,13 +866,17 @@ export function useAdminTopOrganisers(limit = 5, range?: string) {
 
 /**
  * GET /api/v1/admin/analytics/kyc-breakdown
- * KYC verification status breakdown across all registered stakeholders.
+ *
+ * Returns the bucket list plus, since 2026-09-18, the denominator it was counted
+ * over and the per-method tallies. `total` / `breakdown` kept their old names and
+ * shape across the deploy, so everything below is read defensively and the page
+ * degrades to just the bars if we are pointed at an older API.
  */
 export function useAdminKycBreakdown(range?: string) {
   return useQuery({
     queryKey: [...superAdminKeys.all, "analytics", "kyc-breakdown", range],
     queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<{ breakdown: KycBreakdownItem[] }>>(
+      const res = await apiClient.get<ApiResponse<any>>(
         "/api/v1/admin/analytics/kyc-breakdown",
         { params: range ? { range } : undefined }
       );
@@ -855,13 +884,31 @@ export function useAdminKycBreakdown(range?: string) {
       const arr: any[] = Array.isArray(raw)
         ? raw
         : (raw?.breakdown ?? raw?.kycBreakdown ?? raw?.items ?? firstArray(raw));
-      return arr.map((item: any) => ({
+
+      const items = arr.map((item: any) => ({
         label:      item.label      ?? item.type       ?? item.status     ?? "Unknown",
         type:       item.type       ?? item.status,
         count:      item.count      ?? item.total       ?? 0,
         percentage: item.percentage ?? item.percent     ?? item.ratio     ?? 0,
         color:      item.color      ?? "#374151",
       })) as KycBreakdownItem[];
+
+      const method = raw?.byMethod ?? raw?.methods ?? raw?.verificationMethods;
+      const byMethod: KycMethodCounts | undefined = method
+        ? {
+            bvnVerified: method.bvnVerified ?? method.bvn ?? 0,
+            ninVerified: method.ninVerified ?? method.nin ?? 0,
+            chnProvided: method.chnProvided ?? method.chn ?? 0,
+          }
+        : undefined;
+
+      return {
+        items,
+        totalConsidered: raw?.totalConsidered ?? raw?.total ?? undefined,
+        scope:           raw?.scope ?? undefined,
+        byStatus:        raw?.byStatus ?? undefined,
+        byMethod,
+      } as KycBreakdownResult;
     },
     staleTime: 60_000,
   });

@@ -122,7 +122,7 @@ export function SuperAdminAnalytics() {
   const { data: summary,     isLoading: summaryLoading   } = useAdminSummaryStats(range);
   const { data: topOrgs = [], isLoading: topOrgsLoading  } = useAdminTopOrganisers(5, range);
   const { data: byType = [],  isLoading: byTypeLoading   } = useAdminAnalyticsByType(range);
-  const { data: kycData = [], isLoading: kycLoading      } = useAdminKycBreakdown(range);
+  const { data: kyc,          isLoading: kycLoading      } = useAdminKycBreakdown(range);
   const { data: formats = [], isLoading: formatLoading   } = useAdminEventFormat(range);
   const { data: auditData,    isLoading: auditLoading    } = useAdminAuditLogs({ page: 0, size: 10 }, true);
 
@@ -132,7 +132,8 @@ export function SuperAdminAnalytics() {
 
   // ── Compute max for bar scaling ──────────────────────────────────────────
   const maxOrg    = Math.max(...topOrgs.map(o => o.eventCount), 1);
-  const kycTotal  = kycData.reduce((s, i) => s + i.count, 0);
+  const kycData   = kyc?.items ?? [];
+  const kycTotal  = kyc?.totalConsidered ?? kycData.reduce((s, i) => s + i.count, 0);
   const maxFormat = Math.max(...formats.map(f => f.count), 1);
 
   return (
@@ -285,6 +286,16 @@ export function SuperAdminAnalytics() {
         <Card className="attend-card overflow-hidden">
           <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
             <h2 className="font-semibold text-[hsl(var(--foreground))]">KYC Verification Breakdown</h2>
+            {kycTotal > 0 && (
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                {kycTotal.toLocaleString()} users
+                {kyc?.scope === "ALL_USERS_EXCLUDING_SUPER_ADMIN"
+                  ? " — everyone except super admins"
+                  : kyc?.scope
+                    ? ` — ${kyc.scope.replace(/_/g, " ").toLowerCase()}`
+                    : ""}
+              </p>
+            )}
           </div>
           {kycLoading ? <Loader variant="inline" /> : (
             <div className="px-5 py-4 flex flex-col gap-3">
@@ -314,6 +325,35 @@ export function SuperAdminAnalytics() {
                   </div>
                 );
               })}
+
+              {kyc?.byMethod && (
+                <div className="mt-2 pt-4 border-t border-[hsl(var(--border))]">
+                  <div className="flex items-baseline justify-between mb-2.5">
+                    <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">
+                      What has actually been verified
+                    </h3>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {([
+                      { label: "BVN",  value: kyc.byMethod.bvnVerified },
+                      { label: "NIN",  value: kyc.byMethod.ninVerified },
+                      { label: "CHN",  value: kyc.byMethod.chnProvided },
+                    ]).map((m) => (
+                      <div key={m.label} className="rounded-lg bg-[hsl(var(--muted))] px-3 py-2.5">
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">{m.label}</p>
+                        <p className="text-lg font-semibold tabular-nums text-[hsl(var(--foreground))]">
+                          {(m.value ?? 0).toLocaleString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2.5 leading-relaxed">
+                    These do not add up to the bars above, and are not meant to. NIN is verified at
+                    RSVP time and never moves a user along the BVN ladder — someone can be
+                    NIN-verified and still sit in No KYC. One user can be counted in all three.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </Card>
