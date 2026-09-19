@@ -328,10 +328,16 @@ export function SuperAdminAnalytics() {
 
               {kyc?.byMethod && (
                 <div className="mt-2 pt-4 border-t border-[hsl(var(--border))]">
-                  <div className="flex items-baseline justify-between mb-2.5">
+                  <div className="flex items-baseline justify-between gap-3 mb-2.5">
                     <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">
                       What has actually been verified
                     </h3>
+                    {/* The window has to be on the card: these three counts and the
+                        bars above are not comparable, and naming the period is how a
+                        reader works out why without a paragraph explaining it. */}
+                    <span className="text-xs text-[hsl(var(--muted-foreground))] whitespace-nowrap">
+                      {period}
+                    </span>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     {([
@@ -347,11 +353,6 @@ export function SuperAdminAnalytics() {
                       </div>
                     ))}
                   </div>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2.5 leading-relaxed">
-                    These do not add up to the bars above, and are not meant to. NIN is verified at
-                    RSVP time and never moves a user along the BVN ladder — someone can be
-                    NIN-verified and still sit in No KYC. One user can be counted in all three.
-                  </p>
                 </div>
               )}
             </div>
