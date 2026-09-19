@@ -230,7 +230,7 @@ function ClientAnalytics() {
   const { data: performance,  isLoading: perfLoading,  isError: perfError,  error: perfErrorObj  } = useAnalyticsEventPerformance(perfPage, perfSize, range);
   const { data: checkInData,  isLoading: checkInLoading  } = useAnalyticsCheckInOverview(range);
   const { data: trendData,    isLoading: trendLoading, isError: trendError, error: trendErrorObj } = useAnalyticsMonthlyTrend(range);
-  const { data: formatData,   isLoading: formatLoading   } = useAnalyticsEventFormat(range);
+  const { data: formatData,   isLoading: formatLoading, error: formatError } = useAnalyticsEventFormat(range);
   const { data: engagement,   isLoading: engageLoading   } = useAnalyticsEngagement(range);
 
   // NOTE: perfLoading is deliberately excluded here. Including it meant that
@@ -743,8 +743,20 @@ function ClientAnalytics() {
         </div>
         {formatLoading ? <Loader variant="inline" /> : (
           <div className="px-5 py-4">
-            {formats.length === 0 && (
-              <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">No format data yet.</p>
+            {/* Error and empty rendered the same sentence until 2026-09-19. */}
+            {formatError && (
+              <div className="py-4 text-center">
+                <p className="text-sm font-medium text-red-500">Couldn&apos;t load format data.</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                  {(formatError as any)?.message ?? "The request failed."} — the other cards on this
+                  page loaded, so this is that one endpoint rather than the connection.
+                </p>
+              </div>
+            )}
+            {!formatError && formats.length === 0 && (
+              <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">
+                No events in this period.
+              </p>
             )}
             <div className="flex flex-col gap-4">
               {formats.map((item) => {
