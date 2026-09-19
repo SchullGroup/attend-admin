@@ -907,15 +907,51 @@ export interface BulkNoticeRequest {
 }
 
 /** GET /api/v1/client/events/{id}/broadcast/recipients */
+/**
+ * Per-channel reachability, as of the backend's 2026-09-18 change. Each figure is a
+ * COUNT mirroring the exact skip condition the sender applies, so what the composer
+ * promises and what the send delivers cannot drift apart.
+ *
+ * Two things that look like mistakes and are not:
+ *  - `pushCount` is LOWER than `inAppCount`. In-app needs an account; push needs an
+ *    account AND a registered device token, so an account that never opened the app
+ *    gets nothing.
+ *  - there is no `unsubscribed` figure. The platform has no unsubscribe concept, and
+ *    returning 0 would read as "we checked and nobody has" rather than "not a thing
+ *    here". The key appears if that ships.
+ */
+export interface BroadcastRecipients {
+  /** Total audience — unchanged name, value and meaning across the deploy. */
+  recipientCount: number;
+  emailCount?:    number;
+  smsCount?:      number;
+  pushCount?:     number;
+  inAppCount?:    number;
+  unreachable?: {
+    noEmail?:   number;
+    noPhone?:   number;
+    noAccount?: number;
+    noDevice?:  number;
+  };
+}
+
 export function useBroadcastRecipients(eventId: string) {
   return useQuery({
     queryKey: ["broadcast", "recipients", eventId],
-    queryFn: async () => {
-      const res = await apiClient.get<ApiResponse<Record<string, string>>>(
+    queryFn: async (): Promise<BroadcastRecipients> => {
+      const res = await apiClient.get<ApiResponse<any>>(
         `/api/v1/client/events/${eventId}/broadcast/recipients`
       );
-      const raw = res.data.data as any;
-      return (raw?.count ?? raw?.recipientCount ?? raw?.totalRecipients ?? 0) as number;
+      const raw = (res.data?.data ?? res.data) as any;
+      const num = (v: any) => (typeof v === "number" ? v : undefined);
+      return {
+        recipientCount: raw?.recipientCount ?? raw?.count ?? raw?.totalRecipients ?? 0,
+        emailCount:  num(raw?.emailCount),
+        smsCount:    num(raw?.smsCount),
+        pushCount:   num(raw?.pushCount),
+        inAppCount:  num(raw?.inAppCount),
+        unreachable: raw?.unreachable ?? undefined,
+      };
     },
     enabled:   !!eventId,
     staleTime: 60_000,

@@ -207,18 +207,53 @@ export interface CheckInOverviewResponse {
 // ---------------------------------------------------------------------------
 // Query keys
 // ---------------------------------------------------------------------------
+/**
+ * Date window for every client analytics endpoint (backend 2026-09-18 C1).
+ *
+ * The window filters on EVENT DATE, not created-at — an AGM created in January and
+ * held in September belongs to September — and everything derived from it (RSVPs,
+ * documents, check-ins, fill rate) is computed over the events the window selects,
+ * so the figures on a page agree with each other.
+ *
+ * Two documented exceptions: `monthly-trend` buckets on registration created-at (a
+ * registration trend is about when people registered), and `engagement.documentDownloads`
+ * is always all-time, because `downloadCount` is a running counter with no per-download
+ * timestamp to filter on.
+ *
+ * An unrecognised value is a 400, deliberately — a wrong range that quietly answers a
+ * different question is worse than an error.
+ */
+export type AnalyticsRange = "7d" | "30d" | "90d" | "12m" | "all";
+
+export const ANALYTICS_RANGES: { value: AnalyticsRange; label: string }[] = [
+  { value: "7d",  label: "7 days"    },
+  { value: "30d", label: "30 days"   },
+  { value: "90d", label: "90 days"   },
+  { value: "12m", label: "12 months" },
+  { value: "all", label: "All time"  },
+];
+
+/**
+ * Omitted entirely for "all" so the request stays byte-identical to the pre-C1 one —
+ * the API treats absent and `all` the same, which keeps this working either side of
+ * the deploy.
+ */
+function rangeParams(range: AnalyticsRange) {
+  return range && range !== "all" ? { range } : undefined;
+}
+
 export const clientAnalyticsKeys = {
   all:              ["clientAnalytics"] as const,
-  stats:            ["clientAnalytics", "stats"] as const,
-  byType:           ["clientAnalytics", "byType"] as const,
-  fillRateOverview: ["clientAnalytics", "fillRateOverview"] as const,
-  rsvpsByEvent:     ["clientAnalytics", "rsvpsByEvent"] as const,
-  performance:      (page: number, size: number) =>
-                      ["clientAnalytics", "performance", { page, size }] as const,
-  checkInOverview:  ["clientAnalytics", "checkInOverview"] as const,
-  monthlyTrend:     ["clientAnalytics", "monthlyTrend"] as const,
-  eventFormat:      ["clientAnalytics", "eventFormat"] as const,
-  engagement:       ["clientAnalytics", "engagement"] as const,
+  stats:            (range: AnalyticsRange = "all") => ["clientAnalytics", "stats", range] as const,
+  byType:           (range: AnalyticsRange = "all") => ["clientAnalytics", "byType", range] as const,
+  fillRateOverview: (range: AnalyticsRange = "all") => ["clientAnalytics", "fillRateOverview", range] as const,
+  rsvpsByEvent:     (range: AnalyticsRange = "all") => ["clientAnalytics", "rsvpsByEvent", range] as const,
+  performance:      (page: number, size: number, range: AnalyticsRange = "all") =>
+                      ["clientAnalytics", "performance", { page, size, range }] as const,
+  checkInOverview:  (range: AnalyticsRange = "all") => ["clientAnalytics", "checkInOverview", range] as const,
+  monthlyTrend:     (range: AnalyticsRange = "all") => ["clientAnalytics", "monthlyTrend", range] as const,
+  eventFormat:      (range: AnalyticsRange = "all") => ["clientAnalytics", "eventFormat", range] as const,
+  engagement:       (range: AnalyticsRange = "all") => ["clientAnalytics", "engagement", range] as const,
   exportRegs:       (eventId: string, from?: string, to?: string) =>
                       ["clientAnalytics", "exportRegs", { eventId, from, to }] as const,
 };
@@ -228,12 +263,13 @@ export const clientAnalyticsKeys = {
 // ---------------------------------------------------------------------------
 
 /** GET /analytics/stats — aggregate summary: totalEvents, totalAttendees, avgFillRate, documentsPublished */
-export function useAnalyticsStats() {
+export function useAnalyticsStats(range: AnalyticsRange = "all") {
   return useQuery({
-    queryKey: clientAnalyticsKeys.stats,
+    queryKey: clientAnalyticsKeys.stats(range),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<AnalyticsStatsResponse>>(
-        "/api/v1/client/analytics/stats"
+        "/api/v1/client/analytics/stats",
+        { params: rangeParams(range) }
       );
       return res.data.data;
     },
@@ -242,12 +278,13 @@ export function useAnalyticsStats() {
 }
 
 /** GET /analytics/by-type — event counts grouped by type */
-export function useAnalyticsByType() {
+export function useAnalyticsByType(range: AnalyticsRange = "all") {
   return useQuery({
-    queryKey: clientAnalyticsKeys.byType,
+    queryKey: clientAnalyticsKeys.byType(range),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<any>>(
-        "/api/v1/client/analytics/by-type"
+        "/api/v1/client/analytics/by-type",
+        { params: rangeParams(range) }
       );
       const raw: any = res.data.data ?? res.data;
       const byType: ByTypeItem[] =
@@ -259,12 +296,13 @@ export function useAnalyticsByType() {
 }
 
 /** GET /analytics/fill-rate-overview — per-event fill rates with bar colors */
-export function useAnalyticsFillRateOverview() {
+export function useAnalyticsFillRateOverview(range: AnalyticsRange = "all") {
   return useQuery({
-    queryKey: clientAnalyticsKeys.fillRateOverview,
+    queryKey: clientAnalyticsKeys.fillRateOverview(range),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<any>>(
-        "/api/v1/client/analytics/fill-rate-overview"
+        "/api/v1/client/analytics/fill-rate-overview",
+        { params: rangeParams(range) }
       );
       const raw: any = res.data.data ?? res.data;
       const fillRateOverview: FillRateOverviewItem[] =
@@ -277,12 +315,13 @@ export function useAnalyticsFillRateOverview() {
 }
 
 /** GET /analytics/rsvps-by-event — RSVP counts per event */
-export function useAnalyticsRsvpsByEvent() {
+export function useAnalyticsRsvpsByEvent(range: AnalyticsRange = "all") {
   return useQuery({
-    queryKey: clientAnalyticsKeys.rsvpsByEvent,
+    queryKey: clientAnalyticsKeys.rsvpsByEvent(range),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<any>>(
-        "/api/v1/client/analytics/rsvps-by-event"
+        "/api/v1/client/analytics/rsvps-by-event",
+        { params: rangeParams(range) }
       );
       const raw: any = res.data.data ?? res.data;
       const rsvpsByEvent: RsvpsByEventItem[] =
@@ -294,12 +333,13 @@ export function useAnalyticsRsvpsByEvent() {
 }
 
 /** GET /analytics/monthly-trend — last 6 months of registration counts */
-export function useAnalyticsMonthlyTrend() {
+export function useAnalyticsMonthlyTrend(range: AnalyticsRange = "all") {
   return useQuery({
-    queryKey: clientAnalyticsKeys.monthlyTrend,
+    queryKey: clientAnalyticsKeys.monthlyTrend(range),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<any>>(
-        "/api/v1/client/analytics/monthly-trend"
+        "/api/v1/client/analytics/monthly-trend",
+        { params: rangeParams(range) }
       );
       const raw: any = res.data.data ?? res.data;
       const trend: MonthlyTrendItem[] =
@@ -321,9 +361,9 @@ export function useAnalyticsMonthlyTrend() {
  * other /analytics/* endpoint here is unaffected; this is the only name
  * that collides. See src/app/api/reports/event-summary/route.ts.
  */
-export function useAnalyticsEventPerformance(page = 0, size = 10) {
+export function useAnalyticsEventPerformance(page = 0, size = 10, range: AnalyticsRange = "all") {
   return useQuery({
-    queryKey: clientAnalyticsKeys.performance(page, size),
+    queryKey: clientAnalyticsKeys.performance(page, size, range),
     queryFn: async () => {
       // Plain axios (no baseURL) so this resolves same-origin against our
       // own Next.js server rather than apiClient's external baseURL — same
@@ -333,7 +373,7 @@ export function useAnalyticsEventPerformance(page = 0, size = 10) {
       const res = await axios.get<ApiResponse<any>>(
         "/api/reports/event-summary",
         {
-          params:  { page, size },
+          params:  { page, size, ...(rangeParams(range) ?? {}) },
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         }
       );
@@ -362,12 +402,13 @@ export function useAnalyticsEventPerformance(page = 0, size = 10) {
 }
 
 /** GET /analytics/check-in-overview (optional endpoint — may not exist on all backends) */
-export function useAnalyticsCheckInOverview() {
+export function useAnalyticsCheckInOverview(range: AnalyticsRange = "all") {
   return useQuery({
-    queryKey: clientAnalyticsKeys.checkInOverview,
+    queryKey: clientAnalyticsKeys.checkInOverview(range),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<CheckInOverviewResponse>>(
-        "/api/v1/client/analytics/check-in-overview"
+        "/api/v1/client/analytics/check-in-overview",
+        { params: rangeParams(range) }
       );
       return res.data.data;
     },
@@ -381,12 +422,13 @@ export function useAnalyticsCheckInOverview() {
  * (virtual / hybrid / in-person). Confirmed live by backend — see
  * BACKEND_BUGS item 13c. Scoped to the caller's own stakeholder.
  */
-export function useAnalyticsEventFormat() {
+export function useAnalyticsEventFormat(range: AnalyticsRange = "all") {
   return useQuery({
-    queryKey: clientAnalyticsKeys.eventFormat,
+    queryKey: clientAnalyticsKeys.eventFormat(range),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<any>>(
-        "/api/v1/client/analytics/event-format"
+        "/api/v1/client/analytics/event-format",
+        { params: rangeParams(range) }
       );
       const raw: any = res.data.data ?? res.data;
       const formats: EventFormatItem[] =
@@ -405,12 +447,13 @@ export function useAnalyticsEventFormat() {
  * exists yet, same as the admin endpoint), so it's read defensively as 0
  * here until the UI is updated to distinguish "not tracked" from "zero".
  */
-export function useAnalyticsEngagement() {
+export function useAnalyticsEngagement(range: AnalyticsRange = "all") {
   return useQuery({
-    queryKey: clientAnalyticsKeys.engagement,
+    queryKey: clientAnalyticsKeys.engagement(range),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<any>>(
-        "/api/v1/client/analytics/engagement"
+        "/api/v1/client/analytics/engagement",
+        { params: rangeParams(range) }
       );
       const d: any = res.data.data ?? res.data;
       return {

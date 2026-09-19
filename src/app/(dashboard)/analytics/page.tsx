@@ -26,6 +26,8 @@ import {
   useAnalyticsEngagement,
   useExportRegistrations,
   extractStat,
+  ANALYTICS_RANGES,
+  type AnalyticsRange,
 } from "@/api/client-analytics";
 import { useGetMe } from "@/api/auth/hooks";
 import { Card } from "@/components/ui/card";
@@ -210,15 +212,26 @@ function ClientAnalytics() {
   const [perfPage, setPerfPage] = useState(0);
   const perfSize = 10;
 
-  const { data: stats,        isLoading: statsLoading  } = useAnalyticsStats();
-  const { data: byType,       isLoading: byTypeLoading  } = useAnalyticsByType();
-  const { data: rsvps,        isLoading: rsvpsLoading   } = useAnalyticsRsvpsByEvent();
-  const { data: fillRate,     isLoading: fillLoading     } = useAnalyticsFillRateOverview();
-  const { data: performance,  isLoading: perfLoading,  isError: perfError,  error: perfErrorObj  } = useAnalyticsEventPerformance(perfPage, perfSize);
-  const { data: checkInData,  isLoading: checkInLoading  } = useAnalyticsCheckInOverview();
-  const { data: trendData,    isLoading: trendLoading, isError: trendError, error: trendErrorObj } = useAnalyticsMonthlyTrend();
-  const { data: formatData,   isLoading: formatLoading   } = useAnalyticsEventFormat();
-  const { data: engagement,   isLoading: engageLoading   } = useAnalyticsEngagement();
+  // One window drives every card on the page (backend 2026-09-18 C1). Defaults to
+  // all time, which is exactly what these endpoints returned before ranges existed.
+  const [range, setRange] = useState<AnalyticsRange>("all");
+
+  // Changing the window resets pagination — page 4 of the last 7 days is rarely
+  // where anyone wants to land.
+  function handleRangeChange(next: AnalyticsRange) {
+    setRange(next);
+    setPerfPage(0);
+  }
+
+  const { data: stats,        isLoading: statsLoading  } = useAnalyticsStats(range);
+  const { data: byType,       isLoading: byTypeLoading  } = useAnalyticsByType(range);
+  const { data: rsvps,        isLoading: rsvpsLoading   } = useAnalyticsRsvpsByEvent(range);
+  const { data: fillRate,     isLoading: fillLoading     } = useAnalyticsFillRateOverview(range);
+  const { data: performance,  isLoading: perfLoading,  isError: perfError,  error: perfErrorObj  } = useAnalyticsEventPerformance(perfPage, perfSize, range);
+  const { data: checkInData,  isLoading: checkInLoading  } = useAnalyticsCheckInOverview(range);
+  const { data: trendData,    isLoading: trendLoading, isError: trendError, error: trendErrorObj } = useAnalyticsMonthlyTrend(range);
+  const { data: formatData,   isLoading: formatLoading, error: formatError } = useAnalyticsEventFormat(range);
+  const { data: engagement,   isLoading: engageLoading   } = useAnalyticsEngagement(range);
 
   // NOTE: perfLoading is deliberately excluded here. Including it meant that
   // every time the Per-Event Breakdown table's page changed, React Query's
@@ -304,8 +317,35 @@ function ClientAnalytics() {
   const trendMonths = trendData?.trend ?? [];
   const maxTrend    = Math.max(...trendMonths.map((m) => m.registrations), 1);
 
+  const rangeLabel = ANALYTICS_RANGES.find((r) => r.value === range)?.label ?? "All time";
+
   return (
     <div className="flex flex-col gap-6">
+
+      {/* ── Date window ── One selector drives every card below it. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 overflow-x-auto max-w-full">
+          {ANALYTICS_RANGES.map((r) => (
+            <button
+              key={r.value}
+              onClick={() => handleRangeChange(r.value)}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
+                range === r.value
+                  ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
+                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+          {range === "all"
+            ? "All events, all time."
+            : `Events held in the last ${rangeLabel.toLowerCase()} — counted by event date, not when they were created.`}
+        </p>
+      </div>
+
       {/* Stat cards */}
       <div className="grid grid-cols-4 gap-4">
         {statCards.map((s) => (
@@ -703,8 +743,20 @@ function ClientAnalytics() {
         </div>
         {formatLoading ? <Loader variant="inline" /> : (
           <div className="px-5 py-4">
-            {formats.length === 0 && (
-              <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">No format data yet.</p>
+            {/* Error and empty rendered the same sentence until 2026-09-19. */}
+            {formatError && (
+              <div className="py-4 text-center">
+                <p className="text-sm font-medium text-red-500">Couldn&apos;t load format data.</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                  {(formatError as any)?.message ?? "The request failed."} — the other cards on this
+                  page loaded, so this is that one endpoint rather than the connection.
+                </p>
+              </div>
+            )}
+            {!formatError && formats.length === 0 && (
+              <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">
+                No events in this period.
+              </p>
             )}
             <div className="flex flex-col gap-4">
               {formats.map((item) => {

@@ -23,7 +23,16 @@ import {
 
 function maskValue(val?: string) {
   if (!val) return "—";
-  return val.length > 6 ? val.slice(0, 3) + " **** " + val.slice(-3) : val;
+  const v = val.trim();
+  if (!v) return "—";
+  // Only mask things that actually look like an identity number. The API used to
+  // put prose in these fields — a literal "Not provided" came back as
+  // "Not **** ded", because the masker happily chewed on any string over six
+  // characters. The backend now returns null (2026-09-18 A3); this is the guard
+  // that stops a future placeholder rendering as gibberish.
+  const looksLikeIdentityNumber = /^[A-Za-z]{0,4}[\s-]?\d{4,}$/.test(v);
+  if (!looksLikeIdentityNumber) return v;
+  return v.length > 6 ? v.slice(0, 3) + " **** " + v.slice(-3) : v;
 }
 
 // Prefer real browser back-navigation so a user who arrived here from an
@@ -292,12 +301,44 @@ export default function ParticipantDetailPage({
                 return (
                   <div className="grid grid-cols-3 gap-3">
                     {[
-                      { label: "BVN", value: maskValue(p.kyc?.bvn) },
-                      { label: "CHN", value: maskValue(p.kyc?.chn) },
-                      { label: "NIN", value: maskValue(p.kyc?.nin) },
-                    ].map(({ label, value }) => (
+                      // `verified` is only meaningful for BVN and NIN — CHN is a
+                      // shareholder reference the register supplies, not something
+                      // we verify against a provider.
+                      { label: "BVN", value: maskValue(p.kyc?.bvn),
+                        verified: p.kyc?.bvn ? Boolean((p.kyc as any)?.bvnVerified) : undefined },
+                      { label: "CHN", value: maskValue(p.kyc?.chn), verified: undefined },
+                      { label: "NIN", value: maskValue(p.kyc?.nin),
+                        verified: p.kyc?.nin ? Boolean((p.kyc as any)?.ninVerified) : undefined },
+                    ].map(({ label, value, verified }) => (
                       <div key={label} className="rounded-xl bg-[hsl(var(--muted)/0.5)] p-4">
-                        <p className="attend-section-title mb-2">{label}</p>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="attend-section-title">{label}</p>
+                          {/* Absence of a pill used to mean both "not verified" and
+                              "verification does not apply here", which left an admin
+                              unable to tell an unverified NIN from a CHN. Both states
+                              are now stated; CHN still carries no pill because there
+                              is nothing to verify it against. */}
+                          {verified === true && (
+                            <span
+                              className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700"
+                              title={label === "NIN"
+                                ? "NIN + selfie matched against the NIMC photo. Independent of the BVN ladder, so this user can be NIN-verified and still NO_KYC."
+                                : "BVN verified."}
+                            >
+                              Verified
+                            </span>
+                          )}
+                          {verified === false && (
+                            <span
+                              className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                              title={label === "NIN"
+                                ? "This NIN has been supplied but not matched against the NIMC photo. It counts for nothing until it is."
+                                : "This BVN has been supplied but not verified."}
+                            >
+                              Not verified
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm font-mono font-semibold text-[hsl(var(--foreground))]">{value}</p>
                       </div>
                     ))}

@@ -39,7 +39,29 @@ export function EventBroadcastTab({ eventId }: Props) {
   const [message, setMessage] = useState("");
   const retryRef = useRef<{ signature: string; key: string } | null>(null);
 
-  const { data: recipientCount = 0 } = useBroadcastRecipients(eventId);
+  const { data: recipients } = useBroadcastRecipients(eventId);
+  const recipientCount = recipients?.recipientCount ?? 0;
+
+  // How many of the audience this channel can actually reach. Undefined until the
+  // backend's per-channel counts are deployed — in that case we fall back to the
+  // total and say nothing, which is the old behaviour.
+  const reachable: number | undefined =
+    channel === "EMAIL"  ? recipients?.emailCount  :
+    channel === "SMS"    ? recipients?.smsCount    :
+    channel === "PUSH"   ? recipients?.pushCount   :
+    channel === "IN_APP" ? recipients?.inAppCount  :
+    undefined;                                    // ALL — no single number applies
+
+  const sendCount = reachable ?? recipientCount;
+  const skipped   = reachable === undefined ? 0 : Math.max(0, recipientCount - reachable);
+
+  // The specific reason this channel skips people, so the warning names it.
+  const skipReason: string | null =
+    channel === "EMAIL"  ? "have no email address" :
+    channel === "SMS"    ? "have no phone number"  :
+    channel === "PUSH"   ? "have no registered device" :
+    channel === "IN_APP" ? "have no Attend account" :
+    null;
   const { data: historyData, isLoading: historyLoading } = useBroadcastHistory(eventId);
   const sendMutation = useSendBroadcast();
 
@@ -106,11 +128,26 @@ export function EventBroadcastTab({ eventId }: Props) {
                   </button>
                 ))}
               </div>
-              {channel === "ALL" && (
-                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1.5">
-                  Sends through all available delivery channels. Push and in-app require a matching Attend account.
+              {channel === "ALL" ? (
+                <div className="mt-1.5 text-xs text-[hsl(var(--muted-foreground))]">
+                  <p>Sends through every channel — each person gets it wherever they are reachable.</p>
+                  {recipients?.emailCount !== undefined && (
+                    <p className="mt-1 tabular-nums">
+                      Reach per channel: {recipients.emailCount?.toLocaleString()} email ·{" "}
+                      {recipients.smsCount?.toLocaleString()} SMS ·{" "}
+                      {recipients.pushCount?.toLocaleString()} push ·{" "}
+                      {recipients.inAppCount?.toLocaleString()} in-app
+                    </p>
+                  )}
+                </div>
+              ) : skipped > 0 && skipReason ? (
+                // Said BEFORE the send, not discovered afterwards from the history card.
+                <p className="mt-1.5 text-xs text-amber-700">
+                  <b className="tabular-nums">{skipped.toLocaleString()}</b> of{" "}
+                  <span className="tabular-nums">{recipientCount.toLocaleString()}</span> {skipReason} and
+                  will be skipped.
                 </p>
-              )}
+              ) : null}
             </div>
 
             {/* Subject (email / all) */}
@@ -139,7 +176,7 @@ export function EventBroadcastTab({ eventId }: Props) {
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder={`Write an update for ${recipientCount.toLocaleString()} registered attendees…`}
+                placeholder={`Write an update for ${sendCount.toLocaleString()} recipients…`}
                 rows={4}
                 maxLength={maxMessageLength}
                 className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 py-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] resize-none"
@@ -161,7 +198,11 @@ export function EventBroadcastTab({ eventId }: Props) {
               {sendMutation.isPending ? (
                 "Sending…"
               ) : (
-                <><Send className="h-4 w-4" /> Send to {recipientCount.toLocaleString()} attendees</>
+                <>
+                  <Send className="h-4 w-4" />
+                  Send to {sendCount.toLocaleString()}
+                  {reachable !== undefined && channel !== "ALL" ? ` via ${CHANNEL_CONFIG.find((c) => c.key === channel)?.label}` : " attendees"}
+                </>
               )}
             </Button>
           </div>
