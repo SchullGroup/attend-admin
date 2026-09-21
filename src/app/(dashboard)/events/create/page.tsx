@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Check, ChevronRight, ChevronLeft } from "lucide-react";
-import { judgingWeightsValid } from "./components/HackathonSteps";
+import { judgingCriteriaValid } from "./components/HackathonSteps";
 import { clearEventDrafts, hasEventDraft, DRAFT_PREFIX } from "./components/state-hooks";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +59,8 @@ function CreateEventInner() {
   const [showStepErrors, setShowStepErrors] = useState(false);
   const submissionLockRef = useRef(false);
   const navHydrated       = useRef(false);
+  /** The type in play before the current one, so a switch can carry work over. */
+  const lastModuleRef     = useRef<ModuleId | null>(null);
 
   // The field values rehydrate themselves (see useDraft in state-hooks). These
   // three live here rather than in a module hook, so they are mirrored here too
@@ -68,7 +70,11 @@ function CreateEventInner() {
       const mod  = window.localStorage.getItem(`${DRAFT_PREFIX}nav.module`);
       const stp  = window.localStorage.getItem(`${DRAFT_PREFIX}nav.step`);
       const org  = window.localStorage.getItem(`${DRAFT_PREFIX}nav.organiserId`);
-      if (mod) setSelectedModule(JSON.parse(mod) as ModuleId);
+      if (mod) {
+        const restored = JSON.parse(mod) as ModuleId | null;
+        setSelectedModule(restored);
+        lastModuleRef.current = restored;
+      }
       if (stp) setStep(Number(JSON.parse(stp)) || 0);
       if (org) setOrganiserId(String(JSON.parse(org)));
       if (mod || org) setDraftRestored(true);
@@ -153,7 +159,7 @@ function CreateEventInner() {
       if (s === 1) return hack.problemStatement.length >= 30;
       // Prizes & Judging — scores are meaningless unless the weights total 100%,
       // and Continue used to allow any total through.
-      if (s === 3) return judgingWeightsValid(hack.criteria);
+      if (s === 3) return judgingCriteriaValid(hack.criteria);
       return true;
     }
     if (module === "GENERAL") {
@@ -178,8 +184,63 @@ function CreateEventInner() {
   }
   function back() { setShowStepErrors(false); setStep((s) => Math.max(s - 1, 0)); }
   function skip() { setShowStepErrors(false); setStep((s) => Math.min(s + 1, steps.length - 1)); }
-  function selectModule(id: ModuleId) { setSelectedModule(id); setStep(0); setShowStepErrors(false); }
-  function resetModule()               { setSelectedModule(null); setStep(0); setShowStepErrors(false); }
+  // ─── Carrying work across a change of event type ────────────────────────────
+  //
+  // Picking the wrong type is easy — the four cards look alike and the
+  // difference only becomes obvious a step or two in. Everything that means the
+  // same thing in every flow follows the user across rather than being retyped.
+  // Type-specific work (resolutions, prize tiers, speakers) stays with its own
+  // type and is still there if they switch back.
+
+  function stateFor(id: ModuleId): any {
+    return id === "AGM" ? agm : id === "LAUNCH" ? launch : id === "HACKATHON" ? hack : general;
+  }
+
+  function carryOver(from: ModuleId, to: ModuleId) {
+    const a = stateFor(from);
+    const b = stateFor(to);
+
+    // Only non-empty values move, so switching never blanks something out.
+    const text: [string, string][] = [
+      [a.title,       "setTitle"],
+      [a.description, "setDescription"],
+      [a.venue,       "setVenue"],
+      [a.streamUrl,   "setStreamUrl"],
+      [a.capacity,    "setCapacity"],
+      [a.flyerUrl,    "setFlyerUrl"],
+      [a.time,        "setTime"],
+      [a.endTime,     "setEndTime"],
+    ];
+    text.forEach(([value, setter]) => {
+      if (value && typeof b[setter] === "function") b[setter](value);
+    });
+
+    // The challenge flow calls its date `startDate`; everywhere else it is `date`.
+    const date = from === "HACKATHON" ? a.startDate : a.date;
+    if (date) {
+      if (to === "HACKATHON") b.setStartDate(date);
+      else                    b.setDate(date);
+    }
+
+    // These always hold a value, so they copy unconditionally.
+    if (typeof b.setFormat   === "function") b.setFormat(a.format);
+    if (typeof b.setFeatured === "function") b.setFeatured(a.featured);
+    // Launch and General both have it; AGM and Innovation do not.
+    if (a.audienceMode && typeof b.setAudienceMode === "function") b.setAudienceMode(a.audienceMode);
+  }
+
+  function selectModule(id: ModuleId) {
+    const previous = lastModuleRef.current;
+    if (previous && previous !== id) carryOver(previous, id);
+    lastModuleRef.current = id;
+    setSelectedModule(id);
+    setStep(0);
+    setShowStepErrors(false);
+  }
+
+  // Deliberately keeps lastModuleRef: "Change event type" returns to the picker,
+  // and the type chosen next is exactly when the carry-over should happen.
+  function resetModule() { setSelectedModule(null); setStep(0); setShowStepErrors(false); }
 
   // ─── Submit ─────────────────────────────────────────────────────────────────
 

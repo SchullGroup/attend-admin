@@ -9,7 +9,7 @@ import { UploadProgress } from "@/components/ui/upload-progress";
 import { apiClient } from "@/lib/api-client";
 import { cn, throttledProgress } from "@/lib/utils";
 import { ImageUrlUpload } from "@/components/custom/image-url-upload";
-import { Toggle, FormatPicker, ReviewRow, OrgChip, todayISO, nextEndTime } from "./shared";
+import { Toggle, FormatPicker, ReviewRow, OrgChip, todayISO, nextEndTime, minStartTimeToday, startTimeTooSoon } from "./shared";
 import { MAX_SHORT } from "./HackathonSteps";
 import type { AgmState } from "./state-hooks";
 
@@ -56,18 +56,32 @@ export function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState
       <div className="grid grid-cols-3 gap-4">
         <div>
           <Label className="mb-2 block">Date <span className="text-red-500">*</span></Label>
-          <Input type="date" min={todayISO()} value={s.date} onChange={(e) => s.setDate(e.target.value)}
+          <Input type="date" min={todayISO()} value={s.date} onChange={(e) => {
+              const next = e.target.value;
+              // Moving onto today can strand a start time that has already gone.
+              if (next === todayISO() && s.time && s.time < minStartTimeToday()) {
+                const earliest = minStartTimeToday();
+                s.setEndTime(nextEndTime(s.time, earliest, s.endTime));
+                s.setTime(earliest);
+              }
+              s.setDate(next);
+            }}
             className={cn(showErrors && !s.date && "border-red-400 focus-visible:ring-red-200")} />
           {showErrors && !s.date && <p className="text-xs text-red-500 mt-1">Date is required.</p>}
         </div>
         <div><Label className="mb-2 block">Start Time</Label>
           {/* Moving the start carries the end with it, so nobody has to set the
               same thing twice. An end time the user chose themselves is kept. */}
-          <Input type="time" value={s.time} onChange={(e) => {
-            const next = e.target.value;
-            s.setEndTime(nextEndTime(s.time, next, s.endTime));
-            s.setTime(next);
-          }} /></div>
+          <Input type="time" min={s.date === todayISO() ? minStartTimeToday() : undefined}
+            value={s.time} onChange={(e) => {
+              const next = e.target.value;
+              s.setEndTime(nextEndTime(s.time, next, s.endTime));
+              s.setTime(next);
+            }} />
+          {startTimeTooSoon(s.date, s.time) && (
+            <p className="text-xs text-amber-600 mt-1">Already passed — starts need about an hour&apos;s notice.</p>
+          )}
+        </div>
         <div><Label className="mb-2 block">End Time</Label>
           <Input type="time" min={s.time} value={s.endTime} onChange={(e) => s.setEndTime(e.target.value)} />
           {s.endTime && s.time && s.endTime <= s.time && (

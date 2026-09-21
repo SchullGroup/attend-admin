@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { ImageUrlUpload } from "@/components/custom/image-url-upload";
-import { Toggle, FormatPicker, ReviewRow, OrgChip, todayISO, nextEndTime } from "./shared";
+import { Toggle, FormatPicker, ReviewRow, OrgChip, todayISO, nextEndTime, minStartTimeToday, startTimeTooSoon } from "./shared";
 import type { HackState } from "./state-hooks";
 
 const MIN_CHARS = 30;
@@ -50,6 +50,22 @@ export function judgingWeightsTotal(criteria: { weight: string }[]): number {
 
 export function judgingWeightsValid(criteria: { weight: string }[]): boolean {
   return Math.round(judgingWeightsTotal(criteria) * 100) / 100 === 100;
+}
+
+/** Criteria with no name still score, and nobody can tell what they scored. */
+export function unnamedCriteriaCount(criteria: { label: string }[]): number {
+  return criteria.filter((c) => !c.label.trim()).length;
+}
+
+/**
+ * The step is only complete when every criterion has a name AND the weights
+ * total 100. Weights alone were enough before, so an unnamed row carrying 20%
+ * let Continue through.
+ */
+export function judgingCriteriaValid(criteria: { label: string; weight: string }[]): boolean {
+  return criteria.length > 0
+    && unnamedCriteriaCount(criteria) === 0
+    && judgingWeightsValid(criteria);
 }
 function WordCounter({ text, label }: { text: string; label: string }) {
   const count = text.length;
@@ -116,6 +132,12 @@ export function HackStep0({ s, organiserName, showErrors = false }: { s: HackSta
           <Input type="date" min={todayISO()} value={s.startDate} onChange={(e) => {
               const next = e.target.value;
               if (s.endDate && s.endDate < next) s.setEndDate(next);
+              // Moving onto today can strand a start time that has already gone.
+              if (next === todayISO() && s.time && s.time < minStartTimeToday()) {
+                const earliest = minStartTimeToday();
+                s.setEndTime(nextEndTime(s.time, earliest, s.endTime));
+                s.setTime(earliest);
+              }
               s.setStartDate(next);
             }}
             className={cn(showErrors && !s.startDate && "border-red-400 focus-visible:ring-red-200")} />
@@ -133,11 +155,16 @@ export function HackStep0({ s, organiserName, showErrors = false }: { s: HackSta
 
       <div className="grid grid-cols-2 gap-4">
         <div><Label className="mb-2 block">Start Time</Label>
-          <Input type="time" value={s.time} onChange={(e) => {
-            const next = e.target.value;
-            s.setEndTime(nextEndTime(s.time, next, s.endTime));
-            s.setTime(next);
-          }} /></div>
+          <Input type="time" min={s.startDate === todayISO() ? minStartTimeToday() : undefined}
+            value={s.time} onChange={(e) => {
+              const next = e.target.value;
+              s.setEndTime(nextEndTime(s.time, next, s.endTime));
+              s.setTime(next);
+            }} />
+          {startTimeTooSoon(s.startDate, s.time) && (
+            <p className="text-xs text-amber-600 mt-1">Already passed — starts need about an hour&apos;s notice.</p>
+          )}
+        </div>
         <div><Label className="mb-2 block">End Time</Label>
           {/* A challenge can span days, so an end time before the start time is
               only wrong when both fall on the same date. */}
@@ -325,11 +352,24 @@ export function HackPrizesStep({ s }: { s: HackState }) {
           </div>
         </div>
         {(() => {
-          const total = judgingWeightsTotal(s.criteria);
-          const ok    = judgingWeightsValid(s.criteria);
+          const total   = judgingWeightsTotal(s.criteria);
+          const unnamed = unnamedCriteriaCount(s.criteria);
+          const weightsOk = judgingWeightsValid(s.criteria);
+
+          // Name first: a nameless criterion is the more basic problem, and
+          // reporting both at once reads like two separate failures.
+          if (unnamed > 0) {
+            return (
+              <p className="text-xs mb-3 text-amber-600">
+                {unnamed === 1
+                  ? "One criterion still needs a name."
+                  : `${unnamed} criteria still need names.`}
+              </p>
+            );
+          }
           return (
-            <p className={cn("text-xs mb-3", ok ? "text-green-600" : "text-amber-600")}>
-              {ok
+            <p className={cn("text-xs mb-3", weightsOk ? "text-green-600" : "text-amber-600")}>
+              {weightsOk
                 ? "✓ Weights total 100%"
                 : `Weights must total 100% — currently ${Math.round(total * 100) / 100}%${
                     total < 100 ? ` (${Math.round((100 - total) * 100) / 100}% left to assign)` : " (over by " + Math.round((total - 100) * 100) / 100 + "%)"
@@ -340,7 +380,9 @@ export function HackPrizesStep({ s }: { s: HackState }) {
         <div className="flex flex-col gap-2">
           {s.criteria.map((c) => (
             <div key={c.id} className="flex items-center gap-2">
-              <Input maxLength={MAX_SHORT} placeholder="e.g. Innovation" value={c.label} onChange={(e) => s.updateCriterion(c.id, "label", e.target.value)} className="flex-1" />
+              <Input maxLength={MAX_SHORT} placeholder="e.g. Innovation" value={c.label}
+                onChange={(e) => s.updateCriterion(c.id, "label", e.target.value)}
+                className={cn("flex-1", !c.label.trim() && "border-amber-400 focus-visible:ring-amber-200")} />
               <Input placeholder="30%" value={c.weight} onChange={(e) => s.updateCriterion(c.id, "weight", e.target.value)} className="w-24 shrink-0" />
               {s.criteria.length > 1 && (
                 <button type="button" onClick={() => s.removeCriterion(c.id)} className="text-red-400 hover:text-red-600 shrink-0">

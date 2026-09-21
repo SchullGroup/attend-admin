@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import type { Format, SpeakerItem, Resolution, Prize, Criterion, AgendaRow } from "./types";
+import { todayISO, minStartTimeToday, nextEndTime } from "./shared";
 
 export function genId() { return Math.random().toString(36).slice(2, 10); }
 
@@ -97,12 +98,38 @@ export function hasEventDraft(): boolean {
   return false;
 }
 
+
+/**
+ * The date now defaults to today, so the fixed 09:00 / 10:00 default is already
+ * in the past for most of the working day, and the backend refuses a start that
+ * has passed. Nudge it forward once on mount.
+ *
+ * Runs before a restored draft lands, so a saved time always wins — which is
+ * right: a time the user chose is not ours to move.
+ */
+function useFutureStartTime(
+  date: string, time: string, setTime: (v: string) => void,
+  endTime: string, setEndTime: (v: string) => void,
+) {
+  const done = useRef(false);
+  useEffect(() => {
+    if (done.current || !date) return;
+    done.current = true;
+    const earliest = minStartTimeToday();
+    if (date === todayISO() && time && time < earliest) {
+      setEndTime(nextEndTime(time, earliest, endTime));
+      setTime(earliest);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
+}
+
 // ─── AGM ─────────────────────────────────────────────────────────────────────
 
 export function useAgmState() {
   const [title,               setTitle]               = useDraft("agm", "title", "");
   const [description,         setDescription]         = useDraft("agm", "description", "");
-  const [date,                setDate]                = useDraft("agm", "date", "");
+  const [date,                setDate]                = useDraft("agm", "date", todayISO());
   const [time,                setTime]                = useDraft("agm", "time", "10:00");
   const [endTime,             setEndTime]             = useDraft("agm", "endTime", "");
   const [format,              setFormat]              = useDraft<Format>("agm", "format", "hybrid");
@@ -142,6 +169,8 @@ export function useAgmState() {
   const removeResolution = (id: string) => setResolutions((r) => r.filter((x) => x.id !== id));
   const updateResolution = (id: string, field: keyof Resolution, val: string | boolean) =>
     setResolutions((r) => r.map((x) => x.id === id ? { ...x, [field]: val } : x));
+  useFutureStartTime(date, time, setTime, endTime, setEndTime);
+
   return {
     title, setTitle, description, setDescription,
     date, setDate, time, setTime, endTime, setEndTime,
@@ -169,7 +198,7 @@ export function useAgmState() {
 export function useLaunchState() {
   const [title,          setTitle]          = useDraft("launch", "title", "");
   const [description,    setDescription]    = useDraft("launch", "description", "");
-  const [date,           setDate]           = useDraft("launch", "date", "");
+  const [date,           setDate]           = useDraft("launch", "date", todayISO());
   const [time,           setTime]           = useDraft("launch", "time", "10:00");
   const [endTime,        setEndTime]        = useDraft("launch", "endTime", "");
   const [format,         setFormat]         = useDraft<Format>("launch", "format", "virtual");
@@ -190,6 +219,8 @@ export function useLaunchState() {
   const removeSpeaker = (id: string) => setSpeakers((s) => s.filter((x) => x.id !== id));
   const updateSpeaker = (id: string, field: keyof SpeakerItem, val: string) =>
     setSpeakers((s) => s.map((x) => x.id === id ? { ...x, [field]: val } : x));
+  useFutureStartTime(date, time, setTime, endTime, setEndTime);
+
   return {
     title, setTitle, description, setDescription,
     date, setDate, time, setTime, endTime, setEndTime,
@@ -224,7 +255,7 @@ export function useHackState() {
   const [title,              setTitle]              = useDraft("hack", "title", "");
   const [description,        setDescription]        = useDraft("hack", "description", "");
   const [theme,              setTheme]              = useDraft("hack", "theme", "");
-  const [startDate,          setStartDate]          = useDraft("hack", "startDate", "");
+  const [startDate,          setStartDate]          = useDraft("hack", "startDate", todayISO());
   const [endDate,            setEndDate]            = useDraft("hack", "endDate", "");
   const [time,               setTime]               = useDraft("hack", "time", "09:00");
   const [endTime,            setEndTime]            = useDraft("hack", "endTime", "");
@@ -266,6 +297,8 @@ export function useHackState() {
   const splitCriteriaEvenly = () => setCriteria((c) => splitEvenly(c));
   const updateCriterion = (id: string, field: "label" | "weight", val: string) =>
     setCriteria((c) => c.map((x) => x.id === id ? { ...x, [field]: val } : x));
+  useFutureStartTime(startDate, time, setTime, endTime, setEndTime);
+
   return {
     title, setTitle, description, setDescription,
     theme, setTheme, startDate, setStartDate, endDate, setEndDate,
@@ -287,7 +320,7 @@ export function useHackState() {
 export function useGeneralState() {
   const [title,               setTitle]               = useDraft("general", "title", "");
   const [description,         setDescription]         = useDraft("general", "description", "");
-  const [date,                setDate]                = useDraft("general", "date", "");
+  const [date,                setDate]                = useDraft("general", "date", todayISO());
   const [time,                setTime]                = useDraft("general", "time", "10:00");
   const [endTime,             setEndTime]             = useDraft("general", "endTime", "");
   const [format,              setFormat]              = useDraft<Format>("general", "format", "virtual");
@@ -297,6 +330,8 @@ export function useGeneralState() {
   const [audienceMode,        setAudienceMode]        = useDraft<"open" | "invite">("general", "audienceMode", "open");
   const [featured,            setFeatured]            = useDraft("general", "featured", false);
   const [flyerUrl,            setFlyerUrl]            = useDraft("general", "flyerUrl", "");
+  useFutureStartTime(date, time, setTime, endTime, setEndTime);
+
   return {
     title, setTitle, description, setDescription,
     date, setDate, time, setTime, endTime, setEndTime,

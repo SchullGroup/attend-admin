@@ -263,3 +263,30 @@ export function nextEndTime(prevStart: string, nextStart: string, currentEnd: st
   if (currentEnd <= nextStart) return addHour(nextStart);
   return currentEnd;
 }
+
+/**
+ * Earliest start time for an event dated today: one hour from now, rounded up
+ * to the next five minutes.
+ *
+ * The backend rejects a start that has already passed, and the form's default
+ * was a fixed 09:00 — so anyone creating a same-day event after 9am was refused
+ * by a field they never touched. An hour of lead time also matches what the
+ * event actually needs: invitations have to go out before it starts.
+ */
+export function minStartTimeToday(): string {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() + 60);
+  const rounded = Math.ceil(d.getMinutes() / 5) * 5;
+  if (rounded === 60) { d.setHours(d.getHours() + 1); d.setMinutes(0); }
+  else                { d.setMinutes(rounded); }
+  const pad = (n: number) => String(n).padStart(2, "0");
+  // An event that would spill past midnight keeps the last usable slot rather
+  // than silently landing on tomorrow's clock time with today's date.
+  if (d.getDate() !== new Date().getDate()) return "23:30";
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Is this start time already too late for an event dated today? */
+export function startTimeTooSoon(date: string, time: string): boolean {
+  return !!date && !!time && date === todayISO() && time < minStartTimeToday();
+}
