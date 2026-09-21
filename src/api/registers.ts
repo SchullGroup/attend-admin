@@ -308,10 +308,13 @@ export function useEnrollRegister() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: registerKeys.all });
+      // Deliberately does not tell the user to go and approve it: the enrol
+      // page approves immediately after this resolves, and the approval toast
+      // is what confirms the organisation is usable.
       popup.success(
         "Register Enrolled",
-        "The organisation has been added in PENDING status. Approve it to enable event creation.",
-        4000
+        "The organisation has been created.",
+        2500
       );
     },
     onError: (error: any) =>

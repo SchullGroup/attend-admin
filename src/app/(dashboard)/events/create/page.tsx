@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Check, ChevronRight, ChevronLeft } from "lucide-react";
+import { judgingWeightsValid } from "./components/HackathonSteps";
 import { cn } from "@/lib/utils";
 
 // ─── Component imports ────────────────────────────────────────────────────────
@@ -42,7 +43,7 @@ function CreateEventInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const { data: registersData } = useRegisters("ACTIVE", 0, 100);
+  const { data: registersData, isLoading: registersLoading } = useRegisters("ACTIVE", 0, 100);
   const activeOrganisers = (registersData?.registers ?? []).map((reg) => ({
     id:   reg.id,
     name: reg.name || (reg as any).companyName || reg.id,
@@ -109,6 +110,9 @@ function CreateEventInner() {
         return !!hack.title.trim() && !!hack.startDate && hack.description.length >= 30 && !_hasDupe;
       }
       if (s === 1) return hack.problemStatement.length >= 30;
+      // Prizes & Judging — scores are meaningless unless the weights total 100%,
+      // and Continue used to allow any total through.
+      if (s === 3) return judgingWeightsValid(hack.criteria);
       return true;
     }
     if (module === "GENERAL") {
@@ -457,11 +461,38 @@ function CreateEventInner() {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Which organisation is hosting this event?</p>
             </div>
           </div>
-          <OrgCombobox value={organiserId} onValueChange={setOrganiserId} organisers={activeOrganisers} />
-          {organiserId
-            ? <p className="mt-2 text-xs text-emerald-600 font-medium flex items-center gap-1"><Check className="h-3 w-3" /> {organiserName} selected</p>
-            : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Required — every event must be linked to an organiser.</p>
-          }
+          {/* With no active register the combobox is an empty box and the whole
+              page is a dead end — nothing below it can be touched until an
+              organiser is chosen, and there is no organiser to choose. Send the
+              user to Enrol Register rather than leaving them to work it out.
+              Nothing is typed on this screen before a register is selected, so
+              navigating away costs no input. */}
+          {!registersLoading && activeOrganisers.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[hsl(var(--border))] px-5 py-6 text-center">
+              <p className="text-sm font-medium text-[hsl(var(--foreground))]">
+                You have no registers yet
+              </p>
+              <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                An event has to be hosted by one, so there is nothing to select yet.
+              </p>
+              <Button
+                size="sm"
+                className="mt-4 gap-1.5"
+                onClick={() => router.push("/registers/enrol")}
+              >
+                Enrol Register
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <OrgCombobox value={organiserId} onValueChange={setOrganiserId} organisers={activeOrganisers} />
+              {organiserId
+                ? <p className="mt-2 text-xs text-emerald-600 font-medium flex items-center gap-1"><Check className="h-3 w-3" /> {organiserName} selected</p>
+                : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Required — every event must be linked to an organiser.</p>
+              }
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-3 mb-4">

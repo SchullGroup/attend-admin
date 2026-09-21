@@ -231,7 +231,13 @@ export function Sidebar() {
 
   // Stakeholder logo — for client users whose avatarUrl is null
   const { data: stakeholder } = useClientStakeholder({ enabled: !!currentUser && !isSuperAdminRole(resolveRole(currentUser)) });
-  const pendingCount = pendingEnrollmentsData?.data?.totalCount ?? 0;
+  // Read tolerantly: this endpoint has been seen to return the count as
+  // totalCount or totalElements, and otherwise the array can be measured.
+  const pendingRaw   = pendingEnrollmentsData?.data as any;
+  const pendingCount =
+    pendingRaw?.totalCount ??
+    pendingRaw?.totalElements ??
+    (Array.isArray(pendingRaw?.pendingStakeholders) ? pendingRaw.pendingStakeholders.length : 0);
 
   const hasToken      = typeof window !== "undefined" && !!Cookies.get("accessToken");
   // logoUrl persisted at login time (me endpoint may not return it)
