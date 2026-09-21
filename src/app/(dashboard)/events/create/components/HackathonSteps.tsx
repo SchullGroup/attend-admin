@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { ImageUrlUpload } from "@/components/custom/image-url-upload";
-import { Toggle, FormatPicker, ReviewRow, OrgChip } from "./shared";
+import { Toggle, FormatPicker, ReviewRow, OrgChip, todayISO, nextEndTime } from "./shared";
 import type { HackState } from "./state-hooks";
 
 const MIN_CHARS = 30;
@@ -111,19 +111,41 @@ export function HackStep0({ s, organiserName, showErrors = false }: { s: HackSta
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label className="mb-2 block">Start Date <span className="text-red-500">*</span></Label>
-          <Input type="date" value={s.startDate} onChange={(e) => s.setStartDate(e.target.value)}
+          {/* Changing the start pulls an earlier end date forward with it —
+              an end before the start was previously selectable. */}
+          <Input type="date" min={todayISO()} value={s.startDate} onChange={(e) => {
+              const next = e.target.value;
+              if (s.endDate && s.endDate < next) s.setEndDate(next);
+              s.setStartDate(next);
+            }}
             className={cn(showErrors && !s.startDate && "border-red-400 focus-visible:ring-red-200")} />
           {showErrors && !s.startDate && <p className="text-xs text-red-500 mt-1">Start date is required.</p>}
         </div>
         <div>
           <Label className="mb-2 block">End Date</Label>
-          <Input type="date" value={s.endDate} onChange={(e) => s.setEndDate(e.target.value)} />
+          <Input type="date" min={s.startDate || todayISO()} value={s.endDate}
+            onChange={(e) => s.setEndDate(e.target.value)} />
+          {s.endDate && s.startDate && s.endDate < s.startDate && (
+            <p className="text-xs text-red-500 mt-1">End date cannot be before the start date.</p>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div><Label className="mb-2 block">Start Time</Label><Input type="time" value={s.time} onChange={(e) => s.setTime(e.target.value)} /></div>
-        <div><Label className="mb-2 block">End Time</Label><Input type="time" value={s.endTime} onChange={(e) => s.setEndTime(e.target.value)} /></div>
+        <div><Label className="mb-2 block">Start Time</Label>
+          <Input type="time" value={s.time} onChange={(e) => {
+            const next = e.target.value;
+            s.setEndTime(nextEndTime(s.time, next, s.endTime));
+            s.setTime(next);
+          }} /></div>
+        <div><Label className="mb-2 block">End Time</Label>
+          {/* A challenge can span days, so an end time before the start time is
+              only wrong when both fall on the same date. */}
+          <Input type="time" value={s.endTime} onChange={(e) => s.setEndTime(e.target.value)} />
+          {s.endTime && s.time && s.endTime <= s.time && (!s.endDate || s.endDate === s.startDate) && (
+            <p className="text-xs text-red-500 mt-1">End time must be after the start time.</p>
+          )}
+        </div>
       </div>
 
       <FormatPicker value={s.format} onChange={s.setFormat} />
@@ -289,9 +311,18 @@ export function HackPrizesStep({ s }: { s: HackState }) {
       <div className="border-t border-[hsl(var(--border))] pt-5">
         <div className="flex items-center justify-between mb-3">
           <Label>Judging Criteria</Label>
-          <button type="button" onClick={s.addCriterion} className="flex items-center gap-1.5 text-xs font-medium text-[#7c22c9] hover:opacity-70">
-            <Plus className="h-3.5 w-3.5" /> Add criterion
-          </button>
+          <div className="flex items-center gap-4">
+            {/* Adding and removing rebalance on their own; this is for getting
+                back to an even split after typing custom figures. */}
+            {s.criteria.length > 1 && (
+              <button type="button" onClick={s.splitCriteriaEvenly} className="text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+                Split evenly
+              </button>
+            )}
+            <button type="button" onClick={s.addCriterion} className="flex items-center gap-1.5 text-xs font-medium text-[#7c22c9] hover:opacity-70">
+              <Plus className="h-3.5 w-3.5" /> Add criterion
+            </button>
+          </div>
         </div>
         {(() => {
           const total = judgingWeightsTotal(s.criteria);

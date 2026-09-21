@@ -15,6 +15,7 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Check, ChevronRight, ChevronLeft } from "lucide-react";
 import { judgingWeightsValid } from "./components/HackathonSteps";
+import { clearEventDrafts, hasEventDraft, DRAFT_PREFIX } from "./components/state-hooks";
 import { cn } from "@/lib/utils";
 
 // ─── Component imports ────────────────────────────────────────────────────────
@@ -51,10 +52,50 @@ function CreateEventInner() {
 
   const [selectedModule, setSelectedModule] = useState<ModuleId | null>(null);
   const [step,           setStep]           = useState(0);
+  // Whether anything was restored, so the page can offer to throw it away.
+  const [draftRestored,  setDraftRestored]  = useState(false);
   const [submitting,     setSubmitting]     = useState(false);
   const [organiserId,    setOrganiserId]    = useState("");
   const [showStepErrors, setShowStepErrors] = useState(false);
   const submissionLockRef = useRef(false);
+  const navHydrated       = useRef(false);
+
+  // The field values rehydrate themselves (see useDraft in state-hooks). These
+  // three live here rather than in a module hook, so they are mirrored here too
+  // — without them the form would come back full but on step 1 of nothing.
+  useEffect(() => {
+    try {
+      const mod  = window.localStorage.getItem(`${DRAFT_PREFIX}nav.module`);
+      const stp  = window.localStorage.getItem(`${DRAFT_PREFIX}nav.step`);
+      const org  = window.localStorage.getItem(`${DRAFT_PREFIX}nav.organiserId`);
+      if (mod) setSelectedModule(JSON.parse(mod) as ModuleId);
+      if (stp) setStep(Number(JSON.parse(stp)) || 0);
+      if (org) setOrganiserId(String(JSON.parse(org)));
+      if (mod || org) setDraftRestored(true);
+      else setDraftRestored(hasEventDraft());
+    } catch { /* storage unavailable — carry on with a blank form */ }
+  }, []);
+
+  useEffect(() => {
+    // Skip the mount run, which still holds the blank initial values — writing
+    // there wiped the very keys the effect above had just read.
+    if (!navHydrated.current) {
+      navHydrated.current = true;
+      return;
+    }
+    try {
+      window.localStorage.setItem(`${DRAFT_PREFIX}nav.module`, JSON.stringify(selectedModule));
+      window.localStorage.setItem(`${DRAFT_PREFIX}nav.step`, JSON.stringify(step));
+      window.localStorage.setItem(`${DRAFT_PREFIX}nav.organiserId`, JSON.stringify(organiserId));
+    } catch { /* quota or blocked storage */ }
+  }, [selectedModule, step, organiserId]);
+
+  /** Throw the whole draft away and start clean. */
+  function discardDraft() {
+    clearEventDrafts();
+    setDraftRestored(false);
+    window.location.reload();
+  }
 
   useEffect(() => {
     const type = searchParams.get("type") as ModuleId | null;
@@ -309,6 +350,7 @@ function CreateEventInner() {
         {
           onSuccess: () => {
             stopSubmitting();
+            clearEventDrafts();
             onDone();
           },
           onError: stopSubmitting,
@@ -338,7 +380,7 @@ function CreateEventInner() {
             .map((r) => ({ title: r.title, description: r.description || undefined, specialResolution: r.isSpecial })),
         },
         {
-          onSuccess: () => { stopSubmitting(); onDone(); },
+          onSuccess: () => { stopSubmitting(); clearEventDrafts(); onDone(); },
           onError: stopSubmitting,
         }
       );
@@ -362,7 +404,7 @@ function CreateEventInner() {
           flyerUrl:          general.flyerUrl || undefined,
         },
         {
-          onSuccess: () => { stopSubmitting(); onDone(); },
+          onSuccess: () => { stopSubmitting(); clearEventDrafts(); onDone(); },
           onError: stopSubmitting,
         }
       );
@@ -400,7 +442,7 @@ function CreateEventInner() {
           })),
         },
         {
-          onSuccess: () => { stopSubmitting(); onDone(); },
+          onSuccess: () => { stopSubmitting(); clearEventDrafts(); onDone(); },
           onError: stopSubmitting,
         }
       );
@@ -434,7 +476,7 @@ function CreateEventInner() {
             .map((sp) => ({ name: sp.name, roleTitle: sp.role, bio: sp.bio || undefined })),
         },
         {
-          onSuccess: () => { stopSubmitting(); onDone(); },
+          onSuccess: () => { stopSubmitting(); clearEventDrafts(); onDone(); },
           onError: stopSubmitting,
         }
       );
@@ -450,6 +492,23 @@ function CreateEventInner() {
           <h1 className="text-3xl font-black text-[hsl(var(--foreground))]">Create New Event</h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1.5">Choose the organiser and event type to begin setup.</p>
         </div>
+
+        {/* Something was restored from a previous visit. Say so — a form that
+            silently remembers is as confusing as one that silently forgets. */}
+        {draftRestored && (
+          <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.5)] px-4 py-3">
+            <p className="text-sm text-[hsl(var(--foreground))]">
+              Your unfinished event was restored.
+            </p>
+            <button
+              type="button"
+              onClick={discardDraft}
+              className="text-xs font-semibold text-red-500 hover:opacity-70 shrink-0"
+            >
+              Start over
+            </button>
+          </div>
+        )}
 
         <div className="mb-8 rounded-2xl border border-[hsl(var(--border))] bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-4">
