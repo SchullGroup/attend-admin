@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Check, ChevronRight, ChevronLeft } from "lucide-react";
+import { judgingCriteriaValid } from "./components/HackathonSteps";
+import { clearEventDrafts, hasEventDraft, DRAFT_PREFIX } from "./components/state-hooks";
 import { cn } from "@/lib/utils";
 
 // ─── Component imports ────────────────────────────────────────────────────────
@@ -42,7 +44,7 @@ function CreateEventInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const { data: registersData } = useRegisters("ACTIVE", 0, 100);
+  const { data: registersData, isLoading: registersLoading } = useRegisters("ACTIVE", 0, 100);
   const activeOrganisers = (registersData?.registers ?? []).map((reg) => ({
     id:   reg.id,
     name: reg.name || (reg as any).companyName || reg.id,
@@ -50,10 +52,56 @@ function CreateEventInner() {
 
   const [selectedModule, setSelectedModule] = useState<ModuleId | null>(null);
   const [step,           setStep]           = useState(0);
+  // Whether anything was restored, so the page can offer to throw it away.
+  const [draftRestored,  setDraftRestored]  = useState(false);
   const [submitting,     setSubmitting]     = useState(false);
   const [organiserId,    setOrganiserId]    = useState("");
   const [showStepErrors, setShowStepErrors] = useState(false);
   const submissionLockRef = useRef(false);
+  const navHydrated       = useRef(false);
+  /** The type in play before the current one, so a switch can carry work over. */
+  const lastModuleRef     = useRef<ModuleId | null>(null);
+
+  // The field values rehydrate themselves (see useDraft in state-hooks). These
+  // three live here rather than in a module hook, so they are mirrored here too
+  // — without them the form would come back full but on step 1 of nothing.
+  useEffect(() => {
+    try {
+      const mod  = window.localStorage.getItem(`${DRAFT_PREFIX}nav.module`);
+      const stp  = window.localStorage.getItem(`${DRAFT_PREFIX}nav.step`);
+      const org  = window.localStorage.getItem(`${DRAFT_PREFIX}nav.organiserId`);
+      if (mod) {
+        const restored = JSON.parse(mod) as ModuleId | null;
+        setSelectedModule(restored);
+        lastModuleRef.current = restored;
+      }
+      if (stp) setStep(Number(JSON.parse(stp)) || 0);
+      if (org) setOrganiserId(String(JSON.parse(org)));
+      if (mod || org) setDraftRestored(true);
+      else setDraftRestored(hasEventDraft());
+    } catch { /* storage unavailable — carry on with a blank form */ }
+  }, []);
+
+  useEffect(() => {
+    // Skip the mount run, which still holds the blank initial values — writing
+    // there wiped the very keys the effect above had just read.
+    if (!navHydrated.current) {
+      navHydrated.current = true;
+      return;
+    }
+    try {
+      window.localStorage.setItem(`${DRAFT_PREFIX}nav.module`, JSON.stringify(selectedModule));
+      window.localStorage.setItem(`${DRAFT_PREFIX}nav.step`, JSON.stringify(step));
+      window.localStorage.setItem(`${DRAFT_PREFIX}nav.organiserId`, JSON.stringify(organiserId));
+    } catch { /* quota or blocked storage */ }
+  }, [selectedModule, step, organiserId]);
+
+  /** Throw the whole draft away and start clean. */
+  function discardDraft() {
+    clearEventDrafts();
+    setDraftRestored(false);
+    window.location.reload();
+  }
 
   useEffect(() => {
     const type = searchParams.get("type") as ModuleId | null;
@@ -109,6 +157,9 @@ function CreateEventInner() {
         return !!hack.title.trim() && !!hack.startDate && hack.description.length >= 30 && !_hasDupe;
       }
       if (s === 1) return hack.problemStatement.length >= 30;
+      // Prizes & Judging — scores are meaningless unless the weights total 100%,
+      // and Continue used to allow any total through.
+      if (s === 3) return judgingCriteriaValid(hack.criteria);
       return true;
     }
     if (module === "GENERAL") {
@@ -133,8 +184,63 @@ function CreateEventInner() {
   }
   function back() { setShowStepErrors(false); setStep((s) => Math.max(s - 1, 0)); }
   function skip() { setShowStepErrors(false); setStep((s) => Math.min(s + 1, steps.length - 1)); }
-  function selectModule(id: ModuleId) { setSelectedModule(id); setStep(0); setShowStepErrors(false); }
-  function resetModule()               { setSelectedModule(null); setStep(0); setShowStepErrors(false); }
+  // ─── Carrying work across a change of event type ────────────────────────────
+  //
+  // Picking the wrong type is easy — the four cards look alike and the
+  // difference only becomes obvious a step or two in. Everything that means the
+  // same thing in every flow follows the user across rather than being retyped.
+  // Type-specific work (resolutions, prize tiers, speakers) stays with its own
+  // type and is still there if they switch back.
+
+  function stateFor(id: ModuleId): any {
+    return id === "AGM" ? agm : id === "LAUNCH" ? launch : id === "HACKATHON" ? hack : general;
+  }
+
+  function carryOver(from: ModuleId, to: ModuleId) {
+    const a = stateFor(from);
+    const b = stateFor(to);
+
+    // Only non-empty values move, so switching never blanks something out.
+    const text: [string, string][] = [
+      [a.title,       "setTitle"],
+      [a.description, "setDescription"],
+      [a.venue,       "setVenue"],
+      [a.streamUrl,   "setStreamUrl"],
+      [a.capacity,    "setCapacity"],
+      [a.flyerUrl,    "setFlyerUrl"],
+      [a.time,        "setTime"],
+      [a.endTime,     "setEndTime"],
+    ];
+    text.forEach(([value, setter]) => {
+      if (value && typeof b[setter] === "function") b[setter](value);
+    });
+
+    // The challenge flow calls its date `startDate`; everywhere else it is `date`.
+    const date = from === "HACKATHON" ? a.startDate : a.date;
+    if (date) {
+      if (to === "HACKATHON") b.setStartDate(date);
+      else                    b.setDate(date);
+    }
+
+    // These always hold a value, so they copy unconditionally.
+    if (typeof b.setFormat   === "function") b.setFormat(a.format);
+    if (typeof b.setFeatured === "function") b.setFeatured(a.featured);
+    // Launch and General both have it; AGM and Innovation do not.
+    if (a.audienceMode && typeof b.setAudienceMode === "function") b.setAudienceMode(a.audienceMode);
+  }
+
+  function selectModule(id: ModuleId) {
+    const previous = lastModuleRef.current;
+    if (previous && previous !== id) carryOver(previous, id);
+    lastModuleRef.current = id;
+    setSelectedModule(id);
+    setStep(0);
+    setShowStepErrors(false);
+  }
+
+  // Deliberately keeps lastModuleRef: "Change event type" returns to the picker,
+  // and the type chosen next is exactly when the carry-over should happen.
+  function resetModule() { setSelectedModule(null); setStep(0); setShowStepErrors(false); }
 
   // ─── Submit ─────────────────────────────────────────────────────────────────
 
@@ -305,6 +411,7 @@ function CreateEventInner() {
         {
           onSuccess: () => {
             stopSubmitting();
+            clearEventDrafts();
             onDone();
           },
           onError: stopSubmitting,
@@ -334,7 +441,7 @@ function CreateEventInner() {
             .map((r) => ({ title: r.title, description: r.description || undefined, specialResolution: r.isSpecial })),
         },
         {
-          onSuccess: () => { stopSubmitting(); onDone(); },
+          onSuccess: () => { stopSubmitting(); clearEventDrafts(); onDone(); },
           onError: stopSubmitting,
         }
       );
@@ -358,7 +465,7 @@ function CreateEventInner() {
           flyerUrl:          general.flyerUrl || undefined,
         },
         {
-          onSuccess: () => { stopSubmitting(); onDone(); },
+          onSuccess: () => { stopSubmitting(); clearEventDrafts(); onDone(); },
           onError: stopSubmitting,
         }
       );
@@ -396,7 +503,7 @@ function CreateEventInner() {
           })),
         },
         {
-          onSuccess: () => { stopSubmitting(); onDone(); },
+          onSuccess: () => { stopSubmitting(); clearEventDrafts(); onDone(); },
           onError: stopSubmitting,
         }
       );
@@ -430,7 +537,7 @@ function CreateEventInner() {
             .map((sp) => ({ name: sp.name, roleTitle: sp.role, bio: sp.bio || undefined })),
         },
         {
-          onSuccess: () => { stopSubmitting(); onDone(); },
+          onSuccess: () => { stopSubmitting(); clearEventDrafts(); onDone(); },
           onError: stopSubmitting,
         }
       );
@@ -447,6 +554,23 @@ function CreateEventInner() {
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1.5">Choose the organiser and event type to begin setup.</p>
         </div>
 
+        {/* Something was restored from a previous visit. Say so — a form that
+            silently remembers is as confusing as one that silently forgets. */}
+        {draftRestored && (
+          <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.5)] px-4 py-3">
+            <p className="text-sm text-[hsl(var(--foreground))]">
+              Your unfinished event was restored.
+            </p>
+            <button
+              type="button"
+              onClick={discardDraft}
+              className="text-xs font-semibold text-red-500 hover:opacity-70 shrink-0"
+            >
+              Start over
+            </button>
+          </div>
+        )}
+
         <div className="mb-8 rounded-2xl border border-[hsl(var(--border))] bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-4">
             <div className="h-8 w-8 rounded-full bg-[hsl(var(--primary))] flex items-center justify-center shrink-0">
@@ -457,11 +581,38 @@ function CreateEventInner() {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Which organisation is hosting this event?</p>
             </div>
           </div>
-          <OrgCombobox value={organiserId} onValueChange={setOrganiserId} organisers={activeOrganisers} />
-          {organiserId
-            ? <p className="mt-2 text-xs text-emerald-600 font-medium flex items-center gap-1"><Check className="h-3 w-3" /> {organiserName} selected</p>
-            : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Required — every event must be linked to an organiser.</p>
-          }
+          {/* With no active register the combobox is an empty box and the whole
+              page is a dead end — nothing below it can be touched until an
+              organiser is chosen, and there is no organiser to choose. Send the
+              user to Enrol Register rather than leaving them to work it out.
+              Nothing is typed on this screen before a register is selected, so
+              navigating away costs no input. */}
+          {!registersLoading && activeOrganisers.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[hsl(var(--border))] px-5 py-6 text-center">
+              <p className="text-sm font-medium text-[hsl(var(--foreground))]">
+                You have no registers yet
+              </p>
+              <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                An event has to be hosted by one, so there is nothing to select yet.
+              </p>
+              <Button
+                size="sm"
+                className="mt-4 gap-1.5"
+                onClick={() => router.push("/registers/enrol")}
+              >
+                Enrol Register
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <OrgCombobox value={organiserId} onValueChange={setOrganiserId} organisers={activeOrganisers} />
+              {organiserId
+                ? <p className="mt-2 text-xs text-emerald-600 font-medium flex items-center gap-1"><Check className="h-3 w-3" /> {organiserName} selected</p>
+                : <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Required — every event must be linked to an organiser.</p>
+              }
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-3 mb-4">

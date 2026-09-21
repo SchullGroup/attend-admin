@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { ImageUrlUpload } from "@/components/custom/image-url-upload";
-import { Toggle, FormatPicker, ReviewRow, OrgChip } from "./shared";
+import { Toggle, FormatPicker, ReviewRow, OrgChip, todayISO, nextEndTime, minStartTimeToday, startTimeTooSoon } from "./shared";
+import { MAX_SHORT } from "./HackathonSteps";
 import type { LaunchState } from "./state-hooks";
 
 // ─── Shared validation helpers ───────────────────────────────────────────────
@@ -30,7 +31,7 @@ export function LaunchStep0({ s, organiserName, showErrors = false }: { s: Launc
     <div className="flex flex-col gap-4">
       <div>
         <Label className="mb-2 block">Event Title <span className="text-red-500">*</span></Label>
-        <Input placeholder="e.g. ZenithDirect 3.0 — Official Product Launch" value={s.title}
+        <Input maxLength={MAX_SHORT} placeholder="e.g. ZenithDirect 3.0 — Official Product Launch" value={s.title}
           onChange={(e) => s.setTitle(e.target.value)}
           className={cn(showErrors && !s.title.trim() && "border-red-400 focus-visible:ring-red-200")} />
         {showErrors && !s.title.trim() && <p className="text-xs text-red-500 mt-1">Event title is required.</p>}
@@ -50,12 +51,38 @@ export function LaunchStep0({ s, organiserName, showErrors = false }: { s: Launc
       <div className="grid grid-cols-3 gap-4">
         <div>
           <Label className="mb-2 block">Date <span className="text-red-500">*</span></Label>
-          <Input type="date" value={s.date} onChange={(e) => s.setDate(e.target.value)}
+          <Input type="date" min={todayISO()} value={s.date} onChange={(e) => {
+              const next = e.target.value;
+              // Moving onto today can strand a start time that has already gone.
+              if (next === todayISO() && s.time && s.time < minStartTimeToday()) {
+                const earliest = minStartTimeToday();
+                s.setEndTime(nextEndTime(s.time, earliest, s.endTime));
+                s.setTime(earliest);
+              }
+              s.setDate(next);
+            }}
             className={cn(showErrors && !s.date && "border-red-400 focus-visible:ring-red-200")} />
           {showErrors && !s.date && <p className="text-xs text-red-500 mt-1">Date is required.</p>}
         </div>
-        <div><Label className="mb-2 block">Start Time</Label><Input type="time" value={s.time} onChange={(e) => s.setTime(e.target.value)} /></div>
-        <div><Label className="mb-2 block">End Time</Label><Input type="time" value={s.endTime} onChange={(e) => s.setEndTime(e.target.value)} /></div>
+        <div><Label className="mb-2 block">Start Time</Label>
+          {/* Moving the start carries the end with it, so nobody has to set the
+              same thing twice. An end time the user chose themselves is kept. */}
+          <Input type="time" min={s.date === todayISO() ? minStartTimeToday() : undefined}
+            value={s.time} onChange={(e) => {
+              const next = e.target.value;
+              s.setEndTime(nextEndTime(s.time, next, s.endTime));
+              s.setTime(next);
+            }} />
+          {startTimeTooSoon(s.date, s.time) && (
+            <p className="text-xs text-amber-600 mt-1">Already passed — starts need about an hour&apos;s notice.</p>
+          )}
+        </div>
+        <div><Label className="mb-2 block">End Time</Label>
+          <Input type="time" min={s.time} value={s.endTime} onChange={(e) => s.setEndTime(e.target.value)} />
+          {s.endTime && s.time && s.endTime <= s.time && (
+            <p className="text-xs text-red-500 mt-1">End time must be after the start time.</p>
+          )}
+        </div>
       </div>
 
       <FormatPicker value={s.format} onChange={s.setFormat} />
@@ -63,13 +90,13 @@ export function LaunchStep0({ s, organiserName, showErrors = false }: { s: Launc
       {(s.format === "virtual" || s.format === "hybrid") && (
         <div>
           <Label className="mb-2 block"><Monitor className="h-3.5 w-3.5 inline mr-1" />Stream URL <span className="text-xs font-normal text-[hsl(var(--muted-foreground))]">— optional</span></Label>
-          <Input placeholder="https://youtube.com/live/... or https://zoom.us/j/..." value={s.streamUrl} onChange={(e) => s.setStreamUrl(e.target.value)} />
+          <Input maxLength={MAX_SHORT} placeholder="https://youtube.com/live/... or https://zoom.us/j/..." value={s.streamUrl} onChange={(e) => s.setStreamUrl(e.target.value)} />
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Optional — paste a link now, or add one (or generate a Zoom meeting) later from the event&apos;s Settings tab.</p>
         </div>
       )}
       {(s.format === "in_person" || s.format === "hybrid") && (
         <div><Label className="mb-2 block"><MapPin className="h-3.5 w-3.5 inline mr-1" />Venue</Label>
-          <Input placeholder="e.g. Eko Hotels, Victoria Island" value={s.venue} onChange={(e) => s.setVenue(e.target.value)} /></div>
+          <Input maxLength={MAX_SHORT} placeholder="e.g. Eko Hotels, Victoria Island" value={s.venue} onChange={(e) => s.setVenue(e.target.value)} /></div>
       )}
 
       <div><Label className="mb-2 block">Capacity</Label>
@@ -94,12 +121,12 @@ export function LaunchStep1({ s, showErrors = false }: { s: LaunchState; showErr
       <ImageUrlUpload value={s.flyerUrl} onChange={s.setFlyerUrl} />
       <div>
         <Label className="mb-2 block">Product Name <span className="text-red-500">*</span></Label>
-        <Input placeholder="e.g. ZenithDirect 3.0" value={s.productName} onChange={(e) => s.setProductName(e.target.value)}
+        <Input maxLength={MAX_SHORT} placeholder="e.g. ZenithDirect 3.0" value={s.productName} onChange={(e) => s.setProductName(e.target.value)}
           className={cn(showErrors && !s.productName.trim() && "border-red-400 focus-visible:ring-red-200")} />
         {showErrors && !s.productName.trim() && <p className="text-xs text-red-500 mt-1">Product name is required.</p>}
       </div>
       <div><Label className="mb-2 block">Tagline</Label>
-        <Input placeholder="e.g. Banking beyond boundaries." value={s.tagline} onChange={(e) => s.setTagline(e.target.value)} /></div>
+        <Input maxLength={MAX_SHORT} placeholder="e.g. Banking beyond boundaries." value={s.tagline} onChange={(e) => s.setTagline(e.target.value)} /></div>
       <div>
         <Label className="mb-2 block">Product Description</Label>
         <textarea rows={4} placeholder="Describe the product — what it does, who it's for, and why it matters."
@@ -126,8 +153,8 @@ export function LaunchSpeakersStep({ s }: { s: LaunchState }) {
             )}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label className="mb-1.5 block">Name</Label><Input placeholder="Dr. Jane Smith" value={sp.name} onChange={(e) => s.updateSpeaker(sp.id, "name", e.target.value)} /></div>
-            <div><Label className="mb-1.5 block">Role / Title</Label><Input placeholder="CEO" value={sp.role} onChange={(e) => s.updateSpeaker(sp.id, "role", e.target.value)} /></div>
+            <div><Label className="mb-1.5 block">Name</Label><Input maxLength={MAX_SHORT} placeholder="Dr. Jane Smith" value={sp.name} onChange={(e) => s.updateSpeaker(sp.id, "name", e.target.value)} /></div>
+            <div><Label className="mb-1.5 block">Role / Title</Label><Input maxLength={MAX_SHORT} placeholder="CEO" value={sp.role} onChange={(e) => s.updateSpeaker(sp.id, "role", e.target.value)} /></div>
           </div>
           <div>
             <Label className="mb-1.5 block">Bio <span className="font-normal text-[hsl(var(--muted-foreground))]">(optional)</span></Label>

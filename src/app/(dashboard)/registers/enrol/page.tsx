@@ -125,9 +125,23 @@ export default function EnrolRegisterPage() {
     };
 
     enrollMutation.mutate(payload, {
-      onSuccess: () => {
+      onSuccess: (created: any) => {
         setForm(EMPTY_FORM);
         setShowErrors(false);
+
+        // Approving an organisation you enrolled yourself was never a super
+        // admin's job, and leaving it PENDING blocks the very next thing the
+        // user came here to do — create an event. Approve it immediately.
+        const newId =
+          created?.id ?? created?.registerId ?? created?.register?.id ?? created?.data?.id;
+
+        if (newId) {
+          approveMutation.mutate(String(newId));
+        } else {
+          // The enrol response did not carry an id, so there is nothing to
+          // approve against. Say so rather than leaving a silent PENDING row.
+          toast("Enrolled, but still pending — approve it in the list below.");
+        }
       },
     });
   }

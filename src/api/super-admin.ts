@@ -110,13 +110,26 @@ export function useStakeholders(page = 0, limit = 10) {
   });
 }
 
+/**
+ * Pending registrar enrolments — drives the count badge on "Enrol Registrar".
+ *
+ * The URL was `/admin/stakeholders/pending`, which matches no route and 404s
+ * (only `/stakeholders/active` exists under that prefix). The badge therefore
+ * never rendered, and a missing badge is indistinguishable from "none pending" —
+ * so super admins had no way to see that enrolments were waiting. Backend
+ * confirmed the correct path on 2026-09-19.
+ *
+ * `registrars.ts` has `usePendingRegistrars` against the same endpoint; this one
+ * is kept because only this hook takes an `enabled` flag, which is what stops a
+ * non-super-admin firing an admin-only request on every page.
+ */
 export function usePendingEnrollments(page = 0, limit = 20, enabled = true) {
   return useQuery({
     queryKey: superAdminKeys.pendingEnrollments(page, limit),
     enabled,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<PendingEnrollmentsResponse>>(
-        `/api/v1/admin/stakeholders/pending?page=${page}&size=${limit}`
+        `/api/v1/admin/registrars/pending?page=${page}&size=${limit}`
       );
       return res.data;
     },

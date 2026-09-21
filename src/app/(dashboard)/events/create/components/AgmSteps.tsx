@@ -9,7 +9,8 @@ import { UploadProgress } from "@/components/ui/upload-progress";
 import { apiClient } from "@/lib/api-client";
 import { cn, throttledProgress } from "@/lib/utils";
 import { ImageUrlUpload } from "@/components/custom/image-url-upload";
-import { Toggle, FormatPicker, ReviewRow, OrgChip } from "./shared";
+import { Toggle, FormatPicker, ReviewRow, OrgChip, todayISO, nextEndTime, minStartTimeToday, startTimeTooSoon } from "./shared";
+import { MAX_SHORT } from "./HackathonSteps";
 import type { AgmState } from "./state-hooks";
 
 // ─── Shared validation helpers ───────────────────────────────────────────────
@@ -35,7 +36,7 @@ export function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState
     <div className="flex flex-col gap-4">
       <div>
         <Label className="mb-2 block">Meeting Title <span className="text-red-500">*</span></Label>
-        <Input placeholder="e.g. Routelink MFB 10th Annual General Meeting" value={s.title}
+        <Input maxLength={MAX_SHORT} placeholder="e.g. Routelink MFB 10th Annual General Meeting" value={s.title}
           onChange={(e) => s.setTitle(e.target.value)}
           className={cn(showErrors && !s.title.trim() && "border-red-400 focus-visible:ring-red-200")} />
         {showErrors && !s.title.trim() && <p className="text-xs text-red-500 mt-1">Meeting title is required.</p>}
@@ -55,12 +56,38 @@ export function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState
       <div className="grid grid-cols-3 gap-4">
         <div>
           <Label className="mb-2 block">Date <span className="text-red-500">*</span></Label>
-          <Input type="date" value={s.date} onChange={(e) => s.setDate(e.target.value)}
+          <Input type="date" min={todayISO()} value={s.date} onChange={(e) => {
+              const next = e.target.value;
+              // Moving onto today can strand a start time that has already gone.
+              if (next === todayISO() && s.time && s.time < minStartTimeToday()) {
+                const earliest = minStartTimeToday();
+                s.setEndTime(nextEndTime(s.time, earliest, s.endTime));
+                s.setTime(earliest);
+              }
+              s.setDate(next);
+            }}
             className={cn(showErrors && !s.date && "border-red-400 focus-visible:ring-red-200")} />
           {showErrors && !s.date && <p className="text-xs text-red-500 mt-1">Date is required.</p>}
         </div>
-        <div><Label className="mb-2 block">Start Time</Label><Input type="time" value={s.time} onChange={(e) => s.setTime(e.target.value)} /></div>
-        <div><Label className="mb-2 block">End Time</Label><Input type="time" value={s.endTime} onChange={(e) => s.setEndTime(e.target.value)} /></div>
+        <div><Label className="mb-2 block">Start Time</Label>
+          {/* Moving the start carries the end with it, so nobody has to set the
+              same thing twice. An end time the user chose themselves is kept. */}
+          <Input type="time" min={s.date === todayISO() ? minStartTimeToday() : undefined}
+            value={s.time} onChange={(e) => {
+              const next = e.target.value;
+              s.setEndTime(nextEndTime(s.time, next, s.endTime));
+              s.setTime(next);
+            }} />
+          {startTimeTooSoon(s.date, s.time) && (
+            <p className="text-xs text-amber-600 mt-1">Already passed — starts need about an hour&apos;s notice.</p>
+          )}
+        </div>
+        <div><Label className="mb-2 block">End Time</Label>
+          <Input type="time" min={s.time} value={s.endTime} onChange={(e) => s.setEndTime(e.target.value)} />
+          {s.endTime && s.time && s.endTime <= s.time && (
+            <p className="text-xs text-red-500 mt-1">End time must be after the start time.</p>
+          )}
+        </div>
       </div>
 
       <FormatPicker value={s.format} onChange={s.setFormat} />
@@ -68,14 +95,14 @@ export function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState
       {(s.format === "virtual" || s.format === "hybrid") && (
         <div>
           <Label className="mb-2 block"><Monitor className="h-3.5 w-3.5 inline mr-1" />Stream URL <span className="text-xs font-normal text-[hsl(var(--muted-foreground))]">— optional</span></Label>
-          <Input placeholder="https://agm.company.ng/live" value={s.streamUrl} onChange={(e) => s.setStreamUrl(e.target.value)} />
+          <Input maxLength={MAX_SHORT} placeholder="https://agm.company.ng/live" value={s.streamUrl} onChange={(e) => s.setStreamUrl(e.target.value)} />
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Optional — paste a link now, or add one (or generate a Zoom meeting) later from the event&apos;s Settings tab.</p>
         </div>
       )}
       {(s.format === "in_person" || s.format === "hybrid") && (
         <div>
           <Label className="mb-2 block"><MapPin className="h-3.5 w-3.5 inline mr-1" />Venue / Location</Label>
-          <Input placeholder="e.g. Grand Ballroom, Oriental Hotel, Victoria Island, Lagos" value={s.venue} onChange={(e) => s.setVenue(e.target.value)} />
+          <Input maxLength={MAX_SHORT} placeholder="e.g. Grand Ballroom, Oriental Hotel, Victoria Island, Lagos" value={s.venue} onChange={(e) => s.setVenue(e.target.value)} />
         </div>
       )}
 
@@ -143,12 +170,12 @@ export function AgmAgendaStep({ s }: { s: AgmState }) {
             </div>
             <div className="col-span-2">
               <Label className="mb-1.5 block">Item Title</Label>
-              <Input placeholder="e.g. Opening remarks" value={item.title} onChange={(e) => s.updateAgendaItem(item.id, "title", e.target.value)} />
+              <Input maxLength={MAX_SHORT} placeholder="e.g. Opening remarks" value={item.title} onChange={(e) => s.updateAgendaItem(item.id, "title", e.target.value)} />
             </div>
           </div>
           <div>
             <Label className="mb-1.5 block">Speaker / Presenter <span className="font-normal text-[hsl(var(--muted-foreground))]">(optional)</span></Label>
-            <Input placeholder="e.g. Chairman — Mr. Adeyemi" value={item.speaker} onChange={(e) => s.updateAgendaItem(item.id, "speaker", e.target.value)} />
+            <Input maxLength={MAX_SHORT} placeholder="e.g. Chairman — Mr. Adeyemi" value={item.speaker} onChange={(e) => s.updateAgendaItem(item.id, "speaker", e.target.value)} />
           </div>
         </div>
       ))}
@@ -304,7 +331,7 @@ export function AgmResolutionsStep({ s, showErrors = false }: { s: AgmState; sho
             </div>
           )}
           <div><Label className="mb-1.5 block">Resolution Title</Label>
-            <Input placeholder="e.g. Approval of Directors' Remuneration" value={res.title}
+            <Input maxLength={MAX_SHORT} placeholder="e.g. Approval of Directors' Remuneration" value={res.title}
               onChange={(e) => s.updateResolution(res.id, "title", e.target.value)} /></div>
           <div>
             <Label className="mb-1.5 block">Description <span className="font-normal text-[hsl(var(--muted-foreground))]">(optional)</span></Label>

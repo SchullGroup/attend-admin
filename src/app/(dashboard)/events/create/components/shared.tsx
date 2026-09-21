@@ -221,3 +221,72 @@ export function StepPanel({
     </div>
   );
 }
+
+// ─── Date / time helpers ─────────────────────────────────────────────────────
+//
+// Shared by all four event types so the rules do not drift between them.
+
+/** Today as YYYY-MM-DD, for the `min` of a date input. */
+export function todayISO(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** Tomorrow as YYYY-MM-DDTHH:mm, for deadlines that must be strictly future. */
+export function tomorrowLocalDateTime(hour = 9): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(hour, 0, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** "10:00" → "11:00". Clamps at 23:59 rather than rolling into the next day. */
+export function addHour(time: string): string {
+  const [h, m] = (time || "").split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return "";
+  if (h >= 23) return "23:59";
+  return `${String(h + 1).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/**
+ * Changing the start time should carry the end time with it, so a user who
+ * moves an event from 10:00 to 14:00 is not left with an end time of 11:00 and
+ * no warning. The end time only follows while it is still the default offset or
+ * has become impossible — an end time the user deliberately set further out is
+ * left alone.
+ */
+export function nextEndTime(prevStart: string, nextStart: string, currentEnd: string): string {
+  if (!currentEnd) return addHour(nextStart);
+  if (currentEnd === addHour(prevStart)) return addHour(nextStart);
+  if (currentEnd <= nextStart) return addHour(nextStart);
+  return currentEnd;
+}
+
+/**
+ * Earliest start time for an event dated today: one hour from now, rounded up
+ * to the next five minutes.
+ *
+ * The backend rejects a start that has already passed, and the form's default
+ * was a fixed 09:00 — so anyone creating a same-day event after 9am was refused
+ * by a field they never touched. An hour of lead time also matches what the
+ * event actually needs: invitations have to go out before it starts.
+ */
+export function minStartTimeToday(): string {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() + 60);
+  const rounded = Math.ceil(d.getMinutes() / 5) * 5;
+  if (rounded === 60) { d.setHours(d.getHours() + 1); d.setMinutes(0); }
+  else                { d.setMinutes(rounded); }
+  const pad = (n: number) => String(n).padStart(2, "0");
+  // An event that would spill past midnight keeps the last usable slot rather
+  // than silently landing on tomorrow's clock time with today's date.
+  if (d.getDate() !== new Date().getDate()) return "23:30";
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Is this start time already too late for an event dated today? */
+export function startTimeTooSoon(date: string, time: string): boolean {
+  return !!date && !!time && date === todayISO() && time < minStartTimeToday();
+}

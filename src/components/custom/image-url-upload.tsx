@@ -25,7 +25,9 @@ interface ImageUrlUploadProps {
 }
 
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024;
+// 5 MB, matching the organisation logo upload and what the field now states.
+// Was 4 MB while the label said 4 and the error said 5 — QA read both.
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
 function resolveImageUrl(url: string): string {
   if (/^(https?:|data:|blob:)/i.test(url)) return url;
@@ -40,7 +42,7 @@ export function ImageUrlUpload({
   folder = "event-flyers",
   disabled = false,
   label = "Flyer image",
-  helpText = "JPG, PNG or WebP only. Maximum file size: 4 MB.",
+  helpText = "JPG, PNG or WebP only. Maximum file size: 5 MB.",
 }: ImageUrlUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const localPreviewRef = useRef<string | null>(null);
@@ -79,7 +81,7 @@ export function ImageUrlUpload({
       return;
     }
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      parseAndToastApiError(null, "The image must be smaller than 5 MB (maximum 4 MB).");
+      parseAndToastApiError(null, "The image must be smaller than 5 MB.");
       if (inputRef.current) inputRef.current.value = "";
       return;
     }
