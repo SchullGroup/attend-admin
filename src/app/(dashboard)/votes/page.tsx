@@ -10,12 +10,23 @@ import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
 
-const STATUS_FILTERS = [
-  { label: "All",      value: "" },
-  { label: "Live",     value: "LIVE" },
-  { label: "Upcoming", value: "UPCOMING" },
-  { label: "Past",     value: "PAST" },
-  { label: "Draft",    value: "DRAFT" },
+/**
+ * The tabs did not filter anything, because their values were never the words
+ * the API answers with. The list returns LIVE, PUBLISHED, ENDED and DRAFT;
+ * "Upcoming" asked for UPCOMING and "Past" asked for PAST, so those two tabs
+ * could only ever match nothing — a published AGM next month is "upcoming" to
+ * a reader but PUBLISHED to the backend.
+ *
+ * So each tab now owns the set of statuses it covers and the filtering happens
+ * here, on what came back, instead of being pushed to a parameter the two sides
+ * disagree about. `match: null` means the tab filters nothing.
+ */
+const STATUS_FILTERS: { label: string; value: string; match: string[] | null }[] = [
+  { label: "All",      value: "",         match: null },
+  { label: "Live",     value: "LIVE",     match: ["LIVE", "ONGOING", "IN_PROGRESS"] },
+  { label: "Upcoming", value: "UPCOMING", match: ["UPCOMING", "PUBLISHED", "SCHEDULED"] },
+  { label: "Past",     value: "PAST",     match: ["PAST", "ENDED", "COMPLETED", "CLOSED", "CANCELLED"] },
+  { label: "Draft",    value: "DRAFT",    match: ["DRAFT"] },
 ];
 
 function statusStyle(s: string) {
@@ -42,16 +53,42 @@ function VotesPageInner() {
   const [status, setStatus] = useUrlState("status");
   const [page,   setPage]   = useUrlPageState();
   const [searchDraft, setSearchDraft, search] = useUrlSearchState("q", 500, { page: null });
-  const size = 20;
+
+  const activeTab = STATUS_FILTERS.find((f) => f.value === status) ?? STATUS_FILTERS[0];
+  const filtering = activeTab.match !== null;
+
+  // `status` is deliberately NOT sent: the API would filter on a word it does
+  // not use and hand back an empty list, leaving nothing here to work with. On
+  // a filtered tab we ask for a larger single page instead and narrow it below,
+  // which is honest as long as the page covers the account — the note in
+  // BACKEND_VOTE_STATUS_2026-09-22.md asks for real server-side filtering.
+  // A narrowed view (a status tab, a search term, or both) is filtered here, so
+  // it asks for one large page rather than paging through the server's slices —
+  // otherwise a match sitting on server page 3 would simply never be found.
+  const narrowed = filtering || Boolean(search.trim());
+  const size     = narrowed ? 100 : 20;
 
   const { data: stats,  isLoading: statsLoading  } = useVoteStats();
-  const { data: list,   isLoading: listLoading    } = useClientVoteList(search, status, page, size);
+  const { data: list,   isLoading: listLoading    } = useClientVoteList(search, "", narrowed ? 0 : page, size);
 
   if (statsLoading && listLoading) return <Loader variant="page" text="Loading Votes…" />;
 
-  const events     = list?.records ?? list?.events ?? [];
-  const totalCount = list?.totalCount ?? 0;
-  const totalPages = Math.ceil(totalCount / size);
+  const rawEvents = list?.records ?? list?.events ?? [];
+  // The term is applied here too, over the two columns the row actually shows.
+  // If the API honours `search` this is a no-op; if it ignores it — the way the
+  // challenges list did — the user gets a real result instead of the full list
+  // dressed up as an answer.
+  const term = search.trim().toLowerCase();
+  const events = rawEvents.filter((ev: any) => {
+    if (activeTab.match && !activeTab.match.includes((ev.status ?? "").toUpperCase())) return false;
+    if (term && ![ev.title, ev.registerName].some((v: any) => (v ?? "").toLowerCase().includes(term))) return false;
+    return true;
+  });
+
+  // Pagination only means anything on the unfiltered tab — a filtered tab is
+  // showing everything it found, so a pager would promise pages that aren't there.
+  const totalCount = narrowed ? events.length : (list?.totalCount ?? 0);
+  const totalPages = narrowed ? 1 : Math.ceil(totalCount / size);
 
   return (
     <div className="flex flex-col gap-6">
@@ -200,7 +237,11 @@ function VotesPageInner() {
 
             {events.length === 0 && (
               <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
-                No AGM/EGM vote records found.
+                {search.trim()
+                  ? `No AGMs match “${search.trim()}”.`
+                  : filtering
+                    ? `No ${activeTab.label.toLowerCase()} AGMs.`
+                    : "No AGM/EGM vote records found."}
               </div>
             )}
 

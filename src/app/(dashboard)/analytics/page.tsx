@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import {
   CalendarDays,
   Users,
@@ -30,6 +30,7 @@ import {
   type AnalyticsRange,
 } from "@/api/client-analytics";
 import { useGetMe } from "@/api/auth/hooks";
+import { useUrlEnumState, useUrlPageState, useUrlParamWriter } from "@/lib/use-url-state";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -209,18 +210,26 @@ function ExportRegistrationsPanel({ events }: { events: { id: string; eventId?: 
 // ---------------------------------------------------------------------------
 
 function ClientAnalytics() {
-  const [perfPage, setPerfPage] = useState(0);
+  const writeParams = useUrlParamWriter();
+  const [perfPage, setPerfPage] = useUrlPageState("perfPage");
   const perfSize = 10;
 
   // One window drives every card on the page (backend 2026-09-18 C1). Defaults to
   // all time, which is exactly what these endpoints returned before ranges existed.
-  const [range, setRange] = useState<AnalyticsRange>("all");
+  //
+  // It lives in the URL so a reload — or a link pasted to a colleague — reopens
+  // the same window instead of snapping back to All time. Validated against the
+  // known ranges, so a stale "?range=6m" falls back to All time rather than
+  // sending a window the API does not understand.
+  const [range] = useUrlEnumState<AnalyticsRange>(
+    "range", ANALYTICS_RANGES.map((r) => r.value), "all"
+  );
 
   // Changing the window resets pagination — page 4 of the last 7 days is rarely
-  // where anyone wants to land.
+  // where anyone wants to land. Both params go in one write: two separate ones
+  // would each build on the pre-write URL and the second would drop the first.
   function handleRangeChange(next: AnalyticsRange) {
-    setRange(next);
-    setPerfPage(0);
+    writeParams({ range: next === "all" ? null : next, perfPage: null });
   }
 
   const { data: stats,        isLoading: statsLoading  } = useAnalyticsStats(range);
@@ -929,7 +938,7 @@ function ClientAnalytics() {
 // Page — role gate
 // ---------------------------------------------------------------------------
 
-export default function AnalyticsPage() {
+function AnalyticsPageInner() {
   const { data: userResponse, isLoading: userLoading } = useGetMe();
   const isSuperAdmin = isSuperAdminRole(resolveRole(userResponse?.data));
 
@@ -949,5 +958,17 @@ export default function AnalyticsPage() {
       </div>
       <ClientAnalytics />
     </div>
+  );
+}
+
+/**
+ * useSearchParams needs a Suspense boundary above it — without one the whole
+ * route opts out of static rendering and Next.js errors at build time.
+ */
+export default function AnalyticsPage() {
+  return (
+    <Suspense fallback={<Loader variant="page" text="Loading Analytics…" />}>
+      <AnalyticsPageInner />
+    </Suspense>
   );
 }
