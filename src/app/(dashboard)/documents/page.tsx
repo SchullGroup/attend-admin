@@ -1,8 +1,9 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import {
   Upload, Download, Trash2, FileText, Send, Search, Check, ChevronDown,
 } from "lucide-react";
+import { useUrlParamWriter, useUrlSearchState, useUrlState } from "@/lib/use-url-state";
 import { DOC_TYPES, DOC_TYPE_CONFIG, type DocType } from "@/lib/document-type";
 import { useGetMe } from "@/api/auth/hooks";
 import { useClientEventsDropdown } from "@/api/client-events";
@@ -133,7 +134,7 @@ function EventCombobox({
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
-export default function DocumentsPage() {
+function DocumentsPageInner() {
   const { data: userResponse } = useGetMe();
   // Only true platform Super Admin uses the admin document API/UI — every
   // client-org role (admin, event_manager, viewer, judge, kyc_officer) uses
@@ -143,16 +144,21 @@ export default function DocumentsPage() {
   const isAdmin = isSuperAdminRole(resolveRole(userResponse?.data));
   const isViewer = resolveRole(userResponse?.data) === "viewer";
 
-  const [typeFilter,     setTypeFilter]     = useState("");
-  const [search,         setSearch]         = useState("");
-  const [registerFilter, setRegisterFilter] = useState("");
-  const [eventFilter,    setEventFilter]    = useState("");
+  const writeParams = useUrlParamWriter();
+  const [typeFilter,     setTypeFilter]     = useUrlState("type");
+  const [searchDraft,    setSearchDraft, search] = useUrlSearchState();
+  const [registerFilter, setRegisterFilter] = useUrlState("register");
+  const [eventFilter,    setEventFilter]    = useUrlState("event");
   // Registrar + (cascading) Register filters — Super Admin only. Registers here
   // is a different concept from the client-only `registerFilter` above (which
   // maps to that org's own "Organiser" dropdown) — this scopes across all
   // registrars platform-wide, same pattern as the Events page.
-  const [registrarFilter,      setRegistrarFilter]      = useState("");
-  const [adminRegisterFilter,  setAdminRegisterFilter]  = useState("");
+  // Changing the registrar must also clear the register beneath it — both in
+  // one writeParams call, because two separate router.replace calls in the same
+  // handler would each start from the same stale snapshot and the second would
+  // undo the first.
+  const [registrarFilter] = useUrlState("registrar");
+  const [adminRegisterFilter,  setAdminRegisterFilter]  = useUrlState("adminRegister");
   const [uploadOpen,     setUploadOpen]     = useState(false);
   const [form,           setForm]           = useState({ title: "", type: "NOTICE" as DocType, eventId: "" });
   const [selectedFile,   setSelectedFile]   = useState<File | null>(null);
@@ -385,7 +391,7 @@ export default function DocumentsPage() {
           <div className="flex items-center gap-2">
             <select
               value={registrarFilter}
-              onChange={(e) => { setRegistrarFilter(e.target.value); setAdminRegisterFilter(""); }}
+              onChange={(e) => writeParams({ registrar: e.target.value, adminRegister: null })}
               className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
             >
               <option value="">All Registrars</option>
@@ -414,8 +420,8 @@ export default function DocumentsPage() {
           <input
             type="text"
             placeholder="Search documents…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchDraft}
+            onChange={(e) => setSearchDraft(e.target.value)}
             className="w-full pl-9 pr-4 h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
           />
         </div>
@@ -546,9 +552,15 @@ export default function DocumentsPage() {
           <div className="py-14 text-center">
             <FileText className="h-10 w-10 mx-auto mb-3 text-[hsl(var(--muted-foreground))] opacity-30" />
             <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-1">No documents found</p>
-            {(typeFilter || search || registerFilter || eventFilter || registrarFilter || adminRegisterFilter) && (
+            {(typeFilter || searchDraft || registerFilter || eventFilter || registrarFilter || adminRegisterFilter) && (
               <button
-                onClick={() => { setTypeFilter(""); setSearch(""); setRegisterFilter(""); setEventFilter(""); setRegistrarFilter(""); setAdminRegisterFilter(""); }}
+                onClick={() => {
+                  setSearchDraft("");
+                  writeParams({
+                    type: null, q: null, register: null,
+                    event: null, registrar: null, adminRegister: null,
+                  });
+                }}
                 className="text-xs text-[hsl(var(--primary))] hover:underline mt-1"
               >
                 Clear filters
@@ -558,5 +570,17 @@ export default function DocumentsPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+/**
+ * useSearchParams needs a Suspense boundary above it — without one the whole
+ * route opts out of static rendering and Next.js errors at build time.
+ */
+export default function DocumentsPage() {
+  return (
+    <Suspense fallback={<div className="py-14 text-center text-sm text-[hsl(var(--muted-foreground))]">Loading documents…</div>}>
+      <DocumentsPageInner />
+    </Suspense>
   );
 }

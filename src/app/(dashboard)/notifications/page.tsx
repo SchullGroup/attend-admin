@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, Suspense } from "react";
+import { useUrlEnumState, useUrlPageState, useUrlParamWriter } from "@/lib/use-url-state";
 import { Bell, BellOff, CheckCheck, X } from "lucide-react";
 import { useGetMe } from "@/api/auth/hooks";
 import {
@@ -103,14 +104,20 @@ function DetailPanel({
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
-export default function NotificationsPage() {
+function NotificationsPageInner() {
   const { data: userResponse, isLoading: userLoading } = useGetMe();
   const role    = resolveRole(userResponse?.data);
   const isAdmin = !userLoading && isSuperAdminRole(role);
   const isJudge = !userLoading && JUDGE_ROLES.has(role);
 
-  const [filter,   setFilter]   = useState<"all" | "unread">("all");
-  const [page,     setPage]     = useState(0);
+  // Filter and page in the URL: an unread-only view is exactly the thing
+  // someone reloads to check, and losing it back to "All" on page 1 is the
+  // opposite of what they wanted.
+  const writeParams = useUrlParamWriter();
+  const [filter] = useUrlEnumState<"all" | "unread">("filter", ["all", "unread"], "all");
+  const [page, setPage] = useUrlPageState();
+  // Deliberately NOT in the URL — the open notification is a reading position,
+  // not a view, and a stale id in a shared link would open the wrong thing.
   const [selected, setSelected] = useState<any | null>(null);
   const limit = 20;
 
@@ -209,7 +216,7 @@ export default function NotificationsPage() {
             {(["all", "unread"] as const).map((f) => (
               <button
                 key={f}
-                onClick={() => { setFilter(f); setPage(0); setSelected(null); }}
+                onClick={() => { writeParams({ filter: f === "all" ? null : f, page: null }); setSelected(null); }}
                 className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all capitalize ${
                   filter === f
                     ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
@@ -325,5 +332,17 @@ export default function NotificationsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * useSearchParams needs a Suspense boundary — without one this route opts out
+ * of static rendering and the build errors.
+ */
+export default function NotificationsPage() {
+  return (
+    <Suspense fallback={null}>
+      <NotificationsPageInner />
+    </Suspense>
   );
 }

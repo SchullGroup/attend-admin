@@ -16,6 +16,7 @@ import { formatDate } from "@/lib/utils";
 import { ChallengeGuidePanel } from "./components/ChallengeGuide";
 import type { RegisterBranding } from "@/types/super-admin";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { useUrlSearchState } from "@/lib/use-url-state";
 
 const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
 const JUDGE_ROLES       = new Set(["judge"]);
@@ -41,9 +42,8 @@ function statusStyle(status: string): { bg: string; color: string } {
 // ---------------------------------------------------------------------------
 function JudgeChallengesView() {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-
-  const debouncedSearch = useDebouncedValue(search);
+  // Backed by ?q= like the client and admin views, so a reload keeps the search.
+  const [search, setSearch, debouncedSearch] = useUrlSearchState("q", 400);
   const { data, isLoading } = useJudgeChallenges(debouncedSearch, "", 0, 100);
 
   const hasLoaded = useRef(false);
@@ -249,7 +249,22 @@ function HackathonsPageInner() {
   if (isLoading && !hasLoaded.current) return <Loader variant="page" text="Loading Challenges…" />;
 
   const summary    = data?.summary;
-  const challenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; applicationCount?: number; shortlistedTeams?: number; shortlistedCount?: number; status?: string; branding?: RegisterBranding }>;
+  const rawChallenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; applicationCount?: number; shortlistedTeams?: number; shortlistedCount?: number; status?: string; branding?: RegisterBranding }>;
+
+  // The API currently returns the full list whichever `search` we send, so a
+  // term that matches nothing came back looking like a successful search over
+  // everything — no "no results", just the wrong rows. Filtering the page we
+  // were given at least makes a miss look like a miss.
+  //
+  // This only sees the current page, so when the server starts honouring the
+  // parameter this becomes a no-op (every row already matches) and can go.
+  const term = debouncedListSearch.trim().toLowerCase();
+  const challenges = term
+    ? rawChallenges.filter((c) =>
+        (c.title ?? "").toLowerCase().includes(term) ||
+        (c.organiserName ?? "").toLowerCase().includes(term))
+    : rawChallenges;
+  const serverIgnoredSearch = !!term && rawChallenges.length > 0 && challenges.length !== rawChallenges.length;
   // Server already filters by status (both hooks are passed statusTab) and paginates —
   // no client-side re-filtering, otherwise "totalCount" and the rendered rows fall out of sync.
   const totalCount = data?.totalCount ?? challenges.length;
@@ -331,6 +346,11 @@ function HackathonsPageInner() {
 
       {/* How-it-works walkthrough — client users only (super admin observes,
           doesn't run challenges). Forced open when there are no challenges yet. */}
+      {serverIgnoredSearch && (
+        <p className="text-xs text-amber-600 -mt-3">
+          Search is being applied on this page only — the API returned unfiltered results.
+        </p>
+      )}
       {!isSuperAdmin && <ChallengeGuidePanel alwaysShow={challenges.length === 0} />}
 
       <div className="flex items-center gap-3">
@@ -426,7 +446,16 @@ function HackathonsPageInner() {
           </tbody>
         </table>
         {challenges.length === 0 && (
-          <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">No challenges found.</div>
+          <div className="py-12 text-center">
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+              {term ? `No challenges match "${debouncedListSearch.trim()}".` : "No challenges found."}
+            </p>
+            {term && totalCount > rawChallenges.length && (
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                Only this page was searched — there are {totalCount} challenges in total.
+              </p>
+            )}
+          </div>
         )}
         {challenges.length > 0 && totalPages > 1 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-[hsl(var(--border)/0.6)]">

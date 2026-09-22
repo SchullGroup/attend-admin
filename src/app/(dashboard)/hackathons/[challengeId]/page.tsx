@@ -1,6 +1,7 @@
 "use client";
 import React, { use, useState, useEffect, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useUrlState } from "@/lib/use-url-state";
 import {
   ArrowLeft, Trophy, Users, FileText, Lightbulb, Star, ChevronDown,
   Plus, Trash2, ToggleLeft, ToggleRight, ListOrdered, Target, Award,
@@ -57,7 +58,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
-import { popup } from "@/lib/popup-store";
+import { popup, usePopupStore } from "@/lib/popup-store";
 import { getApiErrorCode } from "@/lib/api-error";
 
 // ---------------------------------------------------------------------------
@@ -216,10 +217,13 @@ function OverviewTab({
   challengeId,
   readOnly = false,
   isSuperAdmin = false,
+  onGoToSettings,
 }: {
   challengeId: string;
   readOnly?: boolean;
   isSuperAdmin?: boolean;
+  /** Jump to the Settings tab. Absent for roles with no Settings tab. */
+  onGoToSettings?: () => void;
 }) {
   // Super admin has no client org, so the client-scoped detail endpoint
   // returns nothing for them (this rendered as "Challenge not found." even
@@ -424,7 +428,43 @@ function OverviewTab({
                 disabled={toggleOpen.isPending || isChallengeEnded(c.status)}
                 title={isChallengeEnded(c.status) ? "Challenge ended — applications are locked" : undefined}
                 className="gap-1.5"
-                onClick={() => toggleOpen.mutate({ challengeId, open: !c.applicationsOpen })}
+                onClick={() => {
+                  // Closing needs no ceremony. Opening does: the moment it is
+                  // open, teams start submitting against whatever application
+                  // form is configured, and changing the questions afterwards
+                  // means comparing entries that answered different things.
+                  if (c.applicationsOpen || !onGoToSettings) {
+                    toggleOpen.mutate({ challengeId, open: !c.applicationsOpen });
+                    return;
+                  }
+                  // Opening is the explicit confirm, and Review Settings is a
+                  // link in the body rather than a button. Closing the dialog —
+                  // the X, Escape, a click outside — fires onCancel, so
+                  // anything wired there would happen on dismissal: the first
+                  // version opened applications when the popup was ignored.
+                  popup.confirm(
+                    "Check your application form first?",
+                    <>
+                      Teams will answer the questions you set on the Settings tab. It is hard to
+                      change them once teams start applying, because early teams will have answered
+                      different questions from later ones.{" "}
+                      <button
+                        type="button"
+                        className="underline font-medium text-[#7c22c9] hover:opacity-70"
+                        onClick={() => {
+                          usePopupStore.getState().closePopup();
+                          onGoToSettings();
+                        }}
+                      >
+                        Review Settings
+                      </button>
+                    </>,
+                    () => toggleOpen.mutate({ challengeId, open: true }),
+                    undefined,
+                    "Open Applications",
+                    "Cancel"
+                  );
+                }}
               >
                 {c.applicationsOpen
                   ? <><ToggleRight className="h-4 w-4" /> Close</>
@@ -447,8 +487,10 @@ function OverviewTab({
 // Applications tab
 // ---------------------------------------------------------------------------
 function ApplicationsTab({ challengeId, readOnly = false }: { challengeId: string; readOnly?: boolean }) {
-  const [activeStatus, setActiveStatus]  = useState("");
-  const [activeTrack,  setActiveTrack]   = useState("");
+  // Namespaced keys: the page itself owns ?tab=, so the sub-filters inside the
+  // Applications tab cannot use plain ?status= without colliding with it.
+  const [activeStatus, setActiveStatus]  = useUrlState("appStatus");
+  const [activeTrack,  setActiveTrack]   = useUrlState("track");
   const [openMenu,     setOpenMenu]      = useState<string | null>(null);
   const [selectedApp,  setSelectedApp]   = useState<string | null>(null);
   const [showExport,   setShowExport]    = useState(false);
@@ -2356,9 +2398,11 @@ export default function ChallengeDetailPage({
               Applications {challenge.applicationsOpen ? "Open" : "Closed"}
             </span>
             </div>
-            {/* Super admins have no Applications tab (see ADMIN_TABS), so the
-                submissions were otherwise unreachable from the page that
-                summarises the challenge. */}
+            {/* Super admins only: they have no Applications tab (see ADMIN_TABS),
+                so without this the submissions are unreachable from here. Client
+                roles already have the tab, and two routes to the same list is
+                clutter. */}
+            {isSuperAdmin && (
             <Button
               variant="outline" size="sm" className="gap-1.5"
               onClick={() => router.push(`/hackathons/applications?challengeId=${challengeId}`)}
@@ -2371,6 +2415,7 @@ export default function ChallengeDetailPage({
                 </span>
               )}
             </Button>
+            )}
           </div>
         </div>
       </div>
@@ -2414,7 +2459,11 @@ export default function ChallengeDetailPage({
           {!isViewer && (
             <TabHint>open applications so teams can apply, then review them on the Applications tab.</TabHint>
           )}
-          <OverviewTab challengeId={challengeId} readOnly={isViewer} />
+          <OverviewTab
+            challengeId={challengeId}
+            readOnly={isViewer}
+            onGoToSettings={isViewer ? undefined : () => setTab("Settings")}
+          />
         </div>
       )}
       {!isSuperAdmin && tab === "Applications" && (

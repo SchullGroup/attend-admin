@@ -1,12 +1,12 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useRef, Suspense } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Search, Users, ShieldCheck, Shield, ShieldOff, CheckCircle2, UserMinus,
 } from "lucide-react";
 // CheckCircle2 kept for verified count stat only
 import { useUsers, useSuspendUser, useActivateUser } from "@/api/super-admin";
+import { useUrlEnumState, useUrlPageState, useUrlParamWriter, useUrlSearchState } from "@/lib/use-url-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -28,48 +28,20 @@ const STATUS_FILTERS = [
   { label: "Revoked",   value: "REVOKED" },
 ];
 
-function useDebounce<T>(value: T, ms = 400): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return debounced;
-}
-
-export default function ParticipantsPage() {
+function ParticipantsPageInner() {
   // Filter state lives in the URL, not just in component state — opening a row and
   // coming back remounts this component, and local state would be gone. The query
   // string survives browser back and a reload.
-  const router       = useRouter();
-  const pathname     = usePathname();
-  const searchParams = useSearchParams();
+  const writeParams = useUrlParamWriter();
 
-  const [searchInput,    setSearchInput]    = useState(() => searchParams.get("q") ?? "");
-  const [activeStatus,   setActiveStatus]   = useState(
-    () => (STATUS_FILTERS.some((f) => f.value && f.value === searchParams.get("status"))
-      ? searchParams.get("status")!
-      : "")
-  );
-  const [confirmId,      setConfirmId]      = useState<string | null>(null);
-  const [page,           setPage]           = useState(() => {
-    const p = Number(searchParams.get("page"));
-    return Number.isInteger(p) && p > 0 ? p : 0;
-  });
+  const [activeStatus] = useUrlEnumState("status", STATUS_FILTERS.map((f) => f.value), "");
+  const [page, setPage] = useUrlPageState();
+  // The box binds to `searchInput` so typing stays instant; `debouncedSearch`
+  // (and the URL) only follow once typing settles, so one request goes out per
+  // search rather than one per keystroke.
+  const [searchInput, setSearchInput, debouncedSearch] = useUrlSearchState("q", 400, { page: null });
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   const LIMIT = 20;
-
-  const debouncedSearch = useDebounce(searchInput, 400);
-
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (searchInput)  params.set("q", searchInput);       else params.delete("q");
-    if (activeStatus) params.set("status", activeStatus); else params.delete("status");
-    if (page > 0)     params.set("page", String(page));   else params.delete("page");
-    const next = params.toString();
-    if (next !== searchParams.toString()) {
-      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
-    }
-  }, [searchInput, activeStatus, page, pathname, router, searchParams]);
 
   // GET /api/v1/admin/users — status and search are server-side as of the backend's
   // 2026-09-14 note, so the tabs and the search box now filter all 10k+ users rather than
@@ -81,7 +53,12 @@ export default function ParticipantsPage() {
   const suspendMutation  = useSuspendUser();
   const activateMutation = useActivateUser();
 
-  if (isLoading) return <Loader variant="page" text="Loading Users…" />;
+  // Only take over the whole page on the FIRST load. Every filter change makes a
+  // new query key, so React Query reports isLoading again — and swapping the page
+  // for a loader unmounts the search box mid-word, dropping the cursor.
+  const hasLoaded = useRef(false);
+  if (data) hasLoaded.current = true;
+  if (isLoading && !hasLoaded.current) return <Loader variant="page" text="Loading Users…" />;
 
   const raw = data as any;
   const allUsers: UserSummaryResponse[] =
@@ -195,7 +172,7 @@ export default function ParticipantsPage() {
           <Input
             placeholder="Search by name, email, or phone…"
             value={searchInput}
-            onChange={(e) => { setSearchInput(e.target.value); setPage(0); }}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="pl-9"
           />
         </div>
@@ -203,7 +180,7 @@ export default function ParticipantsPage() {
           {STATUS_FILTERS.map((f) => (
             <button
               key={f.value}
-              onClick={() => { setActiveStatus(f.value); setPage(0); }}
+              onClick={() => writeParams({ status: f.value, page: null })}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
                 activeStatus === f.value
                   ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
@@ -353,11 +330,23 @@ export default function ParticipantsPage() {
         <div className="flex items-center justify-between mt-4 px-1">
           <p className="text-xs text-[hsl(var(--muted-foreground))]">Page {page + 1} of {totalPages}</p>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>Next</Button>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * useSearchParams needs a Suspense boundary above it — without one the whole
+ * route opts out of static rendering and Next.js errors at build time.
+ */
+export default function ParticipantsPage() {
+  return (
+    <Suspense fallback={<Loader variant="page" text="Loading Users…" />}>
+      <ParticipantsPageInner />
+    </Suspense>
   );
 }

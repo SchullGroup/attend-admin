@@ -1,6 +1,7 @@
 "use client";
-import React, { useState, useCallback, Suspense } from "react";
+import React, { useState, useCallback, useEffect, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useUrlSearchState, useUrlState } from "@/lib/use-url-state";
 import {
   FileText, ChevronDown, ArrowLeft, ChevronRight, Search,
   Users, Trophy, Lightbulb, ExternalLink, Code, Target, ClipboardList,
@@ -438,8 +439,10 @@ function ChallengeApplications({
   onViewDetail: (appId: string) => void;
   readOnly?:    boolean;
 }) {
-  const [activeStatus, setActiveStatus] = useState("");
-  const [activeTrack,  setActiveTrack]  = useState("");
+  // Filters live in the URL too — a reload on "Shortlisted" used to come back
+  // showing everything with the pill reset.
+  const [activeStatus, setActiveStatus] = useUrlState("status");
+  const [activeTrack,  setActiveTrack]  = useUrlState("track");
   const [showExport,   setShowExport]   = useState(false);
   const [exportFrom,   setExportFrom]   = useState("");
   const [exportTo,     setExportTo]     = useState("");
@@ -934,7 +937,7 @@ function JudgeAppDetail({ challengeId, applicationId, onBack }: { challengeId: s
 // Judge applications view — GET /api/v1/judge/challenges/{id}/applications
 // ---------------------------------------------------------------------------
 function JudgeApplicationsView() {
-  const [search,               setSearch]               = useState("");
+  const [search,               setSearch, settledSearch] = useSearchState();
   const [selectedChallengeId,  setSelectedChallengeId]  = useSelectedChallenge();
   const [selectedAppId,        setSelectedAppId]        = useState<string | null>(null);
 
@@ -1095,28 +1098,26 @@ function JudgeApplicationsView() {
  * looking at. `replace` rather than `push` so the picker does not fill the back
  * stack with one entry per challenge.
  */
+/**
+ * The URL-state helpers live in @/lib/use-url-state now — this file used to
+ * carry its own copy, which is how this page and Judging ended up with two
+ * subtly different versions of the same hook.
+ */
+function useSearchState() {
+  return useUrlSearchState("q", 500);
+}
+
 function useSelectedChallenge() {
-  const router       = useRouter();
-  const pathname     = usePathname();
-  const searchParams = useSearchParams();
-  const selected     = searchParams.get("challengeId");
-
-  const setSelected = useCallback((id: string | null) => {
-    const params = new URLSearchParams(Array.from(searchParams.entries()));
-    if (id) params.set("challengeId", id);
-    else    params.delete("challengeId");
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [router, pathname, searchParams]);
-
-  return [selected, setSelected] as const;
+  const [value, setValue] = useUrlState("challengeId");
+  // The picker treats "" as nothing selected; the rest of the page wants null.
+  return [value || null, setValue] as const;
 }
 
 function ApplicationsPageInner() {
   const router = useRouter();
   const [selectedChallengeId, setSelectedChallengeId] = useSelectedChallenge();
   const [selectedAppId,       setSelectedAppId]       = useState<string | null>(null);
-  const [search,              setSearch]              = useState("");
+  const [search,              setSearch, settledSearch] = useSearchState();
 
   const { data: userResponse } = useGetMe();
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
@@ -1309,11 +1310,10 @@ function ApplicationsPageInner() {
 function SuperAdminApplicationsView() {
   const router = useRouter();
   const [selectedChallengeId, setSelectedChallengeId] = useSelectedChallenge();
-  const [search,              setSearch]              = useState("");
+  const [search,              setSearch, settledSearch] = useSearchState();
 
   // The input stays instant; only the query waits for typing to settle.
-  const debouncedSearch = useDebouncedValue(search);
-  const { data, isLoading } = useAdminChallenges(debouncedSearch, "", "", 0, 100);
+  const { data, isLoading } = useAdminChallenges(settledSearch, "", "", 0, 100);
   const challenges = data?.challenges ?? [];
   const summary    = data?.summary;
 

@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/custom/status-badge";
 import { ModuleBadge } from "@/components/custom/module-badge";
 import { formatDate } from "@/lib/utils";
 import { getEventModule, MODULE_COLORS } from "@/lib/event-module";
+import { useUrlPageState, useUrlParamWriter, useUrlState } from "@/lib/use-url-state";
 
 const PAGE_SIZE = 20;
 
@@ -24,9 +25,12 @@ const EVENT_TYPE_OPTIONS = [
 export default function RegistrarEventsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const [page, setPage] = useState(0);
-  const [registerFilter, setRegisterFilter] = useState("");
-  const [typeFilter,     setTypeFilter]     = useState("");
+  // Both filters and the page in the URL — this screen is reached from the
+  // registrar profile, so back-and-forth is the normal way to use it.
+  const writeParams = useUrlParamWriter();
+  const [page, setPage] = useUrlPageState();
+  const [registerFilter] = useUrlState("register");
+  const [typeFilter]     = useUrlState("type");
 
   const { data: registrar, isLoading: registrarLoading } = useRegistrarDetail(id);
   const { data: registersData } = useRegistrarRegisters(id);
@@ -96,7 +100,7 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
       <div className="flex items-center gap-3 flex-wrap">
         <select
           value={registerFilter}
-          onChange={(e) => { setRegisterFilter(e.target.value); setPage(0); }}
+          onChange={(e) => writeParams({ register: e.target.value, page: null })}
           className="h-9 pl-3 pr-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
         >
           <option value="">All Registers</option>
@@ -106,7 +110,7 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
         </select>
         <select
           value={typeFilter}
-          onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}
+          onChange={(e) => writeParams({ type: e.target.value, page: null })}
           className="h-9 pl-3 pr-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
         >
           <option value="">All Event Types</option>
@@ -116,7 +120,7 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
         </select>
         {(registerFilter || typeFilter) && (
           <button
-            onClick={() => { setRegisterFilter(""); setTypeFilter(""); setPage(0); }}
+            onClick={() => writeParams({ register: null, type: null, page: null })}
             className="text-xs font-medium text-[hsl(var(--primary))] hover:underline"
           >
             Clear filters

@@ -9,6 +9,7 @@
  * renders only if the backend sends it with a non-zero count.
  */
 import { useEffect, useRef, useState } from "react";
+import { useUrlPageState, useUrlParamWriter, useUrlSearchState, useUrlState } from "@/lib/use-url-state";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -88,17 +89,13 @@ export function ProxiesSection({
   /** Event's resolutions (from useVoteResults) — powers the bulk proxy-vote upload's resolution/candidate picker. */
   resolutions?: ResolutionResult[];
 }) {
-  const [tab,         setTab]         = useState("ALL");
-  const [searchInput, setSearchInput] = useState("");
-  const [search,      setSearch]      = useState("");
-  const [page,        setPage]        = useState(0);
+  // Namespaced keys (?ptab=, ?pq=, ?ppage=) so the proxies list does not fight
+  // the rest of the vote detail page for the plain ones.
+  const writeParams = useUrlParamWriter();
+  const [tab]  = useUrlState("ptab", "ALL");
+  const [page, setPage] = useUrlPageState("ppage");
+  const [searchInput, setSearchInput, search] = useUrlSearchState("pq", 400, { ppage: null });
   const size = 20;
-
-  // Debounce the search input so we don't refetch per keystroke
-  useEffect(() => {
-    const t = setTimeout(() => { setSearch(searchInput.trim()); setPage(0); }, 400);
-    return () => clearTimeout(t);
-  }, [searchInput]);
 
   const { data, isLoading, isFetching } = useEventProxies(eventId, {
     search,
@@ -317,7 +314,7 @@ export function ProxiesSection({
         {tabs.map((t) => (
           <button
             key={t.key}
-            onClick={() => { setTab(t.key); setPage(0); }}
+            onClick={() => writeParams({ ptab: t.key === "ALL" ? null : t.key, ppage: null })}
             className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
               tab === t.key
                 ? "bg-[hsl(var(--primary))] text-white"

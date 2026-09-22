@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useUrlEnumState } from "@/lib/use-url-state";
 import {
   TrendingUp, TrendingDown, CalendarDays, FileText, Vote,
   Users, Building2,
@@ -105,18 +105,27 @@ function StatCard({
 
 // Maps the dropdown's display label to the query param sent to the backend.
 // Backend support for this param is unconfirmed — see BACKEND_BUGS item 13.
-const PERIOD_RANGE: Record<string, string> = {
-  "Last 30 Days":   "30d",
-  "Last 90 Days":   "90d",
-  "Last 12 Months": "12m",
-  "All Time":       "all",
-};
+const PERIOD_OPTIONS = [
+  { range: "30d", label: "Last 30 Days"   },
+  { range: "90d", label: "Last 90 Days"   },
+  { range: "12m", label: "Last 12 Months" },
+  { range: "all", label: "All Time"       },
+] as const;
+
+type AdminRange = (typeof PERIOD_OPTIONS)[number]["range"];
+const ADMIN_RANGES = PERIOD_OPTIONS.map((p) => p.range);
 
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function SuperAdminAnalytics() {
-  const [period,     setPeriod]     = useState("Last 30 Days");
-  const range = PERIOD_RANGE[period];
+  // The window lives in the URL (shared with the client Analytics view, same
+  // `?range=`), so a reload reopens the same period instead of snapping back to
+  // 30 days. Validated against the known ranges — a stale "?range=6m" falls
+  // back to the default rather than sending a window the API cannot read.
+  const [range, setRange] = useUrlEnumState<AdminRange>("range", ADMIN_RANGES, "30d");
+  // Cards and section headers name the window they are counting, so the reader
+  // can tell why two numbers are not comparable without a paragraph saying so.
+  const periodLabel = PERIOD_OPTIONS.find((p) => p.range === range)?.label ?? "Last 30 Days";
 
   // Hooks — all scoped to the selected date range (see PERIOD_RANGE above).
   const { data: summary,     isLoading: summaryLoading   } = useAdminSummaryStats(range);
@@ -146,14 +155,13 @@ export function SuperAdminAnalytics() {
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">Platform performance overview</p>
         </div>
         <select
-          value={period}
-          onChange={e => setPeriod(e.target.value)}
+          value={range}
+          onChange={e => setRange(e.target.value as AdminRange)}
           className="h-8 pl-3 pr-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
         >
-          <option>Last 30 Days</option>
-          <option>Last 90 Days</option>
-          <option>Last 12 Months</option>
-          <option>All Time</option>
+          {PERIOD_OPTIONS.map((p) => (
+            <option key={p.range} value={p.range}>{p.label}</option>
+          ))}
         </select>
       </div>
 
@@ -162,7 +170,7 @@ export function SuperAdminAnalytics() {
         <StatCard
           label="Total Registrations"
           value={summary?.totalRegistrations ?? 0}
-          subtitle={period}
+          subtitle={periodLabel}
           icon={Users}
           accent="#2563eb"
           change={summary?.registrationsChange}
@@ -178,7 +186,7 @@ export function SuperAdminAnalytics() {
         <StatCard
           label="Docs Distributed"
           value={summary?.docsDistributed ?? 0}
-          subtitle={period}
+          subtitle={periodLabel}
           icon={FileText}
           accent="#d97706"
           change={summary?.docsChange}
@@ -336,7 +344,7 @@ export function SuperAdminAnalytics() {
                         bars above are not comparable, and naming the period is how a
                         reader works out why without a paragraph explaining it. */}
                     <span className="text-xs text-[hsl(var(--muted-foreground))] whitespace-nowrap">
-                      {period}
+                      {periodLabel}
                     </span>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
