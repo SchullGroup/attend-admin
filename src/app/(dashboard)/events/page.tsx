@@ -295,10 +295,24 @@ function EventsPageInner() {
   // Event Type filter — super admin only (client admin already has CLIENT_TYPE_TABS).
   const [adminTypeFilter, setAdminTypeFilter] = useUrlState("eventType");
 
+  // Search, Organizer, Registrar, Register and the admin Event Type are all
+  // applied below, to the rows we were handed — the list endpoints take none of
+  // them. Over a 20-row page that quietly breaks: with 49 events, searching for
+  // one that happens to sit on page 3 finds nothing and the screen says "No
+  // events found", which reads as "it isn't there" rather than "it isn't on
+  // this page". So as soon as one of those is active we ask for a single large
+  // page and filter that, and hide the pager, which would otherwise offer pages
+  // that no longer mean anything. The status and type tabs stay server-side.
+  const narrowed = Boolean(
+    searchQuery.trim() || organizerFilter || registerFilter || adminTypeFilter || registrarFilter
+  );
+  const pageSize   = narrowed ? 100 : LIMIT;
+  const activePage = narrowed ? 0   : page;
+
   // These two hit super-admin-only backend endpoints — must stay gated behind
   // isSuperAdmin, or a Client Admin gets a 403 firing on every page load.
-  const { data: adminData,    isLoading: adminLoading  } = useEvents(activeStatus, page, LIMIT, isSuperAdmin);
-  const { data: clientData,   isLoading: clientLoading } = useClientEvents(activeType, page, LIMIT);
+  const { data: adminData,    isLoading: adminLoading  } = useEvents(activeStatus, activePage, pageSize, isSuperAdmin);
+  const { data: clientData,   isLoading: clientLoading } = useClientEvents(activeType, activePage, pageSize);
   const { data: registrarsData                         } = useRegistrars("", 0, 100, isSuperAdmin);
   // NOTE: /api/v1/client/registers is org-scoped — it 403s / returns nothing for
   // super_admin (who has no client org). There's currently no platform-wide "list all
@@ -331,10 +345,10 @@ function EventsPageInner() {
   }));
 
   const events     = isAdmin ? adminEvents : clientEvents;
-  const totalPages = isAdmin
+  const serverTotalPages = isAdmin
     ? (adminData?.totalPages  ?? 1)
     : Math.ceil((clientData?.totalCount ?? 0) / LIMIT) || 1;
-  const totalCount = isAdmin
+  const serverTotalCount = isAdmin
     ? (adminData?.totalElements ?? adminEvents.length)
     : (clientData?.totalCount   ?? clientEvents.length);
 
@@ -381,6 +395,11 @@ function EventsPageInner() {
       return bt - at;
     });
 
+  // While narrowed, the header counts what is on screen — saying "49 total
+  // events" above three matching rows is just wrong — and the pager is hidden.
+  const totalCount = narrowed ? filtered.length : serverTotalCount;
+  const totalPages = narrowed ? 1               : serverTotalPages;
+
   // Only take over the whole page on the FIRST load. Every filter change makes
   // a new query key, so React Query reports isLoading again — and swapping the
   // page for a loader unmounts the search box mid-word, which is why typing
@@ -395,8 +414,8 @@ function EventsPageInner() {
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Events</h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
             {isSuperAdmin
-              ? `${totalCount} total event${totalCount !== 1 ? "s" : ""} across all modules`
-              : `${totalCount} total event${totalCount !== 1 ? "s" : ""} in your organisation`}
+              ? `${totalCount} ${narrowed ? "matching" : "total"} event${totalCount !== 1 ? "s" : ""}${narrowed ? "" : " across all modules"}`
+              : `${totalCount} ${narrowed ? "matching" : "total"} event${totalCount !== 1 ? "s" : ""}${narrowed ? "" : " in your organisation"}`}
           </p>
         </div>
         {!isSuperAdmin && !isViewer && (
@@ -534,7 +553,11 @@ function EventsPageInner() {
         </table>
         {filtered.length === 0 && (
           <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
-            No events found.
+            {searchQuery.trim()
+              ? `No events match “${searchQuery.trim()}”.`
+              : narrowed
+                ? "No events match these filters."
+                : "No events found."}
           </div>
         )}
       </Card>
