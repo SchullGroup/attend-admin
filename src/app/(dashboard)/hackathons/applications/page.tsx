@@ -1,6 +1,6 @@
 "use client";
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useCallback, Suspense } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   FileText, ChevronDown, ArrowLeft, ChevronRight, Search,
   Users, Trophy, Lightbulb, ExternalLink, Code, Target, ClipboardList,
@@ -922,7 +922,7 @@ function JudgeAppDetail({ challengeId, applicationId, onBack }: { challengeId: s
 // ---------------------------------------------------------------------------
 function JudgeApplicationsView() {
   const [search,               setSearch]               = useState("");
-  const [selectedChallengeId,  setSelectedChallengeId]  = useState<string | null>(null);
+  const [selectedChallengeId,  setSelectedChallengeId]  = useSelectedChallenge();
   const [selectedAppId,        setSelectedAppId]        = useState<string | null>(null);
 
   const { data: challengeData, isLoading: challengesLoading } = useJudgeChallenges("", "", 0, 100);
@@ -1074,9 +1074,34 @@ function JudgeApplicationsView() {
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
-export default function ApplicationsPage() {
+/**
+ * Which challenge is open, kept in the URL rather than in component state.
+ *
+ * It lived in `useState`, so a reload — or landing on a link someone shared —
+ * dropped back to the challenge list with no way to tell which one you had been
+ * looking at. `replace` rather than `push` so the picker does not fill the back
+ * stack with one entry per challenge.
+ */
+function useSelectedChallenge() {
+  const router       = useRouter();
+  const pathname     = usePathname();
+  const searchParams = useSearchParams();
+  const selected     = searchParams.get("challengeId");
+
+  const setSelected = useCallback((id: string | null) => {
+    const params = new URLSearchParams(Array.from(searchParams.entries()));
+    if (id) params.set("challengeId", id);
+    else    params.delete("challengeId");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [router, pathname, searchParams]);
+
+  return [selected, setSelected] as const;
+}
+
+function ApplicationsPageInner() {
   const router = useRouter();
-  const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
+  const [selectedChallengeId, setSelectedChallengeId] = useSelectedChallenge();
   const [selectedAppId,       setSelectedAppId]       = useState<string | null>(null);
   const [search,              setSearch]              = useState("");
 
@@ -1270,7 +1295,7 @@ export default function ApplicationsPage() {
 // ---------------------------------------------------------------------------
 function SuperAdminApplicationsView() {
   const router = useRouter();
-  const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
+  const [selectedChallengeId, setSelectedChallengeId] = useSelectedChallenge();
   const [search,              setSearch]              = useState("");
 
   const { data, isLoading } = useAdminChallenges(search, "", "", 0, 100);
@@ -1401,5 +1426,15 @@ function SuperAdminApplicationsView() {
         )}
       </Card>
     </div>
+  );
+}
+
+// useSearchParams requires a Suspense boundary. One here covers the judge and
+// super-admin views too, since both render inside this component.
+export default function ApplicationsPage() {
+  return (
+    <Suspense fallback={<Loader variant="inline" text="Loading applications…" />}>
+      <ApplicationsPageInner />
+    </Suspense>
   );
 }
