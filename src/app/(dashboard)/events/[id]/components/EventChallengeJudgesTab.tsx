@@ -1,6 +1,8 @@
 "use client";
 
-import { UserCheck } from "lucide-react";
+import { UserCheck, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
 import { useAdminChallengeJudges } from "@/api/admin-challenges";
@@ -11,6 +13,7 @@ import { useAdminChallengeJudges } from "@/api/admin-challenges";
  * API: GET /api/v1/admin/challenges/{id}/judges
  */
 export function EventChallengeJudgesTab({ challengeId }: { challengeId: string }) {
+  const router = useRouter();
   const { data: panel, isLoading } = useAdminChallengeJudges(challengeId);
 
   if (isLoading) return <Loader variant="inline" text="Loading judges…" />;
@@ -28,15 +31,28 @@ export function EventChallengeJudgesTab({ challengeId }: { challengeId: string }
 
   return (
     <Card className="attend-card overflow-hidden">
-      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
-        <UserCheck className="h-4 w-4 text-[#7c22c9]" />
-        <h2 className="font-semibold text-[hsl(var(--foreground))]">
-          Judge Panel ({judges.length})
-        </h2>
+      {/* Tracks sit on their own row rather than being squeezed in beside the
+          heading. Nine of them could not fit on one line, so each pill broke its
+          own label in half and collided with the title. */}
+      <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
+        <div className="flex items-center gap-2">
+          <UserCheck className="h-4 w-4 text-[#7c22c9] shrink-0" />
+          <h2 className="font-semibold text-[hsl(var(--foreground))] mr-auto">
+            Judge Panel ({judges.length})
+          </h2>
+        {/* The panel shows how much scoring has been done but never the scores
+            themselves, which left no route from here to the results. */}
+        <Button
+          variant="outline" size="sm" className="gap-1.5 shrink-0"
+          onClick={() => router.push(`/hackathons/${challengeId}?tab=Leaderboard`)}
+        >
+          View Scoring <ChevronRight className="h-3.5 w-3.5" />
+        </Button>
+        </div>
         {panel?.tracks && panel.tracks.length > 0 && (
-          <div className="ml-auto flex gap-1.5">
+          <div className="mt-3 flex flex-wrap gap-1.5">
             {panel.tracks.map((t) => (
-              <span key={t} className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
+              <span key={t} className="text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap max-w-[220px] truncate" title={t} style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
                 {t}
               </span>
             ))}

@@ -33,8 +33,13 @@ export interface OrgInfoFields {
   industry?:    string;
   rcNumber:     string;
   contactEmail: string;
+  /** Normalised by useOrganisationProfile — read this, not the aliases below. */
   phone?:       string;
   website?:     string;
+  /** Aliases the API has used for the same number; present only on the wire. */
+  representativePhone?: string;
+  contactPhone?:        string;
+  phoneNumber?:         string;
 }
 
 export interface OrgBrandingFields {
@@ -151,7 +156,15 @@ export function useClientStakeholder(opts?: { enabled?: boolean }) {
   });
 }
 
-/** Full organisation profile including branding. */
+/**
+ * Full organisation profile including branding.
+ *
+ * The phone is read tolerantly. It was absent entirely until backend added it
+ * on 2026-09-21, and the number can reasonably live under more than one name —
+ * the organisation's own line, or the representative's, which is what the enrol
+ * form collected. Whichever arrives is surfaced as `organisationInfo.phone` so
+ * the settings form has one field to bind to.
+ */
 export function useOrganisationProfile() {
   return useQuery({
     queryKey: clientOrgKeys.profile,
@@ -159,7 +172,22 @@ export function useOrganisationProfile() {
       const res = await apiClient.get<ApiResponse<OrganisationProfileResponse>>(
         "/api/v1/client/organisation/profile"
       );
-      return res.data.data;
+      const raw  = (res.data.data ?? res.data) as any;
+      const info = raw?.organisationInfo ?? {};
+
+      const phone =
+        info.phone               ??
+        info.representativePhone ??
+        info.contactPhone        ??
+        info.phoneNumber         ??
+        raw?.phone               ??
+        raw?.representativePhone ??
+        undefined;
+
+      return {
+        ...raw,
+        organisationInfo: { ...info, phone: phone || undefined },
+      } as OrganisationProfileResponse;
     },
     staleTime: 120_000,
   });

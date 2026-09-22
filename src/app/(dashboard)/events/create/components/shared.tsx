@@ -57,7 +57,9 @@ export function ReviewRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start gap-3 py-2.5 border-b border-[hsl(var(--border))] last:border-0">
       <p className="text-xs text-[hsl(var(--muted-foreground))] w-36 shrink-0 pt-0.5">{label}</p>
-      <p className="text-sm text-[hsl(var(--foreground))] font-medium">{value || "—"}</p>
+      {/* Review values include the joined prize-tier string, which is the
+          longest free-form value on that screen. */}
+      <p className="text-sm text-[hsl(var(--foreground))] font-medium flex-1 min-w-0 break-words">{value || "—"}</p>
     </div>
   );
 }

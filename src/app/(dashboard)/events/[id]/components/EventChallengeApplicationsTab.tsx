@@ -24,8 +24,24 @@ const STATUS_TABS = [
  * — the admin-scoped endpoint — since this page runs under super_admin, who
  * has no client org and can't hit the org-scoped equivalent).
  */
-export function EventChallengeApplicationsTab({ challengeId }: { challengeId: string }) {
-  const [activeStatus, setActiveStatus] = useState("");
+/**
+ * `status` / `onStatusChange` are optional so a caller that keeps the filter in
+ * the URL can drive it from there. Left out, the component owns the state as
+ * before — the event detail page has no Suspense boundary, so it must not read
+ * search params itself.
+ */
+export function EventChallengeApplicationsTab({
+  challengeId,
+  status,
+  onStatusChange,
+}: {
+  challengeId:     string;
+  status?:         string;
+  onStatusChange?: (next: string) => void;
+}) {
+  const [ownStatus, setOwnStatus] = useState("");
+  const activeStatus   = status ?? ownStatus;
+  const setActiveStatus = onStatusChange ?? setOwnStatus;
   const { data, isLoading } = useAdminChallengeApplications(challengeId, activeStatus, 0, 100);
 
   const apps = data?.content ?? [];

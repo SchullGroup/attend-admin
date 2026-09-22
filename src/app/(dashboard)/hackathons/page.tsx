@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useRef, useEffect, Suspense } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   Lightbulb, ArrowRight, Trophy, Users, FileText, ChevronRight, ChevronLeft, Search, Star,
 } from "lucide-react";
@@ -15,6 +15,7 @@ import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
 import { ChallengeGuidePanel } from "./components/ChallengeGuide";
 import type { RegisterBranding } from "@/types/super-admin";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 
 const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
 const JUDGE_ROLES       = new Set(["judge"]);
@@ -42,9 +43,12 @@ function JudgeChallengesView() {
   const router = useRouter();
   const [search, setSearch] = useState("");
 
-  const { data, isLoading } = useJudgeChallenges(search, "", 0, 100);
+  const debouncedSearch = useDebouncedValue(search);
+  const { data, isLoading } = useJudgeChallenges(debouncedSearch, "", 0, 100);
 
-  if (isLoading) return <Loader variant="page" text="Loading Challenges…" />;
+  const hasLoaded = useRef(false);
+  if (data) hasLoaded.current = true;
+  if (isLoading && !hasLoaded.current) return <Loader variant="page" text="Loading Challenges…" />;
 
   const summary    = data?.summary;
   const challenges = data?.challenges ?? [];
@@ -188,11 +192,19 @@ function JudgeChallengesView() {
 // ---------------------------------------------------------------------------
 const CHALLENGES_PAGE_SIZE = 10;
 
-export default function HackathonsPage() {
-  const router = useRouter();
-  const [search,    setSearch]    = useState("");
-  const [statusTab, setStatusTab] = useState("");
-  const [page,      setPage]      = useState(0);
+function HackathonsPageInner() {
+  const router       = useRouter();
+  const pathname     = usePathname();
+  const searchParams = useSearchParams();
+
+  // Seeded from the URL so a reload — or a shared link — lands on the same
+  // search, tab and page rather than resetting to everything.
+  const [search,    setSearch]    = useState(() => searchParams.get("q")      ?? "");
+  const [statusTab, setStatusTab] = useState(() => searchParams.get("status") ?? "");
+  const [page,      setPage]      = useState(() => Number(searchParams.get("page") ?? 0) || 0);
+
+  /** True once a result has arrived, so later refetches never blank the page. */
+  const hasLoaded = useRef(false);
 
   const { data: userResponse } = useGetMe();
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
@@ -204,8 +216,23 @@ export default function HackathonsPage() {
   // scoring) for this role instead of being blocked from entry entirely.
 
   // Always call these — hooks must not be conditional
-  const { data: clientData, isLoading: clientLoading, isFetching: clientFetching, isError: clientError } = useClientChallenges(search, statusTab, page, CHALLENGES_PAGE_SIZE);
-  const { data: adminData,  isLoading: adminLoading,  isFetching: adminFetching, isError: adminErrorFlag  } = useAdminChallenges(search, "", statusTab, page, CHALLENGES_PAGE_SIZE);
+  // 600ms: long enough that a pause mid-word does not fire a request, short
+  // enough that finishing a word still feels answered.
+  const debouncedListSearch = useDebouncedValue(search, 600);
+
+  // Mirror the settled values into the URL — the debounced one, not the raw
+  // input, so the address bar does not churn on every keystroke.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (debouncedListSearch) params.set("q", debouncedListSearch);
+    if (statusTab)           params.set("status", statusTab);
+    if (page > 0)            params.set("page", String(page));
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedListSearch, statusTab, page]);
+  const { data: clientData, isLoading: clientLoading, isFetching: clientFetching, isError: clientError } = useClientChallenges(debouncedListSearch, statusTab, page, CHALLENGES_PAGE_SIZE);
+  const { data: adminData,  isLoading: adminLoading,  isFetching: adminFetching, isError: adminErrorFlag  } = useAdminChallenges(debouncedListSearch, "", statusTab, page, CHALLENGES_PAGE_SIZE);
 
   // Judge gets its own view
   if (isJudge) return <JudgeChallengesView />;
@@ -214,8 +241,12 @@ export default function HackathonsPage() {
   const isFetching = isSuperAdmin ? adminFetching : clientFetching;
   const data       = isSuperAdmin ? adminData     : clientData;
   const isError    = isSuperAdmin ? adminErrorFlag : clientError;
+  if (data) hasLoaded.current = true;
 
-  if (isLoading) return <Loader variant="page" text="Loading Challenges…" />;
+  // Only the very first load replaces the page. Doing it on every refetch
+  // unmounted the search box mid-type, which is why focus was lost and typing
+  // could not continue until the field was clicked again.
+  if (isLoading && !hasLoaded.current) return <Loader variant="page" text="Loading Challenges…" />;
 
   const summary    = data?.summary;
   const challenges = (data?.challenges ?? []) as Array<{ id: string; title: string; organiserName?: string; date?: string; format?: string; applicationCount?: number; shortlistedTeams?: number; shortlistedCount?: number; status?: string; branding?: RegisterBranding }>;
@@ -381,11 +412,13 @@ export default function HackathonsPage() {
                     </span>
                   </td>
                   <td className="px-5 py-4">
-                    {!isSuperAdmin && (
-                      <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/hackathons/${c.id}`)}>
-                        Open <ChevronRight className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
+                    {/* This was hidden from super admins, leaving their last
+                        column empty and no way to open a challenge from the list
+                        at all. Viewing is read-only, so there is nothing here a
+                        super admin should be kept out of. */}
+                    <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/hackathons/${c.id}`)}>
+                      Open <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
                   </td>
                 </tr>
               );
@@ -416,5 +449,14 @@ export default function HackathonsPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+// useSearchParams needs a Suspense boundary in the App Router.
+export default function HackathonsPage() {
+  return (
+    <Suspense fallback={<Loader variant="page" text="Loading Challenges…" />}>
+      <HackathonsPageInner />
+    </Suspense>
   );
 }

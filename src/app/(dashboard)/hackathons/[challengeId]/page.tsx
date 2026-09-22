@@ -257,8 +257,20 @@ function OverviewTab({
               >
                 <Icon className="h-4 w-4" style={{ color }} />
               </div>
-              <div>
-                <p className={`font-bold text-[hsl(var(--foreground))] ${isText ? "text-sm" : "text-lg"}`}>
+              {/* min-w-0 is what lets this shrink inside the flex row. Without
+                  it a long Top Prize cannot wrap and the browser breaks it into
+                  a column of stacked words. */}
+              <div className="min-w-0">
+                <p
+                  className={`font-bold text-[hsl(var(--foreground))] ${isText ? "text-sm leading-snug break-words" : "text-lg"}`}
+                  style={isText ? {
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  } : undefined}
+                  title={isText ? String(value) : undefined}
+                >
                   {value}
                 </p>
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">{label}</p>
@@ -380,9 +392,13 @@ function OverviewTab({
             </h2>
             <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
               {c.prizeTiers.map((p) => (
-                <div key={p.position} className="py-2.5 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] w-16">{p.position}</span>
-                  <span className="text-sm font-bold text-[hsl(var(--foreground))]">{p.reward}</span>
+                <div key={p.position} className="py-2.5 flex items-start gap-3">
+                  <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] w-20 shrink-0 leading-tight pt-0.5">
+                    {p.position}
+                  </span>
+                  <span className="text-sm font-bold text-[hsl(var(--foreground))] flex-1 min-w-0 break-words leading-snug">
+                    {p.reward}
+                  </span>
                 </div>
               ))}
             </div>
@@ -2042,15 +2058,20 @@ function AdminJudgesTab({ challengeId }: { challengeId: string }) {
 
   return (
     <Card className="attend-card overflow-hidden">
-      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
-        <UserCheck className="h-4 w-4 text-[#7c22c9]" />
-        <h2 className="font-semibold text-[hsl(var(--foreground))]">
-          Judge Panel ({judges.length})
-        </h2>
+      {/* A single non-wrapping row could not hold nine tracks: they compressed
+          until each pill broke its own label over two lines and collided with
+          the heading. The row wraps now and the pills keep their width. */}
+      <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
+        <div className="flex items-center gap-2">
+          <UserCheck className="h-4 w-4 text-[#7c22c9] shrink-0" />
+          <h2 className="font-semibold text-[hsl(var(--foreground))]">
+            Judge Panel ({judges.length})
+          </h2>
+        </div>
         {panel?.tracks && panel.tracks.length > 0 && (
-          <div className="ml-auto flex gap-1.5">
+          <div className="mt-3 flex flex-wrap gap-1.5">
             {panel.tracks.map((t) => (
-              <span key={t} className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
+              <span key={t} className="text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap max-w-[220px] truncate" title={t} style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
                 {t}
               </span>
             ))}
@@ -2311,7 +2332,10 @@ export default function ChallengeDetailPage({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Badges on top, action beneath: the button sat between the title and
+              the status pills and pushed them apart. */}
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex items-center gap-2">
             <span
               className="text-xs font-semibold px-2.5 py-1 rounded-full"
               style={
@@ -2331,6 +2355,22 @@ export default function ChallengeDetailPage({
             >
               Applications {challenge.applicationsOpen ? "Open" : "Closed"}
             </span>
+            </div>
+            {/* Super admins have no Applications tab (see ADMIN_TABS), so the
+                submissions were otherwise unreachable from the page that
+                summarises the challenge. */}
+            <Button
+              variant="outline" size="sm" className="gap-1.5"
+              onClick={() => router.push(`/hackathons/applications?challengeId=${challengeId}`)}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              View Applications
+              {(challenge as any).applicationCount > 0 && (
+                <span className="text-[10px] font-bold bg-[#7c22c918] text-[#7c22c9] rounded-full px-1.5 py-0.5">
+                  {(challenge as any).applicationCount}
+                </span>
+              )}
+            </Button>
           </div>
         </div>
       </div>
