@@ -17,6 +17,7 @@ import {
   type ExportApplicationItem,
 } from "@/api/client-challenges";
 import { useGetMe } from "@/api/auth/hooks";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import {
   useJudgeChallenges,
   useJudgeChallengeApplications,
@@ -437,11 +438,8 @@ function ChallengeApplications({
   onViewDetail: (appId: string) => void;
   readOnly?:    boolean;
 }) {
-  // Filters live in the URL for the same reason the challenge does: a reload on
-  // "Shortlisted" used to come back showing everything, with the pill reset and
-  // no sign anything had changed.
-  const [activeStatus, setActiveStatus] = useUrlState("status");
-  const [activeTrack,  setActiveTrack]  = useUrlState("track");
+  const [activeStatus, setActiveStatus] = useState("");
+  const [activeTrack,  setActiveTrack]  = useState("");
   const [showExport,   setShowExport]   = useState(false);
   const [exportFrom,   setExportFrom]   = useState("");
   const [exportTo,     setExportTo]     = useState("");
@@ -1097,27 +1095,21 @@ function JudgeApplicationsView() {
  * looking at. `replace` rather than `push` so the picker does not fill the back
  * stack with one entry per challenge.
  */
-function useUrlState(key: string, fallback = "") {
+function useSelectedChallenge() {
   const router       = useRouter();
   const pathname     = usePathname();
   const searchParams = useSearchParams();
-  const value        = searchParams.get(key) ?? fallback;
+  const selected     = searchParams.get("challengeId");
 
-  const setValue = useCallback((next: string | null) => {
+  const setSelected = useCallback((id: string | null) => {
     const params = new URLSearchParams(Array.from(searchParams.entries()));
-    if (next) params.set(key, next);
-    else      params.delete(key);
+    if (id) params.set("challengeId", id);
+    else    params.delete("challengeId");
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [router, pathname, searchParams, key]);
+  }, [router, pathname, searchParams]);
 
-  return [value, setValue] as const;
-}
-
-function useSelectedChallenge() {
-  const [value, setValue] = useUrlState("challengeId");
-  // The picker treats "" as nothing selected; the rest of the page expects null.
-  return [value || null, setValue] as const;
+  return [selected, setSelected] as const;
 }
 
 function ApplicationsPageInner() {
@@ -1317,10 +1309,11 @@ function ApplicationsPageInner() {
 function SuperAdminApplicationsView() {
   const router = useRouter();
   const [selectedChallengeId, setSelectedChallengeId] = useSelectedChallenge();
-  const [adminStatus,         setAdminStatus]         = useUrlState("status");
   const [search,              setSearch]              = useState("");
 
-  const { data, isLoading } = useAdminChallenges(search, "", "", 0, 100);
+  // The input stays instant; only the query waits for typing to settle.
+  const debouncedSearch = useDebouncedValue(search);
+  const { data, isLoading } = useAdminChallenges(debouncedSearch, "", "", 0, 100);
   const challenges = data?.challenges ?? [];
   const summary    = data?.summary;
 
@@ -1350,11 +1343,7 @@ function SuperAdminApplicationsView() {
             </Button>
           </div>
         </div>
-        <EventChallengeApplicationsTab
-          challengeId={selectedChallengeId}
-          status={adminStatus}
-          onStatusChange={setAdminStatus}
-        />
+        <EventChallengeApplicationsTab challengeId={selectedChallengeId} />
       </div>
     );
   }

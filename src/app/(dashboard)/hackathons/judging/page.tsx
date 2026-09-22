@@ -19,6 +19,7 @@ import {
   type JudgeItem,
 } from "@/api/client-challenges";
 import { AssignmentsSection } from "../components/AssignmentsSection";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import {
   useJudgeChallenges,
   useJudgeChallengeApplications,
@@ -1463,7 +1464,8 @@ function SuperAdminJudgingView() {
   const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
   const [search,              setSearch]              = useState("");
 
-  const { data, isLoading } = useAdminChallenges(search, "", "", 0, 100);
+  const debouncedSearch = useDebouncedValue(search);
+  const { data, isLoading } = useAdminChallenges(debouncedSearch, "", "", 0, 100);
   const challenges = data?.challenges ?? [];
   const summary    = data?.summary;
 

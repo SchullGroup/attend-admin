@@ -2332,23 +2332,10 @@ export default function ChallengeDetailPage({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Super admins have no Applications tab (see ADMIN_TABS), so the
-                submissions were unreachable from the one page that summarises
-                the challenge. Client roles get it too — it is the same list,
-                one click instead of a tab hunt. */}
-            <Button
-              variant="outline" size="sm" className="gap-1.5"
-              onClick={() => router.push(`/hackathons/applications?challengeId=${challengeId}`)}
-            >
-              <FileText className="h-3.5 w-3.5" />
-              View Applications
-              {(challenge as any).applicationCount > 0 && (
-                <span className="text-[10px] font-bold bg-[#7c22c918] text-[#7c22c9] rounded-full px-1.5 py-0.5">
-                  {(challenge as any).applicationCount}
-                </span>
-              )}
-            </Button>
+          {/* Badges on top, action beneath: the button sat between the title and
+              the status pills and pushed them apart. */}
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex items-center gap-2">
             <span
               className="text-xs font-semibold px-2.5 py-1 rounded-full"
               style={
@@ -2368,6 +2355,22 @@ export default function ChallengeDetailPage({
             >
               Applications {challenge.applicationsOpen ? "Open" : "Closed"}
             </span>
+            </div>
+            {/* Super admins have no Applications tab (see ADMIN_TABS), so the
+                submissions were otherwise unreachable from the page that
+                summarises the challenge. */}
+            <Button
+              variant="outline" size="sm" className="gap-1.5"
+              onClick={() => router.push(`/hackathons/applications?challengeId=${challengeId}`)}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              View Applications
+              {(challenge as any).applicationCount > 0 && (
+                <span className="text-[10px] font-bold bg-[#7c22c918] text-[#7c22c9] rounded-full px-1.5 py-0.5">
+                  {(challenge as any).applicationCount}
+                </span>
+              )}
+            </Button>
           </div>
         </div>
       </div>
