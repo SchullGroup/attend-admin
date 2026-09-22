@@ -123,6 +123,9 @@ export function SuperAdminAnalytics() {
   // 30 days. Validated against the known ranges — a stale "?range=6m" falls
   // back to the default rather than sending a window the API cannot read.
   const [range, setRange] = useUrlEnumState<AdminRange>("range", ADMIN_RANGES, "30d");
+  // Cards and section headers name the window they are counting, so the reader
+  // can tell why two numbers are not comparable without a paragraph saying so.
+  const periodLabel = PERIOD_OPTIONS.find((p) => p.range === range)?.label ?? "Last 30 Days";
 
   // Hooks — all scoped to the selected date range (see PERIOD_RANGE above).
   const { data: summary,     isLoading: summaryLoading   } = useAdminSummaryStats(range);
@@ -167,7 +170,7 @@ export function SuperAdminAnalytics() {
         <StatCard
           label="Total Registrations"
           value={summary?.totalRegistrations ?? 0}
-          subtitle={period}
+          subtitle={periodLabel}
           icon={Users}
           accent="#2563eb"
           change={summary?.registrationsChange}
@@ -183,7 +186,7 @@ export function SuperAdminAnalytics() {
         <StatCard
           label="Docs Distributed"
           value={summary?.docsDistributed ?? 0}
-          subtitle={period}
+          subtitle={periodLabel}
           icon={FileText}
           accent="#d97706"
           change={summary?.docsChange}
@@ -341,7 +344,7 @@ export function SuperAdminAnalytics() {
                         bars above are not comparable, and naming the period is how a
                         reader works out why without a paragraph explaining it. */}
                     <span className="text-xs text-[hsl(var(--muted-foreground))] whitespace-nowrap">
-                      {period}
+                      {periodLabel}
                     </span>
                   </div>
                   <div className="grid grid-cols-3 gap-3">

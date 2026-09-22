@@ -94,12 +94,27 @@ export function useUrlEnumState<T extends string>(key: string, allowed: readonly
   return [value, setValue] as const;
 }
 
-/** A page number in the URL, guarded against `?page=banana` becoming NaN. */
+/**
+ * A page number in the URL, guarded against `?page=banana` becoming NaN.
+ *
+ * The setter takes a number or an updater function, so this is a drop-in
+ * replacement for `useState(0)` — every pager in the app is written as
+ * `setPage(p => p + 1)` and silently breaking that shape is not worth the
+ * saved line.
+ */
 export function useUrlPageState(key = "page") {
   const [raw, setRaw] = useUrlState(key);
   const parsed = Number.parseInt(raw, 10);
   const page = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-  const setPage = useCallback((next: number) => setRaw(next > 0 ? String(next) : null), [setRaw]);
+
+  const setPage = useCallback(
+    (next: number | ((prev: number) => number)) => {
+      const value = typeof next === "function" ? next(page) : next;
+      setRaw(value > 0 ? String(value) : null);
+    },
+    [setRaw, page]
+  );
+
   return [page, setPage] as const;
 }
 
