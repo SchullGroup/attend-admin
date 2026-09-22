@@ -23,6 +23,7 @@ import {
 import { cn, digitsOnly, withIdPrefix, resolveRole } from "@/lib/utils";
 import { popup } from "@/lib/popup-store";
 import { useGetMe } from "@/api/auth/hooks";
+import { useUrlPageState, useUrlSearchState } from "@/lib/use-url-state";
 import Papa from "papaparse";
 
 // ── CSV row type ──────────────────────────────────────────────────────────────
@@ -117,19 +118,16 @@ const EMPTY_FORM: AddForm = { fullName: "", email: "", phone: "", chn: "", units
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function RegisterShareholdersSection({ registerId }: { registerId: string }) {
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
+  // Namespaced (?sh=, ?shPage=) — this section sits on a detail page that owns
+  // the plain keys. The register a Meristem staffer is auditing is exactly the
+  // page they reload, and retyping a CHN every time is the whole complaint.
+  const [page, setPage] = useUrlPageState("shPage");
+  const [searchInput, setSearchInput, settledSearch] = useUrlSearchState("sh", 350, { shPage: null });
   const pageSize = 50;
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const nextSearch = searchInput.trim();
-      setSearch(nextSearch.length >= 2 ? nextSearch : "");
-      setPage(0);
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [searchInput]);
+  // The endpoint ignores one-character terms, so hold the request until there
+  // are two — the input below tells the user that is what it is waiting for.
+  const search = settledSearch.trim().length >= 2 ? settledSearch.trim() : "";
 
   const { data, isLoading, isFetching } = useRegisterShareholders(registerId, page, pageSize, search);
   const addOne  = useAddShareholder();

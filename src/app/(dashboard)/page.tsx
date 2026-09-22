@@ -5,7 +5,8 @@ import {
   Lightbulb, CalendarDays,
   Star, UserCheck, CheckCircle2, ChevronRight, Search,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, Suspense } from "react";
+import { useUrlSearchState } from "@/lib/use-url-state";
 import { useGetMe } from "@/api/auth/hooks";
 import { useDashboardStats, useAdminDashboard, useEvents, useUsers } from "@/api/super-admin";
 import { useClientEvents } from "@/api/client-events";
@@ -35,7 +36,9 @@ function typeLabel(type?: string) {
 
 function JudgeDashboard({ name }: { name?: string }) {
   const router = useRouter();
-  const [search, setSearch] = useState("");
+  // In the URL, so a judge who searches, opens a challenge and comes back —
+  // or just reloads — is still looking at the same shortlist.
+  const [search, setSearch] = useUrlSearchState("q", 300);
   const { data, isLoading } = useJudgeEvents();
   const challenges = data?.challenges ?? [];
 
@@ -192,7 +195,7 @@ function JudgeDashboard({ name }: { name?: string }) {
 }
 
 // ─── Page controller ──────────────────────────────────────────────────────────
-export default function DashboardPage() {
+function DashboardPageInner() {
   const { data: userResponse, isLoading: userLoading } = useGetMe();
   const currentUser = userResponse?.data;
 
@@ -275,5 +278,17 @@ export default function DashboardPage() {
       topRegisters={topRegisters}
       liveEvents={liveEvents}
     />
+  );
+}
+
+/**
+ * useSearchParams (in the judge view's search box) needs a Suspense boundary —
+ * without one this route opts out of static rendering and the build errors.
+ */
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<Loader variant="page" text="Loading Dashboard..." />}>
+      <DashboardPageInner />
+    </Suspense>
   );
 }

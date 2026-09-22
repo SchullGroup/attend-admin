@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { Suspense, useState, useEffect, useRef, useCallback } from "react";
+import { useUrlState } from "@/lib/use-url-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
@@ -444,14 +445,18 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
 // navigating back to this list and re-entering the same event's scanner.
 // ---------------------------------------------------------------------------
 
-export default function QRCheckInPage() {
+function QRCheckInPageInner() {
   const { data: eventsData, isLoading } = useClientEvents("ALL", 0, 100);
   const allEvents  = eventsData?.events ?? [];
   const liveEvents = allEvents.filter(
     (e) => e.status?.toUpperCase() === "LIVE" && isPhysicalCheckInEvent(e.format)
   );
 
-  const [selectedEventId, setSelectedEventId]         = useState<string | null>(null);
+  // ?eventId= — a phone at the door that reloads (or sleeps and wakes) should
+  // come back to the scanner it was on, not to the event picker.
+  const [eventIdParam, setEventIdParam] = useUrlState("eventId");
+  const selectedEventId = eventIdParam || null;
+  const setSelectedEventId = setEventIdParam;
   // Keyed by eventId so checkins survive navigating back and forth
   const [checkinsByEvent, setCheckinsByEvent]         = useState<Record<string, CheckIn[]>>({});
 
@@ -581,5 +586,17 @@ export default function QRCheckInPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+/**
+ * useSearchParams needs a Suspense boundary — without one this route opts out
+ * of static rendering and the build errors.
+ */
+export default function QRCheckInPage() {
+  return (
+    <Suspense fallback={<Loader variant="page" text="Loading events…" />}>
+      <QRCheckInPageInner />
+    </Suspense>
   );
 }

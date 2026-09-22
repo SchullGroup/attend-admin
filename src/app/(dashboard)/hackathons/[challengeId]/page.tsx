@@ -1,6 +1,7 @@
 "use client";
 import React, { use, useState, useEffect, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useUrlState } from "@/lib/use-url-state";
 import {
   ArrowLeft, Trophy, Users, FileText, Lightbulb, Star, ChevronDown,
   Plus, Trash2, ToggleLeft, ToggleRight, ListOrdered, Target, Award,
@@ -486,8 +487,10 @@ function OverviewTab({
 // Applications tab
 // ---------------------------------------------------------------------------
 function ApplicationsTab({ challengeId, readOnly = false }: { challengeId: string; readOnly?: boolean }) {
-  const [activeStatus, setActiveStatus]  = useState("");
-  const [activeTrack,  setActiveTrack]   = useState("");
+  // Namespaced keys: the page itself owns ?tab=, so the sub-filters inside the
+  // Applications tab cannot use plain ?status= without colliding with it.
+  const [activeStatus, setActiveStatus]  = useUrlState("appStatus");
+  const [activeTrack,  setActiveTrack]   = useUrlState("track");
   const [openMenu,     setOpenMenu]      = useState<string | null>(null);
   const [selectedApp,  setSelectedApp]   = useState<string | null>(null);
   const [showExport,   setShowExport]    = useState(false);

@@ -21,6 +21,7 @@ import {
   User, CalendarX, FileText, Inbox,
   Download, AlertTriangle, CalendarCheck, Calendar, Users,
 } from "lucide-react";
+import { useUrlEnumState } from "@/lib/use-url-state";
 import { cn } from "@/lib/utils";
 /**
  * Prefer real browser back-navigation so someone who arrived here from a filtered
@@ -48,6 +49,7 @@ const STATUS_DOT: Record<string, { dot: string; label: string }> = {
 };
 
 type TabId = "events" | "documents";
+const TAB_IDS: readonly TabId[] = ["events", "documents"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -80,7 +82,8 @@ function NullableField({ value }: { value: string | null | undefined }): React.R
 export default function RegisterDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id }  = use(params);
   const router  = useRouter();
-  const [tab, setTab] = useState<TabId>("events");
+  // ?tab= — a reload on Documents should not drop back to Events.
+  const [tab, setTab] = useUrlEnumState<TabId>("tab", TAB_IDS, "events");
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const { data: register, isLoading, isError } = useRegisterDetail(id);
@@ -269,7 +272,7 @@ export default function RegisterDetailPage({ params }: { params: Promise<{ id: s
 
       {/* ── Tab switcher ── */}
       <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 w-fit">
-        {(["events", "documents"] as TabId[]).map((t) => (
+        {TAB_IDS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}

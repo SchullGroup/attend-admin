@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useUrlState } from "@/lib/use-url-state";
 import { FileText } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
@@ -39,7 +39,9 @@ export function EventChallengeApplicationsTab({
   status?:         string;
   onStatusChange?: (next: string) => void;
 }) {
-  const [ownStatus, setOwnStatus] = useState("");
+  // Namespaced: the event detail page owns ?tab=, so the status pills inside
+  // this tab get their own key. Only used when the parent does not control it.
+  const [ownStatus, setOwnStatus] = useUrlState("appStatus");
   const activeStatus   = status ?? ownStatus;
   const setActiveStatus = onStatusChange ?? setOwnStatus;
   const { data, isLoading } = useAdminChallengeApplications(challengeId, activeStatus, 0, 100);

@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, Suspense } from "react";
+import { useUrlPageState, useUrlParamWriter, useUrlSearchState, useUrlState } from "@/lib/use-url-state";
 import Link from "next/link";
 import { Users2, Building2, Globe, Search, ShieldOff } from "lucide-react";
 import { useClientAdmins, useSuspendUser, useActivateUser } from "@/api/super-admin";
@@ -17,11 +18,15 @@ const STATUS_FILTERS = [
   { label: "Pending",   value: "PENDING" },
 ];
 
-export default function ClientAdminsPage() {
-  const [search,       setSearch]       = useState("");
-  const [activeStatus, setActiveStatus] = useState("");
+function ClientAdminsPageInner() {
+  // Search and status tab in the URL, so a reload returns to the same view.
+  // NOTE: both are applied in the browser over one page of rows — see
+  // BACKEND_SEARCH_ENDPOINTS_2026-09-22.md §1.6.
+  const writeParams = useUrlParamWriter();
+  const [search, setSearch] = useUrlSearchState("q", 400, { page: null });
+  const [activeStatus] = useUrlState("status");
   const [confirmId,    setConfirmId]    = useState<string | null>(null);
-  const [page,         setPage]         = useState(0);
+  const [page, setPage] = useUrlPageState();
   const LIMIT = 20;
 
   const { data, isLoading } = useClientAdmins(page, LIMIT);
@@ -82,7 +87,7 @@ export default function ClientAdminsPage() {
           {STATUS_FILTERS.map((f) => (
             <button
               key={f.value}
-              onClick={() => setActiveStatus(f.value)}
+              onClick={() => writeParams({ status: f.value, page: null })}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
                 activeStatus === f.value
                   ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
@@ -213,7 +218,7 @@ export default function ClientAdminsPage() {
             <p className="text-sm font-medium text-[hsl(var(--foreground))] mb-1">No client admins found</p>
             {(search || activeStatus) && (
               <button
-                onClick={() => { setSearch(""); setActiveStatus(""); }}
+                onClick={() => { setSearch(""); writeParams({ q: null, status: null, page: null }); }}
                 className="text-xs text-[hsl(var(--primary))] hover:underline mt-1"
               >
                 Clear filters
@@ -233,5 +238,17 @@ export default function ClientAdminsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * useSearchParams needs a Suspense boundary — without one this route opts out
+ * of static rendering and the build errors.
+ */
+export default function ClientAdminsPage() {
+  return (
+    <Suspense fallback={<Loader variant="page" text="Loading Client Admins…" />}>
+      <ClientAdminsPageInner />
+    </Suspense>
   );
 }

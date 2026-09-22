@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useCallback, useEffect, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useUrlSearchState, useUrlState } from "@/lib/use-url-state";
 import {
   FileText, ChevronDown, ArrowLeft, ChevronRight, Search,
   Users, Trophy, Lightbulb, ExternalLink, Code, Target, ClipboardList,
@@ -1098,44 +1099,12 @@ function JudgeApplicationsView() {
  * stack with one entry per challenge.
  */
 /**
- * Search box that survives a reload.
- *
- * The input keeps its own state so typing is instant; the settled value is
- * mirrored into `?q=` and read back on mount. Writing every keystroke to the
- * URL would mean a router call per character.
+ * The URL-state helpers live in @/lib/use-url-state now — this file used to
+ * carry its own copy, which is how this page and Judging ended up with two
+ * subtly different versions of the same hook.
  */
 function useSearchState() {
-  const [value, setValue] = useUrlState("q");
-  const [draft, setDraft] = useState(value);
-  const settled = useDebouncedValue(draft, 500);
-
-  useEffect(() => {
-    if (settled !== value) setValue(settled);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settled]);
-
-  return [draft, setDraft, settled] as const;
-}
-
-/**
- * One query-string key as state. `replace` rather than `push`, so filtering
- * does not fill the back stack with one entry per keystroke or click.
- */
-function useUrlState(key: string, fallback = "") {
-  const router       = useRouter();
-  const pathname     = usePathname();
-  const searchParams = useSearchParams();
-  const value        = searchParams.get(key) ?? fallback;
-
-  const setValue = useCallback((next: string | null) => {
-    const params = new URLSearchParams(Array.from(searchParams.entries()));
-    if (next) params.set(key, next);
-    else      params.delete(key);
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [router, pathname, searchParams, key]);
-
-  return [value, setValue] as const;
+  return useUrlSearchState("q", 500);
 }
 
 function useSelectedChallenge() {

@@ -16,6 +16,7 @@ import { formatDate } from "@/lib/utils";
 import { ChallengeGuidePanel } from "./components/ChallengeGuide";
 import type { RegisterBranding } from "@/types/super-admin";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { useUrlSearchState } from "@/lib/use-url-state";
 
 const SUPER_ADMIN_ROLES = new Set(["super_admin", "superadmin", "super-admin"]);
 const JUDGE_ROLES       = new Set(["judge"]);
@@ -41,9 +42,8 @@ function statusStyle(status: string): { bg: string; color: string } {
 // ---------------------------------------------------------------------------
 function JudgeChallengesView() {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-
-  const debouncedSearch = useDebouncedValue(search);
+  // Backed by ?q= like the client and admin views, so a reload keeps the search.
+  const [search, setSearch, debouncedSearch] = useUrlSearchState("q", 400);
   const { data, isLoading } = useJudgeChallenges(debouncedSearch, "", 0, 100);
 
   const hasLoaded = useRef(false);

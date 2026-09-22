@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback, Suspense } from "react";
+import { useUrlEnumState, useUrlSearchState, useUrlState } from "@/lib/use-url-state";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   Trophy, ArrowLeft, ChevronRight, Search, Lightbulb,
@@ -429,43 +430,12 @@ function JudgesPanel({ challengeId, readOnly = false }: { challengeId: string; r
 }
 
 /**
- * One query-string key as state, so a reload lands where the user left off.
- * `replace`, not `push` — picking a challenge or a tab should not stack up
- * back-button entries.
- */
-function useUrlState(key: string, fallback = "") {
-  const router       = useRouter();
-  const pathname     = usePathname();
-  const searchParams = useSearchParams();
-  const value        = searchParams.get(key) ?? fallback;
-
-  const setValue = useCallback((next: string | null) => {
-    const params = new URLSearchParams(Array.from(searchParams.entries()));
-    if (next) params.set(key, next);
-    else      params.delete(key);
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [router, pathname, searchParams, key]);
-
-  return [value, setValue] as const;
-}
-
-/**
- * Search box that survives a reload. The input keeps its own state so typing
- * stays instant; the settled value is mirrored into `?q=` and read back on
- * mount. Writing every keystroke to the URL would be a router call per letter.
+ * The URL-state helpers live in @/lib/use-url-state now — this file used to
+ * carry its own copy, which is how the Applications and Judging pages ended up
+ * with two subtly different versions of the same hook.
  */
 function useSearchState() {
-  const [value, setValue] = useUrlState("q");
-  const [draft, setDraft] = useState(value);
-  const settled = useDebouncedValue(draft, 500);
-
-  useEffect(() => {
-    if (settled !== value) setValue(settled);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settled]);
-
-  return [draft, setDraft, settled] as const;
+  return useUrlSearchState("q", 500);
 }
 
 // ---------------------------------------------------------------------------
@@ -1061,8 +1031,9 @@ function JudgeApplicationsList({
   challengeId:  string;
   onViewDetail: (appId: string) => void;
 }) {
-  const [activeStatus, setActiveStatus] = useState("");
-  const [activeTrack,  setActiveTrack]  = useState("");
+  // Namespaced: this page already uses ?view= and ?challengeId=.
+  const [activeStatus, setActiveStatus] = useUrlState("appStatus");
+  const [activeTrack,  setActiveTrack]  = useUrlState("track");
   const { data, isLoading } = useJudgeChallengeApplications(challengeId, activeStatus, activeTrack, 0, 100);
   const apps  = data?.applications ?? [];
   const tabs  = data?.tabs         ?? [];
@@ -1285,7 +1256,8 @@ function JudgeChallengeView({
   challengeDate?: string;
   onBack:         () => void;
 }) {
-  const [tab, setTab] = useState<JudgeChallengeTab>("Score");
+  // ?jtab= — Score Teams vs Leaderboard survives a reload.
+  const [tab, setTab] = useUrlEnumState<JudgeChallengeTab>("jtab", ["Score", "Leaderboard"], "Score");
 
   const TABS: { key: JudgeChallengeTab; icon: React.ElementType; label: string }[] = [
     { key: "Score",       icon: Star,    label: "Score Teams"  },

@@ -21,6 +21,7 @@ import {
 } from "@/api/client-events";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useUrlPageState, useUrlParamWriter, useUrlState } from "@/lib/use-url-state";
 import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { popup } from "@/lib/popup-store";
@@ -128,11 +129,15 @@ function selectedCountForCampaign(
 
 export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [page, setPage] = useState(0);
-  const [searchText, setSearchText] = useState("");
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const [tierId, setTierId] = useState("");
+  // Namespaced (?inv=, ?invStatus=, ?tier=, ?invPage=) — the event detail page
+  // owns ?tab=. The search here is submit-driven rather than debounced, so the
+  // draft stays local and only the submitted term reaches the URL.
+  const writeParams = useUrlParamWriter();
+  const [page, setPage] = useUrlPageState("invPage");
+  const [search] = useUrlState("inv");
+  const [status] = useUrlState("invStatus");
+  const [tierId] = useUrlState("tier");
+  const [searchText, setSearchText] = useState(search);
   const [showAdd, setShowAdd] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -231,9 +236,13 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
   }
 
   function resetPageAndFilters(next: { status?: string; tierId?: string }) {
-    if (next.status !== undefined) setStatus(next.status);
-    if (next.tierId !== undefined) setTierId(next.tierId);
-    setPage(0);
+    // One write, not three: separate router.replace calls in the same handler
+    // would each build on the pre-write URL and the last would win alone.
+    writeParams({
+      ...(next.status !== undefined ? { invStatus: next.status || null } : {}),
+      ...(next.tierId !== undefined ? { tier:      next.tierId || null } : {}),
+      invPage: null,
+    });
   }
 
   function dismissImport() {
@@ -511,7 +520,7 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
           </div>
         )}
 
-        <form className="mt-5 grid gap-3 md:grid-cols-[minmax(220px,1fr)_180px_180px_auto]" onSubmit={(event) => { event.preventDefault(); setSearch(searchText.trim()); setPage(0); }}>
+        <form className="mt-5 grid gap-3 md:grid-cols-[minmax(220px,1fr)_180px_180px_auto]" onSubmit={(event) => { event.preventDefault(); writeParams({ inv: searchText.trim() || null, invPage: null }); }}>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
             <Input
@@ -522,10 +531,7 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
               onChange={(event) => {
                 const value = event.target.value;
                 setSearchText(value);
-                if (value === "") {
-                  setSearch("");
-                  setPage(0);
-                }
+                if (value === "") writeParams({ inv: null, invPage: null });
               }}
               placeholder="Search invitees"
               className="pl-9"
