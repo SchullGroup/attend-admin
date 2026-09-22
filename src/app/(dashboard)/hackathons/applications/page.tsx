@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useCallback, Suspense } from "react";
+import React, { useState, useCallback, useEffect, Suspense } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   FileText, ChevronDown, ArrowLeft, ChevronRight, Search,
@@ -438,8 +438,10 @@ function ChallengeApplications({
   onViewDetail: (appId: string) => void;
   readOnly?:    boolean;
 }) {
-  const [activeStatus, setActiveStatus] = useState("");
-  const [activeTrack,  setActiveTrack]  = useState("");
+  // Filters live in the URL too — a reload on "Shortlisted" used to come back
+  // showing everything with the pill reset.
+  const [activeStatus, setActiveStatus] = useUrlState("status");
+  const [activeTrack,  setActiveTrack]  = useUrlState("track");
   const [showExport,   setShowExport]   = useState(false);
   const [exportFrom,   setExportFrom]   = useState("");
   const [exportTo,     setExportTo]     = useState("");
@@ -934,7 +936,7 @@ function JudgeAppDetail({ challengeId, applicationId, onBack }: { challengeId: s
 // Judge applications view — GET /api/v1/judge/challenges/{id}/applications
 // ---------------------------------------------------------------------------
 function JudgeApplicationsView() {
-  const [search,               setSearch]               = useState("");
+  const [search,               setSearch, settledSearch] = useSearchState();
   const [selectedChallengeId,  setSelectedChallengeId]  = useSelectedChallenge();
   const [selectedAppId,        setSelectedAppId]        = useState<string | null>(null);
 
@@ -1095,28 +1097,58 @@ function JudgeApplicationsView() {
  * looking at. `replace` rather than `push` so the picker does not fill the back
  * stack with one entry per challenge.
  */
-function useSelectedChallenge() {
+/**
+ * Search box that survives a reload.
+ *
+ * The input keeps its own state so typing is instant; the settled value is
+ * mirrored into `?q=` and read back on mount. Writing every keystroke to the
+ * URL would mean a router call per character.
+ */
+function useSearchState() {
+  const [value, setValue] = useUrlState("q");
+  const [draft, setDraft] = useState(value);
+  const settled = useDebouncedValue(draft, 500);
+
+  useEffect(() => {
+    if (settled !== value) setValue(settled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settled]);
+
+  return [draft, setDraft, settled] as const;
+}
+
+/**
+ * One query-string key as state. `replace` rather than `push`, so filtering
+ * does not fill the back stack with one entry per keystroke or click.
+ */
+function useUrlState(key: string, fallback = "") {
   const router       = useRouter();
   const pathname     = usePathname();
   const searchParams = useSearchParams();
-  const selected     = searchParams.get("challengeId");
+  const value        = searchParams.get(key) ?? fallback;
 
-  const setSelected = useCallback((id: string | null) => {
+  const setValue = useCallback((next: string | null) => {
     const params = new URLSearchParams(Array.from(searchParams.entries()));
-    if (id) params.set("challengeId", id);
-    else    params.delete("challengeId");
+    if (next) params.set(key, next);
+    else      params.delete(key);
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [router, pathname, searchParams]);
+  }, [router, pathname, searchParams, key]);
 
-  return [selected, setSelected] as const;
+  return [value, setValue] as const;
+}
+
+function useSelectedChallenge() {
+  const [value, setValue] = useUrlState("challengeId");
+  // The picker treats "" as nothing selected; the rest of the page wants null.
+  return [value || null, setValue] as const;
 }
 
 function ApplicationsPageInner() {
   const router = useRouter();
   const [selectedChallengeId, setSelectedChallengeId] = useSelectedChallenge();
   const [selectedAppId,       setSelectedAppId]       = useState<string | null>(null);
-  const [search,              setSearch]              = useState("");
+  const [search,              setSearch, settledSearch] = useSearchState();
 
   const { data: userResponse } = useGetMe();
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
@@ -1309,11 +1341,10 @@ function ApplicationsPageInner() {
 function SuperAdminApplicationsView() {
   const router = useRouter();
   const [selectedChallengeId, setSelectedChallengeId] = useSelectedChallenge();
-  const [search,              setSearch]              = useState("");
+  const [search,              setSearch, settledSearch] = useSearchState();
 
   // The input stays instant; only the query waits for typing to settle.
-  const debouncedSearch = useDebouncedValue(search);
-  const { data, isLoading } = useAdminChallenges(debouncedSearch, "", "", 0, 100);
+  const { data, isLoading } = useAdminChallenges(settledSearch, "", "", 0, 100);
   const challenges = data?.challenges ?? [];
   const summary    = data?.summary;
 

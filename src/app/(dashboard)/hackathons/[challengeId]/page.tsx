@@ -442,11 +442,11 @@ function OverviewTab({
                   // anything wired there would happen on dismissal: the first
                   // version opened applications when the popup was ignored.
                   popup.confirm(
-                    "Check the application form first?",
+                    "Check your application form first?",
                     <>
-                      Teams will fill in the fields set on the Settings tab. Once submissions start
-                      arriving, changing those questions means comparing entries that answered
-                      different ones.{" "}
+                      Teams will answer the questions you set on the Settings tab. It is hard to
+                      change them once teams start applying, because early teams will have answered
+                      different questions from later ones.{" "}
                       <button
                         type="button"
                         className="underline font-medium text-[#7c22c9] hover:opacity-70"
