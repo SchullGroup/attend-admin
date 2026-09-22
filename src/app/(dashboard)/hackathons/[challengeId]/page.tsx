@@ -257,8 +257,22 @@ function OverviewTab({
               >
                 <Icon className="h-4 w-4" style={{ color }} />
               </div>
-              <div>
-                <p className={`font-bold text-[hsl(var(--foreground))] ${isText ? "text-sm" : "text-lg"}`}>
+              {/* min-w-0 lets this shrink inside the flex row. Without it a long
+                  Top Prize refused to wrap and drove the card into a single
+                  column of stacked characters. */}
+              <div className="min-w-0">
+                <p
+                  className={`font-bold text-[hsl(var(--foreground))] ${isText ? "text-sm leading-snug break-words" : "text-lg"}`}
+                  // Prize text is free-form and can run to a sentence, so it is
+                  // clamped here and shown in full in the Prize Tiers card below.
+                  style={isText ? {
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  } : undefined}
+                  title={isText ? String(value) : undefined}
+                >
                   {value}
                 </p>
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">{label}</p>
@@ -380,9 +394,16 @@ function OverviewTab({
             </h2>
             <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
               {c.prizeTiers.map((p) => (
-                <div key={p.position} className="py-2.5 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] w-16">{p.position}</span>
-                  <span className="text-sm font-bold text-[hsl(var(--foreground))]">{p.reward}</span>
+                // `justify-between` with a fixed-width label and no gap meant a
+                // long reward squeezed the place column until the two overlapped.
+                // The label holds its width, the reward takes the rest and wraps.
+                <div key={p.position} className="py-2.5 flex items-start gap-3">
+                  <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] w-20 shrink-0 leading-tight pt-0.5">
+                    {p.position}
+                  </span>
+                  <span className="text-sm font-bold text-[hsl(var(--foreground))] flex-1 min-w-0 break-words leading-snug">
+                    {p.reward}
+                  </span>
                 </div>
               ))}
             </div>

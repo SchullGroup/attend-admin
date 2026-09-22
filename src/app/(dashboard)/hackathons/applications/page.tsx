@@ -451,6 +451,10 @@ function ChallengeApplications({
 
   const apps   = data?.applications ?? [];
   const tabs   = data?.tabs ?? [];
+  // "All" can arrive as an empty key, the literal "ALL", or just that label.
+  const isAllTab   = (t: { key?: string; label?: string }) =>
+    !t.key || t.key.toLowerCase() === "all" || (t.label ?? "").trim().toLowerCase() === "all";
+  const hasAllTab  = tabs.some(isAllTab);
 
   // Track options must stay independent of the active track filter — see
   // matching fix in hackathons/[challengeId]/page.tsx's ApplicationsTab.
@@ -570,20 +574,28 @@ function ChallengeApplications({
 
       {tabs.length > 0 && (
         <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
-          <button
-            onClick={() => setActiveStatus("")}
-            className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-center ${
-              activeStatus === "" ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-            }`}
-          >
-            All
-          </button>
+          {/* The API's tab list already starts with its own "All", so the
+              hard-coded one beside it was a second control doing the same job —
+              and only one of the two could look selected at a time. It is kept
+              only as a fallback for a payload that does not supply one. */}
+          {!hasAllTab && (
+            <button
+              onClick={() => setActiveStatus("")}
+              className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-center ${
+                activeStatus === "" ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              }`}
+            >
+              All
+            </button>
+          )}
           {tabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveStatus(tab.key)}
+              // The API's "All" tab means "no filter", so it maps to an empty
+              // status rather than being sent as a literal status value.
+              onClick={() => setActiveStatus(isAllTab(tab) ? "" : tab.key)}
               className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-center ${
-                activeStatus === tab.key ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                (isAllTab(tab) ? activeStatus === "" : activeStatus === tab.key) ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
               }`}
             >
               {tab.label}
