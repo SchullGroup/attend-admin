@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import Link from "next/link";
 import {
   Radio, Eye, MapPin, Monitor, Users2, Search, ChevronDown, Building2, Check,
@@ -19,6 +19,7 @@ import { formatDate } from "@/lib/utils";
 import { getEventModule, getEventRegisterName, MODULE_COLORS } from "@/lib/event-module";
 import type { EventSummaryResponse } from "@/types/super-admin";
 import { cn } from "@/lib/utils";
+import { useUrlEnumState, useUrlPageState, useUrlParamWriter, useUrlSearchState, useUrlState } from "@/lib/use-url-state";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -261,7 +262,7 @@ function EventTableRow({ event, isSuperAdmin, isViewer }: { event: EventSummaryR
 
 const LIMIT = 20;
 
-export default function EventsPage() {
+function EventsPageInner() {
   const { data: userResponse } = useGetMe();
   const currentUser = userResponse?.data;
 
@@ -272,18 +273,27 @@ export default function EventsPage() {
   const isAdmin      = !currentUser || ADMIN_ROLES.has(normalizedRole);
   const isViewer     = normalizedRole === "viewer";
 
-  const [activeStatus,     setActiveStatus]     = useState("");
-  const [activeType,       setActiveType]       = useState<ClientEventTypeFilter>("ALL");
-  const [searchQuery,      setSearchQuery]      = useState("");
-  const [page,             setPage]             = useState(0);
-  const [registrarFilter,  setRegistrarFilter]  = useState("");
-  const [organizerFilter,  setOrganizerFilter]  = useState("");
+  // Every filter lives in the query string, so opening an event and pressing
+  // back — or simply reloading — returns to this exact view instead of the
+  // unfiltered first page. Changing any filter returns to page 1, since page 4
+  // of the old result set means nothing for the new one.
+  const writeParams = useUrlParamWriter();
+  const [activeStatus] = useUrlState("status");
+  const [activeType] = useUrlEnumState<ClientEventTypeFilter>(
+    "type", CLIENT_TYPE_TABS.map((t) => t.value), "ALL"
+  );
+  const [page, setPage] = useUrlPageState();
+  // Search filters the loaded page client-side, so it binds to the draft and
+  // stays instant; only the URL waits for typing to settle.
+  const [searchQuery, setSearchQuery] = useUrlSearchState("q", 400, { page: null });
+  const [registrarFilter] = useUrlState("registrar");
+  const [organizerFilter, setOrganizerFilter] = useUrlState("organizer");
   // Register filter — scoped to whichever registrar is selected above. Uses the
   // same GET /api/v1/admin/registrars/{id}/registers endpoint as the registrar
   // detail page, so it's real data (not the empty client-scoped Organizer dropdown).
-  const [registerFilter,   setRegisterFilter]   = useState("");
+  const [registerFilter, setRegisterFilter] = useUrlState("register");
   // Event Type filter — super admin only (client admin already has CLIENT_TYPE_TABS).
-  const [adminTypeFilter,  setAdminTypeFilter]  = useState("");
+  const [adminTypeFilter, setAdminTypeFilter] = useUrlState("eventType");
 
   // These two hit super-admin-only backend endpoints — must stay gated behind
   // isSuperAdmin, or a Client Admin gets a 403 firing on every page load.
@@ -298,6 +308,8 @@ export default function EventsPage() {
   const { data: registrarRegistersData                 } = useRegistrarRegisters(registrarFilter);
 
   const isLoading = isAdmin ? adminLoading : clientLoading;
+  const hasLoaded = useRef(false);
+  if (adminData || clientData) hasLoaded.current = true;
 
   // Build unified row data
   const adminEvents: EventSummaryResponse[] = adminData?.content ?? [];
@@ -369,7 +381,11 @@ export default function EventsPage() {
       return bt - at;
     });
 
-  if (isLoading) return <Loader variant="page" text="Loading Events…" />;
+  // Only take over the whole page on the FIRST load. Every filter change makes
+  // a new query key, so React Query reports isLoading again — and swapping the
+  // page for a loader unmounts the search box mid-word, which is why typing
+  // used to drop the cursor.
+  if (isLoading && !hasLoaded.current) return <Loader variant="page" text="Loading Events…" />;
 
   return (
     <div>
@@ -398,7 +414,7 @@ export default function EventsPage() {
           <Input
             placeholder="Search events by title…"
             value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9 h-9"
           />
         </div>
@@ -410,7 +426,7 @@ export default function EventsPage() {
               label="Registrar"
               value={registrarFilter}
               options={registrarOptions}
-              onSelect={(id) => { setRegistrarFilter(id); setRegisterFilter(""); setPage(0); }}
+              onSelect={(id) => writeParams({ registrar: id, register: null, page: null })}
               icon={Building2}
             />
             {/* Cascading Register filter — only shows once a Registrar is picked,
@@ -448,7 +464,13 @@ export default function EventsPage() {
         {(searchQuery || (isSuperAdmin && (registrarFilter || organizerFilter || registerFilter || adminTypeFilter))) && (
           <button
             type="button"
-            onClick={() => { setRegistrarFilter(""); setOrganizerFilter(""); setRegisterFilter(""); setAdminTypeFilter(""); setSearchQuery(""); setPage(0); }}
+            onClick={() => {
+              setSearchQuery("");
+              writeParams({
+                registrar: null, organizer: null, register: null,
+                eventType: null, q: null, page: null,
+              });
+            }}
             className="text-xs text-[hsl(var(--primary))] hover:underline"
           >
             Clear filters
@@ -461,7 +483,7 @@ export default function EventsPage() {
         <div className="flex items-center gap-1 mb-4 bg-[hsl(var(--muted))] rounded-full p-1 w-full">
           {ADMIN_STATUS_TABS.map((tab) => (
             <button key={tab.value}
-              onClick={() => { setActiveStatus(tab.value); setPage(0); }}
+              onClick={() => writeParams({ status: tab.value, page: null })}
               className={`flex-1 px-4 py-1.5 rounded-full text-sm font-medium transition-all text-center ${
                 activeStatus === tab.value
                   ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
@@ -478,7 +500,7 @@ export default function EventsPage() {
         <div className="flex items-center gap-1 mb-4 bg-[hsl(var(--muted))] rounded-full p-1 w-full">
           {CLIENT_TYPE_TABS.map((tab) => (
             <button key={tab.value}
-              onClick={() => { setActiveType(tab.value); setPage(0); }}
+              onClick={() => writeParams({ type: tab.value === "ALL" ? null : tab.value, page: null })}
               className={`flex-1 px-4 py-1.5 rounded-full text-sm font-medium transition-all text-center ${
                 activeType === tab.value
                   ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
@@ -525,16 +547,28 @@ export default function EventsPage() {
           </p>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" className="h-7 text-xs"
-              disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+              disabled={page === 0} onClick={() => setPage(page - 1)}>
               Previous
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs"
-              disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)}>
+              disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
               Next
             </Button>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * useSearchParams needs a Suspense boundary above it — without one the whole
+ * route opts out of static rendering and Next.js errors at build time.
+ */
+export default function EventsPage() {
+  return (
+    <Suspense fallback={<Loader variant="page" text="Loading Events…" />}>
+      <EventsPageInner />
+    </Suspense>
   );
 }

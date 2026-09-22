@@ -1,7 +1,8 @@
 "use client";
-import { useState } from "react";
+import { Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { Vote, Radio, FileText, ChevronRight, Search, CalendarDays } from "lucide-react";
+import { useUrlPageState, useUrlSearchState, useUrlState } from "@/lib/use-url-state";
 import { useClientVoteList, useVoteStats } from "@/api/client-votes";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,11 +32,16 @@ function statusStyle(s: string) {
   return { bg: "#fef3c7", color: "#b45309" };
 }
 
-export default function VotesPage() {
+function VotesPageInner() {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const [page,   setPage]   = useState(0);
+
+  // Search, status tab and page number all live in the query string, so a
+  // reload or the back button returns to this view rather than the unfiltered
+  // first page. A new search or a new tab drops back to page 1 — page 4 of the
+  // old result set means nothing for the new one.
+  const [status, setStatus] = useUrlState("status");
+  const [page,   setPage]   = useUrlPageState();
+  const [searchDraft, setSearchDraft, search] = useUrlSearchState("q", 500, { page: null });
   const size = 20;
 
   const { data: stats,  isLoading: statsLoading  } = useVoteStats();
@@ -83,8 +89,8 @@ export default function VotesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
           <Input
             placeholder="Search AGMs…"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            value={searchDraft}
+            onChange={(e) => setSearchDraft(e.target.value)}
             className="pl-9 h-9"
           />
         </div>
@@ -205,10 +211,10 @@ export default function VotesPage() {
                   Page {page + 1} of {totalPages} · {totalCount} events
                 </span>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+                  <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
                     Prev
                   </Button>
-                  <Button size="sm" variant="outline" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+                  <Button size="sm" variant="outline" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
                     Next
                   </Button>
                 </div>
@@ -218,5 +224,17 @@ export default function VotesPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+/**
+ * useSearchParams needs a Suspense boundary above it — without one the whole
+ * route opts out of static rendering and Next.js errors at build time.
+ */
+export default function VotesPage() {
+  return (
+    <Suspense fallback={<Loader variant="page" text="Loading Votes…" />}>
+      <VotesPageInner />
+    </Suspense>
   );
 }

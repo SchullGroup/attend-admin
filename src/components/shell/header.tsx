@@ -28,6 +28,7 @@ import { useGlobalSearch } from "@/api/super-admin";
 import { useClientSearch, type SearchEvent, type SearchTeamMember, type SearchDocument } from "@/api/client-search";
 import { timeAgo, resolveRole, isSuperAdminRole } from "@/lib/utils";
 import { notificationTypeColor } from "@/lib/notification";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 
 // ---------------------------------------------------------------------------
 // Web Audio notification chime
@@ -92,16 +93,6 @@ function getInitials(name: string) {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
 }
 
-// Simple debounce hook
-function useDebounce<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return debounced;
-}
-
 export function Header() {
   const pathname  = usePathname();
   const router    = useRouter();
@@ -118,7 +109,7 @@ export function Header() {
   // ── Search state ───────────────────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState("");
   const [searchOpen, setSearchOpen]   = useState(false);
-  const debouncedQ = useDebounce(searchInput, 350);
+  const debouncedQ = useDebouncedValue(searchInput, 350);
   const searchRef  = useRef<HTMLDivElement>(null);
 
   // Both hooks called unconditionally (Rules of Hooks).

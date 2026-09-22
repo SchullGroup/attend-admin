@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, Suspense } from "react";
 import {
   Users, ShieldCheck, ShieldAlert, ShieldOff, ShieldX,
   Search, Eye, X, AlertTriangle, Fingerprint,
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { formatDate } from "@/lib/utils";
+import { useUrlPageState, useUrlParamWriter, useUrlSearchState, useUrlState } from "@/lib/use-url-state";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -545,14 +546,18 @@ function DetailDrawer({
 // ParticipantKycDashboard — main page
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function ParticipantKycDashboard() {
-  const [statusFilter, setStatusFilter] = useState("");
-  const [search,       setSearch]       = useState("");
-  const [page,         setPage]         = useState(0);
-  const [selectedId,   setSelectedId]   = useState<string | null>(null);
-
-  // Reset page when filter changes
-  useEffect(() => { setPage(0); }, [statusFilter]);
+function ParticipantKycDashboardInner() {
+  // Status tab, search, page and the open participant all live in the query
+  // string, so a reload — or coming back after approving someone — returns to
+  // the same queue position instead of the top of "All".
+  const writeParams = useUrlParamWriter();
+  const [statusFilter]  = useUrlState("status");
+  const [page, setPage] = useUrlPageState();
+  const [selectedIdParam, setSelectedIdParam] = useUrlState("id");
+  const selectedId = selectedIdParam || null;
+  // Search filters the loaded page client-side, so it binds to the draft and
+  // stays instant; only the URL waits for typing to settle.
+  const [search, setSearch] = useUrlSearchState("q", 400, { page: null });
 
   const { data: stats, isLoading: statsLoading } = useParticipantStats();
   const { data: queueData, isLoading: queueLoading } =
@@ -609,7 +614,7 @@ export default function ParticipantKycDashboard() {
         {/* Status tabs */}
         <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
           {STATUS_TABS.map((t) => (
-            <button key={t.value} onClick={() => setStatusFilter(t.value)}
+            <button key={t.value} onClick={() => writeParams({ status: t.value, page: null })}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
                 statusFilter === t.value
                   ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
@@ -669,7 +674,7 @@ export default function ParticipantKycDashboard() {
                 return (
                   <tr key={pid}
                     className="attend-table-row cursor-pointer group"
-                    onClick={() => setSelectedId(pid)}>
+                    onClick={() => setSelectedIdParam(pid)}>
                     {/* Name */}
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
@@ -720,7 +725,7 @@ export default function ParticipantKycDashboard() {
                     <td className="px-5 py-3">
                       <Button size="sm" variant="outline"
                         className="h-7 text-xs gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => { e.stopPropagation(); setSelectedId(pid); }}>
+                        onClick={(e) => { e.stopPropagation(); setSelectedIdParam(pid); }}>
                         <Eye className="h-3 w-3" /> Review
                       </Button>
                     </td>
@@ -742,7 +747,7 @@ export default function ParticipantKycDashboard() {
                 : `No participants in the "${statusFilter || "All"}" category`}
             </p>
             {(search || statusFilter) && (
-              <button onClick={() => { setSearch(""); setStatusFilter(""); }}
+              <button onClick={() => { setSearch(""); writeParams({ q: null, status: null, page: null }); }}
                 className="mt-3 text-xs text-[hsl(var(--primary))] hover:underline">
                 Clear filters
               </button>
@@ -760,14 +765,14 @@ export default function ParticipantKycDashboard() {
             </p>
             <div className="flex items-center gap-1">
               <Button size="sm" variant="outline" className="h-7 w-7 p-0"
-                disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+                disabled={page === 0} onClick={() => setPage(page - 1)}>
                 <ChevronLeft className="h-3.5 w-3.5" />
               </Button>
               <span className="text-xs font-medium px-2 tabular-nums">
                 {page + 1} / {totalPages}
               </span>
               <Button size="sm" variant="outline" className="h-7 w-7 p-0"
-                disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)}>
+                disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
                 <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -777,8 +782,20 @@ export default function ParticipantKycDashboard() {
 
       {/* ── Detail drawer ── */}
       {selectedId && (
-        <DetailDrawer participantId={selectedId} onClose={() => setSelectedId(null)} />
+        <DetailDrawer participantId={selectedId} onClose={() => setSelectedIdParam(null)} />
       )}
     </div>
+  );
+}
+
+/**
+ * useSearchParams needs a Suspense boundary above it — without one the whole
+ * route opts out of static rendering and Next.js errors at build time.
+ */
+export default function ParticipantKycDashboard() {
+  return (
+    <Suspense fallback={null}>
+      <ParticipantKycDashboardInner />
+    </Suspense>
   );
 }

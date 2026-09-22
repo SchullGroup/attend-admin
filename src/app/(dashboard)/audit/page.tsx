@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, Suspense } from "react";
 import { Search, ShieldAlert, AlertTriangle, Info, Activity, Download, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { CustomSelect } from "@/components/custom/custom-select";
 import { Button } from "@/components/ui/button";
 import { useGetMe } from "@/api/auth/hooks";
+import { useUrlPageState, useUrlParamWriter, useUrlSearchState, useUrlState } from "@/lib/use-url-state";
 import {
   useClientAuditLogs,
   exportClientAuditLogs,
@@ -209,30 +210,32 @@ function LogRow({
 
 const PAGE_SIZE = 20;
 
-export default function AuditLogPage() {
+function AuditLogPageInner() {
   const { data: userResponse, isLoading: userLoading } = useGetMe();
   const isSuperAdmin = isSuperAdminRole(resolveRole(userResponse?.data));
 
-  const [searchInput, setSearchInput] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [category,    setCategory]    = useState("");
-  const [severity,    setSeverity]    = useState("");
-  const [userEmail,   setUserEmail]   = useState("");
-  const [entityId,    setEntityId]    = useState("");
-  const [startDate,   setStartDate]   = useState("");
-  const [endDate,     setEndDate]     = useState("");
+  // Every filter lives in the query string. An audit trail is the screen people
+  // are most likely to link to or come back to — "this search, these dates" is
+  // the whole point of the page — so a reload or the back button has to land on
+  // the same rows rather than the unfiltered log.
+  const writeParams = useUrlParamWriter();
+  const [category]  = useUrlState("category");
+  const [severity]  = useUrlState("severity");
+  const [startDate] = useUrlState("from");
+  const [endDate]   = useUrlState("to");
+  const [page,      setPage]      = useUrlPageState();
+
+  // The three free-text filters each bind to their own draft so typing stays
+  // instant, and each returns to page 1 once it settles.
+  const [searchInput, setSearchInput, searchQuery] = useUrlSearchState("q",      400, { page: null });
+  const [userEmail,   setUserEmail]                = useUrlSearchState("user",   400, { page: null });
+  const [entityId,    setEntityId]                 = useUrlSearchState("entity", 400, { page: null });
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [exporting,   setExporting]   = useState(false);
-  const [page,        setPage]        = useState(0);
 
-  // Debounce search — fire API call 400 ms after the user stops typing
-  useEffect(() => {
-    const t = setTimeout(() => { setSearchQuery(searchInput); setPage(0); }, 400);
-    return () => clearTimeout(t);
-  }, [searchInput]);
-
-  const applyCategory = useCallback((v: string) => { setCategory(v); setPage(0); }, []);
-  const applySeverity = useCallback((v: string) => { setSeverity(v); setPage(0); }, []);
+  const applyCategory = useCallback((v: string) => writeParams({ category: v, page: null }), [writeParams]);
+  const applySeverity = useCallback((v: string) => writeParams({ severity: v, page: null }), [writeParams]);
   useEffect(() => setSelectedIds(new Set()), [searchQuery, category, severity, userEmail, entityId, startDate, endDate, page]);
 
   // Super admin uses the platform-wide audit log; client admin uses their org's log.
@@ -387,7 +390,13 @@ export default function AuditLogPage() {
           {hasFilters && (
             <button
               type="button"
-              onClick={() => { setSearchInput(""); setSearchQuery(""); setCategory(""); setSeverity(""); setUserEmail(""); setEntityId(""); setStartDate(""); setEndDate(""); setPage(0); }}
+              onClick={() => {
+                setSearchInput(""); setUserEmail(""); setEntityId("");
+                writeParams({
+                  q: null, user: null, entity: null, category: null,
+                  severity: null, from: null, to: null, page: null,
+                });
+              }}
               className="text-xs text-[hsl(var(--primary))] hover:underline self-center whitespace-nowrap"
             >
               Clear filters
@@ -395,12 +404,12 @@ export default function AuditLogPage() {
           )}
         </div>
         <div className="mt-3 grid grid-cols-1 gap-3 border-t border-[hsl(var(--border))] pt-3 sm:grid-cols-2 lg:grid-cols-3">
-          <input type="email" value={userEmail} onChange={(event) => { setUserEmail(event.target.value); setPage(0); }} placeholder="User email" className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
-          <input type="text" value={entityId} onChange={(event) => { setEntityId(event.target.value); setPage(0); }} placeholder="Entity ID" className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
+          <input type="email" value={userEmail} onChange={(event) => setUserEmail(event.target.value)} placeholder="User email" className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
+          <input type="text" value={entityId} onChange={(event) => setEntityId(event.target.value)} placeholder="Entity ID" className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
           <div className="flex items-center gap-2">
-            <input type="date" value={startDate} onChange={(event) => { setStartDate(event.target.value); setPage(0); }} aria-label="Start date" className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
+            <input type="date" value={startDate} onChange={(event) => writeParams({ from: event.target.value, page: null })} aria-label="Start date" className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
             <span className="text-xs text-[hsl(var(--muted-foreground))]">to</span>
-            <input type="date" value={endDate} onChange={(event) => { setEndDate(event.target.value); setPage(0); }} aria-label="End date" className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
+            <input type="date" value={endDate} onChange={(event) => writeParams({ to: event.target.value, page: null })} aria-label="End date" className="h-9 min-w-0 flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
           </div>
         </div>
       </Card>
@@ -472,10 +481,10 @@ export default function AuditLogPage() {
               Page {page + 1} of {totalPages} · {totalCount.toLocaleString()} total
             </p>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page === 0 || isFetching} onClick={() => setPage((p) => p - 1)}>
+              <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page === 0 || isFetching} onClick={() => setPage(page - 1)}>
                 Previous
               </Button>
-              <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page >= totalPages - 1 || isFetching} onClick={() => setPage((p) => p + 1)}>
+              <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page >= totalPages - 1 || isFetching} onClick={() => setPage(page + 1)}>
                 Next
               </Button>
             </div>
@@ -483,5 +492,17 @@ export default function AuditLogPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+/**
+ * useSearchParams needs a Suspense boundary above it — without one the whole
+ * route opts out of static rendering and Next.js errors at build time.
+ */
+export default function AuditLogPage() {
+  return (
+    <Suspense fallback={null}>
+      <AuditLogPageInner />
+    </Suspense>
   );
 }
