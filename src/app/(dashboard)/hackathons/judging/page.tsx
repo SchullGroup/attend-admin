@@ -1,6 +1,6 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import React, { useState, useEffect, useCallback, Suspense } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   Trophy, ArrowLeft, ChevronRight, Search, Lightbulb,
   Star, UserCheck, Plus, Trash2, CheckCircle2, MessageSquare,
@@ -428,13 +428,59 @@ function JudgesPanel({ challengeId, readOnly = false }: { challengeId: string; r
   );
 }
 
+/**
+ * One query-string key as state, so a reload lands where the user left off.
+ * `replace`, not `push` — picking a challenge or a tab should not stack up
+ * back-button entries.
+ */
+function useUrlState(key: string, fallback = "") {
+  const router       = useRouter();
+  const pathname     = usePathname();
+  const searchParams = useSearchParams();
+  const value        = searchParams.get(key) ?? fallback;
+
+  const setValue = useCallback((next: string | null) => {
+    const params = new URLSearchParams(Array.from(searchParams.entries()));
+    if (next) params.set(key, next);
+    else      params.delete(key);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [router, pathname, searchParams, key]);
+
+  return [value, setValue] as const;
+}
+
+/**
+ * Search box that survives a reload. The input keeps its own state so typing
+ * stays instant; the settled value is mirrored into `?q=` and read back on
+ * mount. Writing every keystroke to the URL would be a router call per letter.
+ */
+function useSearchState() {
+  const [value, setValue] = useUrlState("q");
+  const [draft, setDraft] = useState(value);
+  const settled = useDebouncedValue(draft, 500);
+
+  useEffect(() => {
+    if (settled !== value) setValue(settled);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settled]);
+
+  return [draft, setDraft, settled] as const;
+}
+
 // ---------------------------------------------------------------------------
 // Challenge judging view
 // ---------------------------------------------------------------------------
 type JudgingTab = "Leaderboard" | "Judges" | "Assignments";
 
 function ChallengeJudging({ challengeId, readOnly = false }: { challengeId: string; readOnly?: boolean }) {
-  const [tab, setTab] = useState<JudgingTab>("Leaderboard");
+  // Which tab you were on survives a reload — landing back on Leaderboard
+  // after refreshing Assignments meant re-navigating every time.
+  const [tabParam, setTabParam] = useUrlState("view", "Leaderboard");
+  const tab    = (["Leaderboard", "Judges", "Assignments"] as JudgingTab[]).includes(tabParam as JudgingTab)
+    ? (tabParam as JudgingTab)
+    : "Leaderboard";
+  const setTab = (next: JudgingTab) => setTabParam(next);
 
   // Fetched here (not inside AssignmentsSection) so the same judges/tracks
   // data feeding the Judges tab also feeds Assignments — keeps this page
@@ -1303,8 +1349,12 @@ function JudgeJudgingPage() {
   const paramId    = searchParams.get("id")    ?? null;
   const paramTitle = searchParams.get("title") ?? "";
 
-  const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(paramId);
-  const [search, setSearch] = useState("");
+  const [urlChallengeId, setUrlChallengeId] = useUrlState("challengeId");
+  // This view has long accepted ?id= from links elsewhere; ?challengeId= is
+  // what it writes now, so both spellings resolve.
+  const selectedChallengeId = urlChallengeId || paramId;
+  const setSelectedChallengeId = (id: string | null) => setUrlChallengeId(id);
+  const [search, setSearch] = useSearchState();
 
   const { data, isLoading } = useJudgeChallenges("", "", 0, 100);
   const challenges = data?.challenges ?? [];
@@ -1442,7 +1492,7 @@ function JudgeJudgingPage() {
 // ---------------------------------------------------------------------------
 // Page (role gate — no hooks below the branch)
 // ---------------------------------------------------------------------------
-export default function JudgingPage() {
+function JudgingPageInner() {
   const { data: userResponse } = useGetMe();
   const normalizedRole = (userResponse?.data?.role ?? "").toLowerCase().replace(/[-\s]/g, "_");
   const isJudge      = JUDGE_ROLES.has(normalizedRole);
@@ -1461,11 +1511,11 @@ export default function JudgingPage() {
 // ---------------------------------------------------------------------------
 function SuperAdminJudgingView() {
   const router = useRouter();
-  const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
-  const [search,              setSearch]              = useState("");
+  const [challengeIdParam, setSelectedChallengeId] = useUrlState("challengeId");
+  const selectedChallengeId = challengeIdParam || null;
+  const [search,              setSearch, settledSearch] = useSearchState();
 
-  const debouncedSearch = useDebouncedValue(search);
-  const { data, isLoading } = useAdminChallenges(debouncedSearch, "", "", 0, 100);
+  const { data, isLoading } = useAdminChallenges(settledSearch, "", "", 0, 100);
   const challenges = data?.challenges ?? [];
   const summary    = data?.summary;
 
@@ -1613,8 +1663,9 @@ function SuperAdminJudgingView() {
 // ---------------------------------------------------------------------------
 function ClientJudgingView({ isViewer = false }: { isViewer?: boolean }) {
   const router = useRouter();
-  const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
-  const [search,              setSearch]              = useState("");
+  const [challengeIdParam, setSelectedChallengeId] = useUrlState("challengeId");
+  const selectedChallengeId = challengeIdParam || null;
+  const [search,              setSearch, settledSearch] = useSearchState();
 
   const { data, isLoading } = useClientChallenges("", "", 0, 100);
   const challenges = data?.challenges ?? [];
@@ -1771,5 +1822,14 @@ function ClientJudgingView({ isViewer = false }: { isViewer?: boolean }) {
         )}
       </Card>
     </div>
+  );
+}
+
+// useSearchParams requires a Suspense boundary in the App Router.
+export default function JudgingPage() {
+  return (
+    <Suspense fallback={<Loader variant="page" text="Loading Judging…" />}>
+      <JudgingPageInner />
+    </Suspense>
   );
 }
