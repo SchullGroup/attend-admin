@@ -381,11 +381,13 @@ export default function HackathonsPage() {
                     </span>
                   </td>
                   <td className="px-5 py-4">
-                    {!isSuperAdmin && (
-                      <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/hackathons/${c.id}`)}>
-                        Open <ChevronRight className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
+                    {/* This was hidden from super admins, leaving their last
+                        column empty and no way to open a challenge from the list
+                        at all. Viewing is read-only, so there is nothing here a
+                        super admin should be kept out of. */}
+                    <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/hackathons/${c.id}`)}>
+                      Open <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
                   </td>
                 </tr>
               );

@@ -257,14 +257,12 @@ function OverviewTab({
               >
                 <Icon className="h-4 w-4" style={{ color }} />
               </div>
-              {/* min-w-0 lets this shrink inside the flex row. Without it a long
-                  Top Prize refused to wrap and drove the card into a single
-                  column of stacked characters. */}
+              {/* min-w-0 is what lets this shrink inside the flex row. Without
+                  it a long Top Prize cannot wrap and the browser breaks it into
+                  a column of stacked words. */}
               <div className="min-w-0">
                 <p
                   className={`font-bold text-[hsl(var(--foreground))] ${isText ? "text-sm leading-snug break-words" : "text-lg"}`}
-                  // Prize text is free-form and can run to a sentence, so it is
-                  // clamped here and shown in full in the Prize Tiers card below.
                   style={isText ? {
                     display: "-webkit-box",
                     WebkitLineClamp: 2,
@@ -394,9 +392,6 @@ function OverviewTab({
             </h2>
             <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
               {c.prizeTiers.map((p) => (
-                // `justify-between` with a fixed-width label and no gap meant a
-                // long reward squeezed the place column until the two overlapped.
-                // The label holds its width, the reward takes the rest and wraps.
                 <div key={p.position} className="py-2.5 flex items-start gap-3">
                   <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] w-20 shrink-0 leading-tight pt-0.5">
                     {p.position}
@@ -2063,15 +2058,18 @@ function AdminJudgesTab({ challengeId }: { challengeId: string }) {
 
   return (
     <Card className="attend-card overflow-hidden">
-      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
-        <UserCheck className="h-4 w-4 text-[#7c22c9]" />
-        <h2 className="font-semibold text-[hsl(var(--foreground))]">
+      {/* A single non-wrapping row could not hold nine tracks: they compressed
+          until each pill broke its own label over two lines and collided with
+          the heading. The row wraps now and the pills keep their width. */}
+      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-x-3 gap-y-2 flex-wrap">
+        <UserCheck className="h-4 w-4 text-[#7c22c9] shrink-0" />
+        <h2 className="font-semibold text-[hsl(var(--foreground))] shrink-0">
           Judge Panel ({judges.length})
         </h2>
         {panel?.tracks && panel.tracks.length > 0 && (
-          <div className="ml-auto flex gap-1.5">
+          <div className="ml-auto flex flex-wrap justify-end gap-1.5 min-w-0">
             {panel.tracks.map((t) => (
-              <span key={t} className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
+              <span key={t} className="text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap shrink-0" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
                 {t}
               </span>
             ))}

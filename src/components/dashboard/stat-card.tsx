@@ -25,12 +25,19 @@ export function StatCard({ label, value, sub, icon: Icon, color, loading, bgOpac
       >
         <Icon className="h-5 w-5" style={{ color }} />
       </div>
-      <div>
+      {/* `value` is typed `number | string`, so any caller can pass free-form
+          text into what looks like a numeric tile. min-w-0 lets it wrap instead
+          of forcing the card wider or stacking one character per line. */}
+      <div className="min-w-0">
         <p className="text-xs font-medium text-[hsl(var(--muted-foreground))] mb-0.5">{label}</p>
         {loading ? (
           <div className="h-7 w-12 rounded-lg bg-[hsl(var(--muted))] animate-pulse mt-0.5" />
         ) : (
-          <p className="text-2xl font-bold tabular-nums text-[hsl(var(--foreground))] leading-none">{value}</p>
+          <p className={`font-bold tabular-nums text-[hsl(var(--foreground))] ${
+            typeof value === "string" && value.length > 12
+              ? "text-sm leading-snug break-words"
+              : "text-2xl leading-none"
+          }`} title={typeof value === "string" ? value : undefined}>{value}</p>
         )}
         <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{sub}</p>
       </div>

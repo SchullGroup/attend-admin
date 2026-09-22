@@ -41,8 +41,14 @@ export function StatCard({
           />
         </div>
       </div>
-      <div>
-        <div className="text-3xl font-bold tabular-nums text-foreground">
+      <div className="min-w-0">
+        {/* Same reason as components/dashboard/stat-card: `value` accepts a
+            string, and a long one has to wrap rather than break the tile. */}
+        <div className={`font-bold tabular-nums text-foreground ${
+          typeof value === "string" && value.length > 12
+            ? "text-base leading-snug break-words"
+            : "text-3xl"
+        }`} title={typeof value === "string" ? value : undefined}>
           {value}
         </div>
         {trend && (

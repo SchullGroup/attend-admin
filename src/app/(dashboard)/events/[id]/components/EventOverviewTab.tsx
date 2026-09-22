@@ -317,9 +317,10 @@ export function EventOverviewTab({
                   <p className="attend-section-title mb-2 flex items-center gap-1.5"><Trophy className="h-3.5 w-3.5 text-amber-500" /> Prizes</p>
                   <div className="flex flex-col divide-y divide-[hsl(var(--border))] rounded-xl border border-[hsl(var(--border))] overflow-hidden">
                     {(innovationChallengeConfig.prizeTiers as { position: string; reward: string }[]).map((p) => (
-                      <div key={p.position} className="flex items-center gap-3 px-4 py-2.5">
-                        <span className="text-xs font-bold text-[hsl(var(--muted-foreground))] w-20 shrink-0">{p.position}</span>
-                        <span className="text-sm font-semibold text-[hsl(var(--foreground))]">{p.reward}</span>
+                      <div key={p.position} className="flex items-start gap-3 px-4 py-2.5">
+                        <span className="text-xs font-bold text-[hsl(var(--muted-foreground))] w-20 shrink-0 leading-tight pt-0.5">{p.position}</span>
+                        {/* Rewards are free-form and often a sentence — wrap rather than push the row wide. */}
+                        <span className="text-sm font-semibold text-[hsl(var(--foreground))] flex-1 min-w-0 break-words leading-snug">{p.reward}</span>
                       </div>
                     ))}
                   </div>
