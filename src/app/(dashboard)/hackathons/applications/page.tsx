@@ -437,8 +437,11 @@ function ChallengeApplications({
   onViewDetail: (appId: string) => void;
   readOnly?:    boolean;
 }) {
-  const [activeStatus, setActiveStatus] = useState("");
-  const [activeTrack,  setActiveTrack]  = useState("");
+  // Filters live in the URL for the same reason the challenge does: a reload on
+  // "Shortlisted" used to come back showing everything, with the pill reset and
+  // no sign anything had changed.
+  const [activeStatus, setActiveStatus] = useUrlState("status");
+  const [activeTrack,  setActiveTrack]  = useUrlState("track");
   const [showExport,   setShowExport]   = useState(false);
   const [exportFrom,   setExportFrom]   = useState("");
   const [exportTo,     setExportTo]     = useState("");
@@ -1094,21 +1097,27 @@ function JudgeApplicationsView() {
  * looking at. `replace` rather than `push` so the picker does not fill the back
  * stack with one entry per challenge.
  */
-function useSelectedChallenge() {
+function useUrlState(key: string, fallback = "") {
   const router       = useRouter();
   const pathname     = usePathname();
   const searchParams = useSearchParams();
-  const selected     = searchParams.get("challengeId");
+  const value        = searchParams.get(key) ?? fallback;
 
-  const setSelected = useCallback((id: string | null) => {
+  const setValue = useCallback((next: string | null) => {
     const params = new URLSearchParams(Array.from(searchParams.entries()));
-    if (id) params.set("challengeId", id);
-    else    params.delete("challengeId");
+    if (next) params.set(key, next);
+    else      params.delete(key);
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [router, pathname, searchParams]);
+  }, [router, pathname, searchParams, key]);
 
-  return [selected, setSelected] as const;
+  return [value, setValue] as const;
+}
+
+function useSelectedChallenge() {
+  const [value, setValue] = useUrlState("challengeId");
+  // The picker treats "" as nothing selected; the rest of the page expects null.
+  return [value || null, setValue] as const;
 }
 
 function ApplicationsPageInner() {
@@ -1308,6 +1317,7 @@ function ApplicationsPageInner() {
 function SuperAdminApplicationsView() {
   const router = useRouter();
   const [selectedChallengeId, setSelectedChallengeId] = useSelectedChallenge();
+  const [adminStatus,         setAdminStatus]         = useUrlState("status");
   const [search,              setSearch]              = useState("");
 
   const { data, isLoading } = useAdminChallenges(search, "", "", 0, 100);
@@ -1340,7 +1350,11 @@ function SuperAdminApplicationsView() {
             </Button>
           </div>
         </div>
-        <EventChallengeApplicationsTab challengeId={selectedChallengeId} />
+        <EventChallengeApplicationsTab
+          challengeId={selectedChallengeId}
+          status={adminStatus}
+          onStatusChange={setAdminStatus}
+        />
       </div>
     );
   }

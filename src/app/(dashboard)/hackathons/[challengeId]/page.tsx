@@ -2061,15 +2061,17 @@ function AdminJudgesTab({ challengeId }: { challengeId: string }) {
       {/* A single non-wrapping row could not hold nine tracks: they compressed
           until each pill broke its own label over two lines and collided with
           the heading. The row wraps now and the pills keep their width. */}
-      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-x-3 gap-y-2 flex-wrap">
-        <UserCheck className="h-4 w-4 text-[#7c22c9] shrink-0" />
-        <h2 className="font-semibold text-[hsl(var(--foreground))] shrink-0">
-          Judge Panel ({judges.length})
-        </h2>
+      <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
+        <div className="flex items-center gap-2">
+          <UserCheck className="h-4 w-4 text-[#7c22c9] shrink-0" />
+          <h2 className="font-semibold text-[hsl(var(--foreground))]">
+            Judge Panel ({judges.length})
+          </h2>
+        </div>
         {panel?.tracks && panel.tracks.length > 0 && (
-          <div className="ml-auto flex flex-wrap justify-end gap-1.5 min-w-0">
+          <div className="mt-3 flex flex-wrap gap-1.5">
             {panel.tracks.map((t) => (
-              <span key={t} className="text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap shrink-0" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
+              <span key={t} className="text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap max-w-[220px] truncate" title={t} style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>
                 {t}
               </span>
             ))}
@@ -2331,6 +2333,22 @@ export default function ChallengeDetailPage({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {/* Super admins have no Applications tab (see ADMIN_TABS), so the
+                submissions were unreachable from the one page that summarises
+                the challenge. Client roles get it too — it is the same list,
+                one click instead of a tab hunt. */}
+            <Button
+              variant="outline" size="sm" className="gap-1.5"
+              onClick={() => router.push(`/hackathons/applications?challengeId=${challengeId}`)}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              View Applications
+              {(challenge as any).applicationCount > 0 && (
+                <span className="text-[10px] font-bold bg-[#7c22c918] text-[#7c22c9] rounded-full px-1.5 py-0.5">
+                  {(challenge as any).applicationCount}
+                </span>
+              )}
+            </Button>
             <span
               className="text-xs font-semibold px-2.5 py-1 rounded-full"
               style={
