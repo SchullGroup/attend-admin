@@ -521,14 +521,6 @@ export const TOURS: Tour[] = [
         placement: "bottom",
       },
       {
-        id: "rg-kyc",
-        title: "Verification",
-        body: "Shareholders verify their identity before they can vote. The KYC queue is where those submissions are reviewed and approved or sent back.",
-        route: "/participants/kyc",
-        placement: "bottom",
-        roles: ["super_admin", "kyc_officer", "client_admin", "admin"],
-      },
-      {
         id: "rg-documents",
         title: "Company documents",
         body: "Documents can attach to a register rather than a single event — the things that stay true between meetings.",
@@ -540,7 +532,76 @@ export const TOURS: Tour[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 5. Judging — the judge's own experience.
+  // 5. Certificates.
+  //
+  // Short on purpose: the whole thing hinges on one idea people get wrong,
+  // which is that the design and the issuing are separate steps, and that a
+  // design can belong either to this event or to the whole organisation.
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    id: "certificates",
+    label: "Certificates",
+    description: "Designing the artwork and issuing it to teams.",
+    roles: ["client_admin", "admin", "event_manager", "viewer"],
+    steps: [
+      {
+        id: "cert-intro",
+        title: "Two separate jobs",
+        body: "Designing the certificate and handing it out are different things. You set the artwork up once and it sits there; issuing is a separate action you take when the challenge is over. Nothing is sent to anyone while you are still designing.",
+        route: "/hackathons/:challengeId?tab=Certificates",
+      },
+      {
+        id: "cert-scope",
+        title: "This event, or every event",
+        body: "The design belongs either to this one challenge or to your whole organisation. \"Organisation default\" is the one to set first — it applies to every event that has not been given its own, so you design once instead of per challenge.",
+        route: "/hackathons/:challengeId?tab=Certificates",
+        target: "cert-scope",
+        placement: "bottom",
+      },
+      {
+        id: "cert-override",
+        title: "How the two interact",
+        body: "A design saved on \"This event\" wins for this event only, and leaves the organisation default untouched everywhere else. Use it when one challenge needs its own look — a sponsor's branding, say — without disturbing the rest.",
+        route: "/hackathons/:challengeId?tab=Certificates",
+        target: "cert-scope",
+        placement: "bottom",
+      },
+      {
+        id: "cert-type",
+        title: "Winners and entrants get different certificates",
+        body: "Winner and Participation are designed separately, so the team that placed first does not receive the same document as everyone who entered. Switching between them here swaps which design you are editing.",
+        route: "/hackathons/:challengeId?tab=Certificates",
+        target: "cert-type",
+        placement: "bottom",
+      },
+      {
+        id: "cert-artwork",
+        title: "Your artwork, their name on it",
+        body: "Upload the background and drag the fields — name, challenge, date — onto it. You are positioning placeholders, not typing anyone's details: each certificate is generated with the right team's name where the placeholder sits.",
+        route: "/hackathons/:challengeId?tab=Certificates",
+        placement: "bottom",
+      },
+      {
+        id: "cert-issue",
+        title: "Issuing them",
+        body: "Issue sends a certificate to every entrant who did not win, using whichever design applies. It stays disabled until the challenge has ended — there is no final list of who placed where until then.",
+        route: "/hackathons/:challengeId?tab=Certificates",
+        target: "cert-issue",
+        placement: "top",
+        roles: ["client_admin", "admin", "event_manager"],
+      },
+      {
+        id: "cert-reissue",
+        title: "If you change the artwork afterwards",
+        body: "Re-issuing regenerates with the current design. Certificates already sent keep the artwork they were made with, so fix the design first and re-issue once rather than several times.",
+        route: "/hackathons/:challengeId?tab=Certificates",
+        roles: ["client_admin", "admin", "event_manager"],
+      },
+    ],
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 6. Judging — the judge's own experience.
   // ─────────────────────────────────────────────────────────────────────────
   {
     id: "judging",

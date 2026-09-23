@@ -414,7 +414,7 @@ export function ParticipationCertificates({ challengeId, readOnly }: { challenge
                         Re-issue with updated artwork
                       </Button>
                     )}
-                    <Button onClick={handleIssue} disabled={!canIssue}>
+                    <Button data-tour="cert-issue" onClick={handleIssue} disabled={!canIssue}>
                       <Send className="h-3.5 w-3.5 mr-1.5" />
                       {issue.isPending ? "Issuing…" : alreadyIssued ? "Re-run issuance" : ended ? "Issue certificates" : "End challenge to issue"}
                     </Button>
