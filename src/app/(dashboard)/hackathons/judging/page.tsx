@@ -1032,11 +1032,21 @@ function JudgeApplicationsList({
   onViewDetail: (appId: string) => void;
 }) {
   // Namespaced: this page already uses ?view= and ?challengeId=.
-  const [activeStatus, setActiveStatus] = useUrlState("appStatus");
+  // A stale link may carry ?appStatus=ALL from before the All tab was
+  // normalised — read it as "no filter" so the tab highlights and the request
+  // does not ask the API for a status called ALL.
+  const [rawStatus, setActiveStatus] = useUrlState("appStatus");
+  const activeStatus = rawStatus.toLowerCase() === "all" ? "" : rawStatus;
   const [activeTrack,  setActiveTrack]  = useUrlState("track");
   const { data, isLoading } = useJudgeChallengeApplications(challengeId, activeStatus, activeTrack, 0, 100);
   const apps  = data?.applications ?? [];
   const tabs  = data?.tabs         ?? [];
+  // "All" can arrive from the API as an empty key, the literal "ALL", or just
+  // that label — the hardcoded All button below is only rendered when the API
+  // did not already send one, otherwise the bar shows two of them.
+  const isAllTab  = (t: { key?: string; label?: string }) =>
+    !t.key || t.key.toLowerCase() === "all" || (t.label ?? "").trim().toLowerCase() === "all";
+  const hasAllTab = tabs.some(isAllTab);
 
   // Track options must stay independent of the active track filter — see
   // matching fix in hackathons/[challengeId]/page.tsx's ApplicationsTab.
@@ -1049,20 +1059,22 @@ function JudgeApplicationsList({
     <div className="flex flex-col gap-4">
       {tabs.length > 0 && (
         <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
-          <button
-            onClick={() => setActiveStatus("")}
-            className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-center ${
-              activeStatus === "" ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-            }`}
-          >
-            All
-          </button>
+          {!hasAllTab && (
+            <button
+              onClick={() => setActiveStatus("")}
+              className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-center ${
+                activeStatus === "" ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              }`}
+            >
+              All
+            </button>
+          )}
           {tabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveStatus(tab.key)}
+              onClick={() => setActiveStatus(isAllTab(tab) ? "" : tab.key)}
               className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-center ${
-                activeStatus === tab.key ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                (isAllTab(tab) ? activeStatus === "" : activeStatus === tab.key) ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
               }`}
             >
               {tab.label}
