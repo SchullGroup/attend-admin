@@ -155,7 +155,7 @@ function JudgeDashboard({ name }: { name?: string }) {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div data-tour="judge-dashboard" className="grid grid-cols-3 gap-4">
         {[
           { label: "Assigned",       value: totalAssigned, Icon: UserCheck,   color: "#7c22c9" },
           { label: "Teams Scored",   value: totalScored,   Icon: CheckCircle2, color: "#16a34a" },

@@ -146,6 +146,7 @@ export function ChallengeGuidePanel({ alwaysShow = false }: { alwaysShow?: boole
 export function TabHint({ label = "Next", children }: { label?: string; children: ReactNode }) {
   return (
     <div
+      data-tour="challenge-next-hint"
       className="flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs text-[hsl(var(--muted-foreground))]"
       style={{ borderColor: `${BRAND}2e`, backgroundColor: `${BRAND}0d` }}
     >

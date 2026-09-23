@@ -4,6 +4,7 @@ import Cookies from "js-cookie";
 import { refreshAccessToken } from "@/lib/api-client";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Header } from "@/components/shell/header";
+import { TourProvider } from "@/components/tour/tour-provider";
 import { Loader } from "@/components/ui/Loader";
 import { Button } from "@/components/ui/button";
 import { rememberSessionEndReason } from "@/lib/auth-session";
@@ -114,7 +115,10 @@ export default function DashboardLayout({
   if (!ready) return <Loader variant="page" text="Resuming session…" />;
 
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: "#f6f7fb" }}>
+    // TourProvider sits inside the `ready` gate, so a tour never opens over a
+    // shell that is still resuming a session.
+    <TourProvider>
+      <div className="min-h-screen flex" style={{ backgroundColor: "#f6f7fb" }}>
       <Sidebar />
       {/* min-w-0 lets this flex column shrink below its widest child instead of
           extending past the viewport; overflow-x-hidden on <main> keeps the shell
@@ -125,5 +129,6 @@ export default function DashboardLayout({
         <main className="flex-1 min-w-0 p-6 overflow-y-auto overflow-x-hidden">{children}</main>
       </div>
     </div>
+    </TourProvider>
   );
 }

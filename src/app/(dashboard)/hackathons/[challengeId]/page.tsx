@@ -247,7 +247,7 @@ function OverviewTab({
       <div className="col-span-2 flex flex-col gap-5">
 
         {/* Stat cards */}
-        <div className="grid grid-cols-4 gap-4">
+        <div data-tour="challenge-stats" className="grid grid-cols-4 gap-4">
           {[
             { label: "Applications", value: c.applicationCount, icon: FileText,  color: "#7c22c9" },
             { label: "Shortlisted",  value: c.shortlistedCount, icon: Star,      color: "#0891b2" },
@@ -466,9 +466,11 @@ function OverviewTab({
                   );
                 }}
               >
-                {c.applicationsOpen
-                  ? <><ToggleRight className="h-4 w-4" /> Close</>
-                  : <><ToggleLeft className="h-4 w-4" /> Open</>}
+                <span data-tour="challenge-open-toggle" className="inline-flex items-center gap-1">
+                  {c.applicationsOpen
+                    ? <><ToggleRight className="h-4 w-4" /> Close</>
+                    : <><ToggleLeft className="h-4 w-4" /> Open</>}
+                </span>
               </Button>
             )}
           </div>
@@ -476,7 +478,9 @@ function OverviewTab({
 
         {/* End challenge — client-admin only, terminal action */}
         {!isSuperAdmin && !readOnly && (
-          <EndChallengeCard challengeId={challengeId} status={c.status} />
+          <div data-tour="challenge-end">
+            <EndChallengeCard challengeId={challengeId} status={c.status} />
+          </div>
         )}
       </div>
     </div>
@@ -2421,10 +2425,11 @@ export default function ChallengeDetailPage({
       </div>
 
       {/* Tab bar */}
-      <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
+      <div data-tour="challenge-tabs" className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
         {tabs.map((t) => (
           <button
             key={t}
+            data-tour={`challenge-tab:${t}`}
             onClick={() => setTab(t)}
             className={`flex-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all text-center ${
               tab === t

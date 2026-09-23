@@ -117,15 +117,18 @@ export default function TeamPage() {
   function MemberRow({ member, revoked: isRevoked }: { member: TeamMember; revoked?: boolean }) {
     return (
       <tr key={member.id} className={`attend-table-row${isRevoked ? " opacity-60" : ""}`}>
-        <td className="px-5 py-3">
+        <td className="px-5 py-3 max-w-[240px]">
           <div className="flex items-center gap-2.5">
             <Avatar member={member} role={member.role} />
-            <span className={`text-sm font-medium text-[hsl(var(--foreground))]${isRevoked ? " line-through" : ""}`}>
+            <span
+              className={`text-sm font-medium text-[hsl(var(--foreground))] truncate${isRevoked ? " line-through" : ""}`}
+              title={member.fullName}
+            >
               {member.fullName}
             </span>
           </div>
         </td>
-        <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{member.email}</td>
+        <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[240px] truncate" title={member.email}>{member.email}</td>
         <td className="px-5 py-3"><RoleBadge role={member.role} /></td>
         {!isRevoked && <td className="px-5 py-3"><StatusBadge status={member.status} /></td>}
         {!isRevoked && (

@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, CheckCircle2, XCircle, Radio,
   Users, Share2, ChevronDown, ChevronUp, Timer,
-  Download, PlusCircle, X, ToggleLeft, ToggleRight, Pencil, Check, Lock,
-} from "lucide-react";
+  Download, PlusCircle, X, ToggleLeft, ToggleRight, Pencil, Check, Lock, MinusCircle } from "lucide-react";
 import {
   useVoteResults,
   useRecordOfflineVotes,
@@ -32,6 +31,7 @@ import { popup } from "@/lib/popup-store";
 
 // eslint-disable-next-line import/order
 import { ProxiesSection } from "./ProxiesSection";
+import { voteOutcome, VOTE_OUTCOME_CLASS } from "@/lib/vote-outcome";
 
 function resolutionStatusStyle(status: string) {
   const s = status?.toUpperCase();
@@ -167,15 +167,17 @@ function CandidateBlock({
           </p>
           {c.bio && <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{c.bio}</p>}
         </div>
-        {c.passed ? (
-          <span className="flex items-center gap-1 text-xs font-semibold text-green-600 shrink-0">
-            <CheckCircle2 className="h-3.5 w-3.5" /> Passed
-          </span>
-        ) : (
-          <span className="flex items-center gap-1 text-xs font-semibold text-red-500 shrink-0">
-            <XCircle className="h-3.5 w-3.5" /> Failed
-          </span>
-        )}
+        {(() => {
+          const outcome = voteOutcome(cTotal, !!c.passed);
+          const Icon = outcome.tone === "passed" ? CheckCircle2
+                     : outcome.tone === "failed" ? XCircle
+                     : MinusCircle;
+          return (
+            <span className={`flex items-center gap-1 text-xs font-semibold shrink-0 ${VOTE_OUTCOME_CLASS[outcome.tone]}`}>
+              <Icon className="h-3.5 w-3.5" /> {outcome.label}
+            </span>
+          );
+        })()}
       </div>
 
       <VoteBar pct={cPct} color="#16a34a" />
@@ -327,18 +329,25 @@ function ResolutionCard({
             <>
               {/* Pass / fail */}
               <div className="flex items-center gap-3 mt-1.5">
-                {res.passed ? (
-                  <span className="flex items-center gap-1 text-xs font-semibold text-green-600">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Passed
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-xs font-semibold text-red-500">
-                    <XCircle className="h-3.5 w-3.5" /> Failed
+                {(() => {
+                  const outcome = voteOutcome(totalCombined, !!res.passed);
+                  const Icon = outcome.tone === "passed" ? CheckCircle2
+                             : outcome.tone === "failed" ? XCircle
+                             : MinusCircle;
+                  return (
+                    <span className={`flex items-center gap-1 text-xs font-semibold ${VOTE_OUTCOME_CLASS[outcome.tone]}`}>
+                      <Icon className="h-3.5 w-3.5" /> {outcome.label}
+                    </span>
+                  );
+                })()}
+                {/* "0% for" alongside no votes is the same misreading in
+                    smaller type, so the share only appears once it means
+                    something. */}
+                {totalCombined > 0 && (
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                    {pct}% for
                   </span>
                 )}
-                <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                  {pct}% for
-                </span>
               </div>
 
               {/* Percentage bar */}
@@ -930,19 +939,19 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
             )}
             <Button size="sm" variant="outline" disabled={exporting} onClick={handleExport}>
               <Download className="h-3.5 w-3.5 mr-1.5" />
-              {exporting ? "Exporting…" : "Export CSV"}
+              <span data-tour="vote-export">{exporting ? "Exporting…" : "Export CSV"}</span>
             </Button>
           </div>
         </div>
       </div>
 
       {/* Event summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div data-tour="vote-summary" className="grid grid-cols-3 gap-4">
         <Card className="attend-card p-5">
           <div className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Total Votes Cast</div>
           <div className="text-2xl font-bold tabular-nums">{(data.totalVotesCast ?? 0).toLocaleString()}</div>
         </Card>
-        <Card className="attend-card p-5">
+        <Card data-tour="vote-quorum" className="attend-card p-5">
           <div className="flex items-center justify-between mb-1">
             <div className="text-xs text-[hsl(var(--muted-foreground))]">Quorum</div>
             {!editingQuorum && !quorumLocked && !isViewer && (
@@ -996,7 +1005,7 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
       </div>
 
       {/* Resolutions */}
-      <div>
+      <div data-tour="vote-resolutions">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-[hsl(var(--foreground))]">
             Resolutions ({resolutions.length})
@@ -1027,7 +1036,9 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
         </div>
 
         {/* ── Proxy Register (AGM milestone #5) ── */}
-        <ProxiesSection eventId={eventId} canMark={canMarkProxies} resolutions={resolutions} />
+        <div data-tour="vote-proxies">
+          <ProxiesSection eventId={eventId} canMark={canMarkProxies} resolutions={resolutions} />
+        </div>
       </div>
     </div>
   );

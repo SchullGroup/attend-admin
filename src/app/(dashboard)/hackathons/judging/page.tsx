@@ -129,7 +129,7 @@ function LeaderboardPanel({ challengeId }: { challengeId: string }) {
                 <td className="px-5 py-3">
                   <span className="text-sm font-black tabular-nums" style={{ color: medalColor(r.rank) }}>#{r.rank}</span>
                 </td>
-                <td className="px-5 py-3 text-sm font-semibold text-[hsl(var(--foreground))]">{r.teamName}</td>
+                <td className="px-5 py-3 text-sm font-semibold text-[hsl(var(--foreground))] max-w-[200px] truncate" title={r.teamName}>{r.teamName}</td>
                 <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[200px] truncate">{r.ideaTitle}</td>
                 <td className="px-5 py-3">
                   <span className="text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: "#faf5ff", color: "#7c22c9", border: "1px solid #e9d5ff" }}>

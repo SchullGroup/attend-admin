@@ -1054,7 +1054,7 @@ export function CertificateTemplateEditor({ challengeId, readOnly }: { challenge
     <div className="flex flex-col gap-4">
       {/* Scope switch: per-event override vs the org-wide default (§2 cascade) */}
       {canEditOrgDefault && (
-        <div className="flex flex-wrap items-center gap-3">
+        <div data-tour="cert-scope" className="flex flex-wrap items-center gap-3">
           <div className="inline-flex rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-0.5">
             {scopeOptions.map(({ value, label }) => {
               const active = value === scope;
@@ -1084,7 +1084,7 @@ export function CertificateTemplateEditor({ challengeId, readOnly }: { challenge
 
       {/* WINNER | PARTICIPATION type switch (§9) */}
       {supportsCertificateType && (
-        <div className="flex flex-wrap items-center gap-3">
+        <div data-tour="cert-type" className="flex flex-wrap items-center gap-3">
           <div className="inline-flex rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-0.5">
             {CERTIFICATE_TYPES.map((t) => {
               const active = t === certType;
