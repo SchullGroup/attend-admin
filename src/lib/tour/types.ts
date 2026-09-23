@@ -58,6 +58,15 @@ export interface TourStep {
   roles?: TourRole[];
 }
 
+/**
+ * An example record a tour needs before it is worth offering.
+ *
+ * Resolved once per session; a tour whose requirement comes back empty is
+ * hidden rather than run, and individual steps that need a missing one are
+ * dropped. See TourProvider.
+ */
+export type TourExampleKey = "challengeId" | "voteEventId";
+
 export interface Tour {
   id: string;
   /** Shown in the "Take a tour" menu. */
@@ -66,5 +75,14 @@ export interface Tour {
   description: string;
   /** Roles this tour is offered to. Omitted means everyone. */
   roles?: TourRole[];
+
+  /**
+   * Hide this tour until the account actually has one of these to stand on.
+   *
+   * A certificates tour on an account with no challenges would be seven cards
+   * about a screen the person cannot open — worse than not offering it, since
+   * they chose it from a menu and got nothing.
+   */
+  requires?: TourExampleKey[];
   steps: TourStep[];
 }

@@ -30,7 +30,7 @@ import { useGetMe } from "@/api/auth/hooks";
 import { apiClient } from "@/lib/api-client";
 import { resolveRole } from "@/lib/utils";
 import { TOURS, WELCOME_TOUR_ID } from "@/lib/tour/tours";
-import type { Tour, TourRole, TourStep } from "@/lib/tour/types";
+import type { Tour, TourExampleKey, TourRole, TourStep } from "@/lib/tour/types";
 import { TourOverlay } from "./tour-overlay";
 
 // Bump the version when the tour content changes enough that returning users
@@ -60,15 +60,41 @@ function writeCompleted(ids: string[]) {
   }
 }
 
-/** Steps this role can actually see. */
-function stepsForRole(tour: Tour, role: TourRole | ""): TourStep[] {
-  return tour.steps.filter((s) => !s.roles || (role && s.roles.includes(role as TourRole)));
+/** Which example record, if any, a step's route depends on. */
+function exampleKeyFor(step: TourStep): TourExampleKey | null {
+  if (step.route?.includes(":challengeId")) return "challengeId";
+  if (step.route?.includes(":voteEventId")) return "voteEventId";
+  return null;
 }
 
-export function toursForRole(role: TourRole | ""): Tour[] {
-  return TOURS.filter(
-    (t) => (!t.roles || (role && t.roles.includes(role as TourRole))) && stepsForRole(t, role).length > 0
-  );
+type Examples = Partial<Record<TourExampleKey, string | null>>;
+
+/**
+ * Steps this person can actually be shown.
+ *
+ * Two filters. Role is the obvious one. The second is emptiness: a step that
+ * stands on an example challenge or vote record is dropped once we know the
+ * account has none, rather than rendering as a centred card about a screen
+ * they cannot open. `undefined` means we have not finished looking, and is
+ * treated as "keep" so nothing flickers out mid-tour.
+ */
+function stepsForRole(tour: Tour, role: TourRole | "", examples: Examples = {}): TourStep[] {
+  return tour.steps.filter((s) => {
+    if (s.roles && !(role && s.roles.includes(role as TourRole))) return false;
+    const key = exampleKeyFor(s);
+    return !key || examples[key] !== null;
+  });
+}
+
+export function toursForRole(role: TourRole | "", examples: Examples = {}): Tour[] {
+  return TOURS.filter((t) => {
+    if (t.roles && !(role && t.roles.includes(role as TourRole))) return false;
+    // A tour that declares a requirement is hidden entirely until the account
+    // has one — the user picked it from a menu, so an empty run is a broken
+    // promise rather than a graceful degradation.
+    if (t.requires?.some((k) => examples[k] === null)) return false;
+    return stepsForRole(t, role, examples).length > 0;
+  });
 }
 
 interface TourContextValue {
@@ -119,7 +145,10 @@ export function TourProvider({ children }: { children: ReactNode }) {
     setHydrated(true);
   }, []);
 
-  const available = useMemo(() => toursForRole(role), [role]);
+  // Resolved example records, keyed as in Examples. null = looked, found none.
+  const [examples, setExamples] = useState<Examples>({});
+
+  const available = useMemo(() => toursForRole(role, examples), [role, examples]);
 
   const activeTour = useMemo(
     () => (activeId ? available.find((t) => t.id === activeId) ?? null : null),
@@ -127,8 +156,8 @@ export function TourProvider({ children }: { children: ReactNode }) {
   );
 
   const steps = useMemo(
-    () => (activeTour ? stepsForRole(activeTour, role) : []),
-    [activeTour, role]
+    () => (activeTour ? stepsForRole(activeTour, role, examples) : []),
+    [activeTour, role, examples]
   );
 
   const markCompleted = useCallback((id: string) => {
@@ -188,46 +217,38 @@ export function TourProvider({ children }: { children: ReactNode }) {
   }, [hydrated, role, completed, available]);
 
   // ── Example records ──────────────────────────────────────────────────────
-  // The deep tours are far more use standing on a real challenge or a real
-  // vote record than describing one from a centred card — "this is where you
-  // open applications" lands when the button is under the spotlight.
+  // The deep tours stand on a real challenge or vote record — "this is where
+  // you open applications" lands when the button is under the spotlight.
   //
-  // So a step's route may contain :challengeId or :voteEventId, and we look up
-  // one example when the tour starts. Deliberately not a react-query hook: a
-  // hook here would fire on every dashboard page load for every role, and
-  // these are org-scoped endpoints that 403 for roles that cannot see them.
-  // One request, only when a tour that needs it begins.
-  const [examples, setExamples] = useState<Record<string, string>>({});
+  // Probed once when the shell mounts rather than when a tour starts, because
+  // the answer decides what the menu offers: an account with no challenges
+  // should not be offered a certificates tour at all. Two requests of size=1,
+  // once per page load, and only for the endpoints this role can actually
+  // reach — a react-query hook here would fire on every dashboard page for
+  // every role, including ones these endpoints 403 for.
+  //
+  // A key set to null means "looked, found none"; absent means "still looking".
 
   useEffect(() => {
-    if (!activeTour) return;
+    if (!role) return;
 
-    const needed = new Set<string>();
-    for (const s of activeTour.steps) {
-      if (s.route?.includes(":challengeId")) needed.add("challengeId");
-      if (s.route?.includes(":voteEventId")) needed.add("voteEventId");
-    }
-    if (needed.size === 0) return;
+    // Which endpoint serves this role's challenge list. Every role has one.
+    const challengeUrl =
+      role === "judge"         ? "/api/v1/judge/challenges"
+      : role === "super_admin" ? "/api/v1/admin/challenges"
+      :                          "/api/v1/client/challenges";
 
-    let cancelled = false;
-
-    // Each entry: the param, the endpoint for this role, and how to dig the id
-    // out of the several envelope shapes these endpoints use.
-    const lookups: { key: string; url: string; pick: (raw: any) => string | undefined }[] = [];
-
-    if (needed.has("challengeId")) {
-      const url =
-        role === "judge"         ? "/api/v1/judge/challenges"
-        : role === "super_admin" ? "/api/v1/admin/challenges"
-        :                          "/api/v1/client/challenges";
-      lookups.push({
+    const lookups: { key: TourExampleKey; url: string; pick: (raw: any) => string | undefined }[] = [
+      {
         key: "challengeId",
-        url,
+        url: challengeUrl,
         pick: (raw) => (raw?.challenges ?? raw?.content ?? raw?.items ?? [])[0]?.id,
-      });
-    }
+      },
+    ];
 
-    if (needed.has("voteEventId")) {
+    // Vote records are org-scoped: there is no equivalent a super admin or a
+    // judge can read, so we do not ask on their behalf.
+    if (role !== "super_admin" && role !== "judge") {
       lookups.push({
         key: "voteEventId",
         url: "/api/v1/client/votes",
@@ -238,27 +259,26 @@ export function TourProvider({ children }: { children: ReactNode }) {
       });
     }
 
+    let cancelled = false;
+
     Promise.all(
       lookups.map(async ({ key, url, pick }) => {
         try {
           const res = await apiClient.get(url, { params: { page: 0, size: 1 } });
           const raw = (res.data as any)?.data ?? res.data;
-          const id  = pick(raw);
-          return id ? ([key, id] as const) : null;
+          return [key, pick(raw) ?? null] as const;
         } catch {
-          // No example yet, no permission, or the endpoint is down. The step
-          // keeps its centred card — never a reason to interrupt the tour.
-          return null;
+          // No permission, or the endpoint is down. Treated the same as empty:
+          // we cannot stand a tour on it either way.
+          return [key, null] as const;
         }
       })
     ).then((pairs) => {
-      if (cancelled) return;
-      const found = Object.fromEntries(pairs.filter(Boolean) as (readonly [string, string])[]);
-      if (Object.keys(found).length) setExamples((prev) => ({ ...prev, ...found }));
+      if (!cancelled) setExamples(Object.fromEntries(pairs) as Examples);
     });
 
     return () => { cancelled = true; };
-  }, [activeTour, role]);
+  }, [role]);
 
   /** Fill :challengeId / :voteEventId, or return null if we have no example. */
   const resolveRoute = useCallback(

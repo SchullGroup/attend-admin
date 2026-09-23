@@ -183,6 +183,7 @@ export const TOURS: Tour[] = [
     label: "Innovation Challenges",
     description: "From brief to announcing winners.",
     roles: ["super_admin", "client_admin", "admin", "event_manager", "viewer"],
+    requires: ["challengeId"],
     steps: [
       {
         id: "ch-intro",
@@ -543,6 +544,7 @@ export const TOURS: Tour[] = [
     label: "Certificates",
     description: "Designing the artwork and issuing it to teams.",
     roles: ["client_admin", "admin", "event_manager", "viewer"],
+    requires: ["challengeId"],
     steps: [
       {
         id: "cert-intro",
@@ -607,6 +609,10 @@ export const TOURS: Tour[] = [
     id: "judging",
     label: "Judging",
     description: "Scoring teams and reading the leaderboard.",
+    // Judge-only. A client admin manages judges from the challenge's Judges
+    // tab; they never score anything, so a tour about entering marks was
+    // describing a screen they do not have.
+    roles: ["judge"],
     steps: [
       {
         id: "jd-intro",
