@@ -443,8 +443,8 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                       instead, via the new "Register" column. */}
                   {(registers as any[]).map((reg) => (
                     <tr key={reg.id} className="attend-table-row">
-                      <td className="px-5 py-3">
-                        <p className="text-sm font-medium text-[hsl(var(--foreground))]">{reg.name}</p>
+                      <td className="px-5 py-3 max-w-[260px]">
+                        <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate" title={reg.name}>{reg.name}</p>
                       </td>
                       <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
                         {reg.industry ?? "—"}

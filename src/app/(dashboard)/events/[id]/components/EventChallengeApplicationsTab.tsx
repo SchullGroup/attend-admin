@@ -98,7 +98,7 @@ export function EventChallengeApplicationsTab({
           <tbody>
             {apps.map((a) => (
               <tr key={a.id} className="attend-table-row">
-                <td className="px-5 py-3 text-sm font-medium text-[hsl(var(--foreground))]">{a.teamName}</td>
+                <td className="px-5 py-3 text-sm font-medium text-[hsl(var(--foreground))] max-w-[200px] truncate" title={a.teamName}>{a.teamName}</td>
                 <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[200px] truncate" title={a.ideaTitle}>{a.ideaTitle}</td>
                 <td className="px-5 py-3">
                   {a.track ? (

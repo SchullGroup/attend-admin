@@ -182,7 +182,7 @@ export const TOURS: Tour[] = [
     id: "challenges",
     label: "Innovation Challenges",
     description: "From brief to announcing winners.",
-    roles: ["super_admin", "client_admin", "admin", "event_manager", "viewer"],
+    roles: [...CLIENT_ROLES],
     requires: ["challengeId"],
     steps: [
       {
@@ -206,6 +206,9 @@ export const TOURS: Tour[] = [
         route: "/hackathons",
         target: "challenge-guide",
         placement: "bottom",
+        // The panel is only rendered for client roles; without this the step
+        // spotlit an empty strip and described something that was not there.
+        roles: [...CLIENT_ROLES],
       },
 
       // ── Landing on a real one ───────────────────────────────────────────
@@ -332,7 +335,7 @@ export const TOURS: Tour[] = [
     id: "events",
     label: "Events & AGMs",
     description: "Creating an event, the live room, and inside a vote record.",
-    roles: ["super_admin", "client_admin", "admin", "event_manager", "viewer"],
+    roles: [...CLIENT_ROLES],
     steps: [
       {
         id: "ev-intro",
@@ -485,7 +488,7 @@ export const TOURS: Tour[] = [
     id: "registers",
     label: "Registers & shareholders",
     description: "Enrolling a company and loading its shareholders.",
-    roles: ["super_admin", "client_admin", "admin", "event_manager", "viewer", "kyc_officer"],
+    roles: [...CLIENT_ROLES],
     steps: [
       {
         id: "rg-intro",
@@ -598,6 +601,242 @@ export const TOURS: Tour[] = [
         body: "Re-issuing regenerates with the current design. Certificates already sent keep the artwork they were made with, so fix the design first and re-issue once rather than several times.",
         route: "/hackathons/:challengeId?tab=Certificates",
         roles: ["client_admin", "admin", "event_manager"],
+      },
+    ],
+  },
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // Super Admin.
+  //
+  // A super admin runs the platform, not the events on it. They never create
+  // an event, open applications, score a team or enrol a register — those are
+  // the registrar's job. Their screens are oversight, access and capacity, so
+  // the organiser tours above are not offered to them at all and these take
+  // their place.
+  // ═════════════════════════════════════════════════════════════════════════
+  {
+    id: "sa-registrars",
+    label: "Registrars",
+    description: "The firms on the platform and the registers beneath them.",
+    roles: ["super_admin"],
+    steps: [
+      {
+        id: "sa-rg-intro",
+        title: "The shape of the platform",
+        body: "A registrar is a firm that acts for listed companies. Each registrar holds registers — one per company — and every event on the platform belongs to one of those registers. Three levels: registrar, register, event.",
+        route: "/registrars",
+      },
+      {
+        id: "sa-rg-list",
+        title: "Every registrar",
+        body: "The firms enrolled on the platform, by status. Suspending one stops it hosting anything new without deleting its history.",
+        route: "/registrars",
+        target: "nav:/registrars",
+        placement: "right",
+      },
+      {
+        id: "sa-rg-detail",
+        title: "Inside one",
+        body: "Open a registrar to see its profile, the registers underneath it, and every event those registers are running. This is where you check what a firm is actually doing on the platform.",
+        route: "/registrars",
+      },
+      {
+        id: "sa-rg-enrol",
+        title: "Bringing one on",
+        body: "Enrol Registrar takes the firm's details and its representative. Approval is what lets them sign in and start creating registers of their own.",
+        target: "nav:/registrars/enrol",
+        placement: "right",
+      },
+      {
+        id: "sa-rg-note",
+        title: "You do not enrol registers",
+        body: "Registers belong to the registrar that holds them, and they create their own. If a register is missing, the question is for that registrar rather than something to add from here.",
+      },
+    ],
+  },
+
+  {
+    id: "sa-oversight",
+    label: "Events & challenges",
+    description: "Watching what is running across every registrar.",
+    roles: ["super_admin"],
+    steps: [
+      {
+        id: "sa-ov-intro",
+        title: "Oversight, not operation",
+        body: "You can see every event and every challenge on the platform, across all registrars. You do not run them — there is no Create Event, no live room and no scoring on your side. These screens answer what is happening and for whom.",
+        route: "/events",
+      },
+      {
+        id: "sa-ov-events",
+        title: "Every event, everywhere",
+        body: "All four kinds, across all registrars — AGMs, launches, challenges and general events. Registrar, register and type filters narrow it, and what you pick stays in the address bar, so a view is a link you can send.",
+        route: "/events",
+        target: "events-filters",
+        placement: "bottom",
+      },
+      {
+        id: "sa-ov-registrar-filter",
+        title: "Narrowing to one firm",
+        body: "Pick a registrar and the register filter appears beneath it, scoped to that firm's registers. That pair answers most \"what is this client doing\" questions on its own.",
+        route: "/events",
+        target: "events-filters",
+        placement: "bottom",
+      },
+      {
+        id: "sa-ov-challenges",
+        title: "Innovation challenges",
+        body: "The same view for challenges: every one on the platform, whoever is running it. Open one to read its brief, its applications and its leaderboard — as a reader. Opening applications, shortlisting, scoring and announcing winners all belong to the organiser.",
+        route: "/hackathons",
+        target: "nav:/hackathons",
+        placement: "right",
+      },
+      {
+        id: "sa-ov-challenge-detail",
+        title: "Inside a challenge",
+        body: "The tabs are the organiser's workflow, and you see the state of each: how many applied, who was shortlisted, which judges are assigned, whether scoring is open. Useful when a registrar asks why something is stuck.",
+        route: "/hackathons",
+      },
+      {
+        id: "sa-ov-documents",
+        title: "Documents",
+        body: "Every document published on the platform, filterable by registrar and register. Downloads are counted, which is what settles whether a notice actually reached people.",
+        route: "/documents",
+        target: "nav:/documents",
+        placement: "right",
+      },
+    ],
+  },
+
+  {
+    id: "sa-people",
+    label: "Users & access",
+    description: "Accounts, verification and who can sign in.",
+    roles: ["super_admin"],
+    steps: [
+      {
+        id: "sa-pp-intro",
+        title: "Two kinds of account",
+        body: "Shareholders, who attend events and vote, and client admins, who run a registrar's side of the platform. They are managed separately because they mean different things.",
+        route: "/participants",
+      },
+      {
+        id: "sa-pp-users",
+        title: "All users",
+        body: "Every shareholder account, searchable by name, email or phone — this one really is searched on the server, so it looks across all of them and not just the page you can see.",
+        route: "/participants",
+        target: "nav:/participants",
+        placement: "right",
+      },
+      {
+        id: "sa-pp-status",
+        title: "Active, pending, suspended",
+        body: "The tabs are account state, not verification state. Suspending stops someone signing in and keeps their record; rejected and pending are stages of enrolment rather than punishments.",
+        route: "/participants",
+      },
+      {
+        id: "sa-pp-kyc",
+        title: "Verification",
+        body: "Shareholders verify their identity before they can vote. Their KYC status shows against each account here, and the queue itself is worked by the registrar's own KYC officer rather than from this screen.",
+        route: "/participants",
+      },
+      {
+        id: "sa-pp-admins",
+        title: "Client admins",
+        body: "The people who run each registrar's account. This is where you see who has access to what, and suspend an account when a firm says someone has left.",
+        route: "/admin/client-admins",
+        target: "nav:/admin/client-admins",
+        placement: "right",
+      },
+    ],
+  },
+
+  {
+    id: "sa-zoom",
+    label: "Zoom sessions",
+    description: "The host pool and how meetings get a host.",
+    roles: ["super_admin"],
+    steps: [
+      {
+        id: "sa-zm-intro",
+        title: "Why there is a pool at all",
+        body: "A Zoom licence can host one meeting at a time. Registrars schedule AGMs independently of each other, so the platform keeps a pool of host licences and hands one to each event for its slot.",
+        route: "/admin/zoom-sessions",
+      },
+      {
+        id: "sa-zm-nav",
+        title: "Where capacity lives",
+        body: "This screen is the whole capacity picture: the licences you hold, what is holding one right now, and what is queued behind them.",
+        target: "nav:/admin/zoom-sessions",
+        placement: "right",
+      },
+      {
+        id: "sa-zm-pool",
+        title: "The host pool",
+        body: "Each licence in the pool can carry one live meeting. Two AGMs at ten o'clock need two hosts — if the pool is smaller than the demand, something has to move.",
+        route: "/admin/zoom-sessions",
+      },
+      {
+        id: "sa-zm-assign",
+        title: "Assigning a host",
+        body: "An event can be given a host directly. That is the manual override for the case the automatic assignment could not cover — usually a clash, or an event added at short notice.",
+        route: "/admin/zoom-sessions",
+      },
+      {
+        id: "sa-zm-held",
+        title: "Held slots",
+        body: "A held slot is a licence reserved for an event that has not started yet. They are what tells you whether tomorrow morning is already full, which is the question worth asking before a registrar schedules another AGM into it.",
+        route: "/admin/zoom-sessions",
+      },
+    ],
+  },
+
+  {
+    id: "sa-analytics",
+    label: "Analytics & audit",
+    description: "Platform numbers, and the record of who did what.",
+    roles: ["super_admin"],
+    steps: [
+      {
+        id: "sa-an-intro",
+        title: "Two different questions",
+        body: "Analytics answers how the platform is being used. The audit log answers who did a particular thing and when. Reach for the first for trends and the second for incidents.",
+        route: "/analytics",
+      },
+      {
+        id: "sa-an-range",
+        title: "One window drives everything",
+        body: "The period you pick applies to every card on the page, so the numbers are always comparable with each other. It stays in the address bar, which makes a particular view something you can send to someone.",
+        route: "/analytics",
+        target: "nav:/analytics",
+        placement: "right",
+      },
+      {
+        id: "sa-an-cards",
+        title: "What is counted",
+        body: "Events by type, top organisers, verification breakdown, event formats. Counted by event date rather than when the record was created — so a window is about what happened in it, not what was typed in it.",
+        route: "/analytics",
+      },
+      {
+        id: "sa-an-audit",
+        title: "The audit log",
+        body: "Every action on the platform with its actor, resource and severity. Filter by category, severity, user email, entity or date range — and every one of those stays in the URL, so an investigation can be handed over as a link.",
+        route: "/audit",
+        target: "nav:/audit",
+        placement: "right",
+      },
+      {
+        id: "sa-an-export",
+        title: "Getting it out",
+        body: "Export all, or select the rows that matter and export those. That file is what goes to whoever asked the question.",
+        route: "/audit",
+      },
+      {
+        id: "sa-an-test",
+        title: "Test accounts",
+        body: "Generated accounts for exercising a flow without touching a real registrar's data. Useful before a release; keep them out of anything you are measuring.",
+        target: "nav:/admin/test-users",
+        placement: "right",
       },
     ],
   },

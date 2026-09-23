@@ -194,7 +194,11 @@ function ParticipantsPageInner() {
       </div>
 
       <Card className="attend-card overflow-hidden">
-        <table className="w-full">
+        {/* Scroll rather than clip. Truncation above keeps this from being
+            needed in normal use, but a narrow laptop with every column shown
+            should still be able to reach the Actions column. */}
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px]">
           <thead>
             <tr className="attend-table-header">
               <th className="px-5 py-3 text-left">User</th>
@@ -223,14 +227,19 @@ function ParticipantsPageInner() {
               return (
                 <tr key={u.id} className="attend-table-row">
                   {/* User */}
-                  <td className="px-5 py-3">
+                  {/* Capped and truncated: these are user-supplied and some are
+                      very long. Without a cap one pasted name stretches the
+                      column and pushes the rest of the table off screen — the
+                      `min-w-0` is what actually lets the flex child shrink, and
+                      `title` keeps the full value one hover away. */}
+                  <td className="px-5 py-3 max-w-[280px]">
                     <div className="flex items-center gap-2.5">
                       <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]">
                         {initials}
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-[hsl(var(--foreground))]">{fullName}</div>
-                        <div className="text-xs text-[hsl(var(--muted-foreground))]">{u.email}</div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-[hsl(var(--foreground))] truncate" title={fullName}>{fullName}</div>
+                        <div className="text-xs text-[hsl(var(--muted-foreground))] truncate" title={u.email}>{u.email}</div>
                       </div>
                     </div>
                   </td>
@@ -316,6 +325,7 @@ function ParticipantsPageInner() {
             })}
           </tbody>
         </table>
+        </div>
 
         {searchedUsers.length === 0 && (
           <div className="py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
