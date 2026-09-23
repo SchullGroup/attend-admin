@@ -221,7 +221,7 @@ export default function RegistersPage() {
       {isLoading ? (
         <Loader variant="inline" text="Loading registers…" />
       ) : (
-        <Card className="attend-card overflow-hidden">
+        <Card data-tour="registers-list" className="attend-card overflow-hidden">
           <table className="w-full">
             <thead>
               <tr className="attend-table-header">

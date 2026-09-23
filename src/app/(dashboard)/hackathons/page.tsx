@@ -351,7 +351,9 @@ function HackathonsPageInner() {
           Search is being applied on this page only — the API returned unfiltered results.
         </p>
       )}
-      {!isSuperAdmin && <ChallengeGuidePanel alwaysShow={challenges.length === 0} />}
+      <div data-tour="challenge-guide">
+        {!isSuperAdmin && <ChallengeGuidePanel alwaysShow={challenges.length === 0} />}
+      </div>
 
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
@@ -380,7 +382,7 @@ function HackathonsPageInner() {
         </div>
       </div>
 
-      <Card className="attend-card overflow-hidden relative">
+      <Card data-tour="challenges-list" className="attend-card overflow-hidden relative">
         {isFetching && !isLoading && (
           <div className="absolute inset-0 bg-[hsl(var(--background))]/60 flex items-center justify-center z-10 rounded-xl">
             <div className="h-5 w-5 rounded-full border-2 border-purple-600 border-t-transparent animate-spin" />

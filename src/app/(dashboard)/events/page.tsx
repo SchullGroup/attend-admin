@@ -426,7 +426,7 @@ function EventsPageInner() {
       </div>
 
       {/* ── Filter bar ── */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+      <div data-tour="events-filters" className="flex flex-wrap items-center gap-3 mb-4">
         {/* Search */}
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
@@ -516,7 +516,7 @@ function EventsPageInner() {
 
       {/* ── Client type tabs ── */}
       {!isAdmin && (
-        <div className="flex items-center gap-1 mb-4 bg-[hsl(var(--muted))] rounded-full p-1 w-full">
+        <div data-tour="events-type-tabs" className="flex items-center gap-1 mb-4 bg-[hsl(var(--muted))] rounded-full p-1 w-full">
           {CLIENT_TYPE_TABS.map((tab) => (
             <button key={tab.value}
               onClick={() => writeParams({ type: tab.value === "ALL" ? null : tab.value, page: null })}

@@ -1,7 +1,7 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Bell, Search, ChevronRight, CalendarDays, Users, Building2, X } from "lucide-react";
+import { Bell, Search, ChevronRight, CalendarDays, Users, Building2, X, Compass } from "lucide-react";
 import { NOTIFICATION_SOUND_KEY } from "@/app/(dashboard)/settings/page";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -29,6 +29,7 @@ import { useClientSearch, type SearchEvent, type SearchTeamMember, type SearchDo
 import { timeAgo, resolveRole, isSuperAdminRole } from "@/lib/utils";
 import { notificationTypeColor } from "@/lib/notification";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { useTour } from "@/components/tour/tour-provider";
 
 // ---------------------------------------------------------------------------
 // Web Audio notification chime
@@ -99,6 +100,7 @@ export function Header() {
   const { data: userResponse } = useGetMe();
   const currentUser = userResponse?.data;
   const { mutate: logout } = useLogout();
+  const { available: tours, start: startTour } = useTour();
   const breadcrumbs = getBreadcrumbs(pathname);
 
   // ── Role detection — must come before hooks that depend on it ─────────────
@@ -232,7 +234,7 @@ export function Header() {
 
       {/* ── Global Search — hidden for Judge (their view is scoped to assigned challenges only) ── */}
       {!isJudge && (
-      <div ref={searchRef} className="hidden md:flex items-center relative w-full max-w-md">
+      <div ref={searchRef} data-tour="global-search" className="hidden md:flex items-center relative w-full max-w-md">
         <Search className="absolute left-3 h-4 w-4 text-[hsl(var(--muted-foreground))] pointer-events-none z-10" />
         <Input
           type="search"
@@ -496,7 +498,7 @@ export function Header() {
         {currentUser && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="focus:outline-none">
+              <button className="focus:outline-none" data-tour="profile-menu">
                 <Avatar className="h-8 w-8 cursor-pointer ring-2 ring-[hsl(var(--border))]">
                   {avatarSrc && (
                     <AvatarImage src={avatarSrc} alt={currentUser.fullName} className="object-cover" />
@@ -523,6 +525,23 @@ export function Header() {
                 </div>
               </div>
               <DropdownMenuSeparator />
+              {/* Replay any tour. Listed individually rather than behind a
+                  submenu: four short labels read faster than one that has to
+                  be opened to find out what is in it. */}
+              {tours.length > 0 && (
+                <>
+                  <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+                    Take a tour
+                  </DropdownMenuLabel>
+                  {tours.map((t) => (
+                    <DropdownMenuItem key={t.id} onClick={() => startTour(t.id)} className="gap-2">
+                      <Compass className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+                      <span className="flex-1">{t.label}</span>
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                </>
+              )}
               <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="text-red-600">Sign out</DropdownMenuItem>
