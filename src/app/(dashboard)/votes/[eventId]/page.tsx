@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, CheckCircle2, XCircle, Radio,
   Users, Share2, ChevronDown, ChevronUp, Timer,
-  Download, PlusCircle, X, ToggleLeft, ToggleRight, Pencil, Check, Lock,
-} from "lucide-react";
+  Download, PlusCircle, X, ToggleLeft, ToggleRight, Pencil, Check, Lock, MinusCircle } from "lucide-react";
 import {
   useVoteResults,
   useRecordOfflineVotes,
@@ -32,6 +31,7 @@ import { popup } from "@/lib/popup-store";
 
 // eslint-disable-next-line import/order
 import { ProxiesSection } from "./ProxiesSection";
+import { voteOutcome, VOTE_OUTCOME_CLASS } from "@/lib/vote-outcome";
 
 function resolutionStatusStyle(status: string) {
   const s = status?.toUpperCase();
@@ -167,15 +167,17 @@ function CandidateBlock({
           </p>
           {c.bio && <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{c.bio}</p>}
         </div>
-        {c.passed ? (
-          <span className="flex items-center gap-1 text-xs font-semibold text-green-600 shrink-0">
-            <CheckCircle2 className="h-3.5 w-3.5" /> Passed
-          </span>
-        ) : (
-          <span className="flex items-center gap-1 text-xs font-semibold text-red-500 shrink-0">
-            <XCircle className="h-3.5 w-3.5" /> Failed
-          </span>
-        )}
+        {(() => {
+          const outcome = voteOutcome(cTotal, !!c.passed);
+          const Icon = outcome.tone === "passed" ? CheckCircle2
+                     : outcome.tone === "failed" ? XCircle
+                     : MinusCircle;
+          return (
+            <span className={`flex items-center gap-1 text-xs font-semibold shrink-0 ${VOTE_OUTCOME_CLASS[outcome.tone]}`}>
+              <Icon className="h-3.5 w-3.5" /> {outcome.label}
+            </span>
+          );
+        })()}
       </div>
 
       <VoteBar pct={cPct} color="#16a34a" />
@@ -327,18 +329,25 @@ function ResolutionCard({
             <>
               {/* Pass / fail */}
               <div className="flex items-center gap-3 mt-1.5">
-                {res.passed ? (
-                  <span className="flex items-center gap-1 text-xs font-semibold text-green-600">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Passed
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-xs font-semibold text-red-500">
-                    <XCircle className="h-3.5 w-3.5" /> Failed
+                {(() => {
+                  const outcome = voteOutcome(totalCombined, !!res.passed);
+                  const Icon = outcome.tone === "passed" ? CheckCircle2
+                             : outcome.tone === "failed" ? XCircle
+                             : MinusCircle;
+                  return (
+                    <span className={`flex items-center gap-1 text-xs font-semibold ${VOTE_OUTCOME_CLASS[outcome.tone]}`}>
+                      <Icon className="h-3.5 w-3.5" /> {outcome.label}
+                    </span>
+                  );
+                })()}
+                {/* "0% for" alongside no votes is the same misreading in
+                    smaller type, so the share only appears once it means
+                    something. */}
+                {totalCombined > 0 && (
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                    {pct}% for
                   </span>
                 )}
-                <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                  {pct}% for
-                </span>
               </div>
 
               {/* Percentage bar */}

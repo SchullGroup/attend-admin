@@ -22,6 +22,13 @@ export const WELCOME_TOUR_ID = "welcome";
 
 const CLIENT_ROLES = ["client_admin", "admin", "event_manager", "viewer", "kyc_officer"] as const;
 
+// Judges see a different product: Dashboard, Challenges, Applications, Judging,
+// Notifications, Settings. No Events, Registers, Documents, Analytics, and no
+// global search in the header. Steps about any of that are restricted to
+// everyone else — a tour that navigates someone to a route missing from their
+// own sidebar is worse than one that skips it.
+const NON_JUDGE_ROLES = ["super_admin", ...CLIENT_ROLES] as const;
+
 export const TOURS: Tour[] = [
   // ─────────────────────────────────────────────────────────────────────────
   // 1. Welcome — the first-run pass. Short on purpose.
@@ -39,7 +46,7 @@ export const TOURS: Tour[] = [
       {
         id: "welcome-sidebar",
         title: "Everything starts here",
-        body: "The sidebar is grouped by what you are doing rather than by screen: running events, running challenges, managing the companies you act for, and the system records underneath. You only see the groups your role can reach.",
+        body: "The sidebar is grouped by what you are doing rather than by screen. You only see the groups your role can reach, so it is shorter for some people than others — nothing is missing.",
         target: "sidebar",
         placement: "right",
         padding: 4,
@@ -59,6 +66,7 @@ export const TOURS: Tour[] = [
         route: "/events",
         target: "nav:/events",
         placement: "right",
+        roles: [...NON_JUDGE_ROLES],
       },
       {
         id: "welcome-events-tabs",
@@ -94,6 +102,32 @@ export const TOURS: Tour[] = [
         placement: "right",
       },
       {
+        id: "welcome-applications-judge",
+        title: "Applications",
+        body: "The submissions from teams on the challenges you are judging — pick a challenge and read what each team sent in. This is the material you score against.",
+        route: "/hackathons/applications",
+        target: "nav:/hackathons/applications",
+        placement: "right",
+        roles: ["judge"],
+      },
+      {
+        id: "welcome-judging-judge",
+        title: "Judging",
+        body: "Where you actually score. Open a challenge, work through its shortlisted teams, and watch the leaderboard settle as you and the other judges submit.",
+        route: "/hackathons/judging",
+        target: "nav:/hackathons/judging",
+        placement: "right",
+        roles: ["judge"],
+      },
+      {
+        id: "welcome-notifications-judge",
+        title: "Notifications",
+        body: "You are told here when you are assigned to a challenge and when scoring opens on one — the two moments something needs you.",
+        target: "nav:/notifications",
+        placement: "right",
+        roles: ["judge"],
+      },
+      {
         id: "welcome-registers",
         title: "Registers",
         body: "A register is a company you act for, and its shareholders. Events belong to a register, so this is usually the first thing set up for a new client.",
@@ -115,6 +149,7 @@ export const TOURS: Tour[] = [
         body: "Search across events, participants and organisations without working out which screen holds them. Quicker than navigating once you know a name.",
         target: "global-search",
         placement: "bottom",
+        roles: [...NON_JUDGE_ROLES],
       },
       {
         id: "welcome-documents",
@@ -122,6 +157,7 @@ export const TOURS: Tour[] = [
         body: "Every notice, agenda and report you have published, in one vault — and the numbers underneath: turnout, fill rates, verification. Both filter by register and by event.",
         target: "nav:/documents",
         placement: "right",
+        roles: [...NON_JUDGE_ROLES],
       },
       {
         id: "welcome-replay",

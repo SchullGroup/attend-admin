@@ -1,5 +1,6 @@
 "use client";
 import { Vote } from "lucide-react";
+import { voteOutcome } from "@/lib/vote-outcome";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/custom/status-badge";
 import type { ResolutionResult, VoteResultsResponse } from "@/api/client-votes";
@@ -32,7 +33,7 @@ function CandidateResultRow({ c }: { c: NonNullable<ResolutionResult["candidates
           )}
         </p>
         <span className={`text-xs font-semibold ${c.passed ? "text-green-600" : "text-red-500"}`}>
-          {total > 0 ? (c.passed ? "Passed" : "Failed") : "No votes"}
+          {voteOutcome(total, !!c.passed).label}
         </span>
       </div>
       {c.bio && <p className="text-xs text-[hsl(var(--muted-foreground))] mb-2">{c.bio}</p>}

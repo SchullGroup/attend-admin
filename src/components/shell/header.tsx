@@ -160,7 +160,27 @@ export function Header() {
 
   // ── Stakeholder logo for client users ──────────────────────────────────────
   const { data: stakeholder } = useClientStakeholder({ enabled: !!currentUser && !isAdmin });
-  const avatarSrc = currentUser?.avatarUrl || (currentUser as any)?.logoUrl || stakeholder?.logoUrl || null;
+
+  // The login-time snapshot, same last resort the sidebar footer uses. Without
+  // it the header and the sidebar disagreed for any user whose logo only ever
+  // arrived at login — a judge saw their picture bottom-left and their initials
+  // top-right, on the same screen. Read in an effect because localStorage is
+  // client-only and reading it during render would not match the server's HTML.
+  const [storedLogoUrl, setStoredLogoUrl] = useState<string | null>(null);
+  const [avatarBroken,  setAvatarBroken]  = useState(false);
+
+  useEffect(() => {
+    try { setStoredLogoUrl(window.localStorage.getItem("userLogoUrl")); } catch { /* blocked storage */ }
+  }, []);
+
+  const resolvedAvatar =
+    currentUser?.avatarUrl || (currentUser as any)?.logoUrl || stakeholder?.logoUrl || storedLogoUrl || null;
+
+  // Reset the error flag when the URL changes, so a later good logo is not
+  // suppressed by an earlier broken one.
+  useEffect(() => { setAvatarBroken(false); }, [resolvedAvatar]);
+
+  const avatarSrc = avatarBroken ? null : resolvedAvatar;
 
   // ── Admin notifications — only fetch when role is confirmed ───────────────
   const { data: adminUnreadData } = useAdminNotifications(0, 1, false, isAdmin);
@@ -501,7 +521,7 @@ export function Header() {
               <button className="focus:outline-none" data-tour="profile-menu">
                 <Avatar className="h-8 w-8 cursor-pointer ring-2 ring-[hsl(var(--border))]">
                   {avatarSrc && (
-                    <AvatarImage src={avatarSrc} alt={currentUser.fullName} className="object-cover" />
+                    <AvatarImage src={avatarSrc} alt={currentUser.fullName} className="object-cover" onError={() => setAvatarBroken(true)} />
                   )}
                   <AvatarFallback className="text-xs bg-[hsl(var(--foreground)/0.1)] text-[hsl(var(--foreground))]">
                     {currentUser.initials || getInitials(currentUser.fullName)}
@@ -513,7 +533,7 @@ export function Header() {
               <div className="flex items-center gap-3 px-3 py-2.5 border-b border-[hsl(var(--border))]">
                 <Avatar className="h-9 w-9 shrink-0">
                   {avatarSrc && (
-                    <AvatarImage src={avatarSrc} alt={currentUser.fullName} className="object-cover" />
+                    <AvatarImage src={avatarSrc} alt={currentUser.fullName} className="object-cover" onError={() => setAvatarBroken(true)} />
                   )}
                   <AvatarFallback className="text-xs bg-[hsl(var(--foreground)/0.1)] text-[hsl(var(--foreground))]">
                     {currentUser.initials || getInitials(currentUser.fullName)}

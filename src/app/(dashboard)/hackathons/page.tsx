@@ -82,9 +82,9 @@ function JudgeChallengesView() {
                   </p>
                   <Button
                     className="h-9 text-sm bg-white text-purple-700 hover:bg-white/90 gap-2"
-                    onClick={() => router.push(`/hackathons/judging?challengeId=${featured.id}`)}
+                    onClick={() => router.push(`/hackathons/applications?id=${featured.id}`)}
                   >
-                    Score Teams <ArrowRight className="h-3.5 w-3.5" />
+                    View Applications <ArrowRight className="h-3.5 w-3.5" />
                   </Button>
                 </>
               ) : (
@@ -165,12 +165,12 @@ function JudgeChallengesView() {
                     </span>
                   </td>
                   <td className="px-5 py-4">
-                    {/* One action. Both buttons used to land a judge in the
-                        same place by different routes; the teams and their
-                        submissions are the first tab of the scoring view. */}
-                    <div className="flex justify-end">
-                      <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/hackathons/judging?challengeId=${c.id}`)}>
-                        Open <Star className="h-3 w-3" />
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/hackathons/applications?id=${c.id}`)}>
+                        Applications
+                      </Button>
+                      <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => router.push(`/hackathons/judging?id=${c.id}`)}>
+                        Score <Star className="h-3 w-3" />
                       </Button>
                     </div>
                   </td>

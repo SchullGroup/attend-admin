@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { PlusCircle, Trash2, Loader2, ShieldCheck, CheckCircle2, Play, Square, BarChart2, Clock } from "lucide-react";
+import { voteOutcome } from "@/lib/vote-outcome";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -632,7 +633,7 @@ export function EventResolutionsTab({
                               <div className="pt-1.5 mt-0.5 border-t border-[hsl(var(--border))] flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
                                 <span>Total votes: <span className="font-semibold text-[hsl(var(--foreground))]">{cTotal.toLocaleString()}</span></span>
                                 <span className={`font-semibold ${c.passed ? "text-green-600" : "text-red-600"}`}>
-                                  {cTotal > 0 ? (c.passed ? "✓ Passed" : "✗ Failed") : "No votes cast"}
+                                  {voteOutcome(cTotal, !!c.passed).label}
                                 </span>
                               </div>
                             )}
@@ -650,7 +651,7 @@ export function EventResolutionsTab({
                       <span>Total votes: <span className="font-semibold text-[hsl(var(--foreground))]">{total.toLocaleString()}</span></span>
                       {(isClosed) && (
                         <span className={`font-semibold ${total > 0 && res.forCount > res.againstCount ? "text-green-600" : "text-red-600"}`}>
-                          {total > 0 ? (res.forCount > res.againstCount ? "✓ Passed" : "✗ Failed") : "No votes cast"}
+                          {voteOutcome(total, res.forCount > res.againstCount).label}
                         </span>
                       )}
                     </div>
