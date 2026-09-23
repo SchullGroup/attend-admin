@@ -43,12 +43,30 @@ function ParticipantsPageInner() {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const LIMIT = 20;
 
+  // Searching "chinedu stephen" returned nothing, even with Chinedu Stephen
+  // right there in the list: the API matches the whole term against one field
+  // at a time, and no single field contains both words.
+  //
+  // So we send the most selective single word — the longest, which is the one
+  // least likely to match half the database — and enforce the rest of the
+  // words here. One word behaves exactly as before.
+  const searchTerms = debouncedSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const isMultiWord = searchTerms.length > 1;
+  const serverTerm  = isMultiWord
+    ? searchTerms.reduce((longest, t) => (t.length > longest.length ? t : longest), "")
+    : (searchTerms[0] ?? "");
+
+  // A multi-word search is narrowed in the browser, so one page of 20 is not
+  // enough to narrow from — ask for a bigger slice and drop the pager, rather
+  // than paging through slices of a set we are about to filter anyway.
+  const size = isMultiWord ? 100 : LIMIT;
+
   // GET /api/v1/admin/users — status and search are server-side as of the backend's
   // 2026-09-14 note, so the tabs and the search box now filter all 10k+ users rather than
   // the 20 rows already on screen.
-  const { data, isLoading } = useUsers("", page, LIMIT, true, {
+  const { data, isLoading } = useUsers("", isMultiWord ? 0 : page, size, true, {
     status: activeStatus,
-    search: debouncedSearch,
+    search: serverTerm,
   });
   const suspendMutation  = useSuspendUser();
   const activateMutation = useActivateUser();
@@ -74,16 +92,22 @@ function ParticipantsPageInner() {
     ? allUsers.filter((u) => (u.status ?? "").toUpperCase() === activeStatus)
     : allUsers;
 
+  // Every word must appear somewhere in the row — name, email or phone — so
+  // "chinedu stephen" and "stephen chinedu" both find the same person, and a
+  // word matching the name while another matches the email still counts.
   const searchedUsers = debouncedSearch.trim().length >= 2
     ? users.filter((u) => {
-        const name = `${u.firstName} ${u.lastName}`.toLowerCase();
-        const s = debouncedSearch.toLowerCase();
-        return name.includes(s) || u.email.toLowerCase().includes(s) || (u.phone ?? "").includes(s);
+        const haystack = `${u.firstName ?? ""} ${u.lastName ?? ""} ${u.email ?? ""} ${u.phone ?? ""}`.toLowerCase();
+        return searchTerms.every((t) => haystack.includes(t));
       })
     : users;
 
-  const totalElements = raw?.totalElements ?? raw?.totalCount ?? allUsers.length;
-  const totalPages    = raw?.totalPages    ?? Math.ceil(totalElements / LIMIT);
+  // While a multi-word search is narrowed here, the server's count is for the
+  // single word we sent — larger than what is on screen. Count the rows the
+  // user can actually see instead of quoting a number they cannot reconcile.
+  const serverTotal   = raw?.totalElements ?? raw?.totalCount ?? allUsers.length;
+  const totalElements = isMultiWord ? searchedUsers.length : serverTotal;
+  const totalPages    = raw?.totalPages    ?? Math.ceil(serverTotal / LIMIT);
 
   // Active / Suspended / Email-verified are PLATFORM-WIDE aggregates, but GET /admin/users
   // returns only one page (LIMIT rows) with no status/verified breakdown — so counting the
@@ -93,7 +117,7 @@ function ParticipantsPageInner() {
   // one, else the page count ONLY when the single page genuinely covers every user; otherwise
   // show "—" rather than a wrong number. Field-name-tolerant so the true figures appear
   // automatically once the backend adds the aggregates.
-  const pageCoversAllUsers = allUsers.length > 0 && totalElements > 0 && allUsers.length >= totalElements;
+  const pageCoversAllUsers = allUsers.length > 0 && serverTotal > 0 && allUsers.length >= serverTotal;
 
   const aggActive    = raw?.activeUsers        ?? raw?.activeCount        ?? raw?.totalActive        ?? null;
   const aggInactive  = raw?.inactiveUsers      ?? raw?.inactiveCount      ?? raw?.totalInactive      ?? null;
@@ -336,7 +360,7 @@ function ParticipantsPageInner() {
         )}
       </Card>
 
-      {totalPages > 1 && (
+      {totalPages > 1 && !isMultiWord && (
         <div className="flex items-center justify-between mt-4 px-1">
           <p className="text-xs text-[hsl(var(--muted-foreground))]">Page {page + 1} of {totalPages}</p>
           <div className="flex gap-2">
