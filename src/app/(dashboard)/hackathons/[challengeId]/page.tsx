@@ -247,7 +247,7 @@ function OverviewTab({
       <div className="col-span-2 flex flex-col gap-5">
 
         {/* Stat cards */}
-        <div className="grid grid-cols-4 gap-4">
+        <div data-tour="challenge-stats" className="grid grid-cols-4 gap-4">
           {[
             { label: "Applications", value: c.applicationCount, icon: FileText,  color: "#7c22c9" },
             { label: "Shortlisted",  value: c.shortlistedCount, icon: Star,      color: "#0891b2" },
@@ -466,9 +466,11 @@ function OverviewTab({
                   );
                 }}
               >
-                {c.applicationsOpen
-                  ? <><ToggleRight className="h-4 w-4" /> Close</>
-                  : <><ToggleLeft className="h-4 w-4" /> Open</>}
+                <span data-tour="challenge-open-toggle" className="inline-flex items-center gap-1">
+                  {c.applicationsOpen
+                    ? <><ToggleRight className="h-4 w-4" /> Close</>
+                    : <><ToggleLeft className="h-4 w-4" /> Open</>}
+                </span>
               </Button>
             )}
           </div>
@@ -476,7 +478,9 @@ function OverviewTab({
 
         {/* End challenge — client-admin only, terminal action */}
         {!isSuperAdmin && !readOnly && (
-          <EndChallengeCard challengeId={challengeId} status={c.status} />
+          <div data-tour="challenge-end">
+            <EndChallengeCard challengeId={challengeId} status={c.status} />
+          </div>
         )}
       </div>
     </div>
@@ -489,11 +493,7 @@ function OverviewTab({
 function ApplicationsTab({ challengeId, readOnly = false }: { challengeId: string; readOnly?: boolean }) {
   // Namespaced keys: the page itself owns ?tab=, so the sub-filters inside the
   // Applications tab cannot use plain ?status= without colliding with it.
-  // A stale link may carry ?appStatus=ALL from before the All tab was
-  // normalised — read it as "no filter" so the tab highlights and the request
-  // does not ask the API for a status called ALL.
-  const [rawStatus, setActiveStatus]  = useUrlState("appStatus");
-  const activeStatus = rawStatus.toLowerCase() === "all" ? "" : rawStatus;
+  const [activeStatus, setActiveStatus]  = useUrlState("appStatus");
   const [activeTrack,  setActiveTrack]   = useUrlState("track");
   const [openMenu,     setOpenMenu]      = useState<string | null>(null);
   const [selectedApp,  setSelectedApp]   = useState<string | null>(null);
@@ -513,13 +513,6 @@ function ApplicationsTab({ challengeId, readOnly = false }: { challengeId: strin
 
   const apps = data?.applications ?? [];
   const tabs = data?.tabs ?? [];
-  // "All" can arrive from the API as an empty key, the literal "ALL", or just
-  // that label — the hardcoded All button below is only rendered when the API
-  // did not already send one, otherwise the bar shows two of them.
-  const isAllTab  = (t: { key?: string; label?: string }) =>
-    !t.key || t.key.toLowerCase() === "all" || (t.label ?? "").trim().toLowerCase() === "all";
-  const hasAllTab = tabs.some(isAllTab);
-
 
   // Track filter options must stay independent of the current track
   // selection — deriving them from the already-track-filtered `apps` list
@@ -677,24 +670,22 @@ function ApplicationsTab({ challengeId, readOnly = false }: { challengeId: strin
       {/* Status tabs from API */}
       {tabs.length > 0 && (
         <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 w-full">
-          {!hasAllTab && (
-            <button
-              onClick={() => setActiveStatus("")}
-              className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-center ${
-                activeStatus === ""
-                  ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
-                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-              }`}
-            >
-              All
-            </button>
-          )}
+          <button
+            onClick={() => setActiveStatus("")}
+            className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-center ${
+              activeStatus === ""
+                ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
+                : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+            }`}
+          >
+            All
+          </button>
           {tabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveStatus(isAllTab(tab) ? "" : tab.key)}
+              onClick={() => setActiveStatus(tab.key)}
               className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-center ${
-                (isAllTab(tab) ? activeStatus === "" : activeStatus === tab.key)
+                activeStatus === tab.key
                   ? "bg-white shadow-sm text-[hsl(var(--foreground))]"
                   : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
               }`}
@@ -2434,10 +2425,11 @@ export default function ChallengeDetailPage({
       </div>
 
       {/* Tab bar */}
-      <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
+      <div data-tour="challenge-tabs" className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
         {tabs.map((t) => (
           <button
             key={t}
+            data-tour={`challenge-tab:${t}`}
             onClick={() => setTab(t)}
             className={`flex-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all text-center ${
               tab === t

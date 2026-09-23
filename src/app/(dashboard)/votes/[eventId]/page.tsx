@@ -930,19 +930,19 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
             )}
             <Button size="sm" variant="outline" disabled={exporting} onClick={handleExport}>
               <Download className="h-3.5 w-3.5 mr-1.5" />
-              {exporting ? "Exporting…" : "Export CSV"}
+              <span data-tour="vote-export">{exporting ? "Exporting…" : "Export CSV"}</span>
             </Button>
           </div>
         </div>
       </div>
 
       {/* Event summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div data-tour="vote-summary" className="grid grid-cols-3 gap-4">
         <Card className="attend-card p-5">
           <div className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Total Votes Cast</div>
           <div className="text-2xl font-bold tabular-nums">{(data.totalVotesCast ?? 0).toLocaleString()}</div>
         </Card>
-        <Card className="attend-card p-5">
+        <Card data-tour="vote-quorum" className="attend-card p-5">
           <div className="flex items-center justify-between mb-1">
             <div className="text-xs text-[hsl(var(--muted-foreground))]">Quorum</div>
             {!editingQuorum && !quorumLocked && !isViewer && (
@@ -996,7 +996,7 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
       </div>
 
       {/* Resolutions */}
-      <div>
+      <div data-tour="vote-resolutions">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-[hsl(var(--foreground))]">
             Resolutions ({resolutions.length})
@@ -1027,7 +1027,9 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
         </div>
 
         {/* ── Proxy Register (AGM milestone #5) ── */}
-        <ProxiesSection eventId={eventId} canMark={canMarkProxies} resolutions={resolutions} />
+        <div data-tour="vote-proxies">
+          <ProxiesSection eventId={eventId} canMark={canMarkProxies} resolutions={resolutions} />
+        </div>
       </div>
     </div>
   );

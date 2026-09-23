@@ -27,6 +27,7 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useGetMe } from "@/api/auth/hooks";
+import { apiClient } from "@/lib/api-client";
 import { resolveRole } from "@/lib/utils";
 import { TOURS, WELCOME_TOUR_ID } from "@/lib/tour/tours";
 import type { Tour, TourRole, TourStep } from "@/lib/tour/types";
@@ -186,14 +187,104 @@ export function TourProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [hydrated, role, completed, available]);
 
+  // ── Example records ──────────────────────────────────────────────────────
+  // The deep tours are far more use standing on a real challenge or a real
+  // vote record than describing one from a centred card — "this is where you
+  // open applications" lands when the button is under the spotlight.
+  //
+  // So a step's route may contain :challengeId or :voteEventId, and we look up
+  // one example when the tour starts. Deliberately not a react-query hook: a
+  // hook here would fire on every dashboard page load for every role, and
+  // these are org-scoped endpoints that 403 for roles that cannot see them.
+  // One request, only when a tour that needs it begins.
+  const [examples, setExamples] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!activeTour) return;
+
+    const needed = new Set<string>();
+    for (const s of activeTour.steps) {
+      if (s.route?.includes(":challengeId")) needed.add("challengeId");
+      if (s.route?.includes(":voteEventId")) needed.add("voteEventId");
+    }
+    if (needed.size === 0) return;
+
+    let cancelled = false;
+
+    // Each entry: the param, the endpoint for this role, and how to dig the id
+    // out of the several envelope shapes these endpoints use.
+    const lookups: { key: string; url: string; pick: (raw: any) => string | undefined }[] = [];
+
+    if (needed.has("challengeId")) {
+      const url =
+        role === "judge"         ? "/api/v1/judge/challenges"
+        : role === "super_admin" ? "/api/v1/admin/challenges"
+        :                          "/api/v1/client/challenges";
+      lookups.push({
+        key: "challengeId",
+        url,
+        pick: (raw) => (raw?.challenges ?? raw?.content ?? raw?.items ?? [])[0]?.id,
+      });
+    }
+
+    if (needed.has("voteEventId")) {
+      lookups.push({
+        key: "voteEventId",
+        url: "/api/v1/client/votes",
+        pick: (raw) => {
+          const row = (raw?.records ?? raw?.events ?? raw?.content ?? [])[0];
+          return row?.id ?? row?.eventId;
+        },
+      });
+    }
+
+    Promise.all(
+      lookups.map(async ({ key, url, pick }) => {
+        try {
+          const res = await apiClient.get(url, { params: { page: 0, size: 1 } });
+          const raw = (res.data as any)?.data ?? res.data;
+          const id  = pick(raw);
+          return id ? ([key, id] as const) : null;
+        } catch {
+          // No example yet, no permission, or the endpoint is down. The step
+          // keeps its centred card — never a reason to interrupt the tour.
+          return null;
+        }
+      })
+    ).then((pairs) => {
+      if (cancelled) return;
+      const found = Object.fromEntries(pairs.filter(Boolean) as (readonly [string, string])[]);
+      if (Object.keys(found).length) setExamples((prev) => ({ ...prev, ...found }));
+    });
+
+    return () => { cancelled = true; };
+  }, [activeTour, role]);
+
+  /** Fill :challengeId / :voteEventId, or return null if we have no example. */
+  const resolveRoute = useCallback(
+    (route: string | undefined): string | null => {
+      if (!route) return null;
+      if (!route.includes(":")) return route;
+      const id =
+        route.includes(":challengeId") ? examples.challengeId :
+        route.includes(":voteEventId") ? examples.voteEventId : undefined;
+      if (!id) return null;
+      return route.replace(":challengeId", id).replace(":voteEventId", id);
+    },
+    [examples]
+  );
+
   // ── Route the tour needs ─────────────────────────────────────────────────
   const step = steps[stepIndex];
 
   useEffect(() => {
-    if (!step?.route) return;
-    if (pathname === step.route) return;
-    router.push(step.route);
-  }, [step, pathname, router]);
+    const target = resolveRoute(step?.route);
+    if (!target) return;
+    // Compare without the query string: a step that lands on ?tab=Applications
+    // must not re-push every time the page rewrites its own filters.
+    if (pathname === target.split("?")[0]) return;
+    router.push(target);
+  }, [step, pathname, router, resolveRoute]);
 
   const value = useMemo<TourContextValue>(
     () => ({

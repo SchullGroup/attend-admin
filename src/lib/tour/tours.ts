@@ -135,6 +135,12 @@ export const TOURS: Tour[] = [
 
   // ─────────────────────────────────────────────────────────────────────────
   // 2. Innovation Challenges — the deep one.
+  //
+  // Steps from "ch-just-made-one" onward stand on a real challenge, because
+  // the screen QA flagged as overwhelming is the one you land on straight
+  // after creating: nine tabs, four zeroes and no obvious first move. Reading
+  // about it from a centred card does not fix that; being shown which of the
+  // nine tabs to touch first does.
   // ─────────────────────────────────────────────────────────────────────────
   {
     id: "challenges",
@@ -145,7 +151,7 @@ export const TOURS: Tour[] = [
       {
         id: "ch-intro",
         title: "How a challenge runs",
-        body: "Seven stages, in order: write the brief, decide what teams submit, open applications, shortlist, assign judges, score, announce. Each stage has a tab, and they are laid out left to right in the order you use them.",
+        body: "Seven stages, in order: write the brief, decide what teams submit, open applications, shortlist, assign judges, score, announce. Each stage has a tab, and they run left to right in the order you use them.",
         route: "/hackathons",
       },
       {
@@ -159,69 +165,124 @@ export const TOURS: Tour[] = [
       {
         id: "ch-guide",
         title: "The short version",
-        body: "This panel is the same sequence in writing, and it stays on the page after this tour ends. Dismiss it once you know the flow — it will collapse to a button you can reopen.",
+        body: "The same sequence in writing. It stays on this page after the tour ends — dismiss it once you know the flow and it collapses to a button you can reopen.",
         route: "/hackathons",
         target: "challenge-guide",
         placement: "bottom",
       },
+
+      // ── Landing on a real one ───────────────────────────────────────────
+      {
+        id: "ch-just-made-one",
+        title: "You have just created one. Now what?",
+        body: "This is the screen straight after creating a challenge, and it is a lot at once: nine tabs and four zeroes. You do not need most of it yet. The next few steps are the three things that actually matter on day one, in order.",
+        route: "/hackathons/:challengeId?tab=Overview",
+      },
+      {
+        id: "ch-tabs",
+        title: "Nine tabs, used in order",
+        body: "They are laid out in the order the work happens, and most stay empty until earlier stages fill them. Winners has nothing in it until judging is done. Ignore everything to the right of where you are.",
+        route: "/hackathons/:challengeId?tab=Overview",
+        target: "challenge-tabs",
+        placement: "bottom",
+      },
+      {
+        id: "ch-hint",
+        title: "The app tells you the next move",
+        body: "This line changes with the state of the challenge and always names the single next action. When you are unsure what to do, it is the answer — on every tab, not just this one.",
+        route: "/hackathons/:challengeId?tab=Overview",
+        target: "challenge-next-hint",
+        placement: "bottom",
+      },
+      {
+        id: "ch-zeroes",
+        title: "Zeroes are normal here",
+        body: "No applications, no shortlist, no judges — correct for a challenge nobody can see yet. They fill in as you work through the stages; nothing here is broken.",
+        route: "/hackathons/:challengeId?tab=Overview",
+        target: "challenge-stats",
+        placement: "bottom",
+      },
+
+      // ── Stage 1: the form ───────────────────────────────────────────────
       {
         id: "ch-settings",
-        title: "Decide what teams submit — first",
-        body: "The Settings tab defines the application form: the questions, the fields, the file uploads. Set this before you open applications. Changing it afterwards means early teams answered different questions from later ones, and you cannot compare them fairly.",
+        title: "First: decide what teams submit",
+        body: "Settings defines the application form — the questions, the fields, the uploads. Do this before you open applications. Change it afterwards and early teams will have answered different questions from later ones, which you cannot fairly compare.",
+        route: "/hackathons/:challengeId?tab=Overview",
+        target: "challenge-tab:Settings",
         placement: "bottom",
+        roles: ["client_admin", "admin", "event_manager"],
       },
+
+      // ── Stage 2: open ───────────────────────────────────────────────────
       {
         id: "ch-open",
-        title: "Opening applications",
-        body: "The toggle on Overview is what makes the challenge visible to teams. The app will ask you to check your form first — that prompt is there because the form is the one thing that is genuinely painful to change later.",
-        placement: "bottom",
+        title: "Second: open applications",
+        body: "This is what makes the challenge visible to teams. The app will ask you to check your form first — that prompt exists because the form is the one thing that is genuinely painful to change later.",
+        route: "/hackathons/:challengeId?tab=Overview",
+        target: "challenge-open-toggle",
+        placement: "left",
+        roles: ["client_admin", "admin", "event_manager"],
       },
+
+      // ── Stage 3 onward ──────────────────────────────────────────────────
       {
         id: "ch-applications",
-        title: "Reading what came in",
-        body: "The Applications tab lists every team with its idea, track and members. The status pills across the top are the pipeline: Submitted, Under Review, Shortlisted, Selected, Not Progressed. Move teams along as you read them.",
+        title: "Third: read what came in",
+        body: "Every team with its idea, track and members. The status pills across the top are the pipeline: Submitted, Under Review, Shortlisted, Selected, Not Progressed. Move teams along as you read them.",
+        route: "/hackathons/:challengeId?tab=Applications",
+        target: "challenge-tab:Applications",
         placement: "bottom",
       },
       {
         id: "ch-shortlist",
-        title: "Shortlisted is the one that matters",
-        body: "Only shortlisted teams reach the judges. That is the gate between everyone who applied and the group that actually gets scored, so it is worth being deliberate about.",
-        placement: "bottom",
+        title: "Shortlisted is the gate",
+        body: "Only shortlisted teams reach the judges. That is the line between everyone who applied and the group that actually gets scored, so it is worth being deliberate about.",
+        route: "/hackathons/:challengeId?tab=Applications",
       },
       {
         id: "ch-tracks",
         title: "Tracks",
         body: "If your challenge has themes — Payments, Lending, whatever you set — teams pick one when they apply, and you can filter and judge by track. Useful when you want a winner per theme rather than one overall.",
-        placement: "bottom",
+        route: "/hackathons/:challengeId?tab=Applications",
       },
       {
         id: "ch-judges",
         title: "Judges and scoring",
-        body: "Add judges from your own team on the Judges tab, then turn Scoring on. Until you do, judges can see their assignments but cannot enter marks — which is what you want while you are still shortlisting.",
+        body: "Add judges from your own team here, then turn Scoring on. Until you do, judges can see their assignments but cannot enter marks — which is what you want while you are still shortlisting.",
+        route: "/hackathons/:challengeId?tab=Judges",
+        target: "challenge-tab:Judges",
         placement: "bottom",
       },
       {
         id: "ch-criteria",
         title: "Criteria and weights",
-        body: "Scoring criteria are set when the challenge is created and must add up to 100%. Each new criterion starts at 20%, so you adjust the others to balance it — that trade-off is deliberate, it makes you decide what actually matters.",
-        placement: "bottom",
+        body: "Scoring criteria are set when the challenge is created and must total 100%. Each new one starts at 20%, so you adjust the others to balance it — that trade-off is deliberate, it makes you decide what actually matters.",
+        route: "/hackathons/:challengeId?tab=Judges",
       },
       {
         id: "ch-leaderboard",
         title: "The leaderboard",
-        body: "Ranks shortlisted teams by weighted score as judges submit. It updates on its own — no recalculation step, and nothing to publish before you can read it.",
+        body: "Ranks shortlisted teams by weighted score as judges submit. It updates on its own — no recalculation step, nothing to publish before you can read it.",
+        route: "/hackathons/:challengeId?tab=Leaderboard",
+        target: "challenge-tab:Leaderboard",
         placement: "bottom",
       },
       {
         id: "ch-end",
         title: "Ending it",
-        body: "Ending the challenge locks application statuses for good. Do it once judging is genuinely finished: after that point you cannot move a team between statuses, by design, so the record of what was decided stays fixed.",
-        placement: "bottom",
+        body: "Ending the challenge locks application statuses for good. Do it once judging is genuinely finished: after that you cannot move a team between statuses, by design, so the record of what was decided stays fixed.",
+        route: "/hackathons/:challengeId?tab=Overview",
+        target: "challenge-end",
+        placement: "top",
+        roles: ["client_admin", "admin", "event_manager"],
       },
       {
         id: "ch-winners",
         title: "Winners and certificates",
-        body: "Announce winners on the Winners tab, then generate certificates from the Certificates tab. Certificates use a template you design once — position the name and the date on your artwork and it applies to every team.",
+        body: "Announce winners here once the challenge has ended, then generate certificates. Certificates use a template you design once — position the name and date on your artwork and it applies to every team.",
+        route: "/hackathons/:challengeId?tab=Winners",
+        target: "challenge-tab:Winners",
         placement: "bottom",
       },
     ],
@@ -233,7 +294,7 @@ export const TOURS: Tour[] = [
   {
     id: "events",
     label: "Events & AGMs",
-    description: "Creating an event through to the live room and the vote.",
+    description: "Creating an event, the live room, and inside a vote record.",
     roles: ["super_admin", "client_admin", "admin", "event_manager", "viewer"],
     steps: [
       {
@@ -311,6 +372,70 @@ export const TOURS: Tour[] = [
         route: "/votes",
         target: "nav:/votes",
         placement: "right",
+        roles: ["client_admin", "admin", "event_manager", "viewer"],
+      },
+
+      // ── Inside one vote record ──────────────────────────────────────────
+      // The second screen QA called overwhelming. Same treatment as the
+      // challenge detail: stand on a real one and name the three things that
+      // decide whether a resolution passes.
+      {
+        id: "vt-open",
+        title: "Inside one AGM",
+        body: "Three numbers, a list of resolutions and a proxy register. That is the whole screen — and between them they decide whether each resolution passes.",
+        route: "/votes/:voteEventId",
+        roles: ["client_admin", "admin", "event_manager", "viewer"],
+      },
+      {
+        id: "vt-summary",
+        title: "Votes cast, quorum, register",
+        body: "Votes cast counts what has come in. The register names the company. Quorum is the one to watch — it is the share of the register that must take part before a vote counts at all.",
+        route: "/votes/:voteEventId",
+        target: "vote-summary",
+        placement: "bottom",
+        roles: ["client_admin", "admin", "event_manager", "viewer"],
+      },
+      {
+        id: "vt-quorum",
+        title: "Quorum decides whether anything counts",
+        body: "Set the required percentage with the pencil. It locks the moment voting opens on any resolution — nobody can move the bar once the room has started voting, which is the point.",
+        route: "/votes/:voteEventId",
+        target: "vote-quorum",
+        placement: "bottom",
+        roles: ["client_admin", "admin", "event_manager"],
+      },
+      {
+        id: "vt-resolutions",
+        title: "Resolutions, one at a time",
+        body: "Each one is voted on separately and carries its own result. Waiting means it has not been opened yet. You open them one at a time on the day so the room votes together rather than at their own pace.",
+        route: "/votes/:voteEventId",
+        target: "vote-resolutions",
+        placement: "top",
+        roles: ["client_admin", "admin", "event_manager", "viewer"],
+      },
+      {
+        id: "vt-failed",
+        title: "\"Failed\" before anyone has voted is normal",
+        body: "A resolution with no votes shows 0% for, so it reads as failed. That is arithmetic on an empty set, not a result — it settles once voting opens and people take part.",
+        route: "/votes/:voteEventId",
+        roles: ["client_admin", "admin", "event_manager", "viewer"],
+      },
+      {
+        id: "vt-proxies",
+        title: "The proxy register",
+        body: "Shareholders who cannot attend appoint someone to vote for them, with their units. Bulk Upload takes the paper proxies in one file rather than keying them one by one.",
+        route: "/votes/:voteEventId",
+        target: "vote-proxies",
+        placement: "top",
+        roles: ["client_admin", "admin", "event_manager", "viewer"],
+      },
+      {
+        id: "vt-export",
+        title: "The record you hand over",
+        body: "Export CSV gives you every resolution and its outcome. This is what goes to the company when they ask what was passed at their AGM.",
+        route: "/votes/:voteEventId",
+        target: "vote-export",
+        placement: "bottom",
         roles: ["client_admin", "admin", "event_manager", "viewer"],
       },
     ],
