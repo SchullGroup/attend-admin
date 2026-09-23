@@ -119,7 +119,11 @@ const SECTIONS: NavSection[] = [
     hiddenForRoles: ["event_manager"],
     items: [
       { title: "Challenges",   icon: Lightbulb, href: "/hackathons" },
-      { title: "Applications", icon: FileApp,   href: "/hackathons/applications" },
+      // Hidden for judges: their Applications screen was a third landing page
+      // onto the same assigned-challenge list, and a judge reads submissions
+      // inside Judging anyway. Organisers keep it — for them it is a genuine
+      // cross-challenge triage view rather than a duplicate.
+      { title: "Applications", icon: FileApp,   href: "/hackathons/applications", judgeHidden: true },
       { title: "Judging",      icon: Star,      href: "/hackathons/judging"      },
     ],
   },

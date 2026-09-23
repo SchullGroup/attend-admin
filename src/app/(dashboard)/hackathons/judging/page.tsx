@@ -1032,21 +1032,11 @@ function JudgeApplicationsList({
   onViewDetail: (appId: string) => void;
 }) {
   // Namespaced: this page already uses ?view= and ?challengeId=.
-  // A stale link may carry ?appStatus=ALL from before the All tab was
-  // normalised — read it as "no filter" so the tab highlights and the request
-  // does not ask the API for a status called ALL.
-  const [rawStatus, setActiveStatus] = useUrlState("appStatus");
-  const activeStatus = rawStatus.toLowerCase() === "all" ? "" : rawStatus;
+  const [activeStatus, setActiveStatus] = useUrlState("appStatus");
   const [activeTrack,  setActiveTrack]  = useUrlState("track");
   const { data, isLoading } = useJudgeChallengeApplications(challengeId, activeStatus, activeTrack, 0, 100);
   const apps  = data?.applications ?? [];
   const tabs  = data?.tabs         ?? [];
-  // "All" can arrive from the API as an empty key, the literal "ALL", or just
-  // that label — the hardcoded All button below is only rendered when the API
-  // did not already send one, otherwise the bar shows two of them.
-  const isAllTab  = (t: { key?: string; label?: string }) =>
-    !t.key || t.key.toLowerCase() === "all" || (t.label ?? "").trim().toLowerCase() === "all";
-  const hasAllTab = tabs.some(isAllTab);
 
   // Track options must stay independent of the active track filter — see
   // matching fix in hackathons/[challengeId]/page.tsx's ApplicationsTab.
@@ -1059,22 +1049,20 @@ function JudgeApplicationsList({
     <div className="flex flex-col gap-4">
       {tabs.length > 0 && (
         <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1">
-          {!hasAllTab && (
-            <button
-              onClick={() => setActiveStatus("")}
-              className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-center ${
-                activeStatus === "" ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-              }`}
-            >
-              All
-            </button>
-          )}
+          <button
+            onClick={() => setActiveStatus("")}
+            className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-center ${
+              activeStatus === "" ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+            }`}
+          >
+            All
+          </button>
           {tabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveStatus(isAllTab(tab) ? "" : tab.key)}
+              onClick={() => setActiveStatus(tab.key)}
               className={`flex-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all text-center ${
-                (isAllTab(tab) ? activeStatus === "" : activeStatus === tab.key) ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                activeStatus === tab.key ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
               }`}
             >
               {tab.label}
@@ -1371,31 +1359,16 @@ function JudgeJudgingPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">My Challenges</h1>
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Judging</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-          Select a challenge to view applications, leaderboard, and score teams
+          Pick a challenge to score its shortlisted teams
         </p>
       </div>
 
-      {summary && (
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: "Active Challenges",  value: summary.activeChallenges,  icon: Lightbulb, color: "#7c22c9" },
-            { label: "Total Applications", value: summary.totalApplications, icon: FileText,  color: "#0891b2" },
-            { label: "Shortlisted",        value: summary.shortlisted ?? summary.teamsToScore ?? 0, icon: Trophy, color: "#d97706" },
-          ].map(({ label, value, icon: Icon, color }) => (
-            <Card key={label} className="attend-card p-4 flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: color + "18" }}>
-                <Icon className="h-4 w-4" style={{ color }} />
-              </div>
-              <div>
-                <p className="text-lg font-bold text-[hsl(var(--foreground))]">{value ?? 0}</p>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">{label}</p>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+      {/* The three summary tiles that used to sit here are the same three on
+          the Challenges screen, one click away. Two screens showing the same
+          counts is what made this section feel repetitive — this one is a
+          picker, so it shows what you pick between and nothing else. */}
 
       <div className="relative max-w-xs">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--muted-foreground))]" />
@@ -1409,8 +1382,9 @@ function JudgeJudgingPage() {
 
       <Card className="attend-card overflow-hidden">
         <div className="px-5 py-4 border-b border-[hsl(var(--border))]">
-          <h2 className="font-semibold text-[hsl(var(--foreground))]">Select a Challenge</h2>
-          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">Click to view applications, leaderboard, and score</p>
+          <h2 className="font-semibold text-[hsl(var(--foreground))]">
+            Assigned to you{filtered.length ? ` (${filtered.length})` : ""}
+          </h2>
         </div>
         <table className="w-full">
           <thead>
