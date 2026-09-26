@@ -372,7 +372,7 @@ function DocumentsPageInner() {
               <SelectTrigger className="h-9 w-[170px] text-sm [&>span]:truncate [&>span]:text-left"><SelectValue placeholder="All Organisers" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>All Organisers</SelectItem>
-                {registerOptions.map((r) => (
+                {withoutServerAllRow(registerOptions, (r) => r.id, (r) => r.label, "All Organisers").map((r) => (
                   <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -384,7 +384,7 @@ function DocumentsPageInner() {
                     empty-id "All Events" row, so that one is dropped rather than
                     rendered as a second All. */}
                 <SelectItem value={ALL}>All Events</SelectItem>
-                {eventOptions.filter((e) => !!e.id).map((e) => (
+                {withoutServerAllRow(eventOptions, (e) => e.id, (e) => e.label, "All Events").map((e) => (
                   <SelectItem key={e.id} value={e.id}>{e.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -402,7 +402,7 @@ function DocumentsPageInner() {
               <SelectTrigger className="h-9 w-[170px] text-sm [&>span]:truncate [&>span]:text-left"><SelectValue placeholder="All Registrars" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>All Registrars</SelectItem>
-                {registrarOptions.map((r) => (
+                {withoutServerAllRow(registrarOptions, (r) => r.id, (r) => r.name, "All Registrars").map((r) => (
                   <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -412,7 +412,7 @@ function DocumentsPageInner() {
                 <SelectTrigger className="h-9 w-[170px] text-sm [&>span]:truncate [&>span]:text-left"><SelectValue placeholder="All Registers" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL}>All Registers</SelectItem>
-                  {adminRegisterOptions.map((r) => (
+                  {withoutServerAllRow(adminRegisterOptions, (r) => r.id, (r) => r.name, "All Registers").map((r) => (
                     <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -593,6 +593,33 @@ function DocumentsPageInner() {
 const ALL = "__all";
 const toSel   = (v: string) => (v ? v : ALL);
 const fromSel = (v: string) => (v === ALL ? "" : v);
+
+/**
+ * Drop the backend's own "All …" row from a filter list.
+ *
+ * Several of these endpoints already include an All entry of their own. We
+ * render our own unconditionally — the list can come back empty, and a Select
+ * with no matching item shows a blank trigger — so the server's copy has to go
+ * or the dropdown lists "All Organisers" twice. This repo has shipped that
+ * duplicate more than once; every filter list here goes through this function
+ * so the next one cannot.
+ *
+ * Both shapes are covered: an entry with no id, and one with a real id whose
+ * label is just the All row spelled out.
+ */
+function withoutServerAllRow<T>(
+  rows: T[],
+  getId: (row: T) => string | null | undefined,
+  getLabel: (row: T) => string | null | undefined,
+  allLabel: string,
+): T[] {
+  const all = allLabel.trim().toLowerCase();
+  return rows.filter((row) => {
+    const id = (getId(row) ?? "").trim();
+    if (!id) return false;
+    return (getLabel(row) ?? "").trim().toLowerCase() !== all;
+  });
+}
 
 export default function DocumentsPage() {
   return (
