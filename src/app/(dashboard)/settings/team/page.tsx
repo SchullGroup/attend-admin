@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { UserAvatar } from "@/components/custom/user-avatar";
 import {
   useOrganisationTeam,
   useInviteTeamMember,
@@ -64,10 +65,13 @@ function Avatar({ member, role }: { member: TeamMember; role: string }) {
   const s = ROLE_STYLE[role] ?? { bg: "#f3f4f6", color: "#6b7280" };
   const initials = member.fullName.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
   return (
-    <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-      style={{ backgroundColor: s.bg, color: s.color }}>
-      {initials}
-    </div>
+    <UserAvatar
+      src={(member as { avatarUrl?: string | null }).avatarUrl}
+      initials={initials}
+      bg={s.bg}
+      fg={s.color}
+      size={32}
+    />
   );
 }
 

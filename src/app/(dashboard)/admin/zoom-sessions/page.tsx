@@ -39,6 +39,7 @@ import {
   type ZoomSessionTotals,
 } from "@/api/admin-zoom-sessions";
 import { useAdminZoomHosts } from "@/api/admin-zoom-hosts";
+import { WebinarCalendarCard } from "./WebinarCalendarCard";
 import { HostPoolCard } from "./HostPoolCard";
 
 export default function ZoomSessionsPage() {
@@ -371,6 +372,13 @@ export default function ZoomSessionsPage() {
             isLoading={hostsLoading}
             derivedUsage={derivedHostUsage}
             unattributedSlots={unattributedSlots}
+          />
+
+          {/* Webinar bookings — the single licence's schedule. Built from the
+              sessions list; there is no separate calendar endpoint. */}
+          <WebinarCalendarCard
+            sessions={sessions}
+            hasWebinarLicence={(hostsData?.webinarHosts?.length ?? 0) > 0}
           />
 
           {/* Assign a host */}

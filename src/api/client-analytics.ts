@@ -8,13 +8,11 @@
  * GET  /api/v1/client/analytics/monthly-trend
  * GET  /api/v1/client/analytics/rsvps-by-event
  * GET  /api/v1/client/analytics/fill-rate-overview
- * GET  /api/v1/client/analytics/event-performance   ?page&size
+ * GET  /api/v1/client/analytics/performance-by-event  ?page&size
  * GET  /api/v1/client/analytics/export/registrations?eventId&from&to
  */
 
 import { useQuery } from "@tanstack/react-query";
-import axios from "axios";
-import Cookies from "js-cookie";
 import { apiClient } from "@/lib/api-client";
 import { ApiResponse } from "@/types/api";
 
@@ -112,7 +110,7 @@ export interface MonthlyTrendResponse {
   trend: MonthlyTrendItem[];
 }
 
-/** GET /analytics/event-performance */
+/** GET /analytics/performance-by-event */
 export interface EventPerformanceItem {
   id:             string;   // API field name
   eventId?:       string;   // normalised alias
@@ -127,7 +125,7 @@ export interface EventPerformanceItem {
   fillRate:       number;
   checkedInCount: number;
   checkInRate:    number;
-  /** Same as the admin `event-performance` shape. `qaResponses` is a real,
+  /** Same as the admin `performance-by-event` shape. `qaResponses` is a real,
    *  confirmed count of EventQuestion rows per event — backend confirmed
    *  `pollResponses` never existed as a field; kept only as a fallback for
    *  older cached/mocked shapes. See BACKEND_BUGS item 13d. */
@@ -136,7 +134,7 @@ export interface EventPerformanceItem {
   pollResponses?:   number;  // legacy/fallback field name — never actually populated
 }
 
-/** GET /analytics/event-format — distribution of events by format */
+/** GET /analytics/format-breakdown — distribution of events by format */
 export interface EventFormatItem {
   format: string;
   count:  number;
@@ -351,31 +349,33 @@ export function useAnalyticsMonthlyTrend(range: AnalyticsRange = "all") {
 }
 
 /**
- * GET /analytics/event-performance — paginated event performance table.
+ * NOTE on these two paths (backend note 2026-09-23 §1).
  *
- * Routed through our own Next.js server (/api/reports/event-summary)
- * instead of calling the external API directly from the browser — the
- * literal string "event-performance" gets silently killed by ad/privacy
- * blocker extensions (net::ERR_BLOCKED_BY_CLIENT, 0 bytes, request never
- * sent) because it matches common analytics-tracker filter rules. Every
- * other /analytics/* endpoint here is unaffected; this is the only name
- * that collides. See src/app/api/reports/event-summary/route.ts.
+ * `analytics/event-format` and `analytics/event-performance` were being killed
+ * in the browser by ad and privacy blockers — EasyPrivacy carries a rule for
+ * any URL containing `/analytics/event`, with no domain anchor, so it matched
+ * ours. The request never left the browser, which is why it looked like a
+ * server that never responded: `Response headers (0)`.
+ *
+ * The backend renamed both. `format-breakdown` and `performance-by-event`
+ * carry identical params and response bodies and pass the filter lists, so
+ * this is a path change and nothing else.
+ *
+ * Rule of thumb for new paths: avoid `analytics/event`, `track`, `pixel`,
+ * `beacon` and `collect`.
  */
+
+/** GET /analytics/performance-by-event — paginated event performance table. */
 export function useAnalyticsEventPerformance(page = 0, size = 10, range: AnalyticsRange = "all") {
   return useQuery({
     queryKey: clientAnalyticsKeys.performance(page, size, range),
     queryFn: async () => {
-      // Plain axios (no baseURL) so this resolves same-origin against our
-      // own Next.js server rather than apiClient's external baseURL — same
-      // trick refreshAccessToken() uses in lib/api-client.ts. Auth header
-      // is attached manually since this bypasses apiClient's interceptor.
-      const token = Cookies.get("accessToken");
-      const res = await axios.get<ApiResponse<any>>(
-        "/api/reports/event-summary",
-        {
-          params:  { page, size, ...(rangeParams(range) ?? {}) },
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        }
+      // Back on apiClient and calling the API directly: the same-origin hop
+      // through our own Next.js route existed only to hide the old path from
+      // blockers, and the new one does not need hiding.
+      const res = await apiClient.get<ApiResponse<any>>(
+        "/api/v1/client/analytics/performance-by-event",
+        { params: { page, size, ...(rangeParams(range) ?? {}) } }
       );
       const raw: any = res.data.data ?? res.data;
       const events: EventPerformanceItem[] = (raw?.events ?? raw?.content ?? []).map(
@@ -418,7 +418,7 @@ export function useAnalyticsCheckInOverview(range: AnalyticsRange = "all") {
 }
 
 /**
- * GET /analytics/event-format — distribution of this org's events by format
+ * GET /analytics/format-breakdown — distribution of this org's events by format
  * (virtual / hybrid / in-person). Confirmed live by backend — see
  * BACKEND_BUGS item 13c. Scoped to the caller's own stakeholder.
  */
@@ -427,7 +427,7 @@ export function useAnalyticsEventFormat(range: AnalyticsRange = "all") {
     queryKey: clientAnalyticsKeys.eventFormat(range),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<any>>(
-        "/api/v1/client/analytics/event-format",
+        "/api/v1/client/analytics/format-breakdown",
         { params: rangeParams(range) }
       );
       const raw: any = res.data.data ?? res.data;

@@ -28,6 +28,10 @@ export interface SearchTeamMember {
   fullName: string;
   email:    string;
   role:     string;
+  /** Profile photo when the API carries one; falls back to initials. */
+  avatarUrl?:   string | null;
+  /** Per-user accent for the initials fallback. */
+  avatarColor?: string | null;
 }
 
 export interface SearchDocument {

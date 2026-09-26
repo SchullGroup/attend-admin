@@ -57,6 +57,8 @@ export type LivePendingQuestion = LiveQuestion;
 export interface LiveAttendeeEntry {
   name:     string;
   initials: string;
+  /** Profile photo when the API carries one; falls back to initials. */
+  avatarUrl?: string | null;
   mode:     string;
   joinedAt: string;
 }

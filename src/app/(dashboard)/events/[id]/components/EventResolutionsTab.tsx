@@ -21,8 +21,10 @@ import {
   useCloseResolutionVoting,
 } from "@/api/client-votes";
 import type { ResolutionType, CandidateInput, CandidateResult } from "@/api/client-votes";
+import { useAdminVoteResults } from "@/api/admin-votes";
 import type { LocalAgendaItem } from "./types";
 
+import { NativeSelect } from "@/components/ui/native-select";
 let _uid = 0;
 const uid = () => `ag_${++_uid}`;
 
@@ -68,6 +70,12 @@ interface Props {
   setAgendaItems: React.Dispatch<React.SetStateAction<LocalAgendaItem[]>>;
   /** When true, all write actions (add, edit, delete) are hidden */
   isSuperAdmin?:  boolean;
+  /**
+   * True only for an actual super admin, who must read vote results from the
+   * admin endpoint. Distinct from `isSuperAdmin` above, which also covers the
+   * Viewer role — a client-scoped role that would 403 on the admin path.
+   */
+  useAdminEndpoints?: boolean;
   /** Only the org owner (client_admin) may open/close resolution voting. Defaults to false — pass explicitly. */
   canControlVoting?: boolean;
 }
@@ -98,11 +106,17 @@ function VoteBar({ label, value, total, color }: { label: string; value: number;
 
 export function EventResolutionsTab({
   eventId, isAGM, agmResolutions = [], agendaItems, setAgendaItems, isSuperAdmin = false,
+  useAdminEndpoints = false,
   canControlVoting = false,
 }: Props) {
 
   // ── Live resolution data ──────────────────────────────────────────────────
-  const { data: voteResults, isLoading: voteLoading } = useVoteResults(eventId);
+  const { data: clientVoteResults, isLoading: clientVoteLoading } =
+    useVoteResults(useAdminEndpoints ? "" : eventId);
+  const { data: adminVoteResults, isLoading: adminVoteLoading } =
+    useAdminVoteResults(useAdminEndpoints ? eventId : "");
+  const voteResults = useAdminEndpoints ? adminVoteResults : clientVoteResults;
+  const voteLoading = useAdminEndpoints ? adminVoteLoading : clientVoteLoading;
   const openVotingMutation  = useOpenResolutionVoting();
   const closeVotingMutation = useCloseResolutionVoting();
   const [duration, setDuration] = useState("60"); // seconds for vote timer
@@ -304,17 +318,13 @@ export function EventResolutionsTab({
             {!isSuperAdmin && (
               <div className="flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
-                <select
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  className="text-xs border border-[hsl(var(--border))] rounded-lg px-2 py-1.5 bg-[hsl(var(--background))] text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-                >
+                <NativeSelect value={duration} onChange={(e) => setDuration(e.target.value)} className="text-xs">
                   <option value="60">1 min</option>
                   <option value="120">2 min</option>
                   <option value="300">5 min</option>
                   <option value="600">10 min</option>
                   <option value="0">No timer</option>
-                </select>
+                </NativeSelect>
               </div>
             )}
             {!isSuperAdmin && (

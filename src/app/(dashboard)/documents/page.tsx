@@ -1,5 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
+import { withoutServerAllRow } from "@/lib/filter-options";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Upload, Download, Trash2, FileText, Send, Search, Check, ChevronDown,
 } from "lucide-react";
@@ -340,8 +342,11 @@ function DocumentsPageInner() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Filters ── */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
+      {/* ── Filters ──
+           Two rows on purpose: the type tabs are one control and read as a unit,
+           so the dropdowns sit with the search box underneath rather than
+           trailing off the end of the pill group. */}
+      <div className="flex flex-col gap-3 mb-4">
         {/* Type tabs */}
         <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 overflow-x-auto">
           {TYPE_FILTERS.map((f) => (
@@ -359,57 +364,60 @@ function DocumentsPageInner() {
           ))}
         </div>
 
+        {/* Dropdowns + search share the second row */}
+        <div className="flex items-center gap-2 flex-wrap">
         {/* Organiser + Event dropdowns (client only) */}
         {!isAdmin && (
           <div className="flex items-center gap-2">
-            <select
-              value={registerFilter}
-              onChange={(e) => setRegisterFilter(e.target.value)}
-              className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
-            >
-              <option value="">All Organisers</option>
-              {registerOptions.map((r) => (
-                <option key={r.id} value={r.id}>{r.label}</option>
-              ))}
-            </select>
-            <select
-              value={eventFilter}
-              onChange={(e) => setEventFilter(e.target.value)}
-              className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
-            >
-              {/* Backend's filter list already includes its own "All Events"
-                  (id: "") entry — don't add a second hardcoded one. */}
-              {eventOptions.map((e) => (
-                <option key={e.id || "all"} value={e.id}>{e.label}</option>
-              ))}
-            </select>
+            <Select value={toSel(registerFilter)} onValueChange={(v) => setRegisterFilter(fromSel(v))}>
+              <SelectTrigger className="h-9 w-[170px] text-sm [&>span]:truncate [&>span]:text-left"><SelectValue placeholder="All Organisers" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All Organisers</SelectItem>
+                {withoutServerAllRow(registerOptions, (r) => r.id, (r) => r.label, "All Organisers").map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={toSel(eventFilter)} onValueChange={(v) => setEventFilter(fromSel(v))}>
+              <SelectTrigger className="h-9 w-[170px] text-sm [&>span]:truncate [&>span]:text-left"><SelectValue placeholder="All Events" /></SelectTrigger>
+              <SelectContent>
+                {/* Always ours. The backend's list may or may not carry its own
+                    empty-id "All Events" row, so that one is dropped rather than
+                    rendered as a second All. */}
+                <SelectItem value={ALL}>All Events</SelectItem>
+                {withoutServerAllRow(eventOptions, (e) => e.id, (e) => e.label, "All Events").map((e) => (
+                  <SelectItem key={e.id} value={e.id}>{e.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 
         {/* Registrar + cascading Register dropdowns (Super Admin only) */}
         {isAdmin && (
           <div className="flex items-center gap-2">
-            <select
-              value={registrarFilter}
-              onChange={(e) => writeParams({ registrar: e.target.value, adminRegister: null })}
-              className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
+            <Select
+              value={toSel(registrarFilter)}
+              onValueChange={(v) => writeParams({ registrar: fromSel(v), adminRegister: null })}
             >
-              <option value="">All Registrars</option>
-              {registrarOptions.map((r) => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
-            {registrarFilter && (
-              <select
-                value={adminRegisterFilter}
-                onChange={(e) => setAdminRegisterFilter(e.target.value)}
-                className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
-              >
-                <option value="">All Registers</option>
-                {adminRegisterOptions.map((r) => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
+              <SelectTrigger className="h-9 w-[170px] text-sm [&>span]:truncate [&>span]:text-left"><SelectValue placeholder="All Registrars" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All Registrars</SelectItem>
+                {withoutServerAllRow(registrarOptions, (r) => r.id, (r) => r.name, "All Registrars").map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                 ))}
-              </select>
+              </SelectContent>
+            </Select>
+            {registrarFilter && (
+              <Select value={toSel(adminRegisterFilter)} onValueChange={(v) => setAdminRegisterFilter(fromSel(v))}>
+                <SelectTrigger className="h-9 w-[170px] text-sm [&>span]:truncate [&>span]:text-left"><SelectValue placeholder="All Registers" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>All Registers</SelectItem>
+                  {withoutServerAllRow(adminRegisterOptions, (r) => r.id, (r) => r.name, "All Registers").map((r) => (
+                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
         )}
@@ -424,6 +432,7 @@ function DocumentsPageInner() {
             onChange={(e) => setSearchDraft(e.target.value)}
             className="w-full pl-9 pr-4 h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
           />
+        </div>
         </div>
       </div>
 
@@ -577,6 +586,16 @@ function DocumentsPageInner() {
  * useSearchParams needs a Suspense boundary above it — without one the whole
  * route opts out of static rendering and Next.js errors at build time.
  */
+/**
+ * Radix's Select refuses `value=""` — it reserves the empty string for "nothing
+ * selected". Our filters use "" to mean "no filter", so they travel through the
+ * component as this sentinel and convert back at the boundary.
+ */
+const ALL = "__all";
+const toSel   = (v: string) => (v ? v : ALL);
+const fromSel = (v: string) => (v === ALL ? "" : v);
+
+
 export default function DocumentsPage() {
   return (
     <Suspense fallback={<div className="py-14 text-center text-sm text-[hsl(var(--muted-foreground))]">Loading documents…</div>}>

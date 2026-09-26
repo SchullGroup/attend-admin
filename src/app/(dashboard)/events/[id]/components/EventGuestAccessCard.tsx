@@ -19,6 +19,7 @@ import {
 } from "@/api/client-guest-access";
 import { popup } from "@/lib/popup-store";
 
+import { NativeSelect } from "@/components/ui/native-select";
 function fmtWhen(iso?: string | null) {
   if (!iso) return null;
   return new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -97,16 +98,12 @@ export function EventGuestAccessCard({ eventId }: { eventId: string }) {
           <div className="flex items-center gap-3 flex-wrap">
             <label className="text-xs text-[hsl(var(--muted-foreground))] flex items-center gap-2">
               Role
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as GuestAccessRole)}
-                className="px-2 py-1 text-xs rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))]"
-              >
+              <NativeSelect value={role} onChange={(e) => setRole(e.target.value as GuestAccessRole)} className="text-xs">
                 <option value="OTHER">Other</option>
                 <option value="REGULATOR">Regulator</option>
                 <option value="DIRECTOR">Director</option>
                 <option value="AUDITOR">Auditor</option>
-              </select>
+              </NativeSelect>
             </label>
             <label className="text-xs text-[hsl(var(--muted-foreground))] flex items-center gap-2">
               Expires

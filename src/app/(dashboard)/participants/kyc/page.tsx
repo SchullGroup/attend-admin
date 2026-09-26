@@ -1,5 +1,6 @@
 "use client";
 import { useState, Suspense } from "react";
+import { UserAvatar } from "@/components/custom/user-avatar";
 import {
   Users, ShieldCheck, ShieldAlert, ShieldOff, ShieldX,
   Search, Eye, X, AlertTriangle, Fingerprint,
@@ -233,11 +234,13 @@ function DetailDrawer({
             <>
               {/* ── Identity block ── */}
               <div className="flex items-center gap-4 p-4 rounded-xl bg-[hsl(var(--muted)/0.5)]">
-                <div className="h-14 w-14 rounded-full flex items-center justify-center
-                                text-base font-bold text-white shrink-0"
-                  style={{ backgroundColor: profile?.avatarColor ?? "#6b7280" }}>
-                  {initials(profile?.fullName)}
-                </div>
+                <UserAvatar
+                  src={profile?.avatarUrl}
+                  initials={initials(profile?.fullName)}
+                  color={profile?.avatarColor}
+                  variant="solid"
+                  size={56}
+                />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">
                     {profile?.fullName ?? "—"}
@@ -678,11 +681,13 @@ function ParticipantKycDashboardInner() {
                     {/* Name */}
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full flex items-center justify-center
-                                        text-xs font-bold text-white shrink-0"
-                          style={{ backgroundColor: p.avatarColor ?? "#6b7280" }}>
-                          {initials(p.fullName)}
-                        </div>
+                        <UserAvatar
+                          src={p.avatarUrl}
+                          initials={initials(p.fullName)}
+                          color={p.avatarColor}
+                          variant="solid"
+                          size={32}
+                        />
                         <div>
                           <p className="text-sm font-medium text-[hsl(var(--foreground))]">
                             {p.fullName ?? "—"}

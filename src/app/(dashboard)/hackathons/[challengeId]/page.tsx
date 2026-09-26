@@ -1,5 +1,6 @@
 "use client";
 import React, { use, useState, useEffect, useRef } from "react";
+import { UserAvatar } from "@/components/custom/user-avatar";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useUrlState } from "@/lib/use-url-state";
 import {
@@ -2002,12 +2003,13 @@ function JudgesTab({ challengeId, readOnly = false }: { challengeId: string; rea
                 <tr key={j.id} className="attend-table-row">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2.5">
-                      <div
-                        className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                        style={{ backgroundColor: j.color || "#7c22c9" }}
-                      >
-                        {j.initials || j.name?.slice(0, 2).toUpperCase()}
-                      </div>
+                      <UserAvatar
+                        src={j.avatarUrl}
+                        initials={j.initials || j.name?.slice(0, 2).toUpperCase() || "?"}
+                        color={j.color || "#7c22c9"}
+                        variant="solid"
+                        size={28}
+                      />
                       <span className="text-sm font-semibold text-[hsl(var(--foreground))]">{j.name}</span>
                     </div>
                   </td>
@@ -2141,12 +2143,13 @@ function AdminJudgesTab({ challengeId }: { challengeId: string }) {
             <tr key={j.id} className="attend-table-row">
               <td className="px-5 py-3">
                 <div className="flex items-center gap-2.5">
-                  <div
-                    className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                    style={{ backgroundColor: j.color || "#7c22c9" }}
-                  >
-                    {j.initials || j.name?.slice(0, 2).toUpperCase()}
-                  </div>
+                  <UserAvatar
+                    src={j.avatarUrl}
+                    initials={j.initials || j.name?.slice(0, 2).toUpperCase() || "?"}
+                    color={j.color || "#7c22c9"}
+                    variant="solid"
+                    size={28}
+                  />
                   <span className="text-sm font-semibold text-[hsl(var(--foreground))]">{j.name}</span>
                 </div>
               </td>

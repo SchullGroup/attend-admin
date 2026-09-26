@@ -15,7 +15,7 @@ import { StatusBadge } from "@/components/custom/status-badge";
 import { ModuleBadge } from "@/components/custom/module-badge";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDateRange } from "@/lib/utils";
 import { getEventModule, getEventRegisterName, MODULE_COLORS } from "@/lib/event-module";
 import type { EventSummaryResponse } from "@/types/super-admin";
 import { cn } from "@/lib/utils";
@@ -208,7 +208,7 @@ function EventTableRow({ event, isSuperAdmin, isViewer }: { event: EventSummaryR
         <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 max-w-[160px] truncate" title={registerName || "—"}>{registerName || "—"}</p>
       </td>
       <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] whitespace-nowrap">
-        {formatDate(event.date)}
+        {formatDateRange(event.date, (event as any).endDate)}
         {event.startTime && <div className="text-xs">{event.startTime}</div>}
       </td>
       <td className="px-5 py-3">

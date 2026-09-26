@@ -45,6 +45,16 @@ export interface ZoomSessionRow {
   stranded:         boolean;
   assignedAt?:      string;
   expiresAt?:       string;
+  /**
+   * Webinar rows. There is no separate calendar endpoint — a webinar booking IS
+   * a session row, so filtering these out of the sessions list is how the
+   * super-admin calendar is built.
+   */
+  type?:            "MEETING" | "WEBINAR";
+  /** Booked window. Present on webinar rows; the date/time the slot is held for. */
+  eventDate?:       string;
+  eventStartTime?:  string;
+  endsAt?:          string;
 }
 
 export interface ZoomSessionTotals {
@@ -163,6 +173,10 @@ function parseZoomSessionRow(raw: any): ZoomSessionRow | null {
     stranded:        toBool(r.stranded ?? r.isStranded ?? r.orphaned),
     assignedAt:      r.assignedAt ?? r.assigned_at ?? undefined,
     expiresAt:       r.expiresAt ?? r.expires_at ?? undefined,
+    type:            String(r.type ?? "").toUpperCase() === "WEBINAR" ? "WEBINAR" : "MEETING",
+    eventDate:       r.eventDate ?? r.event_date ?? undefined,
+    eventStartTime:  r.eventStartTime ?? r.event_start_time ?? undefined,
+    endsAt:          r.endsAt ?? r.ends_at ?? undefined,
   };
 }
 

@@ -130,6 +130,7 @@ export function useAgmState() {
   const [title,               setTitle]               = useDraft("agm", "title", "");
   const [description,         setDescription]         = useDraft("agm", "description", "");
   const [date,                setDate]                = useDraft("agm", "date", todayISO());
+  const [endDate,                setEndDate]                = useDraft("agm", "endDate", "");
   const [time,                setTime]                = useDraft("agm", "time", "10:00");
   const [endTime,             setEndTime]             = useDraft("agm", "endTime", "");
   const [format,              setFormat]              = useDraft<Format>("agm", "format", "hybrid");
@@ -173,7 +174,7 @@ export function useAgmState() {
 
   return {
     title, setTitle, description, setDescription,
-    date, setDate, time, setTime, endTime, setEndTime,
+    date, setDate, endDate, setEndDate, time, setTime, endTime, setEndTime,
     format, setFormat, venue, setVenue, streamUrl, setStreamUrl,
     capacity, setCapacity, rsvpEnabled, setRsvpEnabled, featured, setFeatured,
     flyerUrl, setFlyerUrl,
@@ -199,6 +200,7 @@ export function useLaunchState() {
   const [title,          setTitle]          = useDraft("launch", "title", "");
   const [description,    setDescription]    = useDraft("launch", "description", "");
   const [date,           setDate]           = useDraft("launch", "date", todayISO());
+  const [endDate,           setEndDate]           = useDraft("launch", "endDate", "");
   const [time,           setTime]           = useDraft("launch", "time", "10:00");
   const [endTime,        setEndTime]        = useDraft("launch", "endTime", "");
   const [format,         setFormat]         = useDraft<Format>("launch", "format", "virtual");
@@ -223,7 +225,7 @@ export function useLaunchState() {
 
   return {
     title, setTitle, description, setDescription,
-    date, setDate, time, setTime, endTime, setEndTime,
+    date, setDate, endDate, setEndDate, time, setTime, endTime, setEndTime,
     format, setFormat, venue, setVenue, streamUrl, setStreamUrl,
     capacity, setCapacity,
     productName, setProductName, tagline, setTagline, productDesc, setProductDesc, slug, setSlug,
@@ -321,6 +323,7 @@ export function useGeneralState() {
   const [title,               setTitle]               = useDraft("general", "title", "");
   const [description,         setDescription]         = useDraft("general", "description", "");
   const [date,                setDate]                = useDraft("general", "date", todayISO());
+  const [endDate,                setEndDate]                = useDraft("general", "endDate", "");
   const [time,                setTime]                = useDraft("general", "time", "10:00");
   const [endTime,             setEndTime]             = useDraft("general", "endTime", "");
   const [format,              setFormat]              = useDraft<Format>("general", "format", "virtual");
@@ -334,7 +337,7 @@ export function useGeneralState() {
 
   return {
     title, setTitle, description, setDescription,
-    date, setDate, time, setTime, endTime, setEndTime,
+    date, setDate, endDate, setEndDate, time, setTime, endTime, setEndTime,
     format, setFormat, venue, setVenue, streamUrl, setStreamUrl,
     capacity, setCapacity, audienceMode, setAudienceMode, featured, setFeatured,
     flyerUrl, setFlyerUrl,

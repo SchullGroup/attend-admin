@@ -5,7 +5,7 @@ import { Clock } from "lucide-react";
 import { ModuleBadge } from "@/components/custom/module-badge";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { Button } from "@/components/ui/button";
-import { formatDate } from "@/lib/utils";
+import { formatDateRange } from "@/lib/utils";
 import { getEventModule, getEventRegisterName, MODULE_COLORS } from "@/lib/event-module";
 import type { EventSummaryResponse } from "@/types/super-admin";
 
@@ -38,7 +38,7 @@ export function EventRow({ event }: EventRowProps) {
 
       <div className="hidden lg:flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] shrink-0">
         <Clock className="h-3 w-3" />
-        {formatDate(event.date)}
+        {formatDateRange(event.date, event.endDate)}
       </div>
 
       <div className="w-28 shrink-0">

@@ -1,5 +1,6 @@
 "use client";
 import { use, useState, useMemo } from "react";
+import { withoutServerAllRow } from "@/lib/filter-options";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, Eye, ChevronLeft, ChevronRight } from "lucide-react";
@@ -9,10 +10,11 @@ import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { ModuleBadge } from "@/components/custom/module-badge";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDateRange } from "@/lib/utils";
 import { getEventModule, MODULE_COLORS } from "@/lib/event-module";
 import { useUrlPageState, useUrlParamWriter, useUrlState } from "@/lib/use-url-state";
 
+import { NativeSelect } from "@/components/ui/native-select";
 const PAGE_SIZE = 20;
 
 const EVENT_TYPE_OPTIONS = [
@@ -98,26 +100,18 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
-        <select
-          value={registerFilter}
-          onChange={(e) => writeParams({ register: e.target.value, page: null })}
-          className="h-9 pl-3 pr-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-        >
+        <NativeSelect value={registerFilter} onChange={(e) => writeParams({ register: e.target.value, page: null })} className="text-sm">
           <option value="">All Registers</option>
-          {registerOptions.map((r) => (
+          {withoutServerAllRow(registerOptions, (r) => r.id, (r) => r.name, "All Registers").map((r) => (
             <option key={r.id} value={r.id}>{r.name}</option>
           ))}
-        </select>
-        <select
-          value={typeFilter}
-          onChange={(e) => writeParams({ type: e.target.value, page: null })}
-          className="h-9 pl-3 pr-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-        >
+        </NativeSelect>
+        <NativeSelect value={typeFilter} onChange={(e) => writeParams({ type: e.target.value, page: null })} className="text-sm">
           <option value="">All Event Types</option>
           {EVENT_TYPE_OPTIONS.map((t) => (
             <option key={t.id} value={t.id}>{t.name}</option>
           ))}
-        </select>
+        </NativeSelect>
         {(registerFilter || typeFilter) && (
           <button
             onClick={() => writeParams({ register: null, type: null, page: null })}
@@ -177,7 +171,7 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
                         }
                       </td>
                       <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-                        {formatDate(evt.date)}
+                        {formatDateRange(evt.date, evt.endDate)}
                       </td>
                       <td className="px-5 py-3 text-sm font-medium tabular-nums">
                         {(evt.registrationCount ?? evt.rsvpCount ?? evt.registrationsCount ?? evt.totalRsvps ?? evt.rsvps ?? 0).toLocaleString()}

@@ -41,6 +41,7 @@ import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { popup } from "@/lib/popup-store";
 
+import { NativeSelect } from "@/components/ui/native-select";
 const BRAND = "#7c22c9";
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
@@ -350,25 +351,17 @@ function FieldProperties({ field, onChange, onRemove }: {
         <>
           <label className="flex items-center justify-between gap-2 text-xs">
             <span className="text-[hsl(var(--muted-foreground))]">Align</span>
-            <select
-              value={field.align ?? "CENTER"}
-              onChange={(e) => onChange({ align: e.target.value as TemplateFieldAlign })}
-              className="rounded-md border border-[hsl(var(--border))] bg-transparent px-2 py-1 text-xs text-[hsl(var(--foreground))] outline-none focus:border-[#7c22c9]"
-            >
+            <NativeSelect value={field.align ?? "CENTER"} onChange={(e) => onChange({ align: e.target.value as TemplateFieldAlign })} className="text-xs">
               {TEMPLATE_ALIGNS.map((a) => <option key={a} value={a}>{a}</option>)}
-            </select>
+            </NativeSelect>
           </label>
 
           <label className="flex items-center justify-between gap-2 text-xs">
             <span className="text-[hsl(var(--muted-foreground))]">Font style</span>
-            <select
-              value={field.fontStyle ?? ""}
-              onChange={(e) => onChange({ fontStyle: e.target.value || undefined })}
-              className="rounded-md border border-[hsl(var(--border))] bg-transparent px-2 py-1 text-xs text-[hsl(var(--foreground))] outline-none focus:border-[#7c22c9]"
-            >
+            <NativeSelect value={field.fontStyle ?? ""} onChange={(e) => onChange({ fontStyle: e.target.value || undefined })} className="text-xs">
               <option value="">Default</option>
               {TEMPLATE_FONT_STYLES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            </NativeSelect>
           </label>
 
           <label className="flex items-center justify-between gap-2 text-xs">

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { UserAvatar } from "@/components/custom/user-avatar";
 import { Users, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -151,15 +152,7 @@ export function EventAttendeesTab({ participants, eventId }: Props) {
                   {/* Participant — avatar + name + email with overflow protection */}
                   <td className="px-5 py-3 max-w-[220px]">
                     <Link href={`/participants/${pid}`} className="flex items-center gap-2.5 group">
-                      <div
-                        className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                        style={{
-                          backgroundColor: p.avatarColor ? `${p.avatarColor}22` : "hsl(var(--primary)/0.1)",
-                          color:           p.avatarColor ?? "hsl(var(--primary))",
-                        }}
-                      >
-                        {initials}
-                      </div>
+                      <UserAvatar src={p.avatarUrl} initials={initials} color={p.avatarColor} size={28} />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate group-hover:underline">
                           {fullName}

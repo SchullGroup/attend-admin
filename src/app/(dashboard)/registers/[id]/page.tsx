@@ -36,7 +36,7 @@ function handleBack(router: ReturnType<typeof useRouter>) {
   }
   router.push("/admin/registers");
 }
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDateRange } from "@/lib/utils";
 import { RegisterDocumentItem } from "@/types/super-admin";
 
 // ─── Status map ───────────────────────────────────────────────────────────────
@@ -349,7 +349,7 @@ export default function RegisterDetailPage({ params }: { params: Promise<{ id: s
                       <div className="flex items-center gap-4 text-xs text-[hsl(var(--muted-foreground))]">
                         <div className="flex items-center gap-1">
                           <Calendar className="h-3 w-3 shrink-0" />
-                          <span>{formatDate(ev.date || ev.startDate) || "—"}</span>
+                          <span>{formatDateRange(ev.date || ev.startDate, ev.endDate) || "—"}</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Users className="h-3 w-3 shrink-0" />

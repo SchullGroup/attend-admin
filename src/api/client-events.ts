@@ -28,6 +28,8 @@ export interface EventListItem {
   title:       string;
   eventType:   string;
   date:        string;
+  /** Optional, YYYY-MM-DD. null/absent = single-day event ending on `date`. */
+  endDate?:    string | null;
   format:      string;
   rsvpCount:   number;
   capacity:    number;
@@ -65,7 +67,19 @@ export interface StatusTransitionResponse {
 
 // Zoom Meeting — returned on event detail once a host slot has been claimed for the
 // event (lazily, via POST /events/{id}/zoom), not at creation time (see §7a).
+export type ZoomEntityType = "MEETING" | "WEBINAR";
+
 export interface ZoomMeetingDto {
+  /**
+   * Which Zoom entity this is. Branch on it rather than on the URL: a webinar's
+   * join URL uses `/w/` where a meeting uses `/j/`, so anything parsing the
+   * meeting number out of the link breaks on webinars. Use `meetingId`.
+   *
+   * Absent on responses from before the webinar release — treat as MEETING.
+   */
+  type?:           ZoomEntityType;
+  /** The webinar id, or null on a meeting. Same value as `meetingId` for a webinar. */
+  webinarId?:      number | null;
   meetingId:       number;
   password:        string;
   joinUrl:         string;
@@ -122,6 +136,11 @@ export interface UpdateEventRequest {
   description?:               string;
   format?:                    "VIRTUAL" | "IN_PERSON" | "HYBRID";
   date?:                      string;
+  /**
+   * Optional, YYYY-MM-DD, on or after `date`. Leave OUT to keep the current
+   * value; send it equal to `date` to make the event single-day again.
+   */
+  endDate?:                   string;
   startTime?:                 string;
   streamUrl?:                 string;
   venue?:                     string;
@@ -205,6 +224,7 @@ export const clientEventKeys = {
   documents: (id: string) => ["clientEvents", "documents", id] as const,
   attendees: (id: string, kycStatus: string, page: number, size: number) =>
                ["clientEvents", "attendees", id, { kycStatus, page, size }] as const,
+  panelists: (id: string) => ["clientEvents", "panelists", id] as const,
   dropdown:  () => ["clientEvents", "dropdown"] as const,
 };
 
@@ -296,7 +316,15 @@ export function useClientEventAttendees(
   eventId: string,
   kycStatus = "",
   page = 0,
-  size = 50
+  size = 50,
+  /**
+   * Callers on a shared screen must pass `{ enabled: isClient }`. Without it
+   * this fired for super admins too, who have no client scope: the request
+   * 403s, React Query retries it, and the admin equivalent's data is what ends
+   * up on screen anyway — so the only trace was a column of red rows in the
+   * network tab.
+   */
+  options?: { enabled?: boolean }
 ) {
   return useQuery({
     queryKey: clientEventKeys.attendees(eventId, kycStatus, page, size),
@@ -313,7 +341,7 @@ export function useClientEventAttendees(
       );
       return res.data.data;
     },
-    enabled: !!eventId,
+    enabled: !!eventId && (options?.enabled ?? true),
     staleTime: 30_000,
   });
 }
@@ -1318,17 +1346,29 @@ export function useUpdateStreamUrl() {
 export function useCreateEventZoomMeeting() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ eventId, durationMinutes = 120, forceNew = false }: { eventId: string; durationMinutes?: number; forceNew?: boolean }) => {
+    mutationFn: async ({ eventId, durationMinutes = 120, forceNew = false, type }: {
+      eventId: string; durationMinutes?: number; forceNew?: boolean; type?: ZoomEntityType;
+    }) => {
       const res = await apiClient.post<ApiResponse<ZoomMeetingDto>>(
         `/api/v1/client/events/${eventId}/zoom`,
         null,
-        { params: { durationMinutes, forceNew } }
+        // `type` omitted keeps the event's existing entity, so a plain refresh of
+        // a webinar's ZAK must NOT send it — sending MEETING there would be a
+        // type mismatch, not a refresh.
+        { params: { durationMinutes, forceNew, ...(type ? { type } : {}) } }
       );
       return (res.data as any).data as ZoomMeetingDto;
     },
-    onSuccess: (_, { eventId }) => {
+    onSuccess: (data, { eventId }) => {
       queryClient.invalidateQueries({ queryKey: clientEventKeys.detail(eventId) });
-      popup.success("Zoom Meeting Created", "Zoom meeting has been created for this event.", 3000);
+      const isWebinar = data?.type === "WEBINAR";
+      popup.success(
+        isWebinar ? "Webinar Created" : "Zoom Meeting Created",
+        isWebinar
+          ? "The webinar is booked and the licence is held for this event's time slot."
+          : "Zoom meeting has been created for this event.",
+        3000,
+      );
     },
     onError: (error: any) => {
       // §7f: the shared Zoom host pool can be exhausted — the backend answers 503.
@@ -1346,8 +1386,201 @@ export function useCreateEventZoomMeeting() {
         );
         return;
       }
+
+      // Webinar vocabulary (2026-09-26 backend). These are 409s, deliberately
+      // distinct from the meeting pool's 503: a 503 means "try again shortly",
+      // a 409 means "that date is taken" and retrying will never help.
+      const body = error?.response?.data ?? {};
+      const code = typeof body.code === "string" ? body.code : "";
+      const serverMsg =
+        (typeof body.message === "string" && body.message) ||
+        (typeof body.error === "string" && body.error) || "";
+
+      if (code === "WEBINAR_SLOT_TAKEN") {
+        popup.error("Webinar slot already booked", serverMsg || "Another event holds the webinar licence for this time.", 8000);
+        return;
+      }
+      if (code === "NO_WEBINAR_HOST") {
+        popup.error(
+          "No webinar licence configured",
+          serverMsg || "No webinar-capable Zoom account has been added yet. A super admin can add one under Zoom Sessions.",
+          8000,
+        );
+        return;
+      }
+      if (code === "ZOOM_TYPE_MISMATCH") {
+        popup.error(
+          "This event already has a different Zoom type",
+          serverMsg || "Use Replace to swap between a meeting and a webinar.",
+          7000,
+        );
+        return;
+      }
+      if (code === "ZOOM_WEBINAR_FAILED") {
+        // Explicitly NOT a date clash — the window was free and Zoom refused,
+        // usually a missing licence or scope. Saying "date taken" here would
+        // send the organiser hunting for a conflict that does not exist.
+        popup.error(
+          "Zoom refused the webinar",
+          serverMsg || "The time slot is free, but Zoom would not create the webinar. This is usually a missing licence or API scope — flag it to a super admin.",
+          9000,
+        );
+        return;
+      }
+      if (code === "INVALID_DURATION") {
+        popup.error("Invalid duration", serverMsg || "Duration must be between 1 and 1440 minutes.", 5000);
+        return;
+      }
+
       parseAndToastApiError(error, "Failed to create Zoom meeting. Check that Zoom OAuth is configured on the server.");
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Webinar availability  — GET /api/v1/client/webinar-availability
+// ---------------------------------------------------------------------------
+
+/**
+ * The single webinar licence runs one webinar at a time, so the slot is booked
+ * when the event is scheduled rather than when it starts. This is the check we
+ * run while the organiser is still looking at the form — finding out at launch
+ * that another registrar holds the licence is the failure mode the whole design
+ * exists to avoid.
+ *
+ * Always 200; the answer is in the body. Advisory only — create re-checks
+ * atomically, so two organisers booking at once is the backend's problem, not
+ * a race we have to win here.
+ */
+export interface WebinarConflict {
+  date:             string;
+  /** The booking itself, NOT including the buffer. */
+  startTime:        string;
+  endsAt:           string;
+  /** Only present when the booking runs past midnight. */
+  endDate?:         string;
+  /** Minutes of breathing room required either side. Always 30 today. */
+  bufferMinutes?:   number;
+  /** Cross-organisation clashes are deliberately anonymous — see below. */
+  sameOrganisation: boolean;
+  /** Present only when sameOrganisation is true. */
+  eventId?:         string;
+  eventTitle?:      string;
+}
+
+export interface WebinarAvailability {
+  available: boolean;
+  reason?:   "WEBINAR_SLOT_TAKEN" | "NO_WEBINAR_HOST";
+  conflict?: WebinarConflict;
+}
+
+export function useWebinarAvailability(
+  date: string,
+  startTime: string,
+  durationMinutes: number,
+  /**
+   * Pass the event being edited. Without it the event's OWN booking comes back
+   * as the clash, and the organiser is told their webinar conflicts with itself.
+   */
+  eventId?: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ["webinarAvailability", date, startTime, durationMinutes, eventId ?? null],
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<WebinarAvailability>>(
+        "/api/v1/client/webinar-availability",
+        { params: { date, startTime, durationMinutes, ...(eventId ? { eventId } : {}) } },
+      );
+      return ((res.data as any).data ?? res.data) as WebinarAvailability;
+    },
+    enabled: !!date && !!startTime && durationMinutes > 0 && (options?.enabled ?? true),
+    staleTime: 15_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Webinar panelists  — /api/v1/client/events/{id}/zoom/panelists
+// ---------------------------------------------------------------------------
+
+/**
+ * Zoom decides panelist vs view-only attendee by matching the email passed at
+ * join against this list. So the email stored here must be exactly the one the
+ * person signs in to Attend with — which is why the UI picks people rather than
+ * asking anyone to type an address.
+ */
+export interface ZoomPanelist {
+  id:      string;
+  email:   string;
+  name:    string;
+  addedAt: string;
+}
+
+export function useZoomPanelists(eventId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: clientEventKeys.panelists(eventId),
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<ZoomPanelist[]>>(
+        `/api/v1/client/events/${eventId}/zoom/panelists`,
+      );
+      const raw = (res.data as any).data ?? res.data;
+      return (Array.isArray(raw) ? raw : raw?.panelists ?? []) as ZoomPanelist[];
+    },
+    enabled: !!eventId && (options?.enabled ?? true),
+    staleTime: 30_000,
+  });
+}
+
+export function useAddZoomPanelist() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, email, name }: { eventId: string; email: string; name: string }) => {
+      const res = await apiClient.post<ApiResponse<ZoomPanelist>>(
+        `/api/v1/client/events/${eventId}/zoom/panelists`,
+        { email, name },
+      );
+      return ((res.data as any).data ?? res.data) as ZoomPanelist;
+    },
+    onSuccess: (panelist, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: clientEventKeys.panelists(eventId) });
+      popup.success("Panelist added", `${panelist?.name || "They"} can speak and share video in this webinar.`, 3000);
+    },
+    onError: (error: any) => {
+      const body = error?.response?.data ?? {};
+      const code = typeof body.code === "string" ? body.code : "";
+      const serverMsg = (typeof body.message === "string" && body.message) || "";
+      if (code === "PANELIST_EXISTS") {
+        popup.error("Already a panelist", "That email is already on the panelist list.", 4000);
+        return;
+      }
+      if (code === "NOT_A_WEBINAR") {
+        popup.error("Not a webinar", "Panelists only exist on webinars. This event has a standard Zoom meeting.", 5000);
+        return;
+      }
+      if (code === "ZOOM_REJECTED_PANELIST") {
+        // Most often the panelist cap. Zoom's own wording is more useful than
+        // anything we could guess, so lead with it.
+        popup.error("Zoom refused this panelist", serverMsg || "Zoom would not accept this panelist.", 7000);
+        return;
+      }
+      parseAndToastApiError(error, "Failed to add panelist.");
+    },
+  });
+}
+
+export function useRemoveZoomPanelist() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    // `panelistId` is Attend's own id from the list, not Zoom's.
+    mutationFn: async ({ eventId, panelistId }: { eventId: string; panelistId: string }) => {
+      await apiClient.delete(`/api/v1/client/events/${eventId}/zoom/panelists/${panelistId}`);
+      return panelistId;
+    },
+    onSuccess: (_, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: clientEventKeys.panelists(eventId) });
+      popup.success("Panelist removed", "They will join as a view-only attendee.", 3000);
+    },
+    onError: (error: any) => parseAndToastApiError(error, "Failed to remove panelist."),
   });
 }
 

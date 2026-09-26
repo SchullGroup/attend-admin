@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from "react";
+import { withoutServerAllValue } from "@/lib/filter-options";
 import { Award, ChevronDown, Star, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,6 +18,7 @@ import {
   type JudgeAssignment,
 } from "@/api/client-challenges";
 
+import { NativeSelect } from "@/components/ui/native-select";
 // ---------------------------------------------------------------------------
 // Co-judges expandable row
 // ---------------------------------------------------------------------------
@@ -247,20 +249,12 @@ function AppAssignmentRow({
                 {judges.find((j) => j.id === savedPrimaryId)?.name ?? <span className="text-[hsl(var(--muted-foreground))] italic">Unassigned</span>}
               </span>
             ) : (
-            <select
-              value={selectValue}
-              onChange={(e) => onDraftChange(e.target.value)}
-              className={`text-xs h-8 rounded-lg border px-2 min-w-[160px] focus:outline-none focus:ring-1 focus:ring-[#7c22c9] bg-[hsl(var(--background))] ${
-                isDirty
-                  ? "border-amber-400 ring-1 ring-amber-300"
-                  : "border-[hsl(var(--border))]"
-              }`}
-            >
+            <NativeSelect value={selectValue} onChange={(e) => onDraftChange(e.target.value)} className={`text-xs h-8 rounded-lg border px-2 min-w-[160px] focus:outline-none focus:ring-1 focus:ring-[#7c22c9] bg-[hsl(var(--background))] ${ isDirty ? "border-amber-400 ring-1 ring-amber-300" : "border-[hsl(var(--border))]" }`}>
               <option value="">— Select judge —</option>
               {eligibleJudges.map((j) => (
                 <option key={j.id} value={j.id}>{j.name}</option>
               ))}
-            </select>
+            </NativeSelect>
             )}
             {!readOnly && isDirty && (
               <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">
@@ -405,14 +399,12 @@ export function AssignmentsSection({
         {!readOnly && (
           <div className="flex items-center gap-2 flex-wrap">
             {tracks.length > 0 && (
-              <select
-                value={autoTrack}
-                onChange={(e) => setAutoTrack(e.target.value)}
-                className="text-xs h-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 focus:outline-none"
-              >
+              <NativeSelect value={autoTrack} onChange={(e) => setAutoTrack(e.target.value)} className="text-xs h-8">
                 <option value="">All tracks</option>
-                {tracks.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
+                {withoutServerAllValue(tracks, "All tracks").map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </NativeSelect>
             )}
             <Button
               size="sm" variant="outline" className="gap-1.5"
@@ -444,16 +436,12 @@ export function AssignmentsSection({
               <span className="text-xs font-semibold text-[#7c22c9]">
                 {selectedApps.size} selected
               </span>
-              <select
-                value={bulkJudgeId}
-                onChange={(e) => setBulkJudgeId(e.target.value)}
-                className="text-xs h-8 rounded-lg border border-[hsl(var(--border))] bg-white px-2 flex-1 min-w-[180px] max-w-[260px] focus:outline-none focus:ring-1 focus:ring-[#7c22c9]"
-              >
+              <NativeSelect value={bulkJudgeId} onChange={(e) => setBulkJudgeId(e.target.value)} className="text-xs h-8 flex-1 min-w-[180px] max-w-[260px]">
                 <option value="">— Select judge to assign —</option>
                 {judges.map((j) => (
                   <option key={j.id} value={j.id}>{j.name}{j.specialtyTrack ? ` (${j.specialtyTrack})` : ""}</option>
                 ))}
-              </select>
+              </NativeSelect>
               <Button
                 size="sm"
                 disabled={!bulkJudgeId || bulkAssign.isPending}

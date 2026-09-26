@@ -19,6 +19,7 @@ import {
 } from "@/api/client-events";
 import { popup } from "@/lib/popup-store";
 
+import { NativeSelect } from "@/components/ui/native-select";
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function tierBadgeClass(type: string) {
@@ -82,14 +83,10 @@ function TierFormPanel({
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Type</label>
-          <select
-            value={form.tierType}
-            onChange={(e) => setForm((p) => ({ ...p, tierType: e.target.value }))}
-            className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
-          >
+          <NativeSelect value={form.tierType} onChange={(e) => setForm((p) => ({ ...p, tierType: e.target.value }))} className="text-sm">
             <option value="INVITE_ONLY">Invite Only</option>
             <option value="OPEN">Open</option>
-          </select>
+          </NativeSelect>
         </div>
       </div>
       <div className="flex flex-col gap-1">

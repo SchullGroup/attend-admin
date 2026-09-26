@@ -287,7 +287,8 @@ export interface EventSummaryResponse {
   /** AGM_EGM | PRODUCT_LAUNCH | INNOVATION_CHALLENGE | HACKATHON | GENERAL_EVENT */
   eventType?: string;
   startDate?: string;
-  endDate?:   string;
+  /** Optional, YYYY-MM-DD. null/absent = a single-day event ending on `date`. */
+  endDate?:   string | null;
   registerId?: string;
   rsvpEnabled?: boolean;
   /** Creation timestamp — used to sort event lists by "when created" rather
@@ -467,6 +468,10 @@ export interface SearchEventResult {
 }
 
 export interface SearchUserResult {
+  /** Profile photo when the API carries one; falls back to initials. */
+  avatarUrl?:   string | null;
+  /** Per-user accent for the initials fallback. */
+  avatarColor?: string | null;
   id:        string;
   fullName:  string;
   email:     string;
@@ -475,6 +480,10 @@ export interface SearchUserResult {
 }
 
 export interface SearchClientAdminResult {
+  /** Profile photo when the API carries one; falls back to initials. */
+  avatarUrl?:   string | null;
+  /** Per-user accent for the initials fallback. */
+  avatarColor?: string | null;
   id:               string;
   fullName:         string;
   email:            string;
@@ -535,6 +544,9 @@ export interface UserSummaryResponse {
   roles?: string[];
   phone?: string | null;
   status: UserStatus;
+  /** Profile photo. The API has always returned this; the type simply never
+   *  declared it, so no screen read it. Null for users who have not set one. */
+  avatarUrl?: string | null;
   kycStatus?: string | null;
   emailVerified?: boolean;
   stakeholderName?: string | null;
@@ -593,6 +605,8 @@ export interface ParticipantItem {
 
 export interface ParticipantDetailResponse {
   id: string;
+  /** Profile photo when the API carries one; falls back to initials. */
+  avatarUrl?: string | null;
   displayId: string;
   fullName: string;
   initials: string;
@@ -801,6 +815,8 @@ export interface CreateAgmEventRequest {
   title:                   string;
   description?:            string;
   date:                    string;        // YYYY-MM-DD
+  /** Optional, YYYY-MM-DD, on or after `date`. Omitted/null = single-day. */
+  endDate?:                string;
   startTime:               string;        // HH:mm — swagger key `startTime`
   format:                  "VIRTUAL" | "IN_PERSON" | "HYBRID";
   venue?:                  string;
@@ -831,6 +847,8 @@ export interface CreateGeneralEventRequest {
   title:               string;
   description?:        string;
   date:                string;
+  /** Optional, YYYY-MM-DD, on or after `date`. Omitted/null = single-day. */
+  endDate?:            string;
   startTime:           string;            // swagger key — was `time`
   format:              "VIRTUAL" | "IN_PERSON" | "HYBRID";
   venue?:              string;
@@ -883,6 +901,8 @@ export interface CreateProductLaunchEventRequest {
   registerId:          string;            // was stakeholderId
   title:               string;
   date:                string;
+  /** Optional, YYYY-MM-DD, on or after `date`. Omitted/null = single-day. */
+  endDate?:            string;
   startTime:           string;            // swagger key — was `time`
   format:              "VIRTUAL" | "IN_PERSON" | "HYBRID";
   venue?:              string;

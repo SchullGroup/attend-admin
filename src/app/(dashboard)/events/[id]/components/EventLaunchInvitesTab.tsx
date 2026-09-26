@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useRef, useState } from "react";
+import { withoutServerAllRow } from "@/lib/filter-options";
 import { Ban, Download, Mail, Plus, RefreshCw, RotateCcw, Search, Send, Upload, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import Papa from "papaparse";
@@ -26,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Loader } from "@/components/ui/Loader";
 import { popup } from "@/lib/popup-store";
 
+import { NativeSelect } from "@/components/ui/native-select";
 const PAGE_SIZE = 50;
 const BROWSER_IMPORT_LIMIT = 100;
 const DELIVERY_STATUS_OPTIONS = ["NOT_SENT", "QUEUED", "PROCESSING", "SENT", "DELIVERED", "FAILED", "BOUNCED"] as const;
@@ -409,17 +411,12 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
               <Plus className="h-3.5 w-3.5" /> Add Invite
             </Button>
             <div className="flex items-center gap-1.5">
-              <select
-                value={campaignSelection}
-                onChange={(event) => setCampaignSelection(event.target.value as typeof campaignSelection)}
-                aria-label="Campaign audience"
-                className="h-9 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-xs"
-              >
+              <NativeSelect value={campaignSelection} onChange={(event) => setCampaignSelection(event.target.value as typeof campaignSelection)} aria-label="Campaign audience" className="text-xs">
                 <option value="ALL_UNSENT">All unsent</option>
                 <option value="SELECTED">Selected ({selectedInviteIds.length})</option>
                 <option value="TIER">Tier</option>
                 <option value="IMPORT_JOB" disabled={!importJobId}>Latest import</option>
-              </select>
+              </NativeSelect>
               <Button size="sm" className="gap-1.5" onClick={handleCampaign} disabled={createCampaign.isPending || selectedCountForCampaign(campaignSelection, selectedInviteIds, summary?.unsent ?? 0, importProgress.data?.acceptedRows ?? 0) === 0}>
                 <Send className="h-3.5 w-3.5" /> {createCampaign.isPending ? "Starting…" : "Start Campaign"}
               </Button>
@@ -456,10 +453,10 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
               <Input name="invite-last-name" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" />
               <Input name="invite-email" autoComplete="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email *" />
               <Input name="invite-phone" autoComplete="tel" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" />
-              <select value={newTierId} onChange={(e) => setNewTierId(e.target.value)} className="h-10 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm">
+              <NativeSelect value={newTierId} onChange={(e) => setNewTierId(e.target.value)} className="text-sm">
                 <option value="">No/default tier</option>
                 {tiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}
-              </select>
+              </NativeSelect>
             </div>
             {!newTierId && (
               <Input
@@ -537,14 +534,16 @@ export function EventLaunchInvitesTab({ eventId }: { eventId: string }) {
               className="pl-9"
             />
           </div>
-          <select value={status} onChange={(e) => resetPageAndFilters({ status: e.target.value })} className="h-10 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm">
+          <NativeSelect value={status} onChange={(e) => resetPageAndFilters({ status: e.target.value })} className="text-sm">
             <option value="">All statuses</option>
             {STATUS_OPTIONS.map((option) => <option key={option} value={option}>{option.charAt(0) + option.slice(1).toLowerCase()}</option>)}
-          </select>
-          <select value={tierId} onChange={(e) => resetPageAndFilters({ tierId: e.target.value })} className="h-10 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm">
+          </NativeSelect>
+          <NativeSelect value={tierId} onChange={(e) => resetPageAndFilters({ tierId: e.target.value })} className="text-sm">
             <option value="">All tiers</option>
-            {tiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}
-          </select>
+            {withoutServerAllRow(tiers, (t) => t.id, (t) => t.name, "All tiers").map((tier) => (
+              <option key={tier.id} value={tier.id}>{tier.name}</option>
+            ))}
+          </NativeSelect>
           <Button type="submit" variant="outline">Search</Button>
         </form>
 
