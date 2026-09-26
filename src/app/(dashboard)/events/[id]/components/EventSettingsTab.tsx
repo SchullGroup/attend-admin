@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Radio, Star, Video, ExternalLink, Copy, Check, RefreshCw, Archive, Presentation, CalendarClock, AlertTriangle } from "lucide-react";
+import { Radio, Star, Video, ExternalLink, Copy, Check, RefreshCw, Archive, Presentation, CalendarClock, AlertTriangle, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -630,6 +630,14 @@ export function EventSettingsTab({
                 <p className="text-xs text-[hsl(var(--muted-foreground))] flex-1">
                   Attendees are view-only and ask questions through Q&amp;A. Only panelists you name
                   can speak. Right for an AGM. One event at a time across the whole platform.
+                </p>
+                {/* Panelists are keyed on a Zoom webinar id, so the list cannot exist
+                    before the webinar does. Say so here rather than letting the card
+                    appear out of nowhere later — it reads as a missing feature. */}
+                <p className="text-xs text-[hsl(var(--muted-foreground))] flex items-start gap-1.5">
+                  <Mic className="h-3.5 w-3.5 shrink-0 mt-px" />
+                  A <strong>Panelists</strong> section appears on this tab once the webinar exists,
+                  for naming who can speak.
                 </p>
                 <Button
                   size="sm"
