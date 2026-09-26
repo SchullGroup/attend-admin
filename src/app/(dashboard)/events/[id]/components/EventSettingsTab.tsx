@@ -23,6 +23,7 @@ import { EventGuestAccessCard } from "./EventGuestAccessCard";
 import { EventPanelistsCard } from "./EventPanelistsCard";
 import { ImageUrlUpload } from "@/components/custom/image-url-upload";
 
+import { NativeSelect } from "@/components/ui/native-select";
 // ── Label helper ──────────────────────────────────────────────────────────────
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -298,16 +299,12 @@ export function EventSettingsTab({
           {/* Format */}
           <div>
             <FieldLabel>Format</FieldLabel>
-            <select
-              value={formatVal}
-              onChange={(e) => setFormatVal(e.target.value)}
-              className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
-            >
+            <NativeSelect value={formatVal} onChange={(e) => setFormatVal(e.target.value)} className="w-full text-sm" wrapperClassName="w-full">
               <option value="">— Select format —</option>
               <option value="VIRTUAL">Virtual</option>
               <option value="IN_PERSON">In Person</option>
               <option value="HYBRID">Hybrid</option>
-            </select>
+            </NativeSelect>
           </div>
 
           {/* Date + End date + Start time */}

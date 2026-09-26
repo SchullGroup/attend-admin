@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
+import { withoutServerAllRow } from "@/lib/filter-options";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Upload, Download, Trash2, FileText, Send, Search, Check, ChevronDown,
@@ -594,32 +595,6 @@ const ALL = "__all";
 const toSel   = (v: string) => (v ? v : ALL);
 const fromSel = (v: string) => (v === ALL ? "" : v);
 
-/**
- * Drop the backend's own "All …" row from a filter list.
- *
- * Several of these endpoints already include an All entry of their own. We
- * render our own unconditionally — the list can come back empty, and a Select
- * with no matching item shows a blank trigger — so the server's copy has to go
- * or the dropdown lists "All Organisers" twice. This repo has shipped that
- * duplicate more than once; every filter list here goes through this function
- * so the next one cannot.
- *
- * Both shapes are covered: an entry with no id, and one with a real id whose
- * label is just the All row spelled out.
- */
-function withoutServerAllRow<T>(
-  rows: T[],
-  getId: (row: T) => string | null | undefined,
-  getLabel: (row: T) => string | null | undefined,
-  allLabel: string,
-): T[] {
-  const all = allLabel.trim().toLowerCase();
-  return rows.filter((row) => {
-    const id = (getId(row) ?? "").trim();
-    if (!id) return false;
-    return (getLabel(row) ?? "").trim().toLowerCase() !== all;
-  });
-}
 
 export default function DocumentsPage() {
   return (

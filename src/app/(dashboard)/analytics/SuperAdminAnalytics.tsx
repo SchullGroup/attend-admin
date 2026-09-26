@@ -15,6 +15,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
 
+import { NativeSelect } from "@/components/ui/native-select";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtNum(n: number) {
@@ -154,15 +155,11 @@ export function SuperAdminAnalytics() {
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Analytics &amp; Reports</h1>
           <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">Platform performance overview</p>
         </div>
-        <select
-          value={range}
-          onChange={e => setRange(e.target.value as AdminRange)}
-          className="h-8 pl-3 pr-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-        >
+        <NativeSelect value={range} onChange={e => setRange(e.target.value as AdminRange)} className="h-8 text-sm">
           {PERIOD_OPTIONS.map((p) => (
             <option key={p.range} value={p.range}>{p.label}</option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
 
       {/* ── Row 1: Stat cards ───────────────────────────────────────────── */}

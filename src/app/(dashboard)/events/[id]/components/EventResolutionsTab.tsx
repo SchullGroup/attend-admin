@@ -24,6 +24,7 @@ import type { ResolutionType, CandidateInput, CandidateResult } from "@/api/clie
 import { useAdminVoteResults } from "@/api/admin-votes";
 import type { LocalAgendaItem } from "./types";
 
+import { NativeSelect } from "@/components/ui/native-select";
 let _uid = 0;
 const uid = () => `ag_${++_uid}`;
 
@@ -317,17 +318,13 @@ export function EventResolutionsTab({
             {!isSuperAdmin && (
               <div className="flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
-                <select
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  className="text-xs border border-[hsl(var(--border))] rounded-lg px-2 py-1.5 bg-[hsl(var(--background))] text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-                >
+                <NativeSelect value={duration} onChange={(e) => setDuration(e.target.value)} className="text-xs">
                   <option value="60">1 min</option>
                   <option value="120">2 min</option>
                   <option value="300">5 min</option>
                   <option value="600">10 min</option>
                   <option value="0">No timer</option>
-                </select>
+                </NativeSelect>
               </div>
             )}
             {!isSuperAdmin && (

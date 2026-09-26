@@ -38,6 +38,7 @@ import { Loader } from "@/components/ui/Loader";
 import { formatDate, resolveRole, isSuperAdminRole } from "@/lib/utils";
 import { SuperAdminAnalytics } from "./SuperAdminAnalytics";
 
+import { NativeSelect } from "@/components/ui/native-select";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -172,18 +173,14 @@ function ExportRegistrationsPanel({ events }: { events: { id: string; eventId?: 
       <div className="flex items-end gap-3 flex-wrap">
         <div className="flex-1 min-w-[200px]">
           <label className="block text-xs text-[hsl(var(--muted-foreground))] mb-1">Event</label>
-          <select
-            value={selectedId}
-            onChange={(e) => setSelectedId(e.target.value)}
-            className="w-full h-9 rounded-md border border-[hsl(var(--border))] bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-          >
+          <NativeSelect value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className="w-full text-sm" wrapperClassName="w-full">
             <option value="">Select an event…</option>
             {events.map((ev) => (
               <option key={ev.id ?? ev.eventId} value={ev.id ?? ev.eventId ?? ""}>
                 {ev.title ?? ev.eventTitle}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <div>
           <label className="block text-xs text-[hsl(var(--muted-foreground))] mb-1">From</label>

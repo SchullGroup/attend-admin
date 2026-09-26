@@ -23,6 +23,7 @@ import {
 import type { ResolutionResult } from "@/api/client-votes";
 import Papa from "papaparse";
 
+import { NativeSelect } from "@/components/ui/native-select";
 // ── Bulk proxy-vote CSV row ─────────────────────────────────────────────────
 
 interface ProxyVoteCsvRow {
@@ -207,30 +208,22 @@ export function ProxiesSection({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-[hsl(var(--muted-foreground))] mb-1">Resolution</label>
-              <select
-                value={resolutionId}
-                onChange={(e) => { setResolutionId(e.target.value); setCandidateId(""); }}
-                className="w-full h-9 text-sm rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2.5 focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-              >
+              <NativeSelect value={resolutionId} onChange={(e) => { setResolutionId(e.target.value); setCandidateId(""); }} className="w-full text-sm" wrapperClassName="w-full">
                 <option value="">Select a resolution…</option>
                 {resolutions.map((r) => (
                   <option key={r.id} value={r.id}>{r.order ? `${r.order}. ` : ""}{r.title}</option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
             {isCandidateRes && (
               <div>
                 <label className="block text-xs text-[hsl(var(--muted-foreground))] mb-1">Candidate</label>
-                <select
-                  value={candidateId}
-                  onChange={(e) => setCandidateId(e.target.value)}
-                  className="w-full h-9 text-sm rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2.5 focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-                >
+                <NativeSelect value={candidateId} onChange={(e) => setCandidateId(e.target.value)} className="w-full text-sm" wrapperClassName="w-full">
                   <option value="">Select a candidate…</option>
                   {candidates.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
             )}
           </div>
