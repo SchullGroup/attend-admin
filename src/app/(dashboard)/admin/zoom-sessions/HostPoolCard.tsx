@@ -1,5 +1,6 @@
 "use client";
 import { Fragment, useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users,
   Plus,
@@ -199,15 +200,13 @@ export function HostPoolCard({
             </div>
             <div className="space-y-1.5 sm:w-40">
               <Label htmlFor="host-type">Runs</Label>
-              <select
-                id="host-type"
-                value={newType}
-                onChange={(e) => setNewType(e.target.value as ZoomHostType)}
-                className="h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm"
-              >
-                <option value="MEETING">Meetings</option>
-                <option value="WEBINAR">Webinars</option>
-              </select>
+              <Select value={newType} onValueChange={(v) => setNewType(v as ZoomHostType)}>
+                <SelectTrigger id="host-type" className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MEETING">Meetings</SelectItem>
+                  <SelectItem value="WEBINAR">Webinars</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5 sm:w-32">
               <Label htmlFor="host-capacity">Capacity</Label>

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect, Suspense } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Upload, Download, Trash2, FileText, Send, Search, Check, ChevronDown,
 } from "lucide-react";
@@ -362,54 +363,53 @@ function DocumentsPageInner() {
         {/* Organiser + Event dropdowns (client only) */}
         {!isAdmin && (
           <div className="flex items-center gap-2">
-            <select
-              value={registerFilter}
-              onChange={(e) => setRegisterFilter(e.target.value)}
-              className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
-            >
-              <option value="">All Organisers</option>
-              {registerOptions.map((r) => (
-                <option key={r.id} value={r.id}>{r.label}</option>
-              ))}
-            </select>
-            <select
-              value={eventFilter}
-              onChange={(e) => setEventFilter(e.target.value)}
-              className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
-            >
-              {/* Backend's filter list already includes its own "All Events"
-                  (id: "") entry — don't add a second hardcoded one. */}
-              {eventOptions.map((e) => (
-                <option key={e.id || "all"} value={e.id}>{e.label}</option>
-              ))}
-            </select>
+            <Select value={toSel(registerFilter)} onValueChange={(v) => setRegisterFilter(fromSel(v))}>
+              <SelectTrigger className="h-9 w-[170px] text-sm [&>span]:truncate [&>span]:text-left"><SelectValue placeholder="All Organisers" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All Organisers</SelectItem>
+                {registerOptions.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {/* The backend's own list already carries an "All Events" entry with an
+                empty id — it becomes the sentinel rather than a second hardcoded row. */}
+            <Select value={toSel(eventFilter)} onValueChange={(v) => setEventFilter(fromSel(v))}>
+              <SelectTrigger className="h-9 w-[170px] text-sm [&>span]:truncate [&>span]:text-left"><SelectValue placeholder="All Events" /></SelectTrigger>
+              <SelectContent>
+                {eventOptions.map((e) => (
+                  <SelectItem key={e.id || ALL} value={toSel(e.id)}>{e.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 
         {/* Registrar + cascading Register dropdowns (Super Admin only) */}
         {isAdmin && (
           <div className="flex items-center gap-2">
-            <select
-              value={registrarFilter}
-              onChange={(e) => writeParams({ registrar: e.target.value, adminRegister: null })}
-              className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
+            <Select
+              value={toSel(registrarFilter)}
+              onValueChange={(v) => writeParams({ registrar: fromSel(v), adminRegister: null })}
             >
-              <option value="">All Registrars</option>
-              {registrarOptions.map((r) => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
-            {registrarFilter && (
-              <select
-                value={adminRegisterFilter}
-                onChange={(e) => setAdminRegisterFilter(e.target.value)}
-                className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
-              >
-                <option value="">All Registers</option>
-                {adminRegisterOptions.map((r) => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
+              <SelectTrigger className="h-9 w-[170px] text-sm [&>span]:truncate [&>span]:text-left"><SelectValue placeholder="All Registrars" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All Registrars</SelectItem>
+                {registrarOptions.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                 ))}
-              </select>
+              </SelectContent>
+            </Select>
+            {registrarFilter && (
+              <Select value={toSel(adminRegisterFilter)} onValueChange={(v) => setAdminRegisterFilter(fromSel(v))}>
+                <SelectTrigger className="h-9 w-[170px] text-sm [&>span]:truncate [&>span]:text-left"><SelectValue placeholder="All Registers" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>All Registers</SelectItem>
+                  {adminRegisterOptions.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
         )}
@@ -577,6 +577,15 @@ function DocumentsPageInner() {
  * useSearchParams needs a Suspense boundary above it — without one the whole
  * route opts out of static rendering and Next.js errors at build time.
  */
+/**
+ * Radix's Select refuses `value=""` — it reserves the empty string for "nothing
+ * selected". Our filters use "" to mean "no filter", so they travel through the
+ * component as this sentinel and convert back at the boundary.
+ */
+const ALL = "__all";
+const toSel   = (v: string) => (v ? v : ALL);
+const fromSel = (v: string) => (v === ALL ? "" : v);
+
 export default function DocumentsPage() {
   return (
     <Suspense fallback={<div className="py-14 text-center text-sm text-[hsl(var(--muted-foreground))]">Loading documents…</div>}>
