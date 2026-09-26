@@ -341,8 +341,11 @@ function DocumentsPageInner() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Filters ── */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
+      {/* ── Filters ──
+           Two rows on purpose: the type tabs are one control and read as a unit,
+           so the dropdowns sit with the search box underneath rather than
+           trailing off the end of the pill group. */}
+      <div className="flex flex-col gap-3 mb-4">
         {/* Type tabs */}
         <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 overflow-x-auto">
           {TYPE_FILTERS.map((f) => (
@@ -360,6 +363,8 @@ function DocumentsPageInner() {
           ))}
         </div>
 
+        {/* Dropdowns + search share the second row */}
+        <div className="flex items-center gap-2 flex-wrap">
         {/* Organiser + Event dropdowns (client only) */}
         {!isAdmin && (
           <div className="flex items-center gap-2">
@@ -372,13 +377,15 @@ function DocumentsPageInner() {
                 ))}
               </SelectContent>
             </Select>
-            {/* The backend's own list already carries an "All Events" entry with an
-                empty id — it becomes the sentinel rather than a second hardcoded row. */}
             <Select value={toSel(eventFilter)} onValueChange={(v) => setEventFilter(fromSel(v))}>
               <SelectTrigger className="h-9 w-[170px] text-sm [&>span]:truncate [&>span]:text-left"><SelectValue placeholder="All Events" /></SelectTrigger>
               <SelectContent>
-                {eventOptions.map((e) => (
-                  <SelectItem key={e.id || ALL} value={toSel(e.id)}>{e.label}</SelectItem>
+                {/* Always ours. The backend's list may or may not carry its own
+                    empty-id "All Events" row, so that one is dropped rather than
+                    rendered as a second All. */}
+                <SelectItem value={ALL}>All Events</SelectItem>
+                {eventOptions.filter((e) => !!e.id).map((e) => (
+                  <SelectItem key={e.id} value={e.id}>{e.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -424,6 +431,7 @@ function DocumentsPageInner() {
             onChange={(e) => setSearchDraft(e.target.value)}
             className="w-full pl-9 pr-4 h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
           />
+        </div>
         </div>
       </div>
 
