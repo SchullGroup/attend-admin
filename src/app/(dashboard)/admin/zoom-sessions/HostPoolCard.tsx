@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   Users,
   Plus,
@@ -21,6 +21,7 @@ import {
   useRemoveZoomHost,
   type AdminZoomHostsData,
   type ZoomHostRow,
+  type ZoomHostType,
 } from "@/api/admin-zoom-hosts";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -58,11 +59,16 @@ export function HostPoolCard({
 
   const [newEmail, setNewEmail] = useState("");
   const [newCapacity, setNewCapacity] = useState("2");
+  const [newType,     setNewType]     = useState<ZoomHostType>("MEETING");
   // Per-row capacity drafts, keyed by host id. Absent = not being edited.
   const [capacityDraft, setCapacityDraft] = useState<Record<string, string>>({});
 
   const available = data?.available ?? true;
-  const hosts = data?.hosts ?? [];
+  // Meeting seats first, then webinar licences, so the table reads as two
+  // sections. They are different resources and get counted separately.
+  const meetingHosts = data?.meetingHosts ?? [];
+  const webinarHosts = data?.webinarHosts ?? [];
+  const hosts = [...meetingHosts, ...webinarHosts];
   // Prefer the backend's own per-host usage; fall back to what the sessions list
   // tells us about which pooled account is holding each slot.
   const usageReported = data?.usageReported ?? false;
@@ -80,13 +86,18 @@ export function HostPoolCard({
       return;
     }
     const capNum = Number(newCapacity);
-    const capacity = Number.isFinite(capNum) && capNum >= 1 ? Math.min(Math.round(capNum), MAX_CAPACITY) : 2;
+    // A webinar licence runs one webinar at a time. A second licence is a second
+    // host row, never a bigger number here, so the field is pinned for webinars.
+    const capacity = newType === "WEBINAR"
+      ? 1
+      : (Number.isFinite(capNum) && capNum >= 1 ? Math.min(Math.round(capNum), MAX_CAPACITY) : 2);
     addHost.mutate(
-      { email, capacity },
+      { email, capacity, type: newType },
       {
         onSuccess: () => {
           setNewEmail("");
           setNewCapacity("2");
+          setNewType("MEETING");
         },
       },
     );
@@ -147,8 +158,11 @@ export function HostPoolCard({
         <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">Host pool</h2>
         {available && hosts.length > 0 && (
           <span className="text-sm text-[hsl(var(--muted-foreground))] font-normal">
-            ({hosts.length} host{hosts.length === 1 ? "" : "s"} ·{" "}
-            {hosts.reduce((s, h) => s + h.capacity, 0)} slots)
+            ({meetingHosts.length} meeting host{meetingHosts.length === 1 ? "" : "s"} ·{" "}
+            {meetingHosts.reduce((s, h) => s + h.capacity, 0)} slots
+            {webinarHosts.length > 0
+              ? ` · ${webinarHosts.length} webinar licence${webinarHosts.length === 1 ? "" : "s"}`
+              : " · no webinar licence"})
           </span>
         )}
       </div>
@@ -183,6 +197,18 @@ export function HostPoolCard({
                 }}
               />
             </div>
+            <div className="space-y-1.5 sm:w-40">
+              <Label htmlFor="host-type">Runs</Label>
+              <select
+                id="host-type"
+                value={newType}
+                onChange={(e) => setNewType(e.target.value as ZoomHostType)}
+                className="h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm"
+              >
+                <option value="MEETING">Meetings</option>
+                <option value="WEBINAR">Webinars</option>
+              </select>
+            </div>
             <div className="space-y-1.5 sm:w-32">
               <Label htmlFor="host-capacity">Capacity</Label>
               <Input
@@ -190,7 +216,8 @@ export function HostPoolCard({
                 type="number"
                 min={1}
                 max={MAX_CAPACITY}
-                value={newCapacity}
+                value={newType === "WEBINAR" ? "1" : newCapacity}
+                disabled={newType === "WEBINAR"}
                 onChange={(e) => setNewCapacity(e.target.value)}
               />
             </div>
@@ -199,6 +226,15 @@ export function HostPoolCard({
               Add host
             </Button>
           </div>
+
+          {newType === "WEBINAR" && (
+            <p className="-mt-3 mb-5 text-xs text-[hsl(var(--muted-foreground))]">
+              The account must hold a Zoom webinar licence, and the API app needs the{" "}
+              <code className="text-[11px]">webinar:write:admin</code> scope — Zoom only shows that
+              scope once the account has a licence. Capacity is fixed at one; add a second host for
+              a second licence. The type cannot be changed after the host is created.
+            </p>
+          )}
 
           {/* Host list */}
           {isLoading ? (
@@ -223,23 +259,50 @@ export function HostPoolCard({
                 <thead>
                   <tr className="text-left text-xs font-medium text-[hsl(var(--muted-foreground))] border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)]">
                     <th className="px-4 py-2.5">Host account</th>
+                    <th className="px-4 py-2.5 w-28">Type</th>
                     <th className="px-4 py-2.5 w-40">Capacity</th>
                     <th className="px-4 py-2.5 w-24">In use</th>
                     <th className="px-4 py-2.5 w-28 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {hosts.map((host) => {
+                  {hosts.map((host, idx) => {
                     const draft = capacityDraft[host.id];
                     const editing = draft !== undefined;
                     const changed = editing && Number(draft) !== host.capacity;
+                    const isWebinar = host.type === "WEBINAR";
+                    // First row of each kind opens a labelled section.
+                    const startsSection = idx === 0 || hosts[idx - 1].type !== host.type;
                     return (
-                      <tr key={host.id} className="border-b border-[hsl(var(--border))] last:border-0">
+                      <Fragment key={host.id}>
+                      {startsSection && (
+                        <tr className="bg-[hsl(var(--muted)/0.4)]">
+                          <td colSpan={5} className="px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+                            {isWebinar ? "Webinar licences — one webinar at a time each" : "Meeting hosts"}
+                          </td>
+                        </tr>
+                      )}
+                      <tr className="border-b border-[hsl(var(--border))] last:border-0">
                         <td className="px-4 py-3">
                           <code className="text-xs break-all text-[hsl(var(--foreground))]">{host.email}</code>
                           {host.label && (
                             <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{host.label}</div>
                           )}
+                          {isWebinar && (host.bookedCount ?? 0) > 0 && (
+                            <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                              {host.bookedCount} booking{host.bookedCount === 1 ? "" : "s"} upcoming
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                            style={isWebinar
+                              ? { backgroundColor: "#7c22c91a", color: "#7c22c9" }
+                              : { backgroundColor: "#0B5CFF1a", color: "#0B5CFF" }}
+                          >
+                            {isWebinar ? "Webinar" : "Meeting"}
+                          </span>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
@@ -321,6 +384,7 @@ export function HostPoolCard({
                           </Button>
                         </td>
                       </tr>
+                      </Fragment>
                     );
                   })}
                 </tbody>

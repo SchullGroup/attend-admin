@@ -693,7 +693,7 @@ export function useAdminAnalyticsStakeholderGrowth(months = 6) {
   });
 }
 
-/** GET /api/v1/admin/analytics/event-performance */
+/** GET /api/v1/admin/analytics/performance-by-event — renamed to survive ad blockers, see client-analytics.ts */
 export function useAdminAnalyticsEventPerformance(
   stakeholderId = "", eventType = "", page = 0, size = 20, range?: string
 ) {
@@ -701,7 +701,7 @@ export function useAdminAnalyticsEventPerformance(
     queryKey: [...superAdminKeys.all, "analytics", "event-performance", { stakeholderId, eventType, page, size, range }],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<AdminAnalyticsEventPerformanceResponse>>(
-        "/api/v1/admin/analytics/event-performance",
+        "/api/v1/admin/analytics/performance-by-event",
         { params: { ...(stakeholderId ? { stakeholderId } : {}), ...(eventType ? { eventType } : {}), ...(range ? { range } : {}), page, size } }
       );
       const raw = (res.data.data ?? res.data) as any;
@@ -928,7 +928,7 @@ export function useAdminKycBreakdown(range?: string) {
 }
 
 /**
- * GET /api/v1/admin/analytics/event-format
+ * GET /api/v1/admin/analytics/format-breakdown — renamed to survive ad blockers
  * Distribution of events by format (virtual / hybrid / in-person).
  */
 export function useAdminEventFormat(range?: string) {
@@ -936,7 +936,7 @@ export function useAdminEventFormat(range?: string) {
     queryKey: [...superAdminKeys.all, "analytics", "event-format", range],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<{ formats: EventFormatItem[] }>>(
-        "/api/v1/admin/analytics/event-format",
+        "/api/v1/admin/analytics/format-breakdown",
         { params: range ? { range } : undefined }
       );
       const raw = (res.data.data ?? res.data) as any;

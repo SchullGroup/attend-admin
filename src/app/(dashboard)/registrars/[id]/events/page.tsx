@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { ModuleBadge } from "@/components/custom/module-badge";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDateRange } from "@/lib/utils";
 import { getEventModule, MODULE_COLORS } from "@/lib/event-module";
 import { useUrlPageState, useUrlParamWriter, useUrlState } from "@/lib/use-url-state";
 
@@ -177,7 +177,7 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
                         }
                       </td>
                       <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-                        {formatDate(evt.date)}
+                        {formatDateRange(evt.date, evt.endDate)}
                       </td>
                       <td className="px-5 py-3 text-sm font-medium tabular-nums">
                         {(evt.registrationCount ?? evt.rsvpCount ?? evt.registrationsCount ?? evt.totalRsvps ?? evt.rsvps ?? 0).toLocaleString()}

@@ -134,6 +134,8 @@ export interface AdminChallengeDetail {
 
 export interface AdminJudge {
   id:              string;
+  /** Profile photo when the API carries one; falls back to initials. */
+  avatarUrl?:      string | null;
   initials?:       string;
   color?:          string;
   name:            string;

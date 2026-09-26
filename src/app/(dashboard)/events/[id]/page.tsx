@@ -3,6 +3,9 @@ import { use, useState, useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useEventDetail, useEventDocuments, useEventAttendees } from "@/api/super-admin";
 import { useClientEventDetail, useClientEventDocuments, useClientEventAttendees } from "@/api/client-events";
+// Vote results come from two different endpoints. A super admin has no client
+// scope, so the client hook below is gated on `isClient` and the admin one
+// supplies the same shape for them.
 import { useVoteResults } from "@/api/client-votes";
 import { useAdminVoteResults } from "@/api/admin-votes";
 import { useGetMe } from "@/api/auth/hooks";
@@ -116,7 +119,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const { data: adminDocs  }                             = useEventDocuments(id, { enabled: isAdmin });
   const { data: clientDocs }                             = useClientEventDocuments(id, "", { enabled: isClient });
   const { data: adminAttendees  }                        = useEventAttendees(id, 0, 50, "", { enabled: isAdmin });
-  const { data: clientAttendees }                        = useClientEventAttendees(id, "", 0, 50);
+  const { data: clientAttendees }                        = useClientEventAttendees(id, "", 0, 50, { enabled: isClient });
   const suspendUser = useSuspendUserAccount();
 
   const apiEvent          = isAdmin ? adminEvent    : clientEvent;
@@ -127,7 +130,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   // Vote results — fetched for AGM events. The hook is always called (rules of hooks);
   // passing "" as eventId makes useVoteResults a no-op (enabled: !!eventId → false).
   const agmEventType      = toModule((apiEvent as any)?.eventType);
-  const { data: voteResultsData } = useVoteResults(agmEventType === "AGM" ? id : "");
+  const { data: voteResultsData } = useVoteResults(isClient && agmEventType === "AGM" ? id : "");
   // Super-admin read-only equivalent (AGM handoff #6 parity fix) — only fired
   // for super admin viewing an AGM event; client roles use voteResultsData above.
   const { data: adminVoteResultsData } = useAdminVoteResults(
@@ -312,6 +315,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             <div className="flex items-center gap-2 mb-2">
               <ModuleBadge module={event.module as EventModule} />
               <StatusBadge status={currentStatus} />
+              {/* A webinar behaves differently enough from a meeting — attendees
+                  cannot unmute — that it belongs in the header, not buried in
+                  Settings. */}
+              {(apiEvent as any)?.zoomMeeting?.type === "WEBINAR" && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-0.5 bg-[#7c22c9]/10 text-[#7c22c9]">
+                  Webinar
+                </span>
+              )}
               {currentStatus === "live" && (
                 <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 rounded-full px-2 py-0.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
@@ -370,7 +381,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         />
       )}
       {tab === "Documents"          && <EventDocumentsTab   eventId={id} agmNoticeUrl={(apiEvent as any).agmConfig?.agmNoticeUrl ?? undefined} isAdmin={isAdmin} readOnly={isViewer} />}
-      {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin || isViewer} canControlVoting={isClientAdmin} />}
+      {tab === "Resolutions"         && isAGM && <EventResolutionsTab        eventId={id} isAGM={isAGM} agmResolutions={(apiEvent as any).agmConfig?.resolutions ?? []} agendaItems={agendaItems} setAgendaItems={setAgendaItems} isSuperAdmin={isSuperAdmin || isViewer} useAdminEndpoints={isSuperAdmin} canControlVoting={isClientAdmin} />}
       {tab === "Audience Tiers" && !isSuperAdmin && isInviteOnly && <EventLaunchAudienceTab    eventId={id} />}
       {tab === "Invites"        && !isSuperAdmin && isInviteOnly && <EventLaunchInvitesTab     eventId={id} />}
       {tab === "Waitlist"       && !isSuperAdmin && isLAUNCH && <EventLaunchWaitlistTab    eventId={id} />}
@@ -378,7 +389,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       {tab === "Media"          && !isSuperAdmin && <EventLaunchMediaTab eventId={id} readOnly={isViewer} />}
       {tab === "Broadcast" && !isSuperAdmin && <EventBroadcastTab eventId={id} />}
       {tab === "Vote Results"       && isAGM && <EventVoteResultsTab voteResults={isSuperAdmin ? adminVoteResultsData : voteResultsData} />}
-      {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} voteResults={voteResultsData} eventId={id} />}
+      {tab === "Post-AGM"           && isAGM && <EventPostAgmTab     event={event} voteResults={isSuperAdmin ? adminVoteResultsData : voteResultsData} eventId={id} />}
       {tab === "Settings" && !isSuperAdmin && <EventSettingsTab
         eventId={id}
         title={event.title}
@@ -386,6 +397,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         description={apiEvent.description}
         format={(apiEvent as any).format ?? ""}
         date={(apiEvent as any).date ?? ""}
+        endDate={(apiEvent as any).endDate ?? ""}
         startTime={(apiEvent as any).startTime ?? ""}
         venue={(apiEvent as any).venue ?? (apiEvent as any).location ?? ""}
         streamUrl={(apiEvent as any).streamUrl ?? ""}

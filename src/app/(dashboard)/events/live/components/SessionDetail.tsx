@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { UserAvatar } from "@/components/custom/user-avatar";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -331,12 +332,13 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
                 ) : recentAtt.map((entry, i) => (
                   <div key={i} className="px-5 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div
-                        className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                        style={{ backgroundColor: color }}
-                      >
-                        {entry.initials || initials(entry.name)}
-                      </div>
+                      <UserAvatar
+                        src={entry.avatarUrl}
+                        initials={entry.initials || initials(entry.name)}
+                        color={color}
+                        variant="solid"
+                        size={28}
+                      />
                       <div>
                         <div className="text-xs font-medium text-[hsl(var(--foreground))]">{entry.name}</div>
                         <div className="text-xs text-[hsl(var(--muted-foreground))] capitalize">{entry.mode}</div>

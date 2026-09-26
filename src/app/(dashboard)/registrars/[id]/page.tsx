@@ -29,7 +29,7 @@ import { ModuleBadge } from "@/components/custom/module-badge";
 import { DateCell } from "@/components/ui/date-cell";
 import { CustomSelect } from "@/components/custom/custom-select";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { formatDate, digitsOnly, withIdPrefix, formatRcNumber } from "@/lib/utils";
+import { formatDate, formatDateRange, digitsOnly, withIdPrefix, formatRcNumber } from "@/lib/utils";
 
 /**
  * Prefer real browser back-navigation so someone who arrived from a filtered list
@@ -602,7 +602,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
                           }
                         </td>
                         <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
-                          {formatDate(evt.date)}
+                          {formatDateRange(evt.date, evt.endDate)}
                         </td>
                         <td className="px-5 py-3 text-sm font-medium tabular-nums">
                           {/* Embedded registrar.events[] objects use a different field

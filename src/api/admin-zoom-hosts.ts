@@ -32,13 +32,32 @@ import type { ApiResponse } from "@/types/api";
 //   the same pattern as admin-zoom-sessions.ts.
 // ---------------------------------------------------------------------------
 
+export type ZoomHostType = "MEETING" | "WEBINAR";
+
 /** One licensed Zoom host account in the shared pool. */
 export interface ZoomHostRow {
   /** Stable id if the backend provides one; falls back to the email (which is the natural key). */
   id:          string;
   email:       string;
-  /** Per-host concurrent-meeting capacity. Defaults to 2 (§7d). */
+  /**
+   * What this account is allowed to run. A webinar licence is a different,
+   * scarcer thing from a meeting seat: webinar hosts never get meetings and
+   * meeting hosts never get webinars, so the two are counted separately
+   * everywhere. Absent on pre-webinar responses — treated as MEETING.
+   */
+  type:        ZoomHostType;
+  /**
+   * Per-host concurrent capacity. Meeting seats default to 2 (§7d); a webinar
+   * licence is 1 and should stay 1 — a second licence is a second host row,
+   * not a bigger number here.
+   */
   capacity:    number;
+  /**
+   * Webinar hosts only: bookings not yet ended or cancelled, INCLUDING future
+   * dates. `activeCount` is what is live this second; this is what the licence
+   * is committed to. Always 0 for meeting hosts.
+   */
+  bookedCount?: number;
   /**
    * Slots held: a meeting row exists and its event is neither ENDED nor CANCELLED.
    * As of the backend's 2026-09-14 fix this is derived from the meeting rows themselves
@@ -70,6 +89,11 @@ export interface AdminZoomHostsData {
   /** False when the backend zoom-hosts endpoint isn't deployed yet (404/501). */
   available:     boolean;
   hosts:         ZoomHostRow[];
+  /** `hosts` split by type, so the UI can render its two sections directly. */
+  meetingHosts:  ZoomHostRow[];
+  webinarHosts:  ZoomHostRow[];
+  /** How many webinars can run at once across the platform. Usually 0 or 1. */
+  webinarCapacity: number;
   /** Sum of per-host capacity — the real pool ceiling. null when the pool is empty. */
   totalCapacity: number | null;
   /** Sum of per-host active meetings, when reported. null when unknown. */
@@ -102,11 +126,16 @@ function parseZoomHostRow(raw: any): ZoomHostRow | null {
   const email = r.email ?? r.hostEmail ?? r.host_email ?? r.userEmail ?? r.user_email ?? r.account ?? "";
   const id = r.id ?? r.hostId ?? r.host_id ?? r.userId ?? r.user_id ?? email;
   if (!id && !email) return null;
+  const type: ZoomHostType =
+    String(r.type ?? r.hostType ?? r.host_type ?? "").toUpperCase() === "WEBINAR" ? "WEBINAR" : "MEETING";
   return {
     id:          String(id || email),
     email:       String(email || id),
-    // Per §7d capacity defaults to 2 when the backend omits it.
-    capacity:    numOrNull(r.capacity ?? r.maxConcurrent ?? r.max_concurrent ?? r.slots ?? r.maxSlots) ?? 2,
+    type,
+    // Per §7d meeting capacity defaults to 2 when omitted; a webinar licence is 1.
+    capacity:    numOrNull(r.capacity ?? r.maxConcurrent ?? r.max_concurrent ?? r.slots ?? r.maxSlots)
+                   ?? (type === "WEBINAR" ? 1 : 2),
+    bookedCount: numOrNull(r.bookedCount ?? r.booked_count ?? r.bookings) ?? undefined,
     // NB: avoid the bare `active` key here — it's ambiguous with an enabled flag.
     activeCount: numOrNull(
       r.activeCount ?? r.active_count ?? r.activeMeetings ?? r.inUse ?? r.in_use ?? r.used ?? r.usedSlots ?? r.slotsInUse,
@@ -133,14 +162,27 @@ function parseZoomHosts(payload: any): AdminZoomHostsData {
     .map(parseZoomHostRow)
     .filter((x): x is ZoomHostRow => !!x);
 
-  const totalCapacity = hosts.length ? hosts.reduce((sum, h) => sum + h.capacity, 0) : null;
+  const meetingHosts = hosts.filter((h) => h.type === "MEETING");
+  const webinarHosts = hosts.filter((h) => h.type === "WEBINAR");
+
+  // Meetings only. The backend's own pool totals on /admin/zoom-sessions count
+  // meetings only as of 2026-09-26, and folding a webinar licence into the
+  // meeting ceiling would tell a super admin they have a spare meeting slot
+  // that does not exist.
+  const totalCapacity = meetingHosts.length
+    ? meetingHosts.reduce((sum, h) => sum + h.capacity, 0)
+    : null;
   // Only surface a total-active if the backend actually reported per-host usage.
   const reportedActive = hosts.some(
     (h) => numOrNull(h.raw?.activeCount ?? h.raw?.active_count ?? h.raw?.activeMeetings ?? h.raw?.inUse ?? h.raw?.used) != null,
   );
-  const totalActive = reportedActive ? hosts.reduce((sum, h) => sum + h.activeCount, 0) : null;
+  const totalActive = reportedActive ? meetingHosts.reduce((sum, h) => sum + h.activeCount, 0) : null;
 
-  return { available: true, hosts, totalCapacity, totalActive, usageReported: reportedActive, raw: p };
+  return {
+    available: true, hosts, meetingHosts, webinarHosts,
+    webinarCapacity: webinarHosts.reduce((sum, h) => sum + h.capacity, 0),
+    totalCapacity, totalActive, usageReported: reportedActive, raw: p,
+  };
 }
 
 // --- reads ------------------------------------------------------------------
@@ -165,7 +207,7 @@ export function useAdminZoomHosts(enabled = true) {
       } catch (err: any) {
         const status = err?.response?.status;
         if (status === 404 || status === 501) {
-          return { available: false, hosts: [], totalCapacity: null, totalActive: null, usageReported: false, raw: null };
+          return { available: false, hosts: [], meetingHosts: [], webinarHosts: [], webinarCapacity: 0, totalCapacity: null, totalActive: null, usageReported: false, raw: null };
         }
         throw err;
       }
@@ -188,15 +230,23 @@ function invalidatePoolViews(queryClient: ReturnType<typeof useQueryClient>) {
 export function useAddZoomHost() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ email, capacity }: { email: string; capacity?: number }) => {
-      const body: Record<string, unknown> = { email: email.trim() };
+    // `type` is fixed at creation — PATCH will not change it later, so getting it
+    // right here matters more than the other fields.
+    mutationFn: async ({ email, capacity, type = "MEETING" }: { email: string; capacity?: number; type?: ZoomHostType }) => {
+      const body: Record<string, unknown> = { email: email.trim(), type };
       if (capacity != null) body.capacity = capacity;
       const res = await apiClient.post<ApiResponse<any>>(`/api/v1/admin/zoom-hosts`, body);
       return (res.data as any)?.data ?? res.data;
     },
-    onSuccess: () => {
+    onSuccess: (_, { type = "MEETING" }) => {
       invalidatePoolViews(queryClient);
-      popup.success("Host added", "The licensed Zoom host was added to the pool — capacity is available now.", 3000);
+      popup.success(
+        type === "WEBINAR" ? "Webinar host added" : "Host added",
+        type === "WEBINAR"
+          ? "Organisers can now create webinars. One webinar runs at a time per licence — add another host for a second licence."
+          : "The licensed Zoom host was added to the pool — capacity is available now.",
+        4000,
+      );
     },
     onError: (error: any) => parseAndToastApiError(error, "Failed to add the Zoom host."),
   });

@@ -39,7 +39,7 @@ import { RegisterBrandingSection }     from "./components/RegisterBrandingSectio
 import { RegisterDetailsEditor }      from "./components/RegisterDetailsEditor";
 import { useGetMe } from "@/api/auth/hooks";
 import { getEventModule, MODULE_COLORS } from "@/lib/event-module";
-import { formatDate, resolveRole } from "@/lib/utils";
+import { formatDateRange, resolveRole } from "@/lib/utils";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -153,7 +153,7 @@ function EventRow({
 
       {/* Date */}
       <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] whitespace-nowrap">
-        {formatDate(event.date)}
+        {formatDateRange(event.date, event.endDate)}
       </td>
 
       {/* Format */}

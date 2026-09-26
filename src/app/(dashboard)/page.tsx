@@ -231,6 +231,7 @@ function DashboardPageInner() {
         title:                  e.title,
         status:                 e.status,
         date:                   e.date,
+        endDate:                e.endDate ?? null,
         startTime:              "",
         format:                 e.format as "VIRTUAL" | "IN_PERSON" | "HYBRID",
         live:                   e.status === "LIVE",

@@ -58,6 +58,41 @@ export function formatDate(iso: string) {
 }
 
 /**
+ * A single day, or a range when the event runs over several.
+ *
+ * `endDate` is optional and null for every event created before it existed
+ * (backend note 2026-09-23 §3), so the single-day rendering has to stay the
+ * default rather than the exception. An end date equal to the start is also
+ * a single day — that is how an event is made single-day again after being
+ * a range, so it must not render as "20 Oct – 20 Oct".
+ *
+ * Repeated parts are dropped: "20 – 22 Oct 2026" rather than
+ * "20 Oct 2026 – 22 Oct 2026", and the month is kept when it changes.
+ */
+export function formatDateRange(iso: string, endIso?: string | null): string {
+  if (!iso) return "—";
+  const start = formatDate(iso);
+  if (!endIso || endIso === iso) return start;
+
+  const a = new Date(iso);
+  const b = new Date(endIso);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime()) || b <= a) return start;
+
+  const sameYear  = a.getFullYear() === b.getFullYear();
+  const sameMonth = sameYear && a.getMonth() === b.getMonth();
+
+  if (sameMonth) {
+    const tail = b.toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" });
+    return `${a.getDate()} – ${tail}`;
+  }
+  if (sameYear) {
+    const head = a.toLocaleDateString("en-NG", { day: "numeric", month: "short" });
+    return `${head} – ${formatDate(endIso)}`;
+  }
+  return `${start} – ${formatDate(endIso)}`;
+}
+
+/**
  * Strip everything except digits. Used for registration-ID inputs (CHN, RC
  * number) so the field itself can never contain the prefix — people used to
  * type "chn123", "CHN123", "Chn123", etc. inconsistently, which meant the

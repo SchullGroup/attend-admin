@@ -214,6 +214,8 @@ export interface LeaderboardResponse {
 }
 
 export interface JudgeItem {
+  /** Profile photo when the API carries one; falls back to initials. */
+  avatarUrl?: string | null;
   id:              string;
   userId?:         string;
   initials?:       string;

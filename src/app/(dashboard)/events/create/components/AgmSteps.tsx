@@ -53,7 +53,7 @@ export function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState
 
       <OrgChip name={organiserName} />
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div>
           <Label className="mb-2 block">Date <span className="text-red-500">*</span></Label>
           <Input type="date" min={todayISO()} value={s.date} onChange={(e) => {
@@ -64,10 +64,24 @@ export function AgmStep0({ s, organiserName, showErrors = false }: { s: AgmState
                 s.setEndTime(nextEndTime(s.time, earliest, s.endTime));
                 s.setTime(earliest);
               }
+              if (s.endDate && s.endDate < next) s.setEndDate(next);
               s.setDate(next);
             }}
             className={cn(showErrors && !s.date && "border-red-400 focus-visible:ring-red-200")} />
           {showErrors && !s.date && <p className="text-xs text-red-500 mt-1">Date is required.</p>}
+        </div>
+        <div>
+          <Label className="mb-2 block">
+            End Date <span className="text-[hsl(var(--muted-foreground))] font-normal">(optional)</span>
+          </Label>
+          <Input type="date" min={s.date || todayISO()} value={s.endDate}
+            onChange={(e) => s.setEndDate(e.target.value)} />
+          {s.endDate && s.date && s.endDate < s.date && (
+            <p className="text-xs text-red-500 mt-1">End date cannot be before the start date.</p>
+          )}
+          {!s.endDate && (
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Leave blank for a single-day event.</p>
+          )}
         </div>
         <div><Label className="mb-2 block">Start Time</Label>
           {/* Moving the start carries the end with it, so nobody has to set the

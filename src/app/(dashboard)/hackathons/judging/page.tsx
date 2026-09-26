@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback, Suspense } from "react";
+import { UserAvatar } from "@/components/custom/user-avatar";
 import { useUrlEnumState, useUrlSearchState, useUrlState } from "@/lib/use-url-state";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
@@ -367,12 +368,13 @@ function JudgesPanel({ challengeId, readOnly = false }: { challengeId: string; r
                 <tr key={j.id} className="attend-table-row">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2.5">
-                      <div
-                        className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                        style={{ backgroundColor: j.color || "#7c22c9" }}
-                      >
-                        {j.initials || j.name?.slice(0, 2).toUpperCase()}
-                      </div>
+                      <UserAvatar
+                        src={j.avatarUrl}
+                        initials={j.initials || j.name?.slice(0, 2).toUpperCase() || "?"}
+                        color={j.color || "#7c22c9"}
+                        variant="solid"
+                        size={32}
+                      />
                       <div>
                         <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{j.name}</p>
                         {j.specialtyTrack && (

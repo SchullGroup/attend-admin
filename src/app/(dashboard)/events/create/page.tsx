@@ -338,7 +338,12 @@ function CreateEventInner() {
                  : selectedModule === "HACKATHON" ? hack.startDate
                  : general.date;
 
-      const endDate = selectedModule === "HACKATHON" ? (hack.endDate || undefined) : undefined;
+      // Every event type carries an optional endDate now (backend note
+      // 2026-09-23 §3) — omitted means a single-day event ending on `date`.
+      const endDate = (selectedModule === "AGM"       ? agm.endDate
+                     : selectedModule === "LAUNCH"    ? launch.endDate
+                     : selectedModule === "HACKATHON" ? hack.endDate
+                     :                                  general.endDate) || undefined;
 
       const startTime = selectedModule === "AGM"      ? agm.time
                       : selectedModule === "LAUNCH"    ? launch.time
@@ -429,6 +434,7 @@ function CreateEventInner() {
           registerId:            organiserId,
           title:                 agm.title,
           date:                  agm.date,
+          endDate:               agm.endDate || undefined,
           startTime:             agm.time,
           format:                fmt(agm.format),
           streamUrl:             agm.streamUrl || undefined,
@@ -456,6 +462,7 @@ function CreateEventInner() {
           title:             general.title,
           description:       general.description  || undefined,
           date:              general.date,
+          endDate:           general.endDate || undefined,
           startTime:         general.time,
           format:            fmt(general.format),
           venue:             general.venue         || undefined,
@@ -517,6 +524,7 @@ function CreateEventInner() {
           registerId:         organiserId,
           title:              launch.title,
           date:               launch.date,
+          endDate:            launch.endDate || undefined,
           startTime:          launch.time,
           format:             fmt(launch.format),
           venue:              launch.venue               || undefined,

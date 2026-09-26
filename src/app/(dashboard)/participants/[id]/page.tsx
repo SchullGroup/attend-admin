@@ -1,5 +1,6 @@
 "use client";
 import { use } from "react";
+import { UserAvatar } from "@/components/custom/user-avatar";
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/custom/status-badge";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,9 @@ export default function ParticipantDetailPage({
     ? `${u.firstName?.[0] ?? ""}${u.lastName?.[0] ?? ""}`.toUpperCase() || email[0]?.toUpperCase()
     : p?.initials ?? email[0]?.toUpperCase() ?? "?";
   const avatarColor = p?.avatarColor ?? null;
+  // Both endpoints can carry a photo; prefer the admin-user one, which is
+  // what the detail request actually returns.
+  const avatarUrl   = u?.avatarUrl ?? (p as { avatarUrl?: string | null } | undefined)?.avatarUrl ?? null;
   const createdAt  = u?.createdAt ?? p?.joinedAt ?? null;
   const emailVerified = u?.emailVerified ?? null;
   const stakeholderName = u?.stakeholderName ?? null;
@@ -141,15 +145,13 @@ export default function ParticipantDetailPage({
         {/* ── Profile card ── */}
         <div className="col-span-1 flex flex-col gap-4">
           <Card className="attend-card p-6 flex flex-col items-center text-center">
-            <div
-              className="h-16 w-16 rounded-full flex items-center justify-center text-xl font-bold mb-4"
-              style={{
-                backgroundColor: avatarColor ? `${avatarColor}22` : "hsl(var(--primary)/0.12)",
-                color: avatarColor ?? "hsl(var(--primary))",
-              }}
-            >
-              {initials}
-            </div>
+            <UserAvatar
+              src={avatarUrl}
+              initials={initials}
+              color={avatarColor}
+              size={64}
+              className="mb-4"
+            />
             <h1 className="text-lg font-bold text-[hsl(var(--foreground))]">{fullName}</h1>
             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">{email}</p>
 

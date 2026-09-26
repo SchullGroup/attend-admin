@@ -8,7 +8,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDateRange } from "@/lib/utils";
 import { useClientEventAgenda, useAddAgendaItem, useDeleteAgendaItem, useUpdateAgendaItem } from "@/api/client-events";
 import { popup } from "@/lib/popup-store";
 import type { EventShim, LocalAgendaItem } from "./types";
@@ -173,7 +173,7 @@ export function EventOverviewTab({
           </div>
           <div className="grid grid-cols-2 gap-4">
             {[
-              { icon: Calendar,   label: "Date",   value: endDate ? `${formatDate(event.date)} → ${formatDate(endDate)}` : formatDate(event.date) },
+              { icon: Calendar,   label: "Date",   value: formatDateRange(event.date, endDate) },
               { icon: Clock,      label: "Time",   value: `${event.startTime}${event.endTime ? ` – ${event.endTime}` : ""}` || "TBC" },
               { icon: FormatIcon, label: "Format", value: event.format.charAt(0).toUpperCase() + event.format.slice(1).replace("-", " ") },
               { icon: MapPin,     label: "Venue",  value: event.venue || "Virtual (no physical venue)" },

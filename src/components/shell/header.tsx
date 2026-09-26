@@ -1,5 +1,6 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
+import { UserAvatar } from "@/components/custom/user-avatar";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Bell, Search, ChevronRight, CalendarDays, Users, Building2, X, Compass } from "lucide-react";
 import { NOTIFICATION_SOUND_KEY } from "@/app/(dashboard)/settings/page";
@@ -329,9 +330,12 @@ export function Header() {
                     onClick={() => handleSearchNav(`/participants/${p.id}`)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.5)] transition-colors text-left"
                   >
-                    <div className="h-7 w-7 rounded-full bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-xs font-bold text-[hsl(var(--primary))] shrink-0">
-                      {p.fullName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                    </div>
+                    <UserAvatar
+                      src={p.avatarUrl}
+                      initials={p.fullName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
+                      color={p.avatarColor}
+                      size={28}
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{p.fullName}</p>
                       <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{p.email}</p>
@@ -380,9 +384,12 @@ export function Header() {
                     onClick={() => handleSearchNav(`/registers`)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.5)] transition-colors text-left"
                   >
-                    <div className="h-7 w-7 rounded-full bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-xs font-bold text-[hsl(var(--primary))] shrink-0">
-                      {a.fullName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                    </div>
+                    <UserAvatar
+                      src={a.avatarUrl}
+                      initials={a.fullName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
+                      color={a.avatarColor}
+                      size={28}
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{a.fullName}</p>
                       <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{a.organisationName}</p>
@@ -405,9 +412,12 @@ export function Header() {
                     onClick={() => handleSearchNav("/settings/team")}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.5)] transition-colors text-left"
                   >
-                    <div className="h-7 w-7 rounded-full bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-xs font-bold text-[hsl(var(--primary))] shrink-0">
-                      {m.fullName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                    </div>
+                    <UserAvatar
+                      src={m.avatarUrl}
+                      initials={m.fullName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
+                      color={m.avatarColor}
+                      size={28}
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{m.fullName}</p>
                       <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{m.email}</p>
