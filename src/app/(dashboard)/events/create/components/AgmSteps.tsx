@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { UploadProgress } from "@/components/ui/upload-progress";
 import { apiClient } from "@/lib/api-client";
-import { cn, throttledProgress } from "@/lib/utils";
+import { cn, throttledProgress, formatDateRange } from "@/lib/utils";
 import { ImageUrlUpload } from "@/components/custom/image-url-upload";
 import { Toggle, FormatPicker, ReviewRow, OrgChip, todayISO, nextEndTime, minStartTimeToday, startTimeTooSoon } from "./shared";
 import { MAX_SHORT } from "./HackathonSteps";
@@ -565,7 +565,7 @@ export function AgmReview({ s, organiserName }: { s: AgmState; organiserName: st
           <ReviewRow label="Title" value={s.title} />
           {s.description && <ReviewRow label="Description" value={s.description} />}
           <ReviewRow label="Company" value={organiserName} />
-          <ReviewRow label="Date" value={s.date} />
+          <ReviewRow label="Date" value={formatDateRange(s.date, s.endDate)} />
           <ReviewRow label="Start Time" value={s.time || "—"} />
           {s.endTime && <ReviewRow label="End Time" value={s.endTime} />}
           <ReviewRow label="Format" value={s.format} />

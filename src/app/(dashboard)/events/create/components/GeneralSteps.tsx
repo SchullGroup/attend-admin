@@ -2,7 +2,7 @@
 import { Globe, Mail, Monitor, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import { cn, formatDateRange } from "@/lib/utils";
 import { ImageUrlUpload } from "@/components/custom/image-url-upload";
 import { Toggle, FormatPicker, ReviewRow, OrgChip, todayISO, nextEndTime, minStartTimeToday, startTimeTooSoon } from "./shared";
 import { MAX_SHORT } from "./HackathonSteps";
@@ -172,7 +172,7 @@ export function GeneralReview({ s, organiserName }: { s: GeneralState; organiser
           <ReviewRow label="Title"      value={s.title} />
           {s.description && <ReviewRow label="Description" value={s.description} />}
           <ReviewRow label="Organiser"  value={organiserName} />
-          <ReviewRow label="Date"       value={s.date} />
+          <ReviewRow label="Date"       value={formatDateRange(s.date, s.endDate)} />
           <ReviewRow label="Start Time" value={s.time || "—"} />
           {s.endTime && <ReviewRow label="End Time" value={s.endTime} />}
           <ReviewRow label="Format"     value={s.format} />
