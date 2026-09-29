@@ -46,7 +46,11 @@ export function StatusBadge({ status }: { status: string }) {
   const c = config[key] ?? { label: humanise(status), bg: "#f3f4f6", color: "#6b7280" };
   return (
     <span
-      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
+      // `whitespace-nowrap` matters more than it looks: a two-word label like
+      // "Basic KYC" or "Full KYC" wraps inside the pill as soon as its column
+      // is tight, which makes the badge two lines tall and drags the whole row
+      // with it. The column should give way, not the badge.
+      className="inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold"
       style={{ backgroundColor: c.bg, color: c.color }}
     >
       {c.label}

@@ -58,6 +58,29 @@ export function formatDate(iso: string) {
 }
 
 /**
+ * A date-and-time for reading, from an HTML input value.
+ *
+ * `<input type="datetime-local">` hands back `2026-10-02T12:20`, and review
+ * screens were printing that string straight out — QA read it as a bug,
+ * reasonably: an organiser confirming a submission deadline should not have to
+ * parse an ISO timestamp to check it.
+ *
+ * Deliberately NOT `new Date(...).toLocaleString()` for the bare form: that
+ * treats the value as local time in some browsers and UTC in others, so a
+ * 12:20 deadline can render as 13:20. The clock part is echoed as the user
+ * typed it, and only the date half is formatted.
+ */
+export function formatDateTime(value: string | null | undefined): string {
+  if (!value) return "—";
+  const [datePart, timePart] = String(value).split("T");
+  const date = formatDate(datePart);
+  if (date === "Invalid Date") return String(value);
+  if (!timePart) return date;
+  // Trim seconds when the input includes them: "12:20:00" → "12:20".
+  return `${date}, ${timePart.slice(0, 5)}`;
+}
+
+/**
  * A single day, or a range when the event runs over several.
  *
  * `endDate` is optional and null for every event created before it existed

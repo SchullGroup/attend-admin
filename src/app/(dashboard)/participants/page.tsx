@@ -208,12 +208,12 @@ function ParticipantsPageInner() {
           <thead>
             <tr className="attend-table-header">
               <th className="px-5 py-3 text-left">User</th>
-              <th className="px-5 py-3 text-left">Phone</th>
+              <th className="px-5 py-3 text-left whitespace-nowrap">Phone</th>
               <th className="px-5 py-3 text-left">Roles</th>
-              <th className="px-5 py-3 text-left">KYC</th>
-              <th className="px-5 py-3 text-left">Status</th>
-              <th className="px-5 py-3 text-left">Joined</th>
-              <th className="px-5 py-3 text-left">Actions</th>
+              <th className="px-5 py-3 text-left whitespace-nowrap">KYC</th>
+              <th className="px-5 py-3 text-left whitespace-nowrap">Status</th>
+              <th className="px-5 py-3 text-left whitespace-nowrap">Joined</th>
+              <th className="px-5 py-3 text-left whitespace-nowrap">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -238,7 +238,7 @@ function ParticipantsPageInner() {
                       column and pushes the rest of the table off screen — the
                       `min-w-0` is what actually lets the flex child shrink, and
                       `title` keeps the full value one hover away. */}
-                  <td className="px-5 py-3 max-w-[280px]">
+                  <td className="px-5 py-3 w-full max-w-[280px]">
                     <div className="flex items-center gap-2.5">
                       <UserAvatar src={u.avatarUrl} initials={initials} size={32} />
                       <div className="min-w-0">
@@ -249,7 +249,7 @@ function ParticipantsPageInner() {
                   </td>
 
                   {/* Phone */}
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] whitespace-nowrap">
                     {u.phone ?? "—"}
                   </td>
 
@@ -260,7 +260,7 @@ function ParticipantsPageInner() {
                         {roles.map((r) => (
                           <span
                             key={r}
-                            className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[hsl(var(--primary)/0.08)] text-[hsl(var(--primary))]"
+                            className="inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold bg-[hsl(var(--primary)/0.08)] text-[hsl(var(--primary))]"
                           >
                             {r.replace(/_/g, " ")}
                           </span>
@@ -285,12 +285,12 @@ function ParticipantsPageInner() {
                   </td>
 
                   {/* Joined */}
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] whitespace-nowrap">
                     {u.createdAt ? formatDate(u.createdAt) : "—"}
                   </td>
 
                   {/* Actions */}
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-1.5">
                       <Link href={`/participants/${u.id}`}>
                         <Button size="sm" variant="outline" className="h-7 text-xs">View</Button>

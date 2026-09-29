@@ -2,7 +2,7 @@
 import { Plus, Trash2, Monitor, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime, formatDate } from "@/lib/utils";
 import { ImageUrlUpload } from "@/components/custom/image-url-upload";
 import { Toggle, FormatPicker, ReviewRow, OrgChip, todayISO, nextEndTime, minStartTimeToday, startTimeTooSoon } from "./shared";
 import type { HackState } from "./state-hooks";
@@ -408,8 +408,8 @@ export function HackReview({ s, organiserName }: { s: HackState; organiserName: 
           <ReviewRow label="Title"         value={s.title} />
           {s.description && <ReviewRow label="Description" value={s.description} />}
           <ReviewRow label="Organiser"     value={organiserName} />
-          <ReviewRow label="Start Date"    value={s.startDate} />
-          {s.endDate && <ReviewRow label="End Date" value={s.endDate} />}
+          <ReviewRow label="Start Date"    value={formatDate(s.startDate)} />
+          {s.endDate && <ReviewRow label="End Date" value={formatDate(s.endDate)} />}
           {s.theme && <ReviewRow label="Tracks"    value={s.theme} />}
           <ReviewRow label="Format"        value={s.format} />
           {s.featured && <ReviewRow label="Featured" value="Yes" />}
@@ -419,7 +419,7 @@ export function HackReview({ s, organiserName }: { s: HackState; organiserName: 
         <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] px-4 divide-y divide-[hsl(var(--border))]">
           {s.problemStatement && <ReviewRow label="Problem"     value={s.problemStatement} />}
           {s.deliverable      && <ReviewRow label="Deliverable" value={s.deliverable} />}
-          {s.submissionDeadline && <ReviewRow label="Deadline"  value={s.submissionDeadline} />}
+          {s.submissionDeadline && <ReviewRow label="Deadline"  value={formatDateTime(s.submissionDeadline)} />}
           {s.techStack        && <ReviewRow label="Tech Stack"  value={s.techStack} />}
           {s.flyerUrl         && <ReviewRow label="Flyer"       value="Uploaded" />}
         </div>

@@ -2,7 +2,7 @@
 import { Plus, Trash2, Lock, Globe, Mail, Monitor, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import { cn, formatDateRange, formatDateTime } from "@/lib/utils";
 import { ImageUrlUpload } from "@/components/custom/image-url-upload";
 import { Toggle, FormatPicker, ReviewRow, OrgChip, todayISO, nextEndTime, minStartTimeToday, startTimeTooSoon } from "./shared";
 import { MAX_SHORT } from "./HackathonSteps";
@@ -235,7 +235,7 @@ export function LaunchReview({ s, organiserName }: { s: LaunchState; organiserNa
           <ReviewRow label="Title" value={s.title} />
           {s.description && <ReviewRow label="Description" value={s.description} />}
           <ReviewRow label="Company" value={organiserName} />
-          <ReviewRow label="Date" value={s.date} />
+          <ReviewRow label="Date" value={formatDateRange(s.date, s.endDate)} />
           <ReviewRow label="Start Time" value={s.time || "—"} />
           {s.endTime && <ReviewRow label="End Time" value={s.endTime} />}
           <ReviewRow label="Format" value={s.format} />
@@ -248,7 +248,7 @@ export function LaunchReview({ s, organiserName }: { s: LaunchState; organiserNa
           <ReviewRow label="Product Name" value={s.productName} />
           <ReviewRow label="Tagline" value={s.tagline} />
           {s.flyerUrl && <ReviewRow label="Flyer" value="Uploaded" />}
-          <ReviewRow label="Embargo" value={s.embargoEnabled ? `Enabled — ${s.embargoAt}` : "Disabled"} />
+          <ReviewRow label="Embargo" value={s.embargoEnabled ? `Enabled — ${formatDateTime(s.embargoAt)}` : "Disabled"} />
         </div>
       </div>
     </div>
