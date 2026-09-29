@@ -1,16 +1,7 @@
 "use client";
 import { Fragment, useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  Users,
-  Plus,
-  Trash2,
-  Loader2,
-  Info,
-  Check,
-  X,
-  Server,
-} from "lucide-react";
+import { Users, Plus, Trash2, Loader2, Info, Check, X, Server, Stethoscope, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,6 +14,8 @@ import {
   type AdminZoomHostsData,
   type ZoomHostRow,
   type ZoomHostType,
+  useCheckZoomHost,
+  type ZoomHostCheckResult,
 } from "@/api/admin-zoom-hosts";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -61,6 +54,22 @@ export function HostPoolCard({
   const [newEmail, setNewEmail] = useState("");
   const [newCapacity, setNewCapacity] = useState("2");
   const [newType,     setNewType]     = useState<ZoomHostType>("MEETING");
+  // Check results live per host id, so several rows can be verified without
+  // one result overwriting another.
+  const [checks, setChecks] = useState<Record<string, ZoomHostCheckResult>>({});
+  const [checkingId, setCheckingId] = useState<string | null>(null);
+  const checkHost = useCheckZoomHost();
+
+  function handleCheck(host: ZoomHostRow) {
+    setCheckingId(host.id);
+    checkHost.mutate(
+      { hostId: host.id },
+      {
+        onSuccess: (result) => setChecks((prev) => ({ ...prev, [host.id]: result })),
+        onSettled: () => setCheckingId(null),
+      },
+    );
+  }
   // Per-row capacity drafts, keyed by host id. Absent = not being edited.
   const [capacityDraft, setCapacityDraft] = useState<Record<string, string>>({});
 
@@ -226,6 +235,15 @@ export function HostPoolCard({
             </Button>
           </div>
 
+          {webinarHosts.length > 0 && (
+            <p className="-mt-2 mb-4 text-xs text-[hsl(var(--muted-foreground))]">
+              Use <b>Check</b> on a host to confirm Zoom will actually accept it — it reports a
+              missing webinar licence or a missing API scope before an organiser hits it at booking
+              time. The check itself needs <code className="text-[11px]">user:read:admin</code> on
+              the Zoom app to read licence state.
+            </p>
+          )}
+
           {newType === "WEBINAR" && (
             <p className="-mt-3 mb-5 text-xs text-[hsl(var(--muted-foreground))]">
               The account must hold a Zoom webinar licence, and the API app needs the{" "}
@@ -372,6 +390,20 @@ export function HostPoolCard({
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
+                          <div className="inline-flex items-center gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCheck(host)}
+                            disabled={checkingId === host.id}
+                            className="gap-1.5"
+                            title="Ask Zoom whether this account can actually do its job — licence and API scopes"
+                          >
+                            {checkingId === host.id
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Stethoscope className="h-3.5 w-3.5" />}
+                            Check
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -381,8 +413,44 @@ export function HostPoolCard({
                           >
                             <Trash2 className="h-3.5 w-3.5" /> Remove
                           </Button>
+                          </div>
                         </td>
                       </tr>
+
+                      {/* Check result. Spelling out what is missing is the whole
+                          point — "buy the licence" and "add the scope" are the
+                          two likely answers and they need different people. */}
+                      {checks[host.id] && (
+                        <tr className="border-b border-[hsl(var(--border))] last:border-0">
+                          <td colSpan={5} className="px-4 pb-3 pt-0">
+                            {checks[host.id].ok ? (
+                              <div className="flex items-start gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-800">
+                                <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600 mt-px" />
+                                <span>
+                                  {checks[host.id].message
+                                    || `${host.email} is ready — licence and API scopes are both in place.`}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
+                                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500 mt-px" />
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <span className="font-semibold">
+                                    {checks[host.id].message || "This host cannot run its sessions yet."}
+                                  </span>
+                                  {checks[host.id].issues.length > 0 && (
+                                    <ul className="list-disc pl-4 space-y-0.5">
+                                      {checks[host.id].issues.map((issue, i) => (
+                                        <li key={i} className="break-words">{issue}</li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
                       </Fragment>
                     );
                   })}

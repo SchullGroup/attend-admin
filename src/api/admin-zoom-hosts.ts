@@ -293,3 +293,77 @@ export function useRemoveZoomHost() {
     onError: (error: any) => parseAndToastApiError(error, "Failed to remove the Zoom host."),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Host health check — GET /api/v1/admin/zoom-hosts/{id}/check   (2026-09-26)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ask the backend whether a pooled host can actually do its job.
+ *
+ * Adding a host to the pool only records an email. Whether that Zoom account
+ * really holds a webinar licence, and whether our API app has the scopes to
+ * use it, was invisible until an organiser pressed Create Webinar and got
+ * `ZOOM_WEBINAR_FAILED` — which on our timeline could be the morning of an AGM.
+ * This is the pre-flight for that.
+ *
+ * Note the check itself needs `user:read:admin` on the Zoom app to see licence
+ * state. Without it the check can still run but cannot answer the licence
+ * question, so that scope shows up as one of the missing items.
+ */
+export interface ZoomHostCheckResult {
+  /** True when nothing is missing. */
+  ok:       boolean;
+  /** Human-readable list of what is missing or wrong. Empty when ok. */
+  issues:   string[];
+  /** The backend's own summary line, when it sends one. */
+  message?: string;
+  /** Unparsed body, for the diagnostic toggle. */
+  raw?:     any;
+}
+
+/** Field names are not pinned in the handoff, so read every plausible shape. */
+function parseHostCheck(payload: any): ZoomHostCheckResult {
+  const p = payload ?? {};
+  const rawIssues =
+    p.issues ?? p.missing ?? p.problems ?? p.errors ?? p.failures ?? p.details ?? [];
+  const issues: string[] = (Array.isArray(rawIssues) ? rawIssues : [rawIssues])
+    .filter((x: any) => x != null && x !== "")
+    .map((x: any) => (typeof x === "string" ? x : x?.message ?? x?.detail ?? JSON.stringify(x)));
+
+  // Trust an explicit boolean; otherwise "no issues" means healthy.
+  const explicit = p.ok ?? p.healthy ?? p.valid ?? p.passed;
+  const ok = typeof explicit === "boolean" ? explicit : issues.length === 0;
+
+  return {
+    ok,
+    issues,
+    message: typeof p.message === "string" ? p.message : undefined,
+    raw: p,
+  };
+}
+
+export function useCheckZoomHost() {
+  return useMutation({
+    mutationFn: async ({ hostId }: { hostId: string }) => {
+      const res = await apiClient.get<ApiResponse<any>>(
+        `/api/v1/admin/zoom-hosts/${encodeURIComponent(hostId)}/check`,
+      );
+      return parseHostCheck((res.data as any)?.data ?? res.data);
+    },
+    onError: (error: any) => {
+      // A 404 here means the endpoint is not deployed yet, which is a different
+      // thing from the host being broken — say so rather than implying the
+      // licence is bad.
+      if (error?.response?.status === 404) {
+        popup.error(
+          "Check not available",
+          "This backend does not have the host check endpoint yet. Nothing is wrong with the host — there is just no way to verify it from here.",
+          6000,
+        );
+        return;
+      }
+      parseAndToastApiError(error, "Could not check this Zoom host.");
+    },
+  });
+}
