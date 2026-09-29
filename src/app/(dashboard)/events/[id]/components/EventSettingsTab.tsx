@@ -750,11 +750,16 @@ export function EventSettingsTab({
                 <p className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</p>
                 <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{desc}</p>
               </div>
+              {/* A completed step is a statement of fact, not an offer. It reads
+                  as the dark filled button at reduced opacity — the same look
+                  Go Live already had once it was unavailable — so "Published"
+                  no longer looks like a button you have yet to press. */}
               <Button
                 size="sm"
-                variant={status === "live" ? "default" : "outline"}
+                variant={completed || status === "live" ? "default" : "outline"}
                 disabled={disabled || anyLifecyclePending}
                 onClick={() => confirmLifecycle(status, mutation)}
+                className={completed ? "cursor-default disabled:opacity-60" : undefined}
               >
                 {completed ? (
                   status === "live" ? <Radio className="h-3.5 w-3.5 mr-1.5" /> : <Check className="h-3.5 w-3.5 mr-1.5" />
