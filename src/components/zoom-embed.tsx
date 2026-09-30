@@ -81,6 +81,8 @@ export interface RefreshedZoomMeeting {
   /** Fresh host ZAK — returned directly since the backend's 2026-07-15
    *  idempotency fix (before that it only travelled inside startUrl). */
   hostZak?:   string;
+  /** The pooled host's address. Needed to start a webinar; see `userEmail`. */
+  hostEmail?: string | null;
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -90,6 +92,15 @@ type Status = "idle" | "loading" | "joined" | "error";
 interface ZoomEmbedProps {
   /** Display name shown inside the meeting. */
   userName: string;
+  /**
+   * Email presented to Zoom at join.
+   *
+   * Optional for a meeting, REQUIRED for a webinar — and to start a webinar as
+   * host it must be the host account's own address. Pass the pooled host's
+   * email (`zoomMeeting.hostEmail`), not the signed-in Attend user's: Zoom
+   * matches it against the webinar's host and answers 3624 when it differs.
+   */
+  userEmail?: string | null;
   /** Height in px for the meeting panel. Minimum 600 recommended for Zoom SDK controls. */
   height?: number;
 
@@ -126,6 +137,7 @@ interface ZoomEmbedProps {
 
 const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed({
   userName,
+  userEmail,
   height = 680,
   meetingNumber: meetingNumberProp,
   password: passwordProp,
@@ -178,6 +190,7 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
       let joinNumber   = resolved.meetingNumber;
       let joinPassword = resolved.password;
       let joinZak      = resolved.zak;
+      let joinEmail    = userEmail ?? "";
 
       if (eventId && (forceRefresh || forceNew || !joinZak || zakLooksExpired(joinZak))) {
         try {
@@ -213,6 +226,9 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
             }
             if (!adoptedZak && meeting.hostZak) adoptedZak = meeting.hostZak;
             if (adoptedZak) joinZak = adoptedZak;
+            // A refresh can move the session to a different pooled host, so the
+            // email must be adopted alongside the ZAK — a stale one fails 3624.
+            if (meeting.hostEmail) joinEmail = meeting.hostEmail;
             onMeetingRefreshed?.(meeting);
           } else {
             const errBody = await refreshRes.json().catch(() => ({})) as { error?: string; code?: string };
@@ -259,6 +275,7 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
               meetingNumber: joinNumber,
               password:      joinPassword,
               userName:      userName || "Host",
+              ...(joinEmail ? { userEmail: joinEmail } : {}),
               ...(joinZak ? { zak: joinZak } : {}),
             },
             "*"
@@ -300,7 +317,7 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
       cleanupListener();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolved, userName, eventId, onMeetingRefreshed]);
+  }, [resolved, userName, userEmail, eventId, onMeetingRefreshed]);
 
   function handleLeave() {
     cleanupListener();
@@ -429,7 +446,14 @@ const ZoomEmbed = forwardRef<ZoomEmbedHandle, ZoomEmbedProps>(function ZoomEmbed
                 ? "Every Zoom host is currently running a live meeting. This is temporary — wait a moment and press Try again. Slots free up automatically as other meetings end."
                 : errMsg}
             </p>
-            {/not support start meeting/i.test(errMsg) ? (
+            {/\b3624\b/.test(errMsg) || /host\/alternative email/i.test(errMsg) ? (
+              <p className="text-xs text-amber-400 max-w-xs mt-2">
+                Zoom will only start a webinar for its own host account. The join needs that
+                account&apos;s email address and this event is not supplying one, so retrying
+                will not help. The backend needs to return <code>hostEmail</code> on the Zoom
+                session — flag it to the backend team.
+              </p>
+            ) : /not support start meeting/i.test(errMsg) ? (
               <p className="text-xs text-amber-400 max-w-xs mt-2">
                 The host token doesn&apos;t match this meeting&apos;s host — a backend token issue,
                 not something a retry fixes. Flag to the backend team (see PENDING_BACKEND_FIXES.md,
