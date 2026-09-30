@@ -180,10 +180,22 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
   const isLaunch        = module === "LAUNCH";
   const isVirtual       = room.format?.toUpperCase() === "VIRTUAL";
   const recentAtt       = attendance.length > 0 ? attendance : (room.recentAttendance ?? []);
-  const liveResolutions = room.resolutions.map((resolution) => ({
-    ...resolution,
-    ...resolutionTallies[resolution.id],
-  }));
+  // Two sources feed the vote bars: the WebSocket tally (real-time) and the
+  // 4-second poll of room.resolutions (fallback). The WS tally is normally
+  // ahead, so it should win — but it's stored once and never cleared, so a
+  // tally received right before the socket drops would permanently shadow the
+  // still-polling counts and freeze the numbers mid-AGM. Votes only climb while
+  // voting is open, so take whichever source has counted more: the WS tally
+  // wins while it's live, and the poll takes back over if the socket goes stale.
+  const voteTotal = (r: { forCount?: number; againstCount?: number; abstainCount?: number }) =>
+    (r.forCount ?? 0) + (r.againstCount ?? 0) + (r.abstainCount ?? 0);
+  const liveResolutions = room.resolutions.map((resolution) => {
+    const tally = resolutionTallies[resolution.id];
+    if (tally && voteTotal(tally) >= voteTotal(resolution)) {
+      return { ...resolution, ...tally };
+    }
+    return resolution;
+  });
   const isStreaming     = room.format?.toLowerCase() !== "in_person";
   const hasZoomMeeting  = !!zoomMeeting?.meetingId;
   const zak             = zoomMeeting?.startUrl ? (() => {

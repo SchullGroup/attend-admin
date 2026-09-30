@@ -1,7 +1,12 @@
 export function VoteBar({
   label, value, total, color,
-}: { label: string; value: number; total: number; color: string }) {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+}: { label: string; value?: number | null; total?: number | null; color: string }) {
+  // A freshly-opened resolution can arrive before its tally fields are
+  // populated, so value/total may be undefined at runtime even though the type
+  // says number. Coalesce rather than call .toLocaleString() on undefined.
+  const safeValue = value ?? 0;
+  const safeTotal = total ?? 0;
+  const pct = safeTotal > 0 ? Math.round((safeValue / safeTotal) * 100) : 0;
   return (
     <div className="flex items-center gap-3">
       <span className="text-sm text-[hsl(var(--muted-foreground))] w-16 shrink-0">{label}</span>
@@ -13,7 +18,7 @@ export function VoteBar({
       </div>
       <span className="text-sm font-semibold tabular-nums w-10 text-right">{pct}%</span>
       <span className="text-sm text-[hsl(var(--muted-foreground))] tabular-nums w-20 text-right">
-        {value.toLocaleString()}
+        {safeValue.toLocaleString()}
       </span>
     </div>
   );

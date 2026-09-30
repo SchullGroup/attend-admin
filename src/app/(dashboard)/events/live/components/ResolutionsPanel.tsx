@@ -54,7 +54,12 @@ export function ResolutionsPanel({
       </div>
       <div className="divide-y divide-[hsl(var(--border))]">
         {resolutions.map((res, i) => {
-          const total    = res.forCount + res.againstCount + res.abstainCount;
+          // Counts can be undefined on a just-opened resolution before its
+          // first tally lands — coalesce so the bars render at zero, not crash.
+          const forCount     = res.forCount ?? 0;
+          const againstCount = res.againstCount ?? 0;
+          const abstainCount = res.abstainCount ?? 0;
+          const total        = forCount + againstCount + abstainCount;
           // Only "OPEN" and "CLOSED" are definitive states.
           // Everything else (null, "PENDING", "CREATED", "NOT_STARTED", etc.)
           // means the resolution is ready to be opened — show the Open Voting button.
@@ -119,24 +124,36 @@ export function ResolutionsPanel({
                 )}
               </div>
 
-              {/* Vote bars */}
-              {(isOpen || isClosed) && total > 0 && (
+              {/* Vote bars — shown the moment voting opens (even at zero, so the
+                  host watches the count climb from the start) and kept once
+                  closed so the result is visible here, not only in Vote Records.
+                  Only a CLOSED resolution with no votes drops the bars, for the
+                  plain-text line below. */}
+              {(isOpen || (isClosed && total > 0)) && (
                 <div className="flex flex-col gap-2 mt-3 bg-[hsl(var(--muted)/0.4)] rounded-xl p-3">
-                  <VoteBar label="For"     value={res.forCount}     total={total} color="#16a34a" />
-                  <VoteBar label="Against" value={res.againstCount} total={total} color="#dc2626" />
-                  <VoteBar label="Abstain" value={res.abstainCount} total={total} color="#9ca3af" />
+                  <VoteBar label="For"     value={forCount}     total={total} color="#16a34a" />
+                  <VoteBar label="Against" value={againstCount} total={total} color="#dc2626" />
+                  <VoteBar label="Abstain" value={abstainCount} total={total} color="#9ca3af" />
                   <div className="pt-1 mt-1 border-t border-[hsl(var(--border))] flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
                     <span>Total votes: <span className="font-semibold text-[hsl(var(--foreground))]">{total.toLocaleString()}</span></span>
-                    {(res.forShares + res.againstShares + res.abstainShares) > 0 && (
+                    {((res.forShares ?? 0) + (res.againstShares ?? 0) + (res.abstainShares ?? 0)) > 0 && (
                       <span>
                         Total shares:{" "}
                         <span className="font-semibold text-[hsl(var(--foreground))]">
-                          {(res.forShares + res.againstShares + res.abstainShares).toLocaleString()}
+                          {((res.forShares ?? 0) + (res.againstShares ?? 0) + (res.abstainShares ?? 0)).toLocaleString()}
                         </span>
                       </span>
                     )}
                   </div>
                 </div>
+              )}
+
+              {/* A closed resolution that no one voted on. Say it, rather than
+                  leaving the card blank under the "Closed" badge. */}
+              {isClosed && total === 0 && (
+                <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted)/0.4)] rounded-xl px-3 py-2.5">
+                  No votes were cast on this resolution.
+                </p>
               )}
 
               {/* ── Voting controls ── */}
@@ -201,6 +218,32 @@ export function ResolutionsPanel({
                   >
                     <X className="h-3.5 w-3.5" />
                     {closeVote.isPending ? "Closing…" : "Close Voting"}
+                  </Button>
+                </div>
+              )}
+
+              {/* Reopen a closed resolution — the control room previously left a
+                  closed resolution terminal, with no way to resume voting after
+                  an accidental or premature close. Uses the same /open endpoint.
+                  Confirm-guarded and worded as "resume" so it reads as continuing
+                  the existing vote, not starting a fresh one. */}
+              {isClosed && (
+                <div className="mt-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5"
+                    disabled={busy}
+                    onClick={() => popup.confirm(
+                      "Reopen voting",
+                      `Reopen voting for “${res.title}”? Participants will be able to submit votes again. Votes already recorded are kept.`,
+                      () => openVote.mutate({ eventId, resolutionId: res.id }),
+                      undefined,
+                      "Reopen voting",
+                    )}
+                  >
+                    <Vote className="h-3.5 w-3.5" />
+                    {openVote.isPending ? "Reopening…" : "Reopen voting"}
                   </Button>
                 </div>
               )}
