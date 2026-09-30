@@ -50,6 +50,10 @@ export function ZoomMeetingCard({
           zak={zak}
           eventId={eventId}
           userName={hostName}
+          // The webinar host's own address. Zoom refuses to start a webinar for
+          // anyone else's email, so this is the pooled account's, not the
+          // signed-in organiser's.
+          userEmail={(zoomMeeting as { hostEmail?: string | null }).hostEmail ?? undefined}
           height={640}
           onMeetingRefreshed={onMeetingRefreshed}
         />

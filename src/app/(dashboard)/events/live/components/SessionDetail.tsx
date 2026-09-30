@@ -27,6 +27,7 @@ import { eventColor, formatTime, initials, playChime } from "./helpers";
 import { toEventModule } from "@/lib/event-module";
 import { EventPressKitTab } from "../../[id]/components/EventPressKitTab";
 import { EventGuestAccessCard } from "../../[id]/components/EventGuestAccessCard";
+import { EventPanelistsCard } from "../../[id]/components/EventPanelistsCard";
 import { parseStreamUrl } from "./stream-helpers";
 import { LiveHeaderCard } from "./LiveHeaderCard";
 import { ZoomMeetingCard } from "./ZoomMeetingCard";
@@ -295,13 +296,10 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
           {isLaunch && (
             <EventPressKitTab eventId={eventId} readOnly={isSuperAdmin} isSuperAdmin={isSuperAdmin} />
           )}
-        </div>
 
-        {/* Right: Q&A + Guest Access + Attendance */}
-        <div className="col-span-1 flex flex-col gap-5">
-
-          {canManageGuests && <EventGuestAccessCard eventId={eventId} />}
-
+          {/* Q&A sits under Polls, in the main column: moderating questions is a
+              primary live task and needs the width, and it reads with the poll
+              controls rather than off in the side rail with Panelists/Guests. */}
           <QAPanel
             questions={questions}
             qaBadgeFlash={qaBadgeFlash}
@@ -315,6 +313,20 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
               )
             }
           />
+        </div>
+
+        {/* Right: Panelists + Guest Access + Attendance */}
+        <div className="col-span-1 flex flex-col gap-5">
+
+          {/* Webinars only, and first in the column on purpose: once the session
+              is live, "who can speak" is the question the host is actually
+              asked, and sending them back to Settings to answer it is no good
+              mid-AGM. Zoom cannot promote someone already in the room, so the
+              card's own note points the host at the Participants panel for
+              that — but adding the next speaker belongs here. */}
+          {zoomMeeting?.type === "WEBINAR" && <EventPanelistsCard eventId={eventId} />}
+
+          {canManageGuests && <EventGuestAccessCard eventId={eventId} />}
 
           {/* Physical check-in is not applicable to a virtual-only event. */}
           {!isVirtual && (

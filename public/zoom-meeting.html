@@ -172,6 +172,11 @@
                 meetingNumber: String(data.meetingNumber || ''),
                 passWord:      String(data.password      || ''),
                 userName:      String(data.userName      || 'Host'),
+                // Webinars REQUIRE userEmail, and to start one as host it must
+                // be the host account's own address — otherwise Zoom answers
+                // 3624 "Please use host/alternative email to start the webinar".
+                // Optional for meetings, so it is only sent when we have it.
+                ...(data.userEmail ? { userEmail: String(data.userEmail) } : {}),
                 ...(data.zak ? { zak: String(data.zak) } : {}),
                 success: function () {
                   joined = true;

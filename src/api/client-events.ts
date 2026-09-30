@@ -80,6 +80,14 @@ export interface ZoomMeetingDto {
   type?:           ZoomEntityType;
   /** The webinar id, or null on a meeting. Same value as `meetingId` for a webinar. */
   webinarId?:      number | null;
+  /**
+   * The pooled Zoom account this session belongs to.
+   *
+   * Required to START a webinar: Zoom matches the `userEmail` passed at join
+   * against the webinar's host and refuses with 3624 otherwise. A meeting does
+   * not need it. Absent until the backend returns it.
+   */
+  hostEmail?:      string | null;
   meetingId:       number;
   password:        string;
   joinUrl:         string;
@@ -1510,10 +1518,30 @@ export function useWebinarAvailability(
  * asking anyone to type an address.
  */
 export interface ZoomPanelist {
+  /**
+   * Attend's id, or Zoom's panelist id for a portal-added entry. Either works
+   * for DELETE — the backend resolves both — so callers must not assume a UUID.
+   */
   id:      string;
   email:   string;
   name:    string;
-  addedAt: string;
+  /** Null for a portal-added panelist: Attend has no record of when. */
+  addedAt: string | null;
+  /**
+   * Where this panelist came from. `ZOOM` means someone added them in the Zoom
+   * portal: Attend has no record, so they are NOT carried over when a webinar is
+   * replaced. Adding the same email here converts them to `ATTEND`.
+   */
+  source?: "ATTEND" | "ZOOM";
+  /**
+   * Whether Zoom's own panelist list currently has them.
+   *
+   * `false` is the one that bites: they are in Attend but not on Zoom, so they
+   * would join the webinar as a view-only attendee — the failure nobody notices
+   * until the chairman cannot speak. `null` means Zoom was unreachable and this
+   * is simply unknown.
+   */
+  onZoom?: boolean | null;
 }
 
 export function useZoomPanelists(eventId: string, options?: { enabled?: boolean }) {

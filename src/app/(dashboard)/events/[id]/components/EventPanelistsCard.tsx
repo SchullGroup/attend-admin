@@ -22,7 +22,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { Mic, Plus, Trash2, Search, UserPlus, Info } from "lucide-react";
+import { Mic, Plus, Trash2, Search, UserPlus, Info, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,7 +55,11 @@ export function EventPanelistsCard({
   eventId: string;
   readOnly?: boolean;
 }) {
-  const { data: panelists = [], isLoading } = useZoomPanelists(eventId);
+  // `error` matters as much as the data. Defaulting a failed query to [] made a
+  // broken endpoint render as "No panelists yet" — the same words as a webinar
+  // nobody has added anyone to, which is how you end up debugging the wrong
+  // thing on the morning of an AGM.
+  const { data: panelists = [], isLoading, error, refetch, isFetching } = useZoomPanelists(eventId);
   const addPanelist    = useAddZoomPanelist();
   const removePanelist = useRemoveZoomPanelist();
 
@@ -90,6 +94,12 @@ export function EventPanelistsCard({
 
   // Emails already on the list, so we never offer the same person twice. The
   // backend lowercases on store, so compare lowercased.
+  // Zoom being unreachable is one fact about the whole fetch, not a property of
+  // each person — repeating it on every row turns one piece of information into
+  // a wall of identical warnings.
+  const zoomUnreachable = panelists.length > 0 && panelists.every((p) => p.onZoom === null);
+  const driftCount = panelists.filter((p) => p.onZoom === false).length;
+
   const alreadyPanelist = useMemo(
     () => new Set(panelists.map((p) => p.email.toLowerCase())),
     [panelists],
@@ -143,13 +153,57 @@ export function EventPanelistsCard({
       </h2>
       <p className="text-xs text-[hsl(var(--muted-foreground))] mb-4">
         Panelists can speak, share video and answer Q&amp;A. Everyone else joins view-only.
-        They must sign in with the same email listed here.
+        They must sign in with the same email listed here. This includes anyone added directly in
+        the Zoom portal.
       </p>
 
       {isLoading ? (
         <Loader />
+      ) : error ? (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-900 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500 mt-px" />
+          <div className="flex flex-col items-start gap-1.5 min-w-0">
+            <span className="font-semibold">Could not load the panelist list.</span>
+            <span>
+              This is not the same as having no panelists — the list could not be read at all, so
+              anyone already added is invisible here. If it keeps failing, flag it to the backend
+              team with this event&apos;s id.
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs mt-0.5"
+              disabled={isFetching}
+              onClick={() => refetch()}
+            >
+              {isFetching ? "Retrying…" : "Try again"}
+            </Button>
+          </div>
+        </div>
       ) : (
         <>
+          {zoomUnreachable && (
+            <div className="mb-3 rounded-lg bg-[hsl(var(--muted)/0.6)] border border-[hsl(var(--border))] px-3 py-2 text-xs text-[hsl(var(--muted-foreground))] flex items-start gap-2">
+              <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
+              <span>
+                Zoom couldn&apos;t be reached, so this list is Attend&apos;s record only — it
+                hasn&apos;t been checked against Zoom&apos;s own panelist list. Reload to try again.
+              </span>
+            </div>
+          )}
+
+          {driftCount > 0 && (
+            <div className="mb-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900 flex items-start gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px text-amber-500" />
+              <span>
+                {driftCount === 1 ? "One panelist is" : `${driftCount} panelists are`} on this list
+                but not on Zoom&apos;s — {driftCount === 1 ? "they" : "they"} would join view-only.
+                Remove and add {driftCount === 1 ? "them" : "them"} again to push{" "}
+                {driftCount === 1 ? "them" : "them"} to Zoom.
+              </span>
+            </div>
+          )}
+
           {panelists.length === 0 ? (
             <p className="text-sm text-[hsl(var(--muted-foreground))] mb-4">
               No panelists yet. Only the host will be able to speak.
@@ -160,8 +214,29 @@ export function EventPanelistsCard({
                 <div key={p.id} className="flex items-center gap-3 px-4 py-2.5">
                   <UserAvatar initials={initialsOf(p.name, p.email)} size={28} />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate" title={p.name}>{p.name}</p>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate" title={p.name}>{p.name}</p>
+                      {p.source === "ZOOM" && (
+                        <span
+                          className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] shrink-0"
+                          title="Added directly in the Zoom portal. Attend has no record of them, so they are not carried over if this webinar is replaced — add the same email here to keep them."
+                        >
+                          In Zoom only
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-[hsl(var(--muted-foreground))] truncate" title={p.email}>{p.email}</p>
+
+                    {/* The quiet failure: on Attend's list but not on Zoom's, so
+                        they join view-only and nobody finds out until they try
+                        to speak. */}
+                    {p.onZoom === false && (
+                      <p className="text-xs text-amber-700 flex items-start gap-1 mt-0.5">
+                        <AlertTriangle className="h-3 w-3 shrink-0 mt-px text-amber-500" />
+                        Not on Zoom&apos;s panelist list — they would join view-only. Remove and add
+                        them again.
+                      </p>
+                    )}
                   </div>
                   {!readOnly && (
                     <button
