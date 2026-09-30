@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Vote, CheckCircle2, Users, BookOpen, Award, Download, Lock, Loader2 } from "lucide-react";
+import { Vote, CheckCircle2, Users, BookOpen, Award, Download, Lock, Loader2, FileSpreadsheet, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useExportResolutions } from "@/api/client-votes";
@@ -15,6 +15,7 @@ import {
   useStatutoryReturn,
   downloadCsvText,
   formatStatutoryReturnText,
+  formatStatutoryReturnCsv,
 } from "@/api/client-post-agm";
 import type { EventShim } from "./types";
 
@@ -66,6 +67,7 @@ export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
   const [exportingVotes,      setExportingVotes]      = useState(false);
   const [exportingAttendance, setExportingAttendance] = useState(false);
   const [exportingStatutory,  setExportingStatutory]  = useState(false);
+  const [exportingStatutoryCsv, setExportingStatutoryCsv] = useState(false);
 
   async function handleExportVoteAudit() {
     setExportingVotes(true);
@@ -118,6 +120,24 @@ export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
       }
     } finally {
       setExportingStatutory(false);
+    }
+  }
+
+  async function handleExportStatutoryReturnCsv() {
+    setExportingStatutoryCsv(true);
+    try {
+      const result = await fetchStatutoryReturn();
+      if (result.data) {
+        const csv  = formatStatutoryReturnCsv(result.data);
+        // BOM so Excel reads UTF-8 (organisation names with accents, ₦, etc.)
+        const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement("a");
+        a.href = url; a.download = `${event.title ?? eventId}-statutory-return.csv`; a.click();
+        URL.revokeObjectURL(url);
+      }
+    } finally {
+      setExportingStatutoryCsv(false);
     }
   }
 
@@ -239,13 +259,22 @@ export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
           </div>
           <div className="text-sm font-semibold text-[hsl(var(--foreground))] mb-1">Statutory Return</div>
           <div className="text-xs text-[hsl(var(--muted-foreground))] mb-4">Attendance, quorum, and per-resolution vote totals for SEC/CAC filing</div>
-          <button
-            disabled={exportingStatutory}
-            onClick={handleExportStatutoryReturn}
-            className="flex items-center gap-1.5 w-full justify-center px-3 py-2 rounded-lg text-sm font-medium border border-[hsl(var(--border))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-50"
-          >
-            <Download className="h-3.5 w-3.5" /> {exportingStatutory ? "Exporting…" : "Export Data"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={exportingStatutoryCsv}
+              onClick={handleExportStatutoryReturnCsv}
+              className="flex items-center gap-1.5 flex-1 justify-center px-3 py-2 rounded-lg text-sm font-medium border border-[hsl(var(--border))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-50"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" /> {exportingStatutoryCsv ? "Exporting…" : "CSV"}
+            </button>
+            <button
+              disabled={exportingStatutory}
+              onClick={handleExportStatutoryReturn}
+              className="flex items-center gap-1.5 flex-1 justify-center px-3 py-2 rounded-lg text-sm font-medium border border-[hsl(var(--border))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-50"
+            >
+              <FileText className="h-3.5 w-3.5" /> {exportingStatutory ? "Exporting…" : "Text"}
+            </button>
+          </div>
         </div>
       </div>
 

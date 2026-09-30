@@ -322,6 +322,67 @@ export function downloadCsvText(filename: string, csvText: string) {
 }
 
 /** Render the statutory return as a readable plain-text filing document (SEC/CAC style). */
+/**
+ * Statutory return as CSV, for the registrar who wants the filing figures in a
+ * spreadsheet rather than the human-readable .txt.
+ *
+ * A statutory return is nested — meeting metadata plus a per-resolution table —
+ * and CSV is flat, so this is laid out as Excel-friendly sections: a key/value
+ * metadata block, a blank line, then the resolutions table with a header row.
+ * The per-resolution vote and share totals are the part that goes into an
+ * SEC/CAC filing, so they are the table proper.
+ */
+export function formatStatutoryReturnCsv(r: StatutoryReturn): string {
+  // RFC-4180 quoting: wrap in quotes and double any embedded quote. A resolution
+  // title with a comma would otherwise split into extra columns.
+  const cell = (v: string | number | boolean | null | undefined) => {
+    const str = v == null ? "" : String(v);
+    return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  };
+  const row = (...cells: (string | number | boolean | null | undefined)[]) =>
+    cells.map(cell).join(",");
+
+  const lines: string[] = [
+    row("Statutory Return"),
+    row("Organisation", r.organisationName),
+    row("Meeting", r.eventName),
+    row("Date", r.eventDate),
+    row("Meeting Time", r.meetingTime ?? "Not recorded"),
+    row("Venue", r.eventVenue),
+    "",
+    row("Total Registered", r.totalRegistered),
+    row("Total Attended", r.totalAttended),
+    row("Total Shares Voted", r.totalVotesCastShares),
+    row("Shareholders in Register", r.totalShareholdersInRegister),
+    row("Shareholding Units in Register", r.totalShareholdingUnitsInRegister),
+    row("Present in Person", r.shareholdersPresentInPerson),
+    row("Present by Proxy", r.shareholdersPresentByProxy),
+    row("Shareholding of Present", r.totalShareholdingOfPresent),
+    row("Shareholders Present %", r.percentageOfShareholdersPresent.toFixed(1)),
+    "",
+    // Resolutions table.
+    row(
+      "Resolution No.", "Title", "Type", "Result",
+      "For (votes)", "Against (votes)", "Abstain (votes)",
+      "For (shares)", "Against (shares)", "Abstain (shares)",
+    ),
+  ];
+
+  for (const res of r.resolutions) {
+    lines.push(row(
+      res.order,
+      res.title,
+      res.specialResolution ? "Special" : "Ordinary",
+      res.passed ? "Passed" : "Not passed",
+      res.forVotes, res.againstVotes, res.abstainVotes,
+      res.forShares, res.againstShares, res.abstainShares,
+    ));
+  }
+
+  lines.push("", row("Generated", new Date().toLocaleString()));
+  return lines.join("\r\n");
+}
+
 export function formatStatutoryReturnText(r: StatutoryReturn): string {
   const pct = (n: number, total: number) => (total > 0 ? `${((n / total) * 100).toFixed(1)}%` : "0.0%");
   const lines: string[] = [
