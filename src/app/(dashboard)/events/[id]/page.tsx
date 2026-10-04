@@ -38,6 +38,7 @@ import { EventChallengeJudgesTab }       from "./components/EventChallengeJudges
 import { EventPressKitTab }              from "./components/EventPressKitTab";
 import { EventLaunchMediaTab }           from "./components/EventLaunchMediaTab";
 import type { LocalAgendaItem, EventShim } from "./components/types";
+import { CachedImage } from "@/components/custom/cached-image";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -330,7 +331,17 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                 </span>
               )}
             </div>
-            <h1 className="text-2xl font-bold text-[hsl(var(--foreground))] leading-tight">{event.title}</h1>
+            <div className="flex items-center gap-3">
+              {(apiEvent as any).branding?.logoUrl && (
+                <CachedImage
+                  src={(apiEvent as any).branding.logoUrl}
+                  alt=""
+                  className="h-9 w-9 rounded-lg object-contain border border-[hsl(var(--border))] bg-white shrink-0"
+                  fallback={<div className="h-9 w-9 rounded-lg shrink-0" style={{ backgroundColor: `${event.color}18` }} />}
+                />
+              )}
+              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))] leading-tight">{event.title}</h1>
+            </div>
             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{event.organiser}</p>
           </div>
           <div className="flex items-center gap-2">
