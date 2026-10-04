@@ -14,6 +14,7 @@ import {
   useRejectQuestion,
   useAnswerQuestion,
   liveKeys,
+  normalizeLiveResolution,
   type LiveQuestion,
   type LiveResolution,
 } from "@/api/client-live";
@@ -133,7 +134,10 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
       pollWsSeq.current += 1;
       setPollWsMessage({ seq: pollWsSeq.current, msg });
     } else if (msg.type === "RESOLUTION_TALLY_UPDATED") {
-      setResolutionTallies((prev) => ({ ...prev, [msg.payload.id]: msg.payload }));
+      // WS payload may use the same nested `tally` shape as the poll — flatten it
+      // so counts land on the flat fields the UI reads.
+      const incoming = normalizeLiveResolution(msg.payload);
+      setResolutionTallies((prev) => ({ ...prev, [incoming.id]: incoming }));
     }
   });
 
