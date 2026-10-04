@@ -260,7 +260,8 @@ export function Sidebar() {
   // shadow the current org's stakeholder logo. Track a load error so we fall back to
   // the initials avatar instead of a broken-image icon. Reset when the URL changes.
   const avatarUrl =
-    currentUser?.avatarUrl || currentUser?.logoUrl || stakeholder?.logoUrl || storedLogoUrl || null;
+    // Company/org logo only — the personal profile photo must not stand in for it.
+    stakeholder?.logoUrl || currentUser?.logoUrl || storedLogoUrl || null;
   const [avatarBroken, setAvatarBroken] = useState(false);
   useEffect(() => setAvatarBroken(false), [avatarUrl]);
 

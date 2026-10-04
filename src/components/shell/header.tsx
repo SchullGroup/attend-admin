@@ -177,7 +177,8 @@ export function Header() {
   }, []);
 
   const resolvedAvatar =
-    currentUser?.avatarUrl || (currentUser as any)?.logoUrl || stakeholder?.logoUrl || storedLogoUrl || null;
+    // Company/org logo only — the personal profile photo must not stand in for it.
+    stakeholder?.logoUrl || (currentUser as any)?.logoUrl || storedLogoUrl || null;
 
   // Reset the error flag when the URL changes, so a later good logo is not
   // suppressed by an earlier broken one.

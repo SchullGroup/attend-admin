@@ -25,10 +25,10 @@ export default function ProfilePage() {
       <div>
         <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">My Profile</h1>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-          Your photo, personal details and account security.
+          Your photo and personal details.
         </p>
       </div>
-      <ProfileSettingsView user={user} roleLabel={prettyRole(user?.role)} />
+      <ProfileSettingsView user={user} roleLabel={prettyRole(user?.role)} showAccountCards={false} />
     </div>
   );
 }

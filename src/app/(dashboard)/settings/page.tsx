@@ -106,7 +106,7 @@ function ProfileAvatarUploader({ user, stakeholderName }: { user: Record<string,
   );
 }
 
-export function ProfileSettingsView({ user, roleLabel }: { user: Record<string, any>; roleLabel: string }) {
+export function ProfileSettingsView({ user, roleLabel, showAccountCards = true }: { user: Record<string, any>; roleLabel: string; showAccountCards?: boolean }) {
   const { data: stakeholder } = useClientStakeholder();
   const storedLogoUrl = typeof window !== "undefined" ? (localStorage.getItem("userLogoUrl") ?? null) : null;
   const orgLogoUrl = user?.avatarUrl || user?.logoUrl || storedLogoUrl || stakeholder?.logoUrl || null;
@@ -151,11 +151,15 @@ export function ProfileSettingsView({ user, roleLabel }: { user: Record<string, 
         </div>
       </Card>
 
-      {/* Change password */}
-      <ChangePasswordCard />
+      {showAccountCards && (
+        <>
+          {/* Change password */}
+          <ChangePasswordCard />
 
-      {/* Notification sound */}
-      <NotificationSoundCard />
+          {/* Notification sound */}
+          <NotificationSoundCard />
+        </>
+      )}
     </>
   );
 }

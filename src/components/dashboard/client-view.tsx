@@ -13,6 +13,7 @@ import { useOrganisationProfile } from "@/api/client-organisation";
 import type { EventSummaryResponse } from "@/types/super-admin";
 import type { RegisterItem } from "@/types/super-admin";
 import { CachedImage } from "@/components/custom/cached-image";
+import { UserAvatar } from "@/components/custom/user-avatar";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -57,13 +58,20 @@ export function ClientView({
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
-            Welcome back, {displayName}.
-          </h1>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-            {dateStr} · {timeStr}
-          </p>
+        <div className="flex items-center gap-4">
+          <UserAvatar
+            src={(currentUser as any)?.avatarUrl}
+            initials={(currentUser as any)?.initials || displayName.split(" ").filter(Boolean).map((w: string) => w[0]).join("").slice(0, 2).toUpperCase() || "?"}
+            size={52}
+          />
+          <div>
+            <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
+              Welcome back, {displayName}.
+            </h1>
+            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+              {dateStr} · {timeStr}
+            </p>
+          </div>
         </div>
       </div>
 
