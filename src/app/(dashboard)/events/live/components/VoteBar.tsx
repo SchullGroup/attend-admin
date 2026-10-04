@@ -1,6 +1,10 @@
 export function VoteBar({
-  label, value, total, color,
-}: { label: string; value?: number | null; total?: number | null; color: string }) {
+  label, value, total, color, shares,
+}: {
+  label: string; value?: number | null; total?: number | null; color: string;
+  /** Share units cast for this option — shown when the resolution is share-weighted. */
+  shares?: number | null;
+}) {
   // A freshly-opened resolution can arrive before its tally fields are
   // populated, so value/total may be undefined at runtime even though the type
   // says number. Coalesce rather than call .toLocaleString() on undefined.
@@ -18,8 +22,13 @@ export function VoteBar({
       </div>
       <span className="text-sm font-semibold tabular-nums w-10 text-right">{pct}%</span>
       <span className="text-sm text-[hsl(var(--muted-foreground))] tabular-nums w-20 text-right">
-        {safeValue.toLocaleString()}
+        {safeValue.toLocaleString()} {safeValue === 1 ? "vote" : "votes"}
       </span>
+      {shares != null && (
+        <span className="text-sm text-[hsl(var(--foreground))] font-medium tabular-nums w-32 text-right">
+          {shares.toLocaleString()} {shares === 1 ? "share" : "shares"}
+        </span>
+      )}
     </div>
   );
 }

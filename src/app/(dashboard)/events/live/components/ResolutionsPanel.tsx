@@ -138,20 +138,30 @@ export function ResolutionsPanel({
                   plain-text line below. */}
               {!isCandidate && (isOpen || (isClosed && total > 0)) && (
                 <div className="flex flex-col gap-2 mt-3 bg-[hsl(var(--muted)/0.4)] rounded-xl p-3">
-                  <VoteBar label="For"     value={forCount}     total={total} color="#16a34a" />
-                  <VoteBar label="Against" value={againstCount} total={total} color="#dc2626" />
-                  <VoteBar label="Abstain" value={abstainCount} total={total} color="#9ca3af" />
-                  <div className="pt-1 mt-1 border-t border-[hsl(var(--border))] flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
-                    <span>Total votes: <span className="font-semibold text-[hsl(var(--foreground))]">{total.toLocaleString()}</span></span>
-                    {((res.forShares ?? 0) + (res.againstShares ?? 0) + (res.abstainShares ?? 0)) > 0 && (
-                      <span>
-                        Total shares:{" "}
-                        <span className="font-semibold text-[hsl(var(--foreground))]">
-                          {((res.forShares ?? 0) + (res.againstShares ?? 0) + (res.abstainShares ?? 0)).toLocaleString()}
-                        </span>
-                      </span>
-                    )}
-                  </div>
+                  {(() => {
+                    const fS = res.forShares ?? 0, aS = res.againstShares ?? 0, bS = res.abstainShares ?? 0;
+                    const tS = fS + aS + bS;
+                    const showShares = tS > 0 || !!(res as any).shareWeightedTalliesEnabled;
+                    return (
+                      <>
+                        <VoteBar label="For"     value={forCount}     total={total} color="#16a34a" shares={showShares ? fS : null} />
+                        <VoteBar label="Against" value={againstCount} total={total} color="#dc2626" shares={showShares ? aS : null} />
+                        <VoteBar label="Abstain" value={abstainCount} total={total} color="#9ca3af" shares={showShares ? bS : null} />
+                        <div className="pt-1 mt-1 border-t border-[hsl(var(--border))] flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-[hsl(var(--muted-foreground))]">
+                          <span>Total votes: <span className="font-semibold text-[hsl(var(--foreground))]">{total.toLocaleString()}</span></span>
+                          {showShares && (
+                            <span>
+                              Total shares:{" "}
+                              <span className="font-semibold text-[hsl(var(--foreground))]">{tS.toLocaleString()}</span>{" "}
+                              (For <span className="font-semibold text-green-700">{fS.toLocaleString()}</span>
+                              {" \u00b7 "}Against <span className="font-semibold text-red-600">{aS.toLocaleString()}</span>
+                              {" \u00b7 "}Abstain <span className="font-semibold text-[hsl(var(--foreground))]">{bS.toLocaleString()}</span>)
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -179,9 +189,17 @@ export function ResolutionsPanel({
                           )}
                         </div>
                         <div className="flex flex-col gap-2">
-                          <VoteBar label="For"     value={c.forCount}     total={cTotal} color="#16a34a" />
-                          <VoteBar label="Against" value={c.againstCount} total={cTotal} color="#dc2626" />
-                          <VoteBar label="Abstain" value={c.abstainCount} total={cTotal} color="#9ca3af" />
+                          {(() => {
+                            const cS = (c.forShares ?? 0) + (c.againstShares ?? 0) + (c.abstainShares ?? 0);
+                            const show = cS > 0 || !!(res as any).shareWeightedTalliesEnabled;
+                            return (
+                              <>
+                                <VoteBar label="For"     value={c.forCount}     total={cTotal} color="#16a34a" shares={show ? (c.forShares ?? 0) : null} />
+                                <VoteBar label="Against" value={c.againstCount} total={cTotal} color="#dc2626" shares={show ? (c.againstShares ?? 0) : null} />
+                                <VoteBar label="Abstain" value={c.abstainCount} total={cTotal} color="#9ca3af" shares={show ? (c.abstainShares ?? 0) : null} />
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
                     );

@@ -53,6 +53,9 @@ export interface LiveCandidate {
   forPct?:       number;
   againstPct?:   number;
   abstainPct?:   number;
+  forShares?:     number;
+  againstShares?: number;
+  abstainShares?: number;
 }
 
 export interface LiveResolution {
@@ -104,6 +107,9 @@ function normalizeLiveCandidate(c: any): LiveCandidate {
     forPct:       t.forPct     ?? c?.forPct,
     againstPct:   t.againstPct ?? c?.againstPct,
     abstainPct:   t.abstainPct ?? c?.abstainPct,
+    forShares:     num(t.forShares     ?? c?.forShares),
+    againstShares: num(t.againstShares ?? c?.againstShares),
+    abstainShares: num(t.abstainShares ?? c?.abstainShares),
   };
 }
 
