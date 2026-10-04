@@ -3,7 +3,7 @@ import type { LiveRoomDetail } from "@/api/client-live";
 import { formatElapsed } from "./helpers";
 import { toEventModule } from "@/lib/event-module";
 
-export function LiveHeaderCard({ room, color }: { room: LiveRoomDetail; color: string }) {
+export function LiveHeaderCard({ room, color, organiserName }: { room: LiveRoomDetail; color: string; organiserName?: string }) {
   const isVirtual = room.format?.toUpperCase() === "VIRTUAL";
   const isAGM = toEventModule(room.eventType) === "AGM";
 
@@ -47,7 +47,7 @@ export function LiveHeaderCard({ room, color }: { room: LiveRoomDetail; color: s
         <div>
           <div className="flex items-center gap-2 mb-2">
             <Building2 className="h-4 w-4 opacity-70" />
-            <span className="text-sm font-medium opacity-80">{room.organiserName}</span>
+            <span className="text-sm font-medium opacity-80">{organiserName ?? room.organiserName}</span>
             <span className="text-xs bg-white/20 rounded-full px-2 py-0.5 font-semibold uppercase tracking-wide">
               {room.eventType}
             </span>
