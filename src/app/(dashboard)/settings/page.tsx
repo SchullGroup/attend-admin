@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useGetMe } from "@/api/auth/hooks";
+import { useGetMe, useUploadMyAvatar, useRemoveMyAvatar } from "@/api/auth/hooks";
 import { useChangePassword } from "@/api/auth/auth";
 import { useClientStakeholder } from "@/api/client-organisation";
 import { ClientOrgSettings } from "@/components/dashboard/client-org-settings";
 import { Card } from "@/components/ui/card";
+import { CachedImage } from "@/components/custom/cached-image";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import {
 import {
   CheckCircle, XCircle, Settings, Shield, Link2,
   Loader2, RefreshCw, KeyRound, AlertCircle, Lock,
-  Eye, EyeOff, Volume2, VolumeX,
+  Eye, EyeOff, Volume2, VolumeX, Camera,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,6 +37,74 @@ function normaliseRole(raw: string | undefined | null): string {
 // owner), so editing org-wide branding/RC number/etc. doesn't belong to
 // them any more than it does to a Judge — this mirrors that pattern instead
 // of showing a broken/blank edit form.
+
+function ProfileAvatarUploader({ user, stakeholderName }: { user: Record<string, any>; stakeholderName?: string }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const upload  = useUploadMyAvatar();
+  const remove  = useRemoveMyAvatar();
+  const busy    = upload.isPending || remove.isPending;
+  const avatarUrl = user?.avatarUrl ?? null;
+  const initial = (user?.fullName ?? user?.name ?? "J").charAt(0).toUpperCase();
+  const ALLOWED = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+  const MAX = 5 * 1_048_576;
+
+  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!ALLOWED.includes(file.type)) { toast.error("Use a PNG, JPG, WebP or GIF image."); return; }
+    if (file.size > MAX) { toast.error("Image must be 5 MB or smaller."); return; }
+    upload.mutate(file, {
+      onSuccess: () => toast.success("Profile photo updated"),
+      onError:   () => toast.error("Couldn't upload the photo. Please try again."),
+    });
+  }
+  function onRemove() {
+    remove.mutate(undefined, {
+      onSuccess: () => toast.success("Profile photo removed"),
+      onError:   () => toast.error("Couldn't remove the photo."),
+    });
+  }
+
+  const fallback = (
+    <div className="h-14 w-14 rounded-full bg-[hsl(var(--primary)/0.12)] flex items-center justify-center shrink-0">
+      <span className="text-lg font-bold text-[hsl(var(--primary))]">{initial}</span>
+    </div>
+  );
+
+  return (
+    <div className="flex items-center gap-4 mb-6">
+      <div className="relative shrink-0">
+        {avatarUrl ? (
+          <CachedImage src={avatarUrl} alt="Profile photo" className="h-14 w-14 rounded-full object-cover ring-2 ring-[hsl(var(--border))]" fallback={fallback} />
+        ) : fallback}
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={busy}
+          title="Change photo"
+          aria-label="Change photo"
+          className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-[hsl(var(--primary))] text-white flex items-center justify-center ring-2 ring-[hsl(var(--card))] disabled:opacity-60"
+        >
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
+        </button>
+        <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={onPick} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-base font-semibold text-[hsl(var(--foreground))]">{user?.fullName ?? user?.name ?? "—"}</p>
+        <p className="text-sm text-[hsl(var(--muted-foreground))]">{user?.email ?? "—"}</p>
+        {stakeholderName && <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{stakeholderName}</p>}
+        <div className="flex items-center gap-3 mt-1.5">
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={busy} className="text-xs font-medium text-[hsl(var(--primary))] hover:underline disabled:opacity-60">Change photo</button>
+          {avatarUrl && (
+            <button type="button" onClick={onRemove} disabled={busy} className="text-xs font-medium text-red-600 hover:underline disabled:opacity-60">Remove</button>
+          )}
+        </div>
+        <p className="text-[11px] text-[hsl(var(--muted-foreground))] mt-1">PNG, JPG, WebP or GIF · up to 5 MB</p>
+      </div>
+    </div>
+  );
+}
 
 function ProfileSettingsView({ user, roleLabel }: { user: Record<string, any>; roleLabel: string }) {
   const { data: stakeholder } = useClientStakeholder();
@@ -63,31 +132,7 @@ function ProfileSettingsView({ user, roleLabel }: { user: Record<string, any>; r
           </span>
         </div>
 
-        <div className="flex items-center gap-4 mb-6">
-          {/* Avatar / org logo */}
-          {orgLogoUrl ? (
-            <img
-              src={orgLogoUrl}
-              alt="Organisation logo"
-              className="h-14 w-14 rounded-full object-cover shrink-0 ring-2 ring-[hsl(var(--border))]"
-            />
-          ) : (
-            <div className="h-14 w-14 rounded-full bg-[hsl(var(--primary)/0.12)] flex items-center justify-center shrink-0">
-              <span className="text-lg font-bold text-[hsl(var(--primary))]">
-                {(user?.fullName ?? user?.name ?? "J").charAt(0).toUpperCase()}
-              </span>
-            </div>
-          )}
-          <div>
-            <p className="text-base font-semibold text-[hsl(var(--foreground))]">
-              {user?.fullName ?? user?.name ?? "—"}
-            </p>
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">{user?.email ?? "—"}</p>
-            {stakeholder?.name && (
-              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{stakeholder.name}</p>
-            )}
-          </div>
-        </div>
+        <ProfileAvatarUploader user={user} stakeholderName={stakeholder?.name} />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {fields.map((f) => (
