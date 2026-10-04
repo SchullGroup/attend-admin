@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useGetMe, useUploadMyAvatar, useRemoveMyAvatar } from "@/api/auth/hooks";
+import { useGetMe, useUploadMyAvatar, useRemoveMyAvatar, useUpdateMe } from "@/api/auth/hooks";
+import { PhoneInput, phoneError, normalizePhone } from "@/components/ui/phone-input";
 import { useChangePassword } from "@/api/auth/auth";
 import { useClientStakeholder } from "@/api/client-organisation";
 import { ClientOrgSettings } from "@/components/dashboard/client-org-settings";
@@ -111,44 +112,151 @@ export function ProfileSettingsView({ user, roleLabel, showAccountCards = true }
   const storedLogoUrl = typeof window !== "undefined" ? (localStorage.getItem("userLogoUrl") ?? null) : null;
   const orgLogoUrl = user?.avatarUrl || user?.logoUrl || storedLogoUrl || stakeholder?.logoUrl || null;
 
-  const fields = [
-    { label: "Full Name",     value: user?.fullName ?? user?.name ?? "—" },
-    { label: "Email",         value: user?.email ?? "—" },
-    { label: "Role",          value: roleLabel },
-    { label: "Organisation",  value: user?.organisation ?? user?.organizationName ?? user?.companyName ?? stakeholder?.name ?? "—" },
-  ];
+  const organisationName =
+    user?.organisation ?? user?.organizationName ?? user?.companyName ?? stakeholder?.name ?? "—";
+
+  // Editable personal details — name and phone. Email, role and organisation stay
+  // read-only (identity / access are managed elsewhere).
+  const nameParts = String(user?.fullName ?? user?.name ?? "").trim().split(/\s+/);
+  const initialFirst = user?.firstName ?? nameParts[0] ?? "";
+  const initialLast  = user?.lastName  ?? nameParts.slice(1).join(" ") ?? "";
+  // Backend may store local format ("0805…"); normalise so the field shows
+  // "+234 | 805…" and an untouched number never counts as a change.
+  const initialPhone = normalizePhone(user?.phone ?? user?.phoneNumber ?? "");
+  const [firstName, setFirstName] = useState(initialFirst);
+  const [lastName,  setLastName]  = useState(initialLast);
+  const [phone,     setPhone]     = useState(initialPhone);
+  const updateMe = useUpdateMe();
+  // Inline errors appear after the first submit attempt, then update live.
+  const [triedSubmit, setTriedSubmit] = useState(false);
+  // Field errors returned by the API (e.g. phone already in use) — cleared on edit.
+  const [serverErrs, setServerErrs] = useState<{ firstName?: string; lastName?: string; phone?: string }>({});
+  const firstNameErr = (triedSubmit && !firstName.trim() ? "First name is required." : null) ?? serverErrs.firstName ?? null;
+  const phoneErr = (triedSubmit ? phoneError(phone) : null) ?? serverErrs.phone ?? null;
+
+  // Re-seed when the server copy changes (e.g. after save / refetch).
+  useEffect(() => {
+    setFirstName(initialFirst);
+    setLastName(initialLast);
+    setPhone(initialPhone);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.firstName, user?.lastName, user?.fullName, user?.phone, user?.phoneNumber]);
+
+  const dirty =
+    firstName.trim() !== String(initialFirst).trim() ||
+    lastName.trim()  !== String(initialLast).trim()  ||
+    phone            !== initialPhone;
+
+  function saveDetails(e: React.FormEvent) {
+    e.preventDefault();
+    setTriedSubmit(true);
+    if (!firstName.trim() || phoneError(phone)) return; // inline errors show under the fields
+    const body: { firstName?: string; lastName?: string; phone?: string } = {};
+    if (firstName.trim() !== String(initialFirst).trim()) body.firstName = firstName.trim();
+    if (lastName.trim()  !== String(initialLast).trim())  body.lastName  = lastName.trim();
+    if (phone !== initialPhone) body.phone = phone;
+    setServerErrs({});
+    updateMe.mutate(body, {
+      onSuccess: () => { setTriedSubmit(false); toast.success("Profile updated"); },
+      onError:   (err: any) => {
+        const data = err?.response?.data ?? {};
+        const status: number | undefined = err?.response?.status;
+        // Collect field-level errors in either { errors: { phone: "…" } } or
+        // { errors: [{ field: "phone", message: "…" }] } shape.
+        const fieldErrs: Record<string, string> = {};
+        const raw = data.errors ?? data.fieldErrors ?? data.details;
+        if (Array.isArray(raw)) {
+          raw.forEach((e: any) => { if (e?.field) fieldErrs[String(e.field)] = String(e.message ?? e.defaultMessage ?? "Invalid value"); });
+        } else if (raw && typeof raw === "object") {
+          Object.entries(raw).forEach(([k, v]) => { fieldErrs[k] = Array.isArray(v) ? String(v[0]) : String(v); });
+        }
+        const msg: string = data.message ?? data.error ?? err?.message ?? "";
+        const next: { firstName?: string; lastName?: string; phone?: string } = {
+          firstName: fieldErrs.firstName,
+          lastName:  fieldErrs.lastName,
+          phone:     fieldErrs.phone ?? fieldErrs.phoneNumber,
+        };
+        // A phone conflict / validation message without a field map → show it on the phone field.
+        if (!next.phone && body.phone !== undefined && (/phone/i.test(msg) || status === 409)) {
+          next.phone = status === 409 && !/phone/i.test(msg)
+            ? "This phone number is already linked to another account."
+            : msg;
+        }
+        setServerErrs(next);
+        if (!next.firstName && !next.lastName && !next.phone) {
+          toast.error(msg && status && status < 500 ? msg : "Couldn't save your details. Please try again.");
+        }
+      },
+    });
+  }
+  function resetDetails() {
+    setTriedSubmit(false);
+    setServerErrs({});
+    setFirstName(initialFirst);
+    setLastName(initialLast);
+    setPhone(initialPhone);
+  }
 
   return (
     <>
-      {/* Profile card — read-only */}
+      {/* Profile card — photo + editable personal details */}
       <Card className="attend-card p-6">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <Settings className="h-4 w-4 text-[hsl(var(--primary))]" />
             <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">My Profile</h2>
           </div>
-          <span className="flex items-center gap-1 text-xs text-[hsl(var(--muted-foreground))]">
-            <Lock className="h-3 w-3" /> Read-only
-          </span>
         </div>
 
         <ProfileAvatarUploader user={user} stakeholderName={stakeholder?.name} />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {fields.map((f) => (
-            <div key={f.label} className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
-                {f.label}
-              </Label>
-              <Input
-                value={f.value}
-                readOnly
-                disabled
-                className="bg-[hsl(var(--muted))] cursor-not-allowed text-[hsl(var(--muted-foreground))]"
-              />
+        <form onSubmit={saveDetails} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="pf-first" className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">First Name</Label>
+              <Input id="pf-first" value={firstName} onChange={(e) => { setFirstName(e.target.value); if (serverErrs.firstName) setServerErrs((x) => ({ ...x, firstName: undefined })); }} disabled={updateMe.isPending} autoComplete="given-name"
+                aria-invalid={!!firstNameErr || undefined} aria-describedby={firstNameErr ? "pf-first-err" : undefined}
+                className={firstNameErr ? "border-[hsl(var(--destructive))] focus-visible:ring-[hsl(var(--destructive))]" : undefined} />
+              {firstNameErr && <p id="pf-first-err" className="text-xs text-[hsl(var(--destructive))]">{firstNameErr}</p>}
             </div>
-          ))}
-        </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pf-last" className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Last Name</Label>
+              <Input id="pf-last" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={updateMe.isPending} autoComplete="family-name" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pf-phone" className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Phone Number</Label>
+              <PhoneInput id="pf-phone" value={phone} onChange={(v) => { setPhone(v); if (serverErrs.phone) setServerErrs((e) => ({ ...e, phone: undefined })); }} disabled={updateMe.isPending} invalid={!!phoneErr} />
+              {phoneErr && <p role="alert" className="text-xs text-[hsl(var(--destructive))]">{phoneErr}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                <span className="inline-flex items-center gap-1">Email <Lock className="h-3 w-3" /></span>
+              </Label>
+              <Input value={user?.email ?? "—"} readOnly disabled className="bg-[hsl(var(--muted))] cursor-not-allowed text-[hsl(var(--muted-foreground))]" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                <span className="inline-flex items-center gap-1">Role <Lock className="h-3 w-3" /></span>
+              </Label>
+              <Input value={roleLabel} readOnly disabled className="bg-[hsl(var(--muted))] cursor-not-allowed text-[hsl(var(--muted-foreground))]" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                <span className="inline-flex items-center gap-1">Organisation <Lock className="h-3 w-3" /></span>
+              </Label>
+              <Input value={organisationName} readOnly disabled className="bg-[hsl(var(--muted))] cursor-not-allowed text-[hsl(var(--muted-foreground))]" />
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            {dirty && (
+              <Button type="button" variant="ghost" size="sm" onClick={resetDetails} disabled={updateMe.isPending}>Cancel</Button>
+            )}
+            <Button type="submit" size="sm" disabled={!dirty || updateMe.isPending} className="gap-2">
+              {updateMe.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {updateMe.isPending ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        </form>
       </Card>
 
       {showAccountCards && (

@@ -92,3 +92,15 @@ export const useRemoveMyAvatar = () => {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: authKeys.me() }); },
   });
 };
+
+/** Update the signed-in user's own details. PATCH /api/v1/auth/me — send only changed fields. */
+export const useUpdateMe = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: { firstName?: string; lastName?: string; phone?: string }) => {
+      const res = await apiClient.patch("/api/v1/auth/me", body);
+      return res.data;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: authKeys.me() }); },
+  });
+};

@@ -23,6 +23,8 @@ export interface MeResponse {
   email: string;
   avatarUrl: string | null;
   logoUrl?: string | null;
+  /** Personal phone number (E.164), editable from My Profile. */
+  phone?: string | null;
 }
 
 export type AuthApiResponse = ApiResponse<AuthResponse>;
