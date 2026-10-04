@@ -35,6 +35,7 @@ import {
 import { Loader } from "@/components/ui/Loader";
 import { useGetMe } from "@/api/auth/hooks";
 import { resolveRole } from "@/lib/utils";
+import { CachedImage } from "@/components/custom/cached-image";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -247,19 +248,34 @@ export default function RegistersPage() {
                   <tr key={reg.id} className="attend-table-row">
 
                     {/* Name + industry */}
-                    <td className="px-5 py-3 max-w-[160px]">
-                      <p
-                        className="text-sm font-medium text-[hsl(var(--foreground))] truncate"
-                        title={reg.name || reg.companyName || "—"}
-                      >
-                        {reg.name || reg.companyName || "—"}
-                      </p>
-                      <p
-                        className="text-xs text-[hsl(var(--muted-foreground))] truncate"
-                        title={reg.industry != null && reg.industry !== "" ? reg.industry : "—"}
-                      >
-                        {reg.industry != null && reg.industry !== "" ? reg.industry : <i>—</i>}
-                      </p>
+                    <td className="px-5 py-3 max-w-[200px]">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {((reg as any).branding?.logoUrl ?? (reg as any).logoUrl) ? (
+                          <CachedImage
+                            src={(reg as any).branding?.logoUrl ?? (reg as any).logoUrl}
+                            alt=""
+                            className="h-8 w-8 rounded-lg object-contain border border-[hsl(var(--border))] bg-white shrink-0"
+                          />
+                        ) : (
+                          <div className="h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 bg-[hsl(var(--primary)/0.08)] text-[hsl(var(--primary))]">
+                            {(reg.name || reg.companyName || "—").slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p
+                            className="text-sm font-medium text-[hsl(var(--foreground))] truncate"
+                            title={reg.name || reg.companyName || "—"}
+                          >
+                            {reg.name || reg.companyName || "—"}
+                          </p>
+                          <p
+                            className="text-xs text-[hsl(var(--muted-foreground))] truncate"
+                            title={reg.industry != null && reg.industry !== "" ? reg.industry : "—"}
+                          >
+                            {reg.industry != null && reg.industry !== "" ? reg.industry : <i>—</i>}
+                          </p>
+                        </div>
+                      </div>
                     </td>
 
                     {/* RC Number */}
