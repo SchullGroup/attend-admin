@@ -371,7 +371,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* ── Tab panels ── */}
-      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} organiserLogoUrl={(apiEvent as any).branding?.logoUrl ?? undefined} organiserRegisterId={(apiEvent as any).registerId ?? undefined} attendeesCount={attendeesCount} isSuperAdmin={isSuperAdmin} />}
+      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} organiserLogoUrl={(apiEvent as any).branding?.logoUrl ?? undefined} organiserRegisterId={(apiEvent as any).registerId ?? undefined} registrarId={(apiEvent as any).registrarId ?? undefined} attendeesCount={attendeesCount} isSuperAdmin={isSuperAdmin} />}
       {tab === "Attendees"          && <EventAttendeesTab   participants={participants} suspendUser={suspendUser} eventId={id} />}
       {tab === "Applications" && isHACKATHON && isSuperAdmin && <EventChallengeApplicationsTab challengeId={id} />}
       {tab === "Judging"      && isHACKATHON && isSuperAdmin && <EventChallengeJudgesTab       challengeId={id} />}

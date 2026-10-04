@@ -12,6 +12,7 @@ import { QuickActions } from "@/components/dashboard/quick-actions";
 import { useOrganisationProfile } from "@/api/client-organisation";
 import type { EventSummaryResponse } from "@/types/super-admin";
 import type { RegisterItem } from "@/types/super-admin";
+import { CachedImage } from "@/components/custom/cached-image";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -173,9 +174,15 @@ export function ClientView({
               const dot       = statusKey === "ACTIVE" ? "#16a34a" : statusKey === "SUSPENDED" ? "#dc2626" : "#f59e0b";
               return (
                 <div key={reg.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.3)] transition-colors">
-                  <div className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(55,65,81,0.08)" }}>
-                    <Building2 className="h-3.5 w-3.5" style={{ color: "#374151" }} />
-                  </div>
+                  {((reg as any).branding?.logoUrl ?? (reg as any).logoUrl) ? (
+                    <CachedImage src={(reg as any).branding?.logoUrl ?? (reg as any).logoUrl} alt="" className="h-7 w-7 rounded-lg object-cover border border-[hsl(var(--border))] shrink-0" fallback={
+                      <div className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(55,65,81,0.08)" }}><Building2 className="h-3.5 w-3.5" style={{ color: "#374151" }} /></div>
+                    } />
+                  ) : (
+                    <div className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(55,65,81,0.08)" }}>
+                      <Building2 className="h-3.5 w-3.5" style={{ color: "#374151" }} />
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-[hsl(var(--foreground))] truncate">{name}</p>
                     <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{reg.industry ?? "—"}</p>

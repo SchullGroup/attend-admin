@@ -36,6 +36,8 @@ interface Props {
   organiserLogoUrl?:       string;
   /** Register id of the Organiser — makes the Organiser card link to its register page. */
   organiserRegisterId?:    string;
+  /** Registrar id — makes the Registrar card link to its registrar page (super admin only). */
+  registrarId?:            string;
   /** Total registered attendee records, not the AGM expected/import list. */
   attendeesCount?:         number;
   /** When true, all agenda write actions (add, edit, delete) are hidden */
@@ -44,7 +46,7 @@ interface Props {
 
 export function EventOverviewTab({
   event, fill, eventDocs, agendaItems, isAGM, onNavigate,
-  stakeholderName, organiserLogoUrl, organiserRegisterId, attendeesCount = 0,
+  stakeholderName, organiserLogoUrl, organiserRegisterId, registrarId, attendeesCount = 0,
   isSuperAdmin = false,
 }: Props) {
   const FormatIcon    = FORMAT_ICON[event.format] ?? Monitor;
@@ -558,12 +560,12 @@ export function EventOverviewTab({
                   }
                 </div>
                 <div>
-                  <p className={`text-sm font-semibold text-[hsl(var(--foreground))]${organiserRegisterId ? " group-hover:underline" : ""}`}>{event.organiser}</p>
+                  <p className={`text-sm font-semibold text-[hsl(var(--foreground))]${(!isSuperAdmin && organiserRegisterId) ? " group-hover:underline" : ""}`}>{event.organiser}</p>
                   <p className="text-xs text-[hsl(var(--muted-foreground))]">Event organiser</p>
                 </div>
               </>
             );
-            return organiserRegisterId ? (
+            return (!isSuperAdmin && organiserRegisterId) ? (
               <Link href={`/admin/registers/${organiserRegisterId}`} className="flex items-center gap-3 group">{inner}</Link>
             ) : (
               <div className="flex items-center gap-3">{inner}</div>
@@ -577,15 +579,24 @@ export function EventOverviewTab({
         {stakeholderName && (
           <Card className="attend-card p-5">
             <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3">Registrar</h2>
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-[hsl(var(--muted))] flex items-center justify-center font-bold text-sm shrink-0 text-[hsl(var(--muted-foreground))] overflow-hidden border border-[hsl(var(--border))]">
-                {stakeholderName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{stakeholderName}</p>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">Managing registrar</p>
-              </div>
-            </div>
+            {(() => {
+              const rInner = (
+                <>
+                  <div className="h-10 w-10 rounded-xl bg-[hsl(var(--muted))] flex items-center justify-center font-bold text-sm shrink-0 text-[hsl(var(--muted-foreground))] overflow-hidden border border-[hsl(var(--border))]">
+                    {stakeholderName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                  </div>
+                  <div>
+                    <p className={`text-sm font-semibold text-[hsl(var(--foreground))]${(isSuperAdmin && registrarId) ? " group-hover:underline" : ""}`}>{stakeholderName}</p>
+                    <p className="text-xs text-[hsl(var(--muted-foreground))]">Managing registrar</p>
+                  </div>
+                </>
+              );
+              return (isSuperAdmin && registrarId) ? (
+                <Link href={`/registrars/${registrarId}`} className="flex items-center gap-3 group">{rInner}</Link>
+              ) : (
+                <div className="flex items-center gap-3">{rInner}</div>
+              );
+            })()}
           </Card>
         )}
 
