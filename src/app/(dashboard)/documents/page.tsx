@@ -457,6 +457,7 @@ function DocumentsPageInner() {
               const typeKey    = ((doc.documentType ?? doc.type ?? "OTHER") as string).toUpperCase() as DocType;
               const typeConfig = DOC_TYPE_CONFIG[typeKey] ?? DOC_TYPE_CONFIG.OTHER;
               const TypeIcon   = typeConfig.icon;
+              const regInitials = (doc.registerName ?? "?").split(/\s+/).filter(Boolean).map((w: string) => w[0]).join("").slice(0, 2).toUpperCase() || "?";
               return (
                 <tr key={doc.id} className="attend-table-row">
                   <td className="px-5 py-3">
@@ -467,14 +468,14 @@ function DocumentsPageInner() {
                           alt=""
                           className="h-8 w-8 rounded-lg object-cover border border-[hsl(var(--border))] shrink-0"
                           fallback={
-                            <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: typeConfig.bg }}>
-                              <TypeIcon className="h-4 w-4" style={{ color: typeConfig.color }} />
+                            <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
+                              {regInitials}
                             </div>
                           }
                         />
                       ) : (
-                        <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: typeConfig.bg }}>
-                          <TypeIcon className="h-4 w-4" style={{ color: typeConfig.color }} />
+                        <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
+                          {regInitials}
                         </div>
                       )}
                       <span className="text-sm font-medium text-[hsl(var(--foreground))]">{doc.title}</span>

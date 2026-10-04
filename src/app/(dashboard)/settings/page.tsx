@@ -106,7 +106,7 @@ function ProfileAvatarUploader({ user, stakeholderName }: { user: Record<string,
   );
 }
 
-function ProfileSettingsView({ user, roleLabel }: { user: Record<string, any>; roleLabel: string }) {
+export function ProfileSettingsView({ user, roleLabel }: { user: Record<string, any>; roleLabel: string }) {
   const { data: stakeholder } = useClientStakeholder();
   const storedLogoUrl = typeof window !== "undefined" ? (localStorage.getItem("userLogoUrl") ?? null) : null;
   const orgLogoUrl = user?.avatarUrl || user?.logoUrl || storedLogoUrl || stakeholder?.logoUrl || null;

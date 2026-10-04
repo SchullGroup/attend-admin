@@ -75,6 +75,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/analytics": "Analytics",
   "/votes": "Vote Records",
   "/notifications": "Notifications",
+  "/profile": "My Profile",
   "/settings": "Platform Settings",
   "/settings/roles": "Roles & Access",
 };
