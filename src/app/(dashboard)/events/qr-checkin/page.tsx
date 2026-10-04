@@ -12,6 +12,7 @@ import {
 import { useClientScanQr, useClientEvents, useClientEventAttendees } from "@/api/client-events";
 import { useLiveAttendance } from "@/api/client-live";
 import { toEventModule, MODULE_COLORS } from "@/lib/event-module";
+import { CachedImage } from "@/components/custom/cached-image";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -228,9 +229,15 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
           <ChevronRight className="h-4 w-4 rotate-180" /> Back to Events
         </button>
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0" style={{ backgroundColor: color }}>
-            {initials(event.registerName ?? event.title)}
-          </div>
+          {(event as any).branding?.logoUrl ? (
+            <CachedImage src={(event as any).branding.logoUrl} alt="" className="h-10 w-10 rounded-xl object-cover border border-[hsl(var(--border))] shrink-0" fallback={
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0" style={{ backgroundColor: color }}>{initials(event.registerName ?? event.title)}</div>
+            } />
+          ) : (
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center text-white text-sm font-bold shrink-0" style={{ backgroundColor: color }}>
+              {initials(event.registerName ?? event.title)}
+            </div>
+          )}
           <div>
             <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{event.title}</h1>
             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
@@ -535,9 +542,15 @@ function QRCheckInPageInner() {
                   <tr key={evt.id} className="attend-table-row">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: modColor }}>
-                          {initials(evt.registerName ?? evt.title)}
-                        </div>
+                        {(evt as any).branding?.logoUrl ? (
+                          <CachedImage src={(evt as any).branding.logoUrl} alt="" className="h-9 w-9 rounded-xl object-cover border border-[hsl(var(--border))] shrink-0" fallback={
+                            <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: modColor }}>{initials(evt.registerName ?? evt.title)}</div>
+                          } />
+                        ) : (
+                          <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: modColor }}>
+                            {initials(evt.registerName ?? evt.title)}
+                          </div>
+                        )}
                         <div>
                           <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[220px]">{evt.title}</p>
                           {evt.registerName && <p className="text-xs text-[hsl(var(--muted-foreground))]">{evt.registerName}</p>}

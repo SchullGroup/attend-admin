@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader } from "@/components/ui/Loader";
 import { formatDate } from "@/lib/utils";
+import { CachedImage } from "@/components/custom/cached-image";
 
 /**
  * The tabs did not filter anything, because their values were never the words
@@ -178,12 +179,18 @@ function VotesPageInner() {
                     >
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <div
-                            className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
-                            style={{ backgroundColor: "#2563eb18" }}
-                          >
-                            <Vote className="h-4 w-4" style={{ color: "#2563eb" }} />
-                          </div>
+                          {(ev as any).branding?.logoUrl ? (
+                            <CachedImage src={(ev as any).branding.logoUrl} alt="" className="h-9 w-9 rounded-xl object-cover border border-[hsl(var(--border))] shrink-0" fallback={
+                              <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#2563eb18" }}><Vote className="h-4 w-4" style={{ color: "#2563eb" }} /></div>
+                            } />
+                          ) : (
+                            <div
+                              className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0"
+                              style={{ backgroundColor: "#2563eb18" }}
+                            >
+                              <Vote className="h-4 w-4" style={{ color: "#2563eb" }} />
+                            </div>
+                          )}
                           <div>
                             <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[240px]">
                               {ev.title}

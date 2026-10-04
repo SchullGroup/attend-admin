@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import {
   FileText, Calendar, Clock, MapPin, Users, Users2, Radio, Monitor,
   ExternalLink, Star, Mic2, Package, Zap, Trophy, ListChecks, CalendarRange,
@@ -33,6 +34,8 @@ interface Props {
   stakeholderName?:        string;
   /** Register branding logo — belongs to the Organiser (the register/company), not the Registrar firm. */
   organiserLogoUrl?:       string;
+  /** Register id of the Organiser — makes the Organiser card link to its register page. */
+  organiserRegisterId?:    string;
   /** Total registered attendee records, not the AGM expected/import list. */
   attendeesCount?:         number;
   /** When true, all agenda write actions (add, edit, delete) are hidden */
@@ -41,7 +44,7 @@ interface Props {
 
 export function EventOverviewTab({
   event, fill, eventDocs, agendaItems, isAGM, onNavigate,
-  stakeholderName, organiserLogoUrl, attendeesCount = 0,
+  stakeholderName, organiserLogoUrl, organiserRegisterId, attendeesCount = 0,
   isSuperAdmin = false,
 }: Props) {
   const FormatIcon    = FORMAT_ICON[event.format] ?? Monitor;
@@ -545,18 +548,27 @@ export function EventOverviewTab({
             the register's branding logo (F4); falls back to initials. */}
         <Card className="attend-card p-5">
           <h2 className="font-semibold text-[hsl(var(--foreground))] mb-3">Organiser</h2>
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-[hsl(var(--primary))] font-bold text-sm shrink-0 overflow-hidden border border-[hsl(var(--border))]">
-              {organiserLogoUrl
-                ? <img src={organiserLogoUrl} alt={event.organiser} className="h-full w-full object-cover" />
-                : event.organiser.split(" ").map((n: string) => n[0]).join("").slice(0, 2)
-              }
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{event.organiser}</p>
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">Event organiser</p>
-            </div>
-          </div>
+          {(() => {
+            const inner = (
+              <>
+                <div className="h-10 w-10 rounded-xl bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-[hsl(var(--primary))] font-bold text-sm shrink-0 overflow-hidden border border-[hsl(var(--border))]">
+                  {organiserLogoUrl
+                    ? <img src={organiserLogoUrl} alt={event.organiser} className="h-full w-full object-cover" />
+                    : event.organiser.split(" ").map((n: string) => n[0]).join("").slice(0, 2)
+                  }
+                </div>
+                <div>
+                  <p className={`text-sm font-semibold text-[hsl(var(--foreground))]${organiserRegisterId ? " group-hover:underline" : ""}`}>{event.organiser}</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Event organiser</p>
+                </div>
+              </>
+            );
+            return organiserRegisterId ? (
+              <Link href={`/admin/registers/${organiserRegisterId}`} className="flex items-center gap-3 group">{inner}</Link>
+            ) : (
+              <div className="flex items-center gap-3">{inner}</div>
+            );
+          })()}
         </Card>
 
         {/* Registrar card — the servicing registrar firm (a distinct entity
