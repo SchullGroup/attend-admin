@@ -1306,11 +1306,19 @@ const ordinal = (n: number) => {
 function WinnerMemberRow({ member }: { member: WinnerMember }) {
   return (
     <div className="flex items-center justify-between gap-3 py-1.5">
-      <div className="min-w-0">
-        <p className="text-sm text-[hsl(var(--foreground))] truncate">{member.name || "Unnamed member"}</p>
-        {member.email && (
-          <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{member.email}</p>
-        )}
+      <div className="flex items-center gap-2.5 min-w-0">
+        <UserAvatar
+          src={(member as any).avatarUrl}
+          initials={(member.name || "?").slice(0, 2).toUpperCase()}
+          color={(member as any).avatarColor}
+          size={28}
+        />
+        <div className="min-w-0">
+          <p className="text-sm text-[hsl(var(--foreground))] truncate">{member.name || "Unnamed member"}</p>
+          {member.email && (
+            <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{member.email}</p>
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         {member.email && (
