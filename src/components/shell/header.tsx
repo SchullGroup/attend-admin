@@ -384,7 +384,7 @@ export function Header() {
                 {resultClientAdmins.map((a) => (
                   <button
                     key={a.id}
-                    onClick={() => handleSearchNav(`/registers`)}
+                    onClick={() => handleSearchNav(`/admin/client-admins/${a.id}`)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.5)] transition-colors text-left"
                   >
                     <UserAvatar
