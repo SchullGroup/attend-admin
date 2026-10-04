@@ -256,13 +256,13 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
               fallback={<div className="h-9 w-9 rounded-lg shrink-0" style={{ backgroundColor: `${color}18` }} />}
             />
           )}
-          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{registerName}</h1>
+          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{room.title}</h1>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">
             <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
             LIVE
           </span>
         </div>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">{room.title}</p>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">{registerName}</p>
       </div>
 
       <LiveHeaderCard room={room} color={color} organiserName={registerName} />
