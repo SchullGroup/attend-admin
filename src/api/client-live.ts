@@ -39,6 +39,22 @@ export interface LiveTally {
   passed?:        boolean | null;
 }
 
+/** One nominee in a CANDIDATE resolution, with its own nested tally. */
+export interface LiveCandidate {
+  id:            string;
+  name:          string;
+  bio?:          string;
+  order?:        number;
+  tally?:        LiveTally;
+  forCount:      number;
+  againstCount:  number;
+  abstainCount:  number;
+  totalVotes:    number;
+  forPct?:       number;
+  againstPct?:   number;
+  abstainPct?:   number;
+}
+
 export interface LiveResolution {
   id:                string;
   order:             number;
@@ -53,6 +69,9 @@ export interface LiveResolution {
   openedAt?:         string;
   closedAt?:         string;
   passed?:           boolean | null;
+  resolutionType?:   "STANDARD" | "CANDIDATE";
+  /** Nominees for a CANDIDATE resolution; null/absent for STANDARD. */
+  candidates?:       LiveCandidate[] | null;
   /** Raw nested tally as sent by the backend — kept for reference; flat fields below are derived from it. */
   tally?:            LiveTally;
   // Flat fields the UI reads — populated by normalizeLiveResolution() from `tally`
@@ -74,6 +93,20 @@ const num = (v: unknown): number => (typeof v === "number" && !Number.isNaN(v) ?
  * returns well-defined numbers so downstream `.toLocaleString()` etc. never
  * sees `undefined`.
  */
+function normalizeLiveCandidate(c: any): LiveCandidate {
+  const t = c?.tally ?? {};
+  return {
+    ...c,
+    forCount:     num(t.forCount     ?? c?.forCount),
+    againstCount: num(t.againstCount ?? c?.againstCount),
+    abstainCount: num(t.abstainCount ?? c?.abstainCount),
+    totalVotes:   num(t.totalVotes   ?? c?.totalVotes),
+    forPct:       t.forPct     ?? c?.forPct,
+    againstPct:   t.againstPct ?? c?.againstPct,
+    abstainPct:   t.abstainPct ?? c?.abstainPct,
+  };
+}
+
 export function normalizeLiveResolution(r: any): LiveResolution {
   const t = r?.tally ?? {};
   return {
@@ -85,6 +118,7 @@ export function normalizeLiveResolution(r: any): LiveResolution {
     againstShares: num(t.againstShares ?? r?.againstShares),
     abstainShares: num(t.abstainShares ?? r?.abstainShares),
     passed:        t.passed ?? r?.passed ?? null,
+    candidates:    Array.isArray(r?.candidates) ? r.candidates.map(normalizeLiveCandidate) : (r?.candidates ?? null),
   };
 }
 
