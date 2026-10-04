@@ -245,7 +245,7 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
             <CachedImage
               src={room.branding.logoUrl}
               alt=""
-              className="h-9 w-9 rounded-lg object-contain border border-[hsl(var(--border))] bg-white shrink-0"
+              className="h-9 w-9 rounded-lg object-cover border border-[hsl(var(--border))] shrink-0"
               fallback={<div className="h-9 w-9 rounded-lg shrink-0" style={{ backgroundColor: `${color}18` }} />}
             />
           )}

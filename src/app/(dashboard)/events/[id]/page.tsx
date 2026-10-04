@@ -336,7 +336,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                 <CachedImage
                   src={(apiEvent as any).branding.logoUrl}
                   alt=""
-                  className="h-9 w-9 rounded-lg object-contain border border-[hsl(var(--border))] bg-white shrink-0"
+                  className="h-9 w-9 rounded-lg object-cover border border-[hsl(var(--border))] shrink-0"
                   fallback={<div className="h-9 w-9 rounded-lg shrink-0" style={{ backgroundColor: `${event.color}18` }} />}
                 />
               )}

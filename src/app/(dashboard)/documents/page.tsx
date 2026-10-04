@@ -481,7 +481,7 @@ function DocumentsPageInner() {
                         <CachedImage
                           src={(doc as any).registerLogoUrl ?? (doc as any).branding?.logoUrl}
                           alt=""
-                          className="h-5 w-5 rounded object-contain bg-white border border-[hsl(var(--border))] shrink-0"
+                          className="h-5 w-5 rounded object-cover border border-[hsl(var(--border))] shrink-0"
                         />
                       )}
                       <span className="truncate">{doc.registerName ?? "—"}</span>

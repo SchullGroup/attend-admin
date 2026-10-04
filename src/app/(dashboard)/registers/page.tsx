@@ -254,7 +254,7 @@ export default function RegistersPage() {
                           <CachedImage
                             src={(reg as any).branding?.logoUrl ?? (reg as any).logoUrl}
                             alt=""
-                            className="h-8 w-8 rounded-lg object-contain border border-[hsl(var(--border))] bg-white shrink-0"
+                            className="h-8 w-8 rounded-lg object-cover border border-[hsl(var(--border))] shrink-0"
                           />
                         ) : (
                           <div className="h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 bg-[hsl(var(--primary)/0.08)] text-[hsl(var(--primary))]">

@@ -131,7 +131,7 @@ export function RegisterBrandingSection({
             {savingLogo ? (
               <Loader2 className="h-6 w-6 animate-spin text-[hsl(var(--muted-foreground))]" />
             ) : logoUrl ? (
-              <img src={logoUrl} alt="Register logo" className="h-full w-full object-contain" />
+              <img src={logoUrl} alt="Register logo" className="h-full w-full object-cover" />
             ) : (
               <ImageOff className="h-6 w-6 text-[hsl(var(--muted-foreground))] opacity-40" />
             )}

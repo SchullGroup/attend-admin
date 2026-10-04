@@ -5,6 +5,7 @@ import { Loader } from "@/components/ui/Loader";
 import { Radio, Vote, Users, ChevronRight } from "lucide-react";
 import { useClientEvents } from "@/api/client-events";
 import { eventColor, initials } from "./helpers";
+import { CachedImage } from "@/components/custom/cached-image";
 
 export function SessionList({ onSelect }: { onSelect: (eventId: string) => void }) {
   const { data, isLoading } = useClientEvents("ALL", 0, 100);
@@ -84,12 +85,25 @@ export function SessionList({ onSelect }: { onSelect: (eventId: string) => void 
                   <tr key={sess.id} className="attend-table-row">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div
-                          className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
-                          style={{ backgroundColor: color }}
-                        >
-                          {initials(sess.registerName ?? sess.title)}
-                        </div>
+                        {sess.branding?.logoUrl ? (
+                          <CachedImage
+                            src={sess.branding.logoUrl}
+                            alt=""
+                            className="h-9 w-9 rounded-xl object-cover border border-[hsl(var(--border))] shrink-0"
+                            fallback={
+                              <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: color }}>
+                                {initials(sess.registerName ?? sess.title)}
+                              </div>
+                            }
+                          />
+                        ) : (
+                          <div
+                            className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
+                            style={{ backgroundColor: color }}
+                          >
+                            {initials(sess.registerName ?? sess.title)}
+                          </div>
+                        )}
                         <div>
                           <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[220px]">
                             {sess.title}
