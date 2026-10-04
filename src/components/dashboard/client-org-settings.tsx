@@ -18,6 +18,7 @@ import {
   type OrgInfoFields,
 } from "@/api/client-organisation";
 import { useSupportEmail, useUpdateSupportEmail } from "@/api/client-settings";
+import { CachedImage } from "@/components/custom/cached-image";
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
@@ -244,7 +245,7 @@ function BrandingCard() {
             ) : uploading ? (
               <Loader2 className="h-6 w-6 animate-spin text-[hsl(var(--muted-foreground))]" />
             ) : logoUrl ? (
-              <img src={logoUrl} alt="Organisation logo" className="h-full w-full object-contain" />
+              <CachedImage src={logoUrl} alt="Organisation logo" className="h-full w-full object-contain" />
             ) : (
               <span className="text-2xl font-bold" style={{ color: savedColor }}>{logoInitial}</span>
             )}

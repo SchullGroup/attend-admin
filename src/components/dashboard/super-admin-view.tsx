@@ -16,6 +16,7 @@ import type { EventSummaryResponse, UserSummaryResponse } from "@/types/super-ad
 import type { RegistrarsListResponse } from "@/api/registrars";
 import type { PagedResponse } from "@/types/super-admin";
 import { formatDate } from "@/lib/utils";
+import { CachedImage } from "@/components/custom/cached-image";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -245,7 +246,7 @@ export function SuperAdminView({
                       className="flex items-center gap-3 px-4 py-3 hover:bg-[hsl(var(--muted)/0.3)] transition-colors">
                       <div className="h-8 w-8 rounded-lg overflow-hidden bg-[hsl(var(--primary)/0.08)] flex items-center justify-center text-xs font-bold text-[hsl(var(--primary))] shrink-0">
                         {reg.logoUrl
-                          ? <img src={reg.logoUrl} alt={name} className="h-full w-full object-contain" />
+                          ? <CachedImage src={reg.logoUrl} alt={name} className="h-full w-full object-contain" fallback={<>{ini}</>} />
                           : ini
                         }
                       </div>

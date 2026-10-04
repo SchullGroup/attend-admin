@@ -11,9 +11,20 @@
  * re-permissioned, and a broken <img> renders as a torn-page icon that looks
  * far worse than initials ever did — so a load failure silently returns the
  * initials circle rather than leaving a hole in the table.
+ *
+ * Photos are routed through the stable-key image cache (see lib/image-cache) so
+ * they don't re-download every time a re-signed URL arrives or the row
+ * remounts: the pinned URL is reused, the image is decoded off-DOM before it
+ * swaps in, and a revisit paints instantly with no flash.
  */
 
 import { useEffect, useState } from "react";
+import {
+  resolveImageUrl,
+  isImageLoaded,
+  preloadImage,
+  invalidateImage,
+} from "@/lib/image-cache";
 
 /**
  * Darken a hex colour toward black.
@@ -72,21 +83,38 @@ export function UserAvatar({
   size = 36,
   className = "",
 }: UserAvatarProps) {
+  // Reuse the pinned URL for this logical image so re-signed URLs / remounts hit
+  // the browser cache instead of re-downloading.
+  const resolved = resolveImageUrl(src);
   const [broken, setBroken] = useState(false);
+  // Start "ready" if this image already decoded this session — a revisit then
+  // paints the photo immediately, never the initials-then-photo flash.
+  const [ready, setReady] = useState<boolean>(() => isImageLoaded(src));
 
-  // A new src deserves a fresh attempt — without this, one failure would
-  // poison the slot for every user that later scrolls into the same row.
-  useEffect(() => setBroken(false), [src]);
+  useEffect(() => {
+    let alive = true;
+    setBroken(false);
+    if (!resolved) { setReady(false); return; }
+    if (isImageLoaded(src)) { setReady(true); return; }
+    setReady(false);
+    preloadImage(src).then((ok) => {
+      if (!alive) return;
+      setReady(ok);
+      if (!ok) setBroken(true);
+    });
+    return () => { alive = false; };
+  // `resolved` is stable per logical image, so this only re-runs on a real change
+  }, [resolved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dimensions = { width: size, height: size };
 
-  if (src && !broken) {
+  if (resolved && !broken && ready) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={src}
+        src={resolved}
         alt={initials}
-        onError={() => setBroken(true)}
+        onError={() => { invalidateImage(src); setBroken(true); }}
         style={dimensions}
         className={`rounded-full object-cover shrink-0 bg-[hsl(var(--muted))] ${className}`}
       />

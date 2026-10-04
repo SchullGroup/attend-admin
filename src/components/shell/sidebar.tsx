@@ -31,6 +31,7 @@ import { useGetMe, useLogout } from "@/api/auth/hooks";
 import { useClientStakeholder } from "@/api/client-organisation";
 import { usePendingEnrollments } from "@/api/super-admin";
 import Cookies from "js-cookie";
+import { resolveImageUrl } from "@/lib/image-cache";
 
 const JUDGE_ROLES  = new Set(["judge"]);
 
@@ -388,7 +389,7 @@ export function Sidebar() {
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
             {avatarUrl && !avatarBroken ? (
               <img
-                src={avatarUrl}
+                src={resolveImageUrl(avatarUrl) ?? avatarUrl}
                 alt={displayName}
                 onError={() => setAvatarBroken(true)}
                 className="h-8 w-8 rounded-full object-cover shrink-0 ring-2 ring-[hsl(var(--border))]"

@@ -1033,9 +1033,12 @@ function ApplicationDetailPanel({
               <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
                 {app.members.map((m) => (
                   <div key={m.id} className="py-2.5 flex items-center gap-3">
-                    <div className="h-7 w-7 rounded-full bg-[hsl(var(--muted))] flex items-center justify-center text-xs font-bold shrink-0">
-                      {(m.name || m.fullName)?.slice(0, 2).toUpperCase() || "??"}
-                    </div>
+                    <UserAvatar
+                      src={(m as any).avatarUrl}
+                      initials={(m.name || m.fullName)?.slice(0, 2).toUpperCase() || "??"}
+                      color={(m as any).avatarColor}
+                      size={28}
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[hsl(var(--foreground))]">{m.name || m.fullName}</p>
                       {m.email && <p className="text-xs text-[hsl(var(--muted-foreground))]">{m.email}</p>}
@@ -1907,15 +1910,13 @@ function JudgesTab({ challengeId, readOnly = false }: { challengeId: string; rea
                         selectedId === m.id ? "bg-[#7c22c9] text-white" : "hover:bg-[hsl(var(--accent))]"
                       }`}
                     >
-                      <div
-                        className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                        style={{
-                          backgroundColor: selectedId === m.id ? "rgba(255,255,255,0.25)" : "#7c22c918",
-                          color:           selectedId === m.id ? "#fff" : "#7c22c9",
-                        }}
-                      >
-                        {m.fullName?.slice(0, 2).toUpperCase() || "??"}
-                      </div>
+                      <UserAvatar
+                        src={(m as any).avatarUrl}
+                        initials={m.fullName?.slice(0, 2).toUpperCase() || "??"}
+                        bg={selectedId === m.id ? "rgba(255,255,255,0.25)" : "#7c22c918"}
+                        fg={selectedId === m.id ? "#fff" : "#7c22c9"}
+                        size={28}
+                      />
                       <div className="min-w-0">
                         <p className="text-sm font-semibold truncate">{m.fullName}</p>
                         <p className={`text-xs truncate ${selectedId === m.id ? "text-purple-200" : "text-[hsl(var(--muted-foreground))]"}`}>
