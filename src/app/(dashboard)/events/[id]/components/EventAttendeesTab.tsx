@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DateCell } from "@/components/ui/date-cell";
 import { useExportAttendees } from "@/api/client-events";
+import { useGetMe } from "@/api/auth/hooks";
+import { resolveRole, isSuperAdminRole } from "@/lib/utils";
 
 // ─── KYC Status badge ─────────────────────────────────────────────────────────
 
@@ -94,6 +96,11 @@ interface Props {
 
 export function EventAttendeesTab({ participants, eventId }: Props) {
   const exportMutation = useExportAttendees();
+  // The participant profile page (/participants/{id}) is a super-admin surface.
+  // Client admins / event managers / viewers see the attendee as plain text —
+  // no link into platform-wide user records.
+  const { data: meData } = useGetMe();
+  const isSuperAdmin = isSuperAdminRole(resolveRole(meData?.data));
 
   return (
     <Card className="attend-card overflow-hidden">
@@ -149,17 +156,29 @@ export function EventAttendeesTab({ participants, eventId }: Props) {
               return (
                 <tr key={pid} className="attend-table-row">
 
-                  {/* Participant — avatar + name + email with overflow protection */}
+                  {/* Participant — avatar + name + email with overflow protection.
+                      Linked to the profile for super admin only; plain text otherwise. */}
                   <td className="px-5 py-3 max-w-[220px]">
-                    <Link href={`/participants/${pid}`} className="flex items-center gap-2.5 group">
-                      <UserAvatar src={p.avatarUrl} initials={initials} color={p.avatarColor} size={28} />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate group-hover:underline">
-                          {fullName}
-                        </p>
-                        <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{p.email ?? "—"}</p>
-                      </div>
-                    </Link>
+                    {(() => {
+                      const inner = (
+                        <>
+                          <UserAvatar src={p.avatarUrl} initials={initials} color={p.avatarColor} size={28} />
+                          <div className="min-w-0">
+                            <p className={`text-sm font-medium text-[hsl(var(--foreground))] truncate${isSuperAdmin ? " group-hover:underline" : ""}`}>
+                              {fullName}
+                            </p>
+                            <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{p.email ?? "—"}</p>
+                          </div>
+                        </>
+                      );
+                      return isSuperAdmin ? (
+                        <Link href={`/participants/${pid}`} className="flex items-center gap-2.5 group">
+                          {inner}
+                        </Link>
+                      ) : (
+                        <div className="flex items-center gap-2.5">{inner}</div>
+                      );
+                    })()}
                   </td>
 
                   {/* Phone */}
