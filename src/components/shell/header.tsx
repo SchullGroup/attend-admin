@@ -75,6 +75,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "/analytics": "Analytics",
   "/votes": "Vote Records",
   "/notifications": "Notifications",
+  "/profile": "My Profile",
   "/settings": "Platform Settings",
   "/settings/roles": "Roles & Access",
 };
@@ -176,7 +177,8 @@ export function Header() {
   }, []);
 
   const resolvedAvatar =
-    currentUser?.avatarUrl || (currentUser as any)?.logoUrl || stakeholder?.logoUrl || storedLogoUrl || null;
+    // Company/org logo only — the personal profile photo must not stand in for it.
+    stakeholder?.logoUrl || (currentUser as any)?.logoUrl || storedLogoUrl || null;
 
   // Reset the error flag when the URL changes, so a later good logo is not
   // suppressed by an earlier broken one.
@@ -382,7 +384,7 @@ export function Header() {
                 {resultClientAdmins.map((a) => (
                   <button
                     key={a.id}
-                    onClick={() => handleSearchNav(`/registers`)}
+                    onClick={() => handleSearchNav(`/admin/client-admins/${a.id}`)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.5)] transition-colors text-left"
                   >
                     <UserAvatar

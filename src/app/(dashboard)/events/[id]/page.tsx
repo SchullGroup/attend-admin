@@ -331,17 +331,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              {(apiEvent as any).branding?.logoUrl && (
-                <CachedImage
-                  src={(apiEvent as any).branding.logoUrl}
-                  alt=""
-                  className="h-9 w-9 rounded-lg object-cover border border-[hsl(var(--border))] shrink-0"
-                  fallback={<div className="h-9 w-9 rounded-lg shrink-0" style={{ backgroundColor: `${event.color}18` }} />}
-                />
-              )}
-              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))] leading-tight">{event.title}</h1>
-            </div>
+            <h1 className="text-2xl font-bold text-[hsl(var(--foreground))] leading-tight">{event.title}</h1>
             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">{event.organiser}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -381,7 +371,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
       </div>
 
       {/* ── Tab panels ── */}
-      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} organiserLogoUrl={(apiEvent as any).branding?.logoUrl ?? undefined} attendeesCount={attendeesCount} isSuperAdmin={isSuperAdmin} />}
+      {tab === "Overview"           && <EventOverviewTab    event={event} fill={fill} eventDocs={eventDocs} agendaItems={agendaItems} isAGM={isAGM} onNavigate={setTab} stakeholderName={apiEvent.stakeholderName || undefined} organiserLogoUrl={(apiEvent as any).branding?.logoUrl ?? undefined} organiserRegisterId={(apiEvent as any).registerId ?? undefined} registrarId={(apiEvent as any).registrarId ?? undefined} attendeesCount={attendeesCount} isSuperAdmin={isSuperAdmin} />}
       {tab === "Attendees"          && <EventAttendeesTab   participants={participants} suspendUser={suspendUser} eventId={id} />}
       {tab === "Applications" && isHACKATHON && isSuperAdmin && <EventChallengeApplicationsTab challengeId={id} />}
       {tab === "Judging"      && isHACKATHON && isSuperAdmin && <EventChallengeJudgesTab       challengeId={id} />}

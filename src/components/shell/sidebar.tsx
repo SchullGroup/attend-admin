@@ -14,6 +14,7 @@ import {
   FolderOpen,
   BarChart3,
   Settings,
+  UserCircle,
   UserCog,
   LogOut,
   Building2,
@@ -170,6 +171,7 @@ const SECTIONS: NavSection[] = [
       { title: "Analytics",      icon: BarChart3,  href: "/analytics",     judgeHidden: true },
       { title: "Notifications",  icon: Bell,       href: "/notifications",  hiddenForRoles: ["viewer"] },
       { title: "Audit Log",      icon: ScrollText, href: "/audit",          judgeHidden: true, hiddenForRoles: ["event_manager", "viewer"] },
+      { title: "Profile",        icon: UserCircle, href: "/profile" },
       { title: "Settings",       icon: Settings,   href: "/settings" },
       { title: "Team Members",   icon: Users2,     href: "/settings/team",  clientOnly: true, judgeHidden: true },
     ],
@@ -258,7 +260,8 @@ export function Sidebar() {
   // shadow the current org's stakeholder logo. Track a load error so we fall back to
   // the initials avatar instead of a broken-image icon. Reset when the URL changes.
   const avatarUrl =
-    currentUser?.avatarUrl || currentUser?.logoUrl || stakeholder?.logoUrl || storedLogoUrl || null;
+    // Company/org logo only — the personal profile photo must not stand in for it.
+    stakeholder?.logoUrl || currentUser?.logoUrl || storedLogoUrl || null;
   const [avatarBroken, setAvatarBroken] = useState(false);
   useEffect(() => setAvatarBroken(false), [avatarUrl]);
 

@@ -21,10 +21,51 @@ const DIAL_CODES = [
  */
 function splitPhone(value: string): { dialCode: string; local: string } {
   if (!value) return { dialCode: "+234", local: "" };
-  const match = DIAL_CODES.find((d) => value.startsWith(d.code));
-  if (match) return { dialCode: match.code, local: value.slice(match.code.length) };
-  // No "+" / unrecognized prefix — treat the whole thing as a local number
-  return { dialCode: "+234", local: digitsOnly(value) };
+  const trimmed = value.trim();
+  const match = DIAL_CODES.find((d) => trimmed.startsWith(d.code));
+  if (match) return { dialCode: match.code, local: digitsOnly(trimmed.slice(match.code.length)).replace(/^0+/, "") };
+  const digits = digitsOnly(trimmed);
+  // Country code without the "+" (e.g. "2348012345678")
+  const bare = DIAL_CODES.find((d) => d.code !== "+1" && digits.startsWith(d.code.slice(1)) && digits.length > 10);
+  if (bare) return { dialCode: bare.code, local: digits.slice(bare.code.length - 1).replace(/^0+/, "") };
+  // Local format (e.g. "08012345678") — Nigeria by default, trunk 0 dropped
+  return { dialCode: "+234", local: digits.replace(/^0+/, "") };
+}
+
+/**
+ * Normalise any stored phone ("08012345678", "2348012345678", "+234 801…")
+ * to E.164 ("+2348012345678"). Returns "" for empty input.
+ */
+export function normalizePhone(value: string | null | undefined): string {
+  if (!value) return "";
+  const { dialCode, local } = splitPhone(value);
+  return toE164(dialCode, local);
+}
+
+// Expected national-number length (digits after the country code, no trunk 0).
+const PHONE_RULES: Record<string, { len: number[]; start?: RegExp; startMsg?: string; example: string }> = {
+  "+234": { len: [10], start: /^[789]/, startMsg: "Nigerian mobile numbers start with 07, 08 or 09.", example: "0801 234 5678" },
+  "+1":   { len: [10], start: /^[2-9]/, example: "202 555 0123" },
+  "+44":  { len: [10],                  example: "07400 123456" },
+  "+233": { len: [9],                   example: "024 123 4567" },
+  "+27":  { len: [9],                   example: "082 123 4567" },
+  "+254": { len: [9],                   example: "0712 345678" },
+};
+
+/**
+ * Validate an E.164 phone from <PhoneInput>. Returns an error message for an
+ * incomplete / invalid number, or null when it's fine (or empty and optional).
+ */
+export function phoneError(value: string, opts: { required?: boolean } = {}): string | null {
+  if (!value) return opts.required ? "Phone number is required." : null;
+  const { dialCode, local } = splitPhone(value);
+  const rule = PHONE_RULES[dialCode];
+  if (!rule) return local.length < 7 ? "Phone number is incomplete." : null;
+  const min = Math.min(...rule.len), max = Math.max(...rule.len);
+  if (local.length < min) return `Phone number is incomplete — e.g. ${rule.example}.`;
+  if (local.length > max) return `Too many digits — e.g. ${rule.example}.`;
+  if (rule.start && !rule.start.test(local)) return rule.startMsg ?? `Enter a valid number — e.g. ${rule.example}.`;
+  return null;
 }
 
 /**
@@ -43,12 +84,17 @@ export function PhoneInput({
   placeholder = "801 234 5678",
   className,
   disabled,
+  invalid,
+  id,
 }: {
   value:        string;
   onChange:     (e164: string) => void;
   placeholder?: string;
   className?:   string;
   disabled?:    boolean;
+  /** Red border + aria-invalid (pair with an inline error message). */
+  invalid?:     boolean;
+  id?:          string;
 }) {
   const { dialCode, local } = splitPhone(value);
 
@@ -65,21 +111,28 @@ export function PhoneInput({
       <select
         value={dialCode}
         disabled={disabled}
+        aria-label="Country code"
+        aria-invalid={invalid || undefined}
         onChange={(e) => updateDialCode(e.target.value)}
-        className="h-9 shrink-0 rounded-l-lg rounded-r-none border border-r-0 border-[hsl(var(--input))] bg-[hsl(var(--muted)/0.4)] px-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] disabled:cursor-not-allowed disabled:opacity-50"
+        className={cn("h-9 shrink-0 rounded-l-lg rounded-r-none border border-r-0 bg-[hsl(var(--muted)/0.4)] px-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] disabled:cursor-not-allowed disabled:opacity-50",
+          invalid ? "border-[hsl(var(--destructive))]" : "border-[hsl(var(--input))]")}
       >
         {DIAL_CODES.map((d) => (
           <option key={d.code} value={d.code}>{d.label}</option>
         ))}
       </select>
       <input
+        id={id}
         type="tel"
+        autoComplete="tel-national"
+        aria-invalid={invalid || undefined}
         inputMode="numeric"
         value={local}
         disabled={disabled}
         onChange={(e) => updateLocal(digitsOnly(e.target.value))}
         placeholder={placeholder}
-        className="flex h-9 w-full rounded-r-lg rounded-l-none border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50"
+        className={cn("flex h-9 w-full rounded-r-lg rounded-l-none border bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))] focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50",
+          invalid ? "border-[hsl(var(--destructive))] focus:ring-[hsl(var(--destructive))]" : "border-[hsl(var(--input))]")}
       />
     </div>
   );

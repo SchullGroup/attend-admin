@@ -39,6 +39,8 @@ export interface ChallengeListItem {
   id:                 string;
   title:              string;
   organiserName:      string;
+  /** The register (company) that owns this challenge — matches `branding`. Prefer this over organiserName for display. */
+  registerName?:      string;
   date:               string;
   format:             string;
   applicationCount?:  number;   // total submissions

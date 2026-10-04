@@ -247,7 +247,7 @@ export default function RegisterDetailPage() {
           This register may have been removed or you may not have access.
         </p>
         <Button variant="outline" className="mt-4 gap-2" onClick={() => handleBack(router)}>
-          <ArrowLeft className="h-4 w-4" /> Back to Registers
+          <ArrowLeft className="h-4 w-4" /> Back
         </Button>
       </div>
     );
@@ -283,7 +283,7 @@ export default function RegisterDetailPage() {
         className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors w-fit"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        All Registers
+        Back
       </button>
 
       {/* ── Register profile card ── */}

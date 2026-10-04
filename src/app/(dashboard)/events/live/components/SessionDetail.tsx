@@ -58,7 +58,7 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
   // Fall back to the full event detail only when the live snapshot doesn't include it.
   const roomHasZoom = !!room?.zoomMeeting?.meetingId;
   const { data: eventDetail } = useClientEventDetail(eventId ?? "", {
-    enabled: !!eventId && !roomHasZoom,
+    enabled: !!eventId,
   });
   const zoomMeeting: ZoomMeetingDto | null =
     (room?.zoomMeeting ?? (eventDetail as any)?.zoomMeeting) ?? null;
@@ -194,6 +194,13 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
   // wins while it's live, and the poll takes back over if the socket goes stale.
   const voteTotal = (r: { forCount?: number; againstCount?: number; abstainCount?: number }) =>
     (r.forCount ?? 0) + (r.againstCount ?? 0) + (r.abstainCount ?? 0);
+  // The live snapshot's organiserName is the *registrar* firm (e.g. Meristem);
+  // the register/company that owns the event (e.g. Zenith Bank) comes from the
+  // event detail. Prefer the register name in the control room.
+  const registerName =
+    (eventDetail as any)?.registerName ??
+    (eventDetail as any)?.organizerName ??
+    room.organiserName;
   const liveResolutions = room.resolutions.map((resolution) => {
     const tally = resolutionTallies[resolution.id];
     if (tally && voteTotal(tally) >= voteTotal(resolution)) {
@@ -249,16 +256,16 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
               fallback={<div className="h-9 w-9 rounded-lg shrink-0" style={{ backgroundColor: `${color}18` }} />}
             />
           )}
-          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{room.organiserName}</h1>
+          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{room.title}</h1>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">
             <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
             LIVE
           </span>
         </div>
-        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">{room.title}</p>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">{registerName}</p>
       </div>
 
-      <LiveHeaderCard room={room} color={color} />
+      <LiveHeaderCard room={room} color={color} organiserName={registerName} />
 
       {/* Zoom Meeting — full width */}
       {hasZoomMeeting && zoomMeeting && (

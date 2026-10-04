@@ -78,7 +78,7 @@ function JudgeChallengesView() {
                 <>
                   <h2 className="text-2xl font-bold mb-1 truncate">{featured.title}</h2>
                   <p className="text-purple-200 text-sm mb-4">
-                    {featured.organiserName} · {formatDate(featured.date ?? "")}
+                    {(featured as any).registerName ?? featured.organiserName} · {formatDate(featured.date ?? "")}
                   </p>
                   <Button
                     className="h-9 text-sm bg-white text-purple-700 hover:bg-white/90 gap-2"
@@ -151,7 +151,7 @@ function JudgeChallengesView() {
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[220px]">{c.title}</p>
-                        <p className="text-xs text-[hsl(var(--muted-foreground))]">{c.organiserName}</p>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">{(c as any).registerName ?? c.organiserName}</p>
                       </div>
                     </div>
                   </td>
@@ -309,7 +309,7 @@ function HackathonsPageInner() {
                 <>
                   <h2 className="text-2xl font-bold mb-1 truncate">{featured.title}</h2>
                   <p className="text-purple-200 text-sm mb-4">
-                    {featured.organiserName} · {formatDate(featured.date ?? "")}
+                    {(featured as any).registerName ?? featured.organiserName} · {formatDate(featured.date ?? "")}
                   </p>
                 </>
               ) : (
@@ -418,7 +418,7 @@ function HackathonsPageInner() {
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[220px]">{c.title}</p>
-                        <p className="text-xs text-[hsl(var(--muted-foreground))]">{c.organiserName}</p>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">{(c as any).registerName ?? c.organiserName}</p>
                       </div>
                     </div>
                   </td>

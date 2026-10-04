@@ -21,6 +21,7 @@ import { SuperAdminView } from "@/components/dashboard/super-admin-view";
 import { ClientView } from "@/components/dashboard/client-view";
 import { formatDate } from "@/lib/utils";
 import type { EventSummaryResponse } from "@/types/super-admin";
+import { CachedImage } from "@/components/custom/cached-image";
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
 const ADMIN_ROLES = new Set(["super_admin"]);
@@ -72,9 +73,15 @@ function JudgeDashboard({ name }: { name?: string }) {
       >
         <td className="px-5 py-4">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: bg }}>
-              <Icon className="h-4 w-4" style={{ color }} />
-            </div>
+            {(c as any).branding?.logoUrl ? (
+              <CachedImage src={(c as any).branding.logoUrl} alt="" className="h-9 w-9 rounded-xl object-cover border border-[hsl(var(--border))] shrink-0" fallback={
+                <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: bg }}><Icon className="h-4 w-4" style={{ color }} /></div>
+              } />
+            ) : (
+              <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: bg }}>
+                <Icon className="h-4 w-4" style={{ color }} />
+              </div>
+            )}
             <div>
               <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate max-w-[220px]">{c.title}</p>
               {c.organiserName && <p className="text-xs text-[hsl(var(--muted-foreground))]">{c.organiserName}</p>}
