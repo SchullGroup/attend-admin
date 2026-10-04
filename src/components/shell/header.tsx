@@ -31,6 +31,7 @@ import { timeAgo, resolveRole, isSuperAdminRole } from "@/lib/utils";
 import { notificationTypeColor } from "@/lib/notification";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { useTour } from "@/components/tour/tour-provider";
+import { resolveImageUrl } from "@/lib/image-cache";
 
 // ---------------------------------------------------------------------------
 // Web Audio notification chime
@@ -181,7 +182,7 @@ export function Header() {
   // suppressed by an earlier broken one.
   useEffect(() => { setAvatarBroken(false); }, [resolvedAvatar]);
 
-  const avatarSrc = avatarBroken ? null : resolvedAvatar;
+  const avatarSrc = avatarBroken ? null : resolveImageUrl(resolvedAvatar);
 
   // ── Admin notifications — only fetch when role is confirmed ───────────────
   const { data: adminUnreadData } = useAdminNotifications(0, 1, false, isAdmin);

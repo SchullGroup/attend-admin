@@ -40,6 +40,7 @@ import { RegisterDetailsEditor }      from "./components/RegisterDetailsEditor";
 import { useGetMe } from "@/api/auth/hooks";
 import { getEventModule, MODULE_COLORS } from "@/lib/event-module";
 import { formatDateRange, resolveRole } from "@/lib/utils";
+import { CachedImage } from "@/components/custom/cached-image";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -290,12 +291,25 @@ export default function RegisterDetailPage() {
         <div className="flex min-w-0 items-start gap-5">
 
           {/* Avatar */}
-          <div
-            className="h-14 w-14 rounded-xl flex items-center justify-center text-lg font-bold shrink-0"
-            style={{ backgroundColor: "hsl(var(--primary)/0.1)", color: "hsl(var(--primary))" }}
-          >
-            {initials}
-          </div>
+          {register?.branding?.logoUrl ? (
+            <CachedImage
+              src={register.branding.logoUrl}
+              alt={displayName}
+              className="h-14 w-14 rounded-xl object-cover shrink-0 border border-[hsl(var(--border))]"
+              fallback={
+                <div className="h-14 w-14 rounded-xl flex items-center justify-center text-lg font-bold shrink-0" style={{ backgroundColor: "hsl(var(--primary)/0.1)", color: "hsl(var(--primary))" }}>
+                  {initials}
+                </div>
+              }
+            />
+          ) : (
+            <div
+              className="h-14 w-14 rounded-xl flex items-center justify-center text-lg font-bold shrink-0"
+              style={{ backgroundColor: "hsl(var(--primary)/0.1)", color: "hsl(var(--primary))" }}
+            >
+              {initials}
+            </div>
+          )}
 
           {/* Name + status */}
           <div className="flex-1 min-w-0">

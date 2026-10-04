@@ -12,6 +12,7 @@ import {
   useUpdateOrganisationInfo,
 } from "@/api/client-organisation";
 import type { UpdateOrganisationInfoRequest } from "@/api/client-organisation";
+import { CachedImage } from "@/components/custom/cached-image";
 
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
 
@@ -114,7 +115,7 @@ export function OrganisationSettings() {
         {isLoading ? (
           <div className="h-20 w-20 rounded-2xl bg-[hsl(var(--muted))] animate-pulse" />
         ) : logoUrl ? (
-          <img
+          <CachedImage
             src={logoUrl}
             alt={companyName}
             className="h-20 w-20 rounded-2xl object-contain border border-[hsl(var(--border))]"

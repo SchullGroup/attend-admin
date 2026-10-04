@@ -68,6 +68,8 @@ export function ResolutionsPanel({
           const isClosed  = statusUp === "CLOSED";
           const isPending = !isOpen && !isClosed;
           const busy      = openVote.isPending || closeVote.isPending;
+          const isCandidate = (res.resolutionType ?? "").toUpperCase() === "CANDIDATE"
+            || (Array.isArray(res.candidates) && res.candidates.length > 0);
 
           return (
             <div key={res.id} className="px-5 py-4">
@@ -102,6 +104,11 @@ export function ResolutionsPanel({
                         <CheckCircle2 className="h-3 w-3" /> Ordinary
                       </span>
                     )}
+                    {isCandidate && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2 py-0.5">
+                        Candidate Poll · {res.candidates?.length ?? 0} nominee{(res.candidates?.length ?? 0) !== 1 ? "s" : ""}
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{res.title}</p>
                   {res.description && (
@@ -129,7 +136,7 @@ export function ResolutionsPanel({
                   closed so the result is visible here, not only in Vote Records.
                   Only a CLOSED resolution with no votes drops the bars, for the
                   plain-text line below. */}
-              {(isOpen || (isClosed && total > 0)) && (
+              {!isCandidate && (isOpen || (isClosed && total > 0)) && (
                 <div className="flex flex-col gap-2 mt-3 bg-[hsl(var(--muted)/0.4)] rounded-xl p-3">
                   <VoteBar label="For"     value={forCount}     total={total} color="#16a34a" />
                   <VoteBar label="Against" value={againstCount} total={total} color="#dc2626" />
@@ -150,10 +157,36 @@ export function ResolutionsPanel({
 
               {/* A closed resolution that no one voted on. Say it, rather than
                   leaving the card blank under the "Closed" badge. */}
-              {isClosed && total === 0 && (
+              {!isCandidate && isClosed && total === 0 && (
                 <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted)/0.4)] rounded-xl px-3 py-2.5">
                   No votes were cast on this resolution.
                 </p>
+              )}
+
+              {/* Candidate poll — per-nominee tallies (the live snapshot sends a
+                  tally per candidate). Shown while open and once closed. */}
+              {isCandidate && (isOpen || isClosed) && (res.candidates?.length ?? 0) > 0 && (
+                <div className="flex flex-col gap-3 mt-3">
+                  {res.candidates!.map((c, ci) => {
+                    const cTotal = (c.forCount ?? 0) + (c.againstCount ?? 0) + (c.abstainCount ?? 0);
+                    return (
+                      <div key={c.id ?? ci} className="bg-[hsl(var(--muted)/0.4)] rounded-xl p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm font-semibold text-[hsl(var(--foreground))]">{c.name}</span>
+                          <span className="text-[10px] font-bold text-[hsl(var(--muted-foreground))]">#{ci + 1}</span>
+                          {cTotal === 0 && (
+                            <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">No votes yet</span>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <VoteBar label="For"     value={c.forCount}     total={cTotal} color="#16a34a" />
+                          <VoteBar label="Against" value={c.againstCount} total={cTotal} color="#dc2626" />
+                          <VoteBar label="Abstain" value={c.abstainCount} total={cTotal} color="#9ca3af" />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
 
               {/* ── Voting controls ── */}

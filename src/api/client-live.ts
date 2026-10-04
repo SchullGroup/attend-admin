@@ -19,6 +19,42 @@ import type { RegisterBranding } from "@/types/super-admin";
 // Types
 // ---------------------------------------------------------------------------
 
+/**
+ * Nested tally object the backend now sends on each live resolution
+ * (confirmed 2026-10-04). Counts/shares live here, NOT flat on the resolution.
+ * We flatten it in `normalizeLiveResolution` so the UI can keep reading
+ * `resolution.forCount` etc.
+ */
+export interface LiveTally {
+  forCount?:      number;
+  againstCount?:  number;
+  abstainCount?:  number;
+  totalVotes?:    number;
+  forPct?:        number;
+  againstPct?:    number;
+  abstainPct?:    number;
+  forShares?:     number;
+  againstShares?: number;
+  abstainShares?: number;
+  passed?:        boolean | null;
+}
+
+/** One nominee in a CANDIDATE resolution, with its own nested tally. */
+export interface LiveCandidate {
+  id:            string;
+  name:          string;
+  bio?:          string;
+  order?:        number;
+  tally?:        LiveTally;
+  forCount:      number;
+  againstCount:  number;
+  abstainCount:  number;
+  totalVotes:    number;
+  forPct?:       number;
+  againstPct?:   number;
+  abstainPct?:   number;
+}
+
 export interface LiveResolution {
   id:                string;
   order:             number;
@@ -30,12 +66,60 @@ export interface LiveResolution {
   myVote?:           string;
   votingDeadline?:   string;
   secondsRemaining?: number;
+  openedAt?:         string;
+  closedAt?:         string;
+  passed?:           boolean | null;
+  resolutionType?:   "STANDARD" | "CANDIDATE";
+  /** Nominees for a CANDIDATE resolution; null/absent for STANDARD. */
+  candidates?:       LiveCandidate[] | null;
+  /** Raw nested tally as sent by the backend — kept for reference; flat fields below are derived from it. */
+  tally?:            LiveTally;
+  // Flat fields the UI reads — populated by normalizeLiveResolution() from `tally`
+  // (with fallback to any flat fields older backends still send).
   forCount:          number;
   againstCount:      number;
   abstainCount:      number;
   forShares:         number;
   againstShares:     number;
   abstainShares:     number;
+}
+
+const num = (v: unknown): number => (typeof v === "number" && !Number.isNaN(v) ? v : 0);
+
+/**
+ * Flatten the backend's nested `tally` object onto the resolution so the rest
+ * of the app can read `resolution.forCount` / `forShares` directly. Tolerant of
+ * both shapes: new (counts under `tally`) and legacy (counts flat). Always
+ * returns well-defined numbers so downstream `.toLocaleString()` etc. never
+ * sees `undefined`.
+ */
+function normalizeLiveCandidate(c: any): LiveCandidate {
+  const t = c?.tally ?? {};
+  return {
+    ...c,
+    forCount:     num(t.forCount     ?? c?.forCount),
+    againstCount: num(t.againstCount ?? c?.againstCount),
+    abstainCount: num(t.abstainCount ?? c?.abstainCount),
+    totalVotes:   num(t.totalVotes   ?? c?.totalVotes),
+    forPct:       t.forPct     ?? c?.forPct,
+    againstPct:   t.againstPct ?? c?.againstPct,
+    abstainPct:   t.abstainPct ?? c?.abstainPct,
+  };
+}
+
+export function normalizeLiveResolution(r: any): LiveResolution {
+  const t = r?.tally ?? {};
+  return {
+    ...r,
+    forCount:      num(t.forCount     ?? r?.forCount),
+    againstCount:  num(t.againstCount ?? r?.againstCount),
+    abstainCount:  num(t.abstainCount ?? r?.abstainCount),
+    forShares:     num(t.forShares     ?? r?.forShares),
+    againstShares: num(t.againstShares ?? r?.againstShares),
+    abstainShares: num(t.abstainShares ?? r?.abstainShares),
+    passed:        t.passed ?? r?.passed ?? null,
+    candidates:    Array.isArray(r?.candidates) ? r.candidates.map(normalizeLiveCandidate) : (r?.candidates ?? null),
+  };
 }
 
 export interface LiveQuestion {
@@ -121,6 +205,12 @@ export function useLiveRoomDetail(eventId: string | null | undefined) {
           ...q,
           status: (q as any).status ?? "PENDING" as const,
         }));
+      }
+      // Flatten each resolution's nested `tally` onto flat count/share fields
+      // the UI reads. Without this every vote bar renders 0 even though the
+      // backend is counting votes under `resolution.tally`.
+      if (Array.isArray(raw.resolutions)) {
+        raw.resolutions = raw.resolutions.map(normalizeLiveResolution);
       }
       return raw;
     },

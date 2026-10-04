@@ -14,6 +14,7 @@ import {
   useRejectQuestion,
   useAnswerQuestion,
   liveKeys,
+  normalizeLiveResolution,
   type LiveQuestion,
   type LiveResolution,
 } from "@/api/client-live";
@@ -33,6 +34,7 @@ import { LiveHeaderCard } from "./LiveHeaderCard";
 import { ZoomMeetingCard } from "./ZoomMeetingCard";
 import { StreamPreviewCard } from "./StreamPreviewCard";
 import { ResolutionsPanel } from "./ResolutionsPanel";
+import { CachedImage } from "@/components/custom/cached-image";
 import { PollsPanel, type PollWsMessage } from "./PollsPanel";
 import { QAPanel } from "./QAPanel";
 
@@ -133,7 +135,10 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
       pollWsSeq.current += 1;
       setPollWsMessage({ seq: pollWsSeq.current, msg });
     } else if (msg.type === "RESOLUTION_TALLY_UPDATED") {
-      setResolutionTallies((prev) => ({ ...prev, [msg.payload.id]: msg.payload }));
+      // WS payload may use the same nested `tally` shape as the poll — flatten it
+      // so counts land on the flat fields the UI reads.
+      const incoming = normalizeLiveResolution(msg.payload);
+      setResolutionTallies((prev) => ({ ...prev, [incoming.id]: incoming }));
     }
   });
 
@@ -236,6 +241,14 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
           </Link>
         </div>
         <div className="flex items-center gap-3">
+          {room.branding?.logoUrl && (
+            <CachedImage
+              src={room.branding.logoUrl}
+              alt=""
+              className="h-9 w-9 rounded-lg object-cover border border-[hsl(var(--border))] shrink-0"
+              fallback={<div className="h-9 w-9 rounded-lg shrink-0" style={{ backgroundColor: `${color}18` }} />}
+            />
+          )}
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{room.organiserName}</h1>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-600">
             <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />

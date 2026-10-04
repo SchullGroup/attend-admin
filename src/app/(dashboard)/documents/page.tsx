@@ -28,6 +28,7 @@ import { UploadProgress } from "@/components/ui/upload-progress";
 import { formatDate, resolveRole, isSuperAdminRole } from "@/lib/utils";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { CachedImage } from "@/components/custom/cached-image";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -474,8 +475,17 @@ function DocumentsPageInner() {
                   <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[160px] truncate">
                     {doc.eventName ?? doc.eventTitle ?? "—"}
                   </td>
-                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[140px] truncate">
-                    {doc.registerName ?? "—"}
+                  <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] max-w-[140px]">
+                    <span className="flex items-center gap-2 min-w-0">
+                      {((doc as any).registerLogoUrl ?? (doc as any).branding?.logoUrl) && (
+                        <CachedImage
+                          src={(doc as any).registerLogoUrl ?? (doc as any).branding?.logoUrl}
+                          alt=""
+                          className="h-5 w-5 rounded object-cover border border-[hsl(var(--border))] shrink-0"
+                        />
+                      )}
+                      <span className="truncate">{doc.registerName ?? "—"}</span>
+                    </span>
                   </td>
                   <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">
                     {doc.sizeLabel ?? "—"}

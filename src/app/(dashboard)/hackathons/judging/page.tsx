@@ -282,15 +282,13 @@ function JudgesPanel({ challengeId, readOnly = false }: { challengeId: string; r
                         selectedId === p.id ? "bg-[#7c22c9] text-white" : "hover:bg-[hsl(var(--accent))]"
                       }`}
                     >
-                      <div
-                        className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                        style={{
-                          backgroundColor: selectedId === p.id ? "rgba(255,255,255,0.25)" : "#7c22c918",
-                          color: selectedId === p.id ? "#fff" : "#7c22c9",
-                        }}
-                      >
-                        {p.name.slice(0, 2).toUpperCase()}
-                      </div>
+                      <UserAvatar
+                        src={(p as any).avatarUrl}
+                        initials={p.name?.slice(0, 2).toUpperCase() || "?"}
+                        bg={selectedId === p.id ? "rgba(255,255,255,0.25)" : "#7c22c918"}
+                        fg={selectedId === p.id ? "#fff" : "#7c22c9"}
+                        size={32}
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold truncate">{p.name}</p>
                         {(p.email || p.organization) && (
