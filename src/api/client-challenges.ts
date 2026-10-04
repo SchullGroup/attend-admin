@@ -1266,6 +1266,10 @@ export function useLatestChallengeWinnerAnnouncement(challengeId: string, opts?:
 export type ParticipationSkipReason = "ALREADY_ISSUED" | "IS_WINNER" | "NO_EMAIL";
 
 export interface ParticipationMember {
+  /** Profile photo when the member has an Attend account; null otherwise. */
+  avatarUrl?:   string | null;
+  avatarColor?: string | null;
+  initials?:    string | null;
   memberId?:         string;
   name:              string;
   email?:            string;
@@ -1322,6 +1326,10 @@ function parseParticipationPreview(raw: any, fallbackEventId: string): Participa
         name:             m?.name ?? m?.fullName ?? "Unnamed member",
         email:            m?.email ?? undefined,
         hasAttendAccount: m?.hasAttendAccount ?? m?.hasAccount,
+        // Keep the photo fields — previously dropped here, so rows showed initials only.
+        avatarUrl:        m?.avatarUrl ?? m?.user?.avatarUrl ?? m?.profilePictureUrl ?? null,
+        avatarColor:      m?.avatarColor ?? m?.color ?? null,
+        initials:         m?.initials ?? null,
         certificateId:    m?.certificateId ?? null,
         // Default to "will receive" when the backend doesn't say otherwise, but
         // treat an explicit skipReason as authoritative even if willReceive is absent.

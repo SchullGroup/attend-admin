@@ -19,6 +19,7 @@ import {
   type ParticipationSkipReason,
 } from "@/api/client-challenges";
 import { Button } from "@/components/ui/button";
+import { UserAvatar } from "@/components/custom/user-avatar";
 import { Card } from "@/components/ui/card";
 import { Loader } from "@/components/ui/Loader";
 import { popup } from "@/lib/popup-store";
@@ -122,13 +123,24 @@ function ParticipationMemberRow({ member }: { member: ParticipationMember }) {
   const willReceive = member.willReceive !== false && !member.skipReason;
   return (
     <div className="flex items-center justify-between gap-3 py-1.5">
-      <div className="min-w-0">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <UserAvatar
+          src={member.avatarUrl}
+          initials={
+            member.initials ||
+            (member.name || "?").trim().split(/\s+/).map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+          }
+          color={member.avatarColor}
+          size={28}
+        />
+        <div className="min-w-0">
         <p className={`text-sm truncate ${willReceive ? "text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))]"}`}>
           {member.name || "Unnamed member"}
         </p>
         {member.email && (
           <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{member.email}</p>
         )}
+        </div>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         {willReceive ? (
