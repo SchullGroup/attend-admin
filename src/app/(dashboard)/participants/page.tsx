@@ -3,10 +3,13 @@ import { useState, useRef, Suspense } from "react";
 import { UserAvatar } from "@/components/custom/user-avatar";
 import Link from "next/link";
 import {
-  Search, Users, ShieldCheck, Shield, ShieldOff, CheckCircle2, UserMinus,
+  Search, Users, ShieldCheck, Shield, ShieldOff, CheckCircle2, UserMinus, Download, Loader2,
 } from "lucide-react";
 // CheckCircle2 kept for verified count stat only
-import { useUsers, useSuspendUser, useActivateUser } from "@/api/super-admin";
+import { useUsers, useSuspendUser, useActivateUser, exportAllUsers } from "@/api/super-admin";
+import { useGetMe } from "@/api/auth/hooks";
+import { isSuperAdminRole, resolveRole } from "@/lib/utils";
+import { toast } from "sonner";
 import { useUrlEnumState, useUrlPageState, useUrlParamWriter, useUrlSearchState } from "@/lib/use-url-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -121,7 +124,10 @@ function ParticipantsPageInner() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Users</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Users</h1>
+          <DownloadUsersButton />
+        </div>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mt-3">
           <div className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-lg bg-blue-50 flex items-center justify-center">
@@ -362,5 +368,57 @@ export default function ParticipantsPage() {
     <Suspense fallback={<Loader variant="page" text="Loading Users…" />}>
       <ParticipantsPageInner />
     </Suspense>
+  );
+}
+
+/**
+ * Super-admin only: downloads every account (names, emails, phones, roles) as
+ * an .xlsx from GET /api/v1/admin/users/export. Hidden for any other role —
+ * the file holds every user's contact details.
+ */
+function DownloadUsersButton() {
+  const { data: meData } = useGetMe();
+  const isSuperAdmin = isSuperAdminRole(resolveRole((meData as any)?.data ?? meData));
+  const [busy, setBusy] = useState(false);
+  const [includeTest, setIncludeTest] = useState(false);
+  if (!isSuperAdmin) return null;
+
+  async function download() {
+    setBusy(true);
+    try {
+      const { blob, filename } = await exportAllUsers({ includeTestUsers: includeTest });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast.success("Users exported");
+    } catch (e: any) {
+      toast.error(e?.message || "Couldn't export users. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <label className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] cursor-pointer select-none">
+        <input
+          type="checkbox"
+          className="h-3.5 w-3.5 accent-[hsl(var(--primary))]"
+          checked={includeTest}
+          onChange={(e) => setIncludeTest(e.target.checked)}
+          disabled={busy}
+        />
+        Include test accounts
+      </label>
+      <Button size="sm" variant="outline" className="gap-2" onClick={download} disabled={busy}>
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+        {busy ? "Preparing\u2026" : "Download users (.xlsx)"}
+      </Button>
+    </div>
   );
 }

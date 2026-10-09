@@ -308,7 +308,14 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
         {/* Left: Resolutions + Live Polls + Press Kit */}
         <div className="col-span-2 flex flex-col gap-5">
           {isAGM && (
-            <ResolutionsPanel resolutions={liveResolutions} color={color} eventId={eventId} />
+            <ResolutionsPanel
+              resolutions={liveResolutions}
+              color={color}
+              eventId={eventId}
+              eventTitle={room.title}
+              registerName={registerName}
+              logoUrl={room.branding?.logoUrl ?? null}
+            />
           )}
           {/* Polls (F1) are for non-AGM live events — AGM engagement is
               resolutions/voting, so the panel is hidden there. */}

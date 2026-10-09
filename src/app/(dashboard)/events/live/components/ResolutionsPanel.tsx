@@ -2,26 +2,36 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Wifi, Vote, X, Clock, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { Wifi, Vote, X, Clock, ShieldCheck, CheckCircle2, MonitorPlay } from "lucide-react";
 import { useOpenResolutionVoting, useCloseResolutionVoting, } from "@/api/client-votes";
 import type { LiveResolution } from "@/api/client-live";
 import { VoteBar } from "./VoteBar";
+import { ResultsPresenter } from "./ResultsPresenter";
 import { popup } from "@/lib/popup-store";
 
 export function ResolutionsPanel({
   resolutions,
   color,
   eventId,
+  eventTitle,
+  registerName,
+  logoUrl,
 }: {
   resolutions: LiveResolution[];
   color: string;
   eventId: string;
+  /** Branding for the full-screen results view. */
+  eventTitle?: string;
+  registerName?: string | null;
+  logoUrl?: string | null;
 }) {
   const openVote  = useOpenResolutionVoting();
   const closeVote = useCloseResolutionVoting();
   // Track which resolution has the duration picker open
   const [durationFor, setDurationFor] = useState<string | null>(null);
   const [duration,    setDuration]    = useState("120");
+  // Resolution currently shown in the full-screen results view (null = closed)
+  const [presentingId, setPresentingId] = useState<string | null>(null);
 
   if (resolutions.length === 0) {
     return (
@@ -128,6 +138,20 @@ export function ResolutionsPanel({
                       {res.secondsRemaining}s
                     </span>
                   </div>
+                )}
+
+                {/* Full-screen results — for restreaming the tally to viewers */}
+                {(isOpen || isClosed) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 gap-1.5 h-8"
+                    onClick={() => setPresentingId(res.id)}
+                    title="Show results full screen (for streaming)"
+                  >
+                    <MonitorPlay className="h-3.5 w-3.5" />
+                    Present
+                  </Button>
                 )}
               </div>
 
@@ -302,6 +326,17 @@ export function ResolutionsPanel({
           );
         })}
       </div>
+      {presentingId && (
+        <ResultsPresenter
+          resolutions={resolutions}
+          activeId={presentingId}
+          onChangeActive={setPresentingId}
+          onClose={() => setPresentingId(null)}
+          eventTitle={eventTitle}
+          registerName={registerName}
+          logoUrl={logoUrl}
+        />
+      )}
     </Card>
   );
 }
