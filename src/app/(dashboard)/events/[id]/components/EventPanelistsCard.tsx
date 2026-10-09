@@ -51,15 +51,18 @@ function initialsOf(name: string, email: string) {
 export function EventPanelistsCard({
   eventId,
   readOnly = false,
+  autoRefreshMs,
 }: {
   eventId: string;
+  /** Poll the panelist list every N ms (live control room). */
+  autoRefreshMs?: number;
   readOnly?: boolean;
 }) {
   // `error` matters as much as the data. Defaulting a failed query to [] made a
   // broken endpoint render as "No panelists yet" — the same words as a webinar
   // nobody has added anyone to, which is how you end up debugging the wrong
   // thing on the morning of an AGM.
-  const { data: panelists = [], isLoading, error, refetch, isFetching } = useZoomPanelists(eventId);
+  const { data: panelists = [], isLoading, error, refetch, isFetching } = useZoomPanelists(eventId, { refetchInterval: autoRefreshMs ?? false });
   const addPanelist    = useAddZoomPanelist();
   const removePanelist = useRemoveZoomPanelist();
 

@@ -335,6 +335,7 @@ export function ResolutionsPanel({
           eventTitle={eventTitle}
           registerName={registerName}
           logoUrl={logoUrl}
+          accent={color}
         />
       )}
     </Card>

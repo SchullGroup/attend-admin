@@ -363,7 +363,7 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
               mid-AGM. Zoom cannot promote someone already in the room, so the
               card's own note points the host at the Participants panel for
               that — but adding the next speaker belongs here. */}
-          {zoomMeeting?.type === "WEBINAR" && <EventPanelistsCard eventId={eventId} />}
+          {zoomMeeting?.type === "WEBINAR" && <EventPanelistsCard eventId={eventId} autoRefreshMs={15_000} />}
 
           {canManageGuests && <EventGuestAccessCard eventId={eventId} />}
 
