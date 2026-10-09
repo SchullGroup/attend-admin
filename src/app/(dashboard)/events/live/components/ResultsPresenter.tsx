@@ -50,14 +50,19 @@ function MiniBar({ label, color, pct, votes, shares, showShares }: {
 }) {
   return (
     <div className="flex items-center gap-3 text-[clamp(12px,1.1vw,17px)]">
-      <span className="w-[5.5em] text-slate-800">{label}</span>
+      <span className="w-[4.5em] shrink-0 text-slate-800">{label}</span>
       <div className="flex-1 h-3 rounded-full bg-slate-300 overflow-hidden">
         <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, pct)}%`, backgroundColor: color }} />
       </div>
-      <span className="w-[3.5em] text-right font-bold tabular-nums" style={{ color }}>{Math.round(pct)}%</span>
-      <span className="w-[7em] text-right text-slate-700 tabular-nums">
-        {showShares ? `${shares.toLocaleString()} sh` : `${votes.toLocaleString()} v`}
+      <span className="w-[3.5em] shrink-0 text-right font-bold tabular-nums" style={{ color }}>{Math.round(pct)}%</span>
+      <span className="shrink-0 whitespace-nowrap text-right text-slate-700 tabular-nums min-w-[5em]">
+        {votes.toLocaleString()} {votes === 1 ? "vote" : "votes"}
       </span>
+      {showShares && (
+        <span className="shrink-0 whitespace-nowrap text-right font-semibold text-slate-900 tabular-nums min-w-[7.5em]">
+          {shares.toLocaleString()} {shares === 1 ? "share" : "shares"}
+        </span>
+      )}
     </div>
   );
 }
@@ -240,8 +245,12 @@ export function ResultsPresenter({
       {/* Footer — totals + verdict */}
       <div className="px-[4vw] pb-[4vh] pt-[2vh] flex flex-wrap items-end justify-between gap-6">
         <div className="flex flex-wrap gap-x-10 gap-y-2 text-[clamp(14px,1.4vw,22px)] text-slate-700 tabular-nums">
-          <span>Total votes: <span className="font-bold text-slate-900">{tV.toLocaleString()}</span></span>
-          {shareWeighted && (
+          {/* Candidate polls are tallied per nominee — the resolution-level
+              totals are empty there, so only show them when they carry data. */}
+          {(!isCandidate || tV > 0) && (
+            <span>Total votes: <span className="font-bold text-slate-900">{tV.toLocaleString()}</span></span>
+          )}
+          {shareWeighted && (!isCandidate || tS > 0) && (
             <span>Total shares: <span className="font-bold text-slate-900">{tS.toLocaleString()}</span></span>
           )}
         </div>
