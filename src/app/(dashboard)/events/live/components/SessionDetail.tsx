@@ -308,7 +308,14 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
         {/* Left: Resolutions + Live Polls + Press Kit */}
         <div className="col-span-2 flex flex-col gap-5">
           {isAGM && (
-            <ResolutionsPanel resolutions={liveResolutions} color={color} eventId={eventId} />
+            <ResolutionsPanel
+              resolutions={liveResolutions}
+              color={color}
+              eventId={eventId}
+              eventTitle={room.title}
+              registerName={registerName}
+              logoUrl={room.branding?.logoUrl ?? null}
+            />
           )}
           {/* Polls (F1) are for non-AGM live events — AGM engagement is
               resolutions/voting, so the panel is hidden there. */}
@@ -356,7 +363,7 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
               mid-AGM. Zoom cannot promote someone already in the room, so the
               card's own note points the host at the Participants panel for
               that — but adding the next speaker belongs here. */}
-          {zoomMeeting?.type === "WEBINAR" && <EventPanelistsCard eventId={eventId} />}
+          {zoomMeeting?.type === "WEBINAR" && <EventPanelistsCard eventId={eventId} autoRefreshMs={15_000} />}
 
           {canManageGuests && <EventGuestAccessCard eventId={eventId} />}
 

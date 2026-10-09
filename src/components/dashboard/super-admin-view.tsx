@@ -17,7 +17,6 @@ import type { RegistrarsListResponse } from "@/api/registrars";
 import type { PagedResponse } from "@/types/super-admin";
 import { formatDate } from "@/lib/utils";
 import { CachedImage } from "@/components/custom/cached-image";
-import { UserAvatar } from "@/components/custom/user-avatar";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -115,11 +114,6 @@ export function SuperAdminView({
       {/* ── Header ── */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
-          <UserAvatar
-            src={(currentUser as any)?.avatarUrl}
-            initials={(currentUser as any)?.initials || (currentUser?.fullName ?? "Admin").split(" ").filter(Boolean).map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
-            size={52}
-          />
           <div>
             <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
               Welcome back, {currentUser?.fullName ?? "Admin"}.

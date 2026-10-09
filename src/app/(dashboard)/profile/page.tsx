@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useGetMe } from "@/api/auth/hooks";
+import { isSuperAdminRole, resolveRole } from "@/lib/utils";
 import { ProfileSettingsView } from "../settings/page";
 import { Loader } from "@/components/ui/Loader";
 
@@ -17,8 +20,12 @@ function prettyRole(role?: string | null): string {
 export default function ProfilePage() {
   const { data: me, isLoading } = useGetMe();
   const user = (me?.data ?? {}) as Record<string, any>;
+  const router = useRouter();
+  // Super admin has no personal profile page — send them to the dashboard.
+  const isSuperAdmin = !isLoading && isSuperAdminRole(resolveRole(me?.data as any));
+  useEffect(() => { if (isSuperAdmin) router.replace("/"); }, [isSuperAdmin, router]);
 
-  if (isLoading) return <Loader variant="page" text="Loading profile…" />;
+  if (isLoading || isSuperAdmin) return <Loader variant="page" text="Loading profile…" />;
 
   return (
     <div className="max-w-3xl space-y-6">

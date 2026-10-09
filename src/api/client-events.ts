@@ -1544,7 +1544,7 @@ export interface ZoomPanelist {
   onZoom?: boolean | null;
 }
 
-export function useZoomPanelists(eventId: string, options?: { enabled?: boolean }) {
+export function useZoomPanelists(eventId: string, options?: { enabled?: boolean; refetchInterval?: number | false }) {
   return useQuery({
     queryKey: clientEventKeys.panelists(eventId),
     queryFn: async () => {
@@ -1556,6 +1556,10 @@ export function useZoomPanelists(eventId: string, options?: { enabled?: boolean 
     },
     enabled: !!eventId && (options?.enabled ?? true),
     staleTime: 30_000,
+    // Live control room polls so panelist changes (added elsewhere / in Zoom)
+    // appear without a page reload. Paused while the tab is hidden.
+    refetchInterval: options?.refetchInterval ?? false,
+    refetchIntervalInBackground: false,
   });
 }
 

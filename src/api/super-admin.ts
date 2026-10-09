@@ -475,6 +475,40 @@ export async function exportAdminAuditLogs(params: AdminAuditLogParams) {
   };
 }
 
+/**
+ * GET /api/v1/admin/users/export — every account as an .xlsx (super admin only).
+ * Returns the file; on failure the body is JSON inside a Blob, so we unwrap the
+ * server message for the caller.
+ */
+export async function exportAllUsers(opts: { includeTestUsers?: boolean } = {}) {
+  try {
+    const res = await apiClient.get<Blob>("/api/v1/admin/users/export", {
+      params: opts.includeTestUsers ? { includeTestUsers: true } : undefined,
+      responseType: "blob",
+    });
+    const cd: string | undefined = res.headers["content-disposition"];
+    const encoded = cd?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    const plain   = cd?.match(/filename="?([^";]+)"?/i)?.[1];
+    const today   = new Date().toISOString().slice(0, 10);
+    return {
+      blob: res.data,
+      filename: decodeURIComponent(encoded ?? plain ?? `users-${today}.xlsx`),
+    };
+  } catch (err: any) {
+    const data = err?.response?.data;
+    if (data instanceof Blob) {
+      try {
+        const json = JSON.parse(await data.text());
+        throw new Error(json?.message ?? json?.error ?? "Export failed");
+      } catch (e: any) {
+        if (e instanceof SyntaxError) throw new Error("Export failed");
+        throw e;
+      }
+    }
+    throw err;
+  }
+}
+
 export async function exportSelectedAdminAuditLogs(ids: string[]) {
   const res = await apiClient.post<Blob>(
     "/api/v1/admin/audit-logs/export",
