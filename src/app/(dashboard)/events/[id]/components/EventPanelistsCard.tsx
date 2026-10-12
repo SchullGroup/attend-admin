@@ -21,7 +21,7 @@
  * Zoom view instead, which is seamless, so the note below points them there.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Mic, Plus, Trash2, Search, UserPlus, Info, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import {
   useZoomPanelists,
   useAddZoomPanelist,
   useRemoveZoomPanelist,
+  useBulkRemoveZoomPanelists,
   useClientEventAttendees,
 } from "@/api/client-events";
 import { useOrganisationTeam } from "@/api/client-organisation";
@@ -65,6 +66,24 @@ export function EventPanelistsCard({
   const { data: panelists = [], isLoading, error, refetch, isFetching } = useZoomPanelists(eventId, { refetchInterval: autoRefreshMs ?? false });
   const addPanelist    = useAddZoomPanelist();
   const removePanelist = useRemoveZoomPanelist();
+  const bulkRemove     = useBulkRemoveZoomPanelists();
+  // Bulk selection (ids). Pruned when the list changes so a removed person
+  // never stays "selected".
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  useEffect(() => {
+    setSelected((prev) => {
+      const ids = new Set(panelists.map((p) => p.id));
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [panelists]);
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
 
   const [query,      setQuery]      = useState("");
   // Filter for the panelist list itself (shown once the list gets long).
@@ -149,6 +168,43 @@ export function EventPanelistsCard({
       return;
     }
     add(manualName || email, email);
+  }
+
+  function confirmBulkRemove() {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    popup.confirm(
+      `Remove ${ids.length} panelist${ids.length === 1 ? "" : "s"}?`,
+      `They will join as view-only attendees instead \u2014 no microphone, no video. You can add them back at any time before the webinar starts.`,
+      () => {
+        setProgress({ done: 0, total: ids.length });
+        bulkRemove.mutate(
+          { eventId, panelistIds: ids, onProgress: (done, total) => setProgress({ done, total }) },
+          {
+            onSuccess: ({ removed, failed }) => {
+              setSelected(new Set(failed));
+              if (failed.length === 0) {
+                popup.success(
+                  `${removed.length} panelist${removed.length === 1 ? "" : "s"} removed`,
+                  "They will join as view-only attendees.",
+                  3000,
+                );
+              } else {
+                popup.error(
+                  `${failed.length} could not be removed`,
+                  `${removed.length} removed. The ones that failed are still selected \u2014 try again.`,
+                  5000,
+                );
+              }
+            },
+            onSettled: () => setProgress(null),
+          },
+        );
+      },
+      undefined,
+      "Remove",
+      "Cancel",
+    );
   }
 
   function confirmRemove(id: string, name: string) {
@@ -247,12 +303,71 @@ export function EventPanelistsCard({
                 />
               </div>
             )}
+            {!readOnly && panelists.length > 1 && (() => {
+              const visibleIds = visiblePanelists.map((p) => p.id);
+              const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+              const busy = bulkRemove.isPending;
+              return (
+                <div className="flex items-center justify-between gap-2 mb-2 min-h-8">
+                  <label className="flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))] cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 accent-[#7c22c9]"
+                      checked={allVisibleSelected}
+                      disabled={busy || visibleIds.length === 0}
+                      onChange={() =>
+                        setSelected((prev) => {
+                          const next = new Set(prev);
+                          if (allVisibleSelected) visibleIds.forEach((id) => next.delete(id));
+                          else visibleIds.forEach((id) => next.add(id));
+                          return next;
+                        })
+                      }
+                      aria-label={listFilter ? "Select all matching panelists" : "Select all panelists"}
+                    />
+                    {selected.size > 0 ? `${selected.size} selected` : listFilter ? "Select all matching" : "Select all"}
+                  </label>
+                  {selected.size > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      {!busy && (
+                        <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelected(new Set())}>
+                          Clear
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                        disabled={busy}
+                        onClick={confirmBulkRemove}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        {busy && progress
+                          ? `Removing ${progress.done} of ${progress.total}\u2026`
+                          : `Remove ${selected.size}`}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             <div className={`rounded-xl border border-[hsl(var(--border))] divide-y divide-[hsl(var(--border))] ${panelists.length > 5 ? "max-h-[300px] overflow-y-auto overscroll-contain" : ""}`}>
               {visiblePanelists.length === 0 && (
                 <p className="px-4 py-3 text-xs text-[hsl(var(--muted-foreground))]">No panelist matches “{listFilter}”.</p>
               )}
               {visiblePanelists.map((p) => (
-                <div key={p.id} className="flex items-center gap-3 px-4 py-2.5">
+                <div key={p.id} className={`flex items-center gap-3 px-4 py-2.5 ${selected.has(p.id) ? "bg-[#7c22c90a]" : ""}`}>
+                  {!readOnly && panelists.length > 1 && (
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 shrink-0 accent-[#7c22c9]"
+                      checked={selected.has(p.id)}
+                      disabled={bulkRemove.isPending}
+                      onChange={() => toggle(p.id)}
+                      aria-label={`Select ${p.name}`}
+                    />
+                  )}
                   <UserAvatar initials={initialsOf(p.name, p.email)} size={28} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 min-w-0">
