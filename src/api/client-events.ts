@@ -1619,6 +1619,44 @@ export function useRemoveZoomPanelist() {
   });
 }
 
+/**
+ * Remove several panelists. There is no bulk endpoint, so this calls the
+ * single DELETE for each id, a few at a time (Zoom rate-limits its API), and
+ * reports which ids failed instead of stopping at the first error. One summary
+ * popup is shown by the caller, not one per person.
+ */
+export function useBulkRemoveZoomPanelists() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      eventId, panelistIds, onProgress,
+    }: { eventId: string; panelistIds: string[]; onProgress?: (done: number, total: number) => void }) => {
+      const removed: string[] = [];
+      const failed: string[] = [];
+      const queue = [...panelistIds];
+      let done = 0;
+      const worker = async () => {
+        while (queue.length) {
+          const id = queue.shift()!;
+          try {
+            await apiClient.delete(`/api/v1/client/events/${eventId}/zoom/panelists/${id}`);
+            removed.push(id);
+          } catch {
+            failed.push(id);
+          }
+          done += 1;
+          onProgress?.(done, panelistIds.length);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(3, panelistIds.length) }, worker));
+      return { removed, failed };
+    },
+    onSettled: (_data, _err, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: clientEventKeys.panelists(eventId) });
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Audience Tiers  — /api/v1/client/events/{id}/tiers
 // ---------------------------------------------------------------------------
