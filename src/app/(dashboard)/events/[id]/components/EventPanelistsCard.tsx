@@ -67,6 +67,8 @@ export function EventPanelistsCard({
   const removePanelist = useRemoveZoomPanelist();
 
   const [query,      setQuery]      = useState("");
+  // Filter for the panelist list itself (shown once the list gets long).
+  const [listFilter, setListFilter] = useState("");
   const [manualOpen, setManualOpen] = useState(false);
   const [manualName, setManualName] = useState("");
   const [manualMail, setManualMail] = useState("");
@@ -108,6 +110,12 @@ export function EventPanelistsCard({
   // a wall of identical warnings.
   const zoomUnreachable = panelists.length > 0 && panelists.every((p) => p.onZoom === null);
   const driftCount = panelists.filter((p) => p.onZoom === false).length;
+
+  const visiblePanelists = useMemo(() => {
+    const q = listFilter.trim().toLowerCase();
+    if (!q) return panelists;
+    return panelists.filter((p) => p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q));
+  }, [panelists, listFilter]);
 
   const alreadyPanelist = useMemo(
     () => new Set(panelists.map((p) => p.email.toLowerCase())),
@@ -159,6 +167,11 @@ export function EventPanelistsCard({
       <h2 className="font-semibold text-[hsl(var(--foreground))] flex items-center gap-2 mb-1">
         <Mic className="h-4 w-4 text-[#7c22c9]" />
         Panelists
+        {panelists.length > 0 && (
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#7c22c912] text-[#7c22c9] tabular-nums">
+            {panelists.length}
+          </span>
+        )}
       </h2>
       <p className="text-xs text-[hsl(var(--muted-foreground))] mb-4">
         Panelists can speak, share video and answer Q&amp;A. Everyone else joins view-only.
@@ -218,8 +231,27 @@ export function EventPanelistsCard({
               No panelists yet. Only the host will be able to speak.
             </p>
           ) : (
-            <div className="rounded-xl border border-[hsl(var(--border))] divide-y divide-[hsl(var(--border))] mb-4">
-              {panelists.map((p) => (
+            <div className="mb-4">
+            {/* Long lists: filter + a scrolling box, so many panelists don't push
+                the rest of the live room off screen. */}
+            {panelists.length > 5 && (
+              <div className="relative mb-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+                <Input
+                  value={listFilter}
+                  onChange={(e) => setListFilter(e.target.value)}
+                  placeholder={`Filter ${panelists.length} panelists\u2026`}
+                  autoComplete="off"
+                  name="panelist-filter"
+                  className="pl-8 h-8 text-xs"
+                />
+              </div>
+            )}
+            <div className={`rounded-xl border border-[hsl(var(--border))] divide-y divide-[hsl(var(--border))] ${panelists.length > 5 ? "max-h-[300px] overflow-y-auto overscroll-contain" : ""}`}>
+              {visiblePanelists.length === 0 && (
+                <p className="px-4 py-3 text-xs text-[hsl(var(--muted-foreground))]">No panelist matches “{listFilter}”.</p>
+              )}
+              {visiblePanelists.map((p) => (
                 <div key={p.id} className="flex items-center gap-3 px-4 py-2.5">
                   <UserAvatar initials={initialsOf(p.name, p.email)} size={28} />
                   <div className="min-w-0 flex-1">
@@ -260,6 +292,7 @@ export function EventPanelistsCard({
                   )}
                 </div>
               ))}
+            </div>
             </div>
           )}
 
