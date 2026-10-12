@@ -16,7 +16,8 @@ type Channel = "EMAIL" | "SMS" | "PUSH" | "IN_APP" | "ALL";
 
 // Email allows a longer body; SMS (and any channel that includes SMS, i.e. ALL)
 // plus push/in-app are capped shorter to stay within SMS-safe length.
-const EMAIL_MESSAGE_LIMIT = 1000;
+// Backend raised the email body limit to 10,000 characters (2026-10-12).
+const EMAIL_MESSAGE_LIMIT = 10_000;
 const SHORT_MESSAGE_LIMIT = 500;
 
 function messageLimitFor(channel: Channel) {
@@ -183,7 +184,7 @@ export function EventBroadcastTab({ eventId }: Props) {
               />
               <div className="flex items-center justify-between mt-1">
                 <span className={`text-xs ${message.length > maxMessageLength ? "text-red-500 font-medium" : "text-[hsl(var(--muted-foreground))]"}`}>
-                  {message.length} / {maxMessageLength}
+                  {message.length.toLocaleString()} / {maxMessageLength.toLocaleString()}
                   {(channel === "SMS" || channel === "ALL") && <span className="ml-1.5 text-[hsl(var(--muted-foreground))]">· SMS-safe length</span>}
                 </span>
                 {message.length > maxMessageLength && <span className="text-xs text-red-500 font-medium">Too long</span>}
