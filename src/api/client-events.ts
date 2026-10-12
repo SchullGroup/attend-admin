@@ -332,7 +332,7 @@ export function useClientEventAttendees(
    * up on screen anyway — so the only trace was a column of red rows in the
    * network tab.
    */
-  options?: { enabled?: boolean }
+  options?: { enabled?: boolean; refetchInterval?: number | false }
 ) {
   return useQuery({
     queryKey: clientEventKeys.attendees(eventId, kycStatus, page, size),
@@ -351,6 +351,9 @@ export function useClientEventAttendees(
     },
     enabled: !!eventId && (options?.enabled ?? true),
     staleTime: 30_000,
+    // Live screens poll so new registrants appear without a reload.
+    refetchInterval: options?.refetchInterval ?? false,
+    refetchIntervalInBackground: false,
   });
 }
 

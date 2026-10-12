@@ -72,8 +72,14 @@ export function EventPanelistsCard({
   const [manualMail, setManualMail] = useState("");
 
   // Candidates: the people this event already knows about.
-  const { data: attendeeData } = useClientEventAttendees(eventId, "", 0, 100);
-  const { data: teamData }     = useOrganisationTeam("", "", 0, 100);
+  // Kept fresh: polled with the panelist list in the live room, and refetched
+  // whenever the search box is focused, so people who registered after the
+  // page loaded are findable without a reload.
+  const { data: attendeeData, refetch: refetchAttendees } = useClientEventAttendees(
+    eventId, "", 0, 100, { refetchInterval: autoRefreshMs ?? false },
+  );
+  const { data: teamData, refetch: refetchTeam } = useOrganisationTeam("", "", 0, 100);
+  const refreshCandidates = () => { refetchAttendees(); refetchTeam(); };
 
   const candidates: Candidate[] = useMemo(() => {
     const rows: Candidate[] = [];
@@ -265,6 +271,9 @@ export function EventPanelistsCard({
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
+                  onFocus={refreshCandidates}
+                  autoComplete="off"
+                  name="panelist-search"
                   placeholder="Search your team and this event's attendees…"
                   className="h-9 pl-9 text-sm"
                 />
