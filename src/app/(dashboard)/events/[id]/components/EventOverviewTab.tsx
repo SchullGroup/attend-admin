@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { formatDate, formatDateRange } from "@/lib/utils";
 import { useClientEventAgenda, useAddAgendaItem, useDeleteAgendaItem, useUpdateAgendaItem } from "@/api/client-events";
 import { popup } from "@/lib/popup-store";
+import { useRegistrars } from "@/api/registrars";
 import type { EventShim, LocalAgendaItem } from "./types";
 
 const FORMAT_ICON = { virtual: Monitor, hybrid: Users2, "in-person": MapPin };
@@ -49,6 +50,18 @@ export function EventOverviewTab({
   stakeholderName, organiserLogoUrl, organiserRegisterId, registrarId, attendeesCount = 0,
   isSuperAdmin = false,
 }: Props) {
+  // The event detail doesn't carry the registrar's id, so for super admin we
+  // resolve it by name from the registrars list (small, cached) to make the
+  // Registrar card a link. An explicit `registrarId` from the API wins.
+  const { data: registrarList } = useRegistrars("", 0, 100, isSuperAdmin && !registrarId && !!stakeholderName);
+  const resolvedRegistrarId = registrarId ?? (() => {
+    const target = (stakeholderName ?? "").trim().toLowerCase();
+    if (!target) return undefined;
+    const hit = (registrarList?.registrars ?? []).find(
+      (r: any) => String(r.companyName ?? r.name ?? "").trim().toLowerCase() === target,
+    );
+    return hit?.id as string | undefined;
+  })();
   const FormatIcon    = FORMAT_ICON[event.format] ?? Monitor;
   const isLAUNCH      = event.module === "LAUNCH";
   const isHACKATHON   = event.module === "HACKATHON";
@@ -586,13 +599,13 @@ export function EventOverviewTab({
                     {stakeholderName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
                   </div>
                   <div>
-                    <p className={`text-sm font-semibold text-[hsl(var(--foreground))]${(isSuperAdmin && registrarId) ? " group-hover:underline" : ""}`}>{stakeholderName}</p>
+                    <p className={`text-sm font-semibold text-[hsl(var(--foreground))]${(isSuperAdmin && resolvedRegistrarId) ? " group-hover:underline" : ""}`}>{stakeholderName}</p>
                     <p className="text-xs text-[hsl(var(--muted-foreground))]">Managing registrar</p>
                   </div>
                 </>
               );
-              return (isSuperAdmin && registrarId) ? (
-                <Link href={`/registrars/${registrarId}`} className="flex items-center gap-3 group">{rInner}</Link>
+              return (isSuperAdmin && resolvedRegistrarId) ? (
+                <Link href={`/registrars/${resolvedRegistrarId}`} className="flex items-center gap-3 group">{rInner}</Link>
               ) : (
                 <div className="flex items-center gap-3">{rInner}</div>
               );

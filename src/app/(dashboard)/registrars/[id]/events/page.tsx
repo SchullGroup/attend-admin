@@ -89,7 +89,15 @@ export default function RegistrarEventsPage({ params }: { params: Promise<{ id: 
 
   return (
     <div className="flex flex-col gap-6">
-      <button onClick={() => router.push(`/registrars/${id}`)}
+      <button
+        // Go BACK rather than pushing the registrar page again: pushing added a
+        // new history entry, so the registrar page's own Back returned here and
+        // the two pages bounced between each other. Fall back to a push when
+        // this page was opened directly (no history to return to).
+        onClick={() => {
+          if (typeof window !== "undefined" && window.history.length > 1) router.back();
+          else router.push(`/registrars/${id}`);
+        }}
         className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors w-fit">
         <ArrowLeft className="h-3.5 w-3.5" /> Back to {displayName}
       </button>

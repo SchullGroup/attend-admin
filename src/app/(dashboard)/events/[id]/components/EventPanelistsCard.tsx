@@ -36,6 +36,7 @@ import {
   useClientEventAttendees,
 } from "@/api/client-events";
 import { useOrganisationTeam } from "@/api/client-organisation";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { popup } from "@/lib/popup-store";
 
 interface Candidate {
@@ -96,11 +97,15 @@ export function EventPanelistsCard({
   // Kept fresh: polled with the panelist list in the live room, and refetched
   // whenever the search box is focused, so people who registered after the
   // page loaded are findable without a reload.
+  // Both lists are searched on the server as the organiser types (debounced),
+  // so anyone registered is findable, not just the first 100.
+  const candidateSearch = useDebouncedValue(query.trim(), 300);
+  const searching = candidateSearch.length >= 2;
   const { data: attendeeData, refetch: refetchAttendees } = useClientEventAttendees(
-    eventId, "", 0, 100, { refetchInterval: autoRefreshMs ?? false },
+    eventId, "", 0, 20, { enabled: searching, search: candidateSearch },
   );
-  const { data: teamData, refetch: refetchTeam } = useOrganisationTeam("", "", 0, 100);
-  const refreshCandidates = () => { refetchAttendees(); refetchTeam(); };
+  const { data: teamData, refetch: refetchTeam } = useOrganisationTeam("", "", 0, 20, searching ? candidateSearch : "");
+  const refreshCandidates = () => { if (searching) { refetchAttendees(); refetchTeam(); } };
 
   const candidates: Candidate[] = useMemo(() => {
     const rows: Candidate[] = [];

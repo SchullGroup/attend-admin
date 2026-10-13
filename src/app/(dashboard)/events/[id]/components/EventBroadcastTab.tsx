@@ -1,6 +1,8 @@
 "use client";
 import { useRef, useState } from "react";
-import { Bell, Send, FileText, Megaphone, Clock, Users, Smartphone } from "lucide-react";
+import { Bell, Send, FileText, Megaphone, Clock, Users, Smartphone, Eye, Copy } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +12,7 @@ import {
   useBroadcastHistory,
   useSendBroadcast,
   type SendBroadcastRequest,
+  type BroadcastHistoryItem,
 } from "@/api/client-events";
 
 type Channel = "EMAIL" | "SMS" | "PUSH" | "IN_APP" | "ALL";
@@ -38,6 +41,8 @@ export function EventBroadcastTab({ eventId }: Props) {
   const [channel, setChannel] = useState<Channel>("EMAIL");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  // Sent broadcast opened in the preview dialog (null = closed)
+  const [preview, setPreview] = useState<BroadcastHistoryItem | null>(null);
   const retryRef = useRef<{ signature: string; key: string } | null>(null);
 
   const { data: recipients } = useBroadcastRecipients(eventId);
@@ -225,13 +230,24 @@ export function EventBroadcastTab({ eventId }: Props) {
           ) : (
             <div className="divide-y divide-[hsl(var(--border))]">
               {history.map((item) => (
-                <div key={item.id} className="px-5 py-4">
+                <div
+                  key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setPreview(item)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPreview(item); } }}
+                  className="px-5 py-4 cursor-pointer hover:bg-[hsl(var(--muted)/0.5)] focus:outline-none focus-visible:bg-[hsl(var(--muted)/0.6)] transition-colors group"
+                  title="Open the full message"
+                >
                   <div className="flex items-center justify-between mb-1.5 gap-2">
                     <span className="text-xs font-semibold bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded-full px-2 py-0.5">
                       {item.channel}
                     </span>
-                    <div className="flex items-center gap-1 text-xs text-[hsl(var(--muted-foreground))] shrink-0">
-                      <Clock className="h-3 w-3" />{item.timeAgo}
+                    <div className="flex items-center gap-3 text-xs text-[hsl(var(--muted-foreground))] shrink-0">
+                      <span className="hidden group-hover:inline-flex items-center gap-1 text-[hsl(var(--primary))] font-medium">
+                        <Eye className="h-3 w-3" /> Preview
+                      </span>
+                      <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{item.timeAgo}</span>
                     </div>
                   </div>
                   {item.subject && (
@@ -259,6 +275,95 @@ export function EventBroadcastTab({ eventId }: Props) {
           )}
         </Card>
       </div>
+
+      <BroadcastPreviewDialog item={preview} onClose={() => setPreview(null)} />
     </div>
+  );
+}
+
+const CHANNEL_LABEL: Record<string, string> = {
+  EMAIL: "Email", SMS: "SMS", PUSH: "Push", IN_APP: "In-app", ALL: "All channels",
+};
+
+/** Full view of a sent broadcast: subject, the whole message, when and to whom. */
+function BroadcastPreviewDialog({ item, onClose }: { item: BroadcastHistoryItem | null; onClose: () => void }) {
+  const sentAt = item?.sentAt ? new Date(item.sentAt) : null;
+  const sentLabel = sentAt && !Number.isNaN(sentAt.getTime())
+    ? sentAt.toLocaleString("en-NG", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })
+    : item?.timeAgo;
+  const stats = item
+    ? ([
+        ["Recipients", item.totalRecipients],
+        ["Email", item.emailSent],
+        ["SMS", item.smsSent],
+        ["Push", item.pushSent ?? 0],
+        ["In-app", item.inAppSent ?? 0],
+        ["Skipped", item.skipped],
+      ] as [string, number][]).filter(([label, n]) => label === "Recipients" || n > 0)
+    : [];
+  const skipReason = item && (item.failureReason ?? (item as any).failure_reason ?? (item as any).skipReason);
+
+  function copy() {
+    if (!item) return;
+    const text = item.subject ? `${item.subject}\n\n${item.message}` : item.message;
+    navigator.clipboard?.writeText(text).then(
+      () => toast.success("Message copied"),
+      () => toast.error("Couldn't copy the message"),
+    );
+  }
+
+  return (
+    <Dialog open={!!item} onOpenChange={(open) => { if (!open) onClose(); }}>
+      {/* Header / scrolling body / fixed footer: a long message scrolls in the
+          middle while the title and the actions stay put. */}
+      <DialogContent className="sm:max-w-2xl p-0 overflow-hidden flex flex-col max-h-[85vh]">
+        <DialogHeader className="px-6 pt-6 pb-4 mb-0 border-b border-[hsl(var(--border))]">
+          <DialogTitle className="pr-8 text-lg leading-snug break-words">
+            {item?.subject || "Broadcast message"}
+          </DialogTitle>
+          <DialogDescription asChild>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-1 text-xs text-[hsl(var(--muted-foreground))]">
+              <span className="font-semibold bg-[hsl(var(--muted))] rounded-full px-2.5 py-0.5">
+                {item ? CHANNEL_LABEL[item.channel] ?? item.channel : ""}
+              </span>
+              {sentLabel && (
+                <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> Sent {sentLabel}</span>
+              )}
+              {stats.map(([label, n]) => (
+                <span key={label} className="inline-flex items-center gap-1">
+                  <span className="text-[hsl(var(--border))]">·</span>
+                  <span className="font-semibold text-[hsl(var(--foreground))] tabular-nums">{n.toLocaleString()}</span>
+                  {label === "Recipients" ? (n === 1 ? "recipient" : "recipients") : label.toLowerCase()}
+                </span>
+              ))}
+            </div>
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* The message as sent: line breaks kept, the body scrolls. */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
+          <p className="text-sm text-[hsl(var(--foreground))] leading-7 whitespace-pre-wrap break-words">
+            {item?.message}
+          </p>
+          {skipReason && (
+            <p className="mt-5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
+              <span className="font-semibold">Skipped:</span> {skipReason}
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)]">
+          <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">
+            {item ? `${item.message.length.toLocaleString()} characters` : ""}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={copy}>
+              <Copy className="h-3.5 w-3.5" /> Copy message
+            </Button>
+            <Button type="button" size="sm" onClick={onClose}>Close</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
