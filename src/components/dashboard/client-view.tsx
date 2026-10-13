@@ -181,7 +181,12 @@ export function ClientView({
               const statusKey = (reg.status ?? "").toUpperCase();
               const dot       = statusKey === "ACTIVE" ? "#16a34a" : statusKey === "SUSPENDED" ? "#dc2626" : "#f59e0b";
               return (
-                <div key={reg.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.3)] transition-colors">
+                <Link
+                  key={reg.id}
+                  href={`/admin/registers/${reg.id}`}
+                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-[hsl(var(--muted)/0.3)] transition-colors"
+                  title={`Open ${name}`}
+                >
                   {((reg as any).branding?.logoUrl ?? (reg as any).logoUrl) ? (
                     <CachedImage src={(reg as any).branding?.logoUrl ?? (reg as any).logoUrl} alt="" className="h-7 w-7 rounded-lg object-cover border border-[hsl(var(--border))] shrink-0" fallback={
                       <div className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(55,65,81,0.08)" }}><Building2 className="h-3.5 w-3.5" style={{ color: "#374151" }} /></div>
@@ -200,7 +205,7 @@ export function ClientView({
                     <span className="text-xs text-[hsl(var(--muted-foreground))]">events</span>
                   </div>
                   <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: dot }} />
-                </div>
+                </Link>
               );
             })}
             {topRegisters.length === 0 && (
