@@ -332,10 +332,17 @@ export function useClientEventAttendees(
    * up on screen anyway — so the only trace was a column of red rows in the
    * network tab.
    */
-  options?: { enabled?: boolean; refetchInterval?: number | false }
+  options?: {
+    enabled?: boolean;
+    refetchInterval?: number | false;
+    /** Server-side search (name / email; confirmed working 2026-10-13). Sent from 2 characters. */
+    search?: string;
+  }
 ) {
+  const search = (options?.search ?? "").trim();
+  const searchParam = search.length >= 2 ? search : "";
   return useQuery({
-    queryKey: clientEventKeys.attendees(eventId, kycStatus, page, size),
+    queryKey: [...clientEventKeys.attendees(eventId, kycStatus, page, size), searchParam],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<AttendeeListResponse>>(
         `/api/v1/client/events/${eventId}/attendees`,
@@ -344,6 +351,7 @@ export function useClientEventAttendees(
             page,
             size,
             ...(kycStatus ? { kycStatus } : {}),
+            ...(searchParam ? { search: searchParam } : {}),
           },
         }
       );

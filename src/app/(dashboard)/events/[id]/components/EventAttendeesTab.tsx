@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/custom/user-avatar";
-import { Users, Download, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Users, Download, Loader2, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DateCell } from "@/components/ui/date-cell";
@@ -114,11 +116,16 @@ export function EventAttendeesTab({ participants: firstPage, eventId }: Props) {
   // Paged list: the API returns PAGE_SIZE rows per page, so the tab fetches the
   // page it shows instead of only ever rendering the first one.
   const [page, setPage] = useState(0);
-  const adminQ  = useEventAttendees(eventId, page, PAGE_SIZE, "", { enabled: !meLoading && isSuperAdmin });
-  const clientQ = useClientEventAttendees(eventId, "", page, PAGE_SIZE, { enabled: !meLoading && !isSuperAdmin });
+  // Server-side search (name / email), debounced; back to page 1 on a new term.
+  const [searchInput, setSearchInput] = useState("");
+  const debounced = useDebouncedValue(searchInput.trim(), 350);
+  const search = debounced.length >= 2 ? debounced : "";
+  useEffect(() => { setPage(0); }, [search]);
+  const adminQ  = useEventAttendees(eventId, page, PAGE_SIZE, "", { enabled: !meLoading && isSuperAdmin, search });
+  const clientQ = useClientEventAttendees(eventId, "", page, PAGE_SIZE, { enabled: !meLoading && !isSuperAdmin, search });
   const q = isSuperAdmin ? adminQ : clientQ;
   const res: any = q.data;
-  const participants: any[] = res ? rowsOf(res) : (page === 0 ? firstPage : []);
+  const participants: any[] = res ? rowsOf(res) : (page === 0 && !search ? firstPage : []);
   const total: number = res?.totalCount ?? res?.totalElements ?? participants.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const from = total === 0 ? 0 : page * PAGE_SIZE + 1;
@@ -131,8 +138,33 @@ export function EventAttendeesTab({ participants: firstPage, eventId }: Props) {
         <div>
           <h2 className="font-semibold text-[hsl(var(--foreground))]">Registered Participants</h2>
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-            {total.toLocaleString()} participant{total !== 1 ? "s" : ""} registered
+            {search
+              ? <>{total.toLocaleString()} matching “{search}”</>
+              : <>{total.toLocaleString()} participant{total !== 1 ? "s" : ""} registered</>}
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+        <div className="relative w-56 sm:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
+          <Input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search name or email…"
+            autoComplete="off"
+            name="attendee-search"
+            className="pl-8 pr-8 h-8 text-xs"
+            aria-label="Search attendees"
+          />
+          {searchInput && (
+            <button
+              type="button"
+              onClick={() => setSearchInput("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
         <Button
           size="sm" variant="outline" className="gap-1.5"
@@ -144,6 +176,7 @@ export function EventAttendeesTab({ participants: firstPage, eventId }: Props) {
             : <><Download className="h-3.5 w-3.5" /> Export CSV</>
           }
         </Button>
+        </div>
       </div>
 
       {/* Empty state */}
@@ -154,8 +187,17 @@ export function EventAttendeesTab({ participants: firstPage, eventId }: Props) {
       ) : participants.length === 0 ? (
         <div className="py-14 text-center text-sm text-[hsl(var(--muted-foreground))]">
           <Users className="h-8 w-8 mx-auto mb-3 opacity-25" />
-          <p className="font-medium text-[hsl(var(--foreground))]">No attendees yet</p>
-          <p className="mt-1">Participants who register will appear here.</p>
+          {search ? (
+            <>
+              <p className="font-medium text-[hsl(var(--foreground))]">No attendee matches “{search}”</p>
+              <p className="mt-1">Check the spelling, or search by email instead.</p>
+            </>
+          ) : (
+            <>
+              <p className="font-medium text-[hsl(var(--foreground))]">No attendees yet</p>
+              <p className="mt-1">Participants who register will appear here.</p>
+            </>
+          )}
         </div>
       ) : (
         <table className="w-full">

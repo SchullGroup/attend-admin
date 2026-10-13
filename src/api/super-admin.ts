@@ -1130,13 +1130,15 @@ export function useEventDetail(id: string, opts?: { enabled?: boolean }) {
  * Attendees tab showed "0 participants" even for events with real RSVPs.
  * Flagged to backend to confirm this admin endpoint exists (BACKEND_BUGS item 12).
  */
-export function useEventAttendees(id: string, page = 0, size = 20, kycStatus = "", opts?: { enabled?: boolean }) {
+export function useEventAttendees(id: string, page = 0, size = 20, kycStatus = "", opts?: { enabled?: boolean; search?: string }) {
+  const search = (opts?.search ?? "").trim();
+  const searchParam = search.length >= 2 ? search : "";
   return useQuery({
-    queryKey: clientEventKeys.attendees(id, page, size, kycStatus),
+    queryKey: [...clientEventKeys.attendees(id, page, size, kycStatus), "admin", searchParam],
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<any>>(
         `/api/v1/admin/events/${id}/attendees`,
-        { params: { page, size, ...(kycStatus ? { kycStatus } : {}) } }
+        { params: { page, size, ...(kycStatus ? { kycStatus } : {}), ...(searchParam ? { search: searchParam } : {}) } }
       );
       return res.data.data;
     },
