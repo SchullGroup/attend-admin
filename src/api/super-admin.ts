@@ -1141,6 +1141,7 @@ export function useEventAttendees(id: string, page = 0, size = 20, kycStatus = "
       return res.data.data;
     },
     enabled: !!id && (opts?.enabled ?? true),
+    placeholderData: (prev) => prev, // keep the current page visible while the next loads
   });
 }
 

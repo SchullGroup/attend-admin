@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { UserAvatar } from "@/components/custom/user-avatar";
-import { Users, Download, Loader2 } from "lucide-react";
+import { Users, Download, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DateCell } from "@/components/ui/date-cell";
-import { useExportAttendees } from "@/api/client-events";
+import { useExportAttendees, useClientEventAttendees } from "@/api/client-events";
+import { useEventAttendees } from "@/api/super-admin";
 import { useGetMe } from "@/api/auth/hooks";
 import { resolveRole, isSuperAdminRole } from "@/lib/utils";
 
@@ -94,13 +96,33 @@ interface Props {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function EventAttendeesTab({ participants, eventId }: Props) {
+const PAGE_SIZE = 50;
+
+function rowsOf(res: any): any[] {
+  if (Array.isArray(res)) return res;
+  return res?.attendees ?? res?.content ?? res?.participants ?? res?.data ?? [];
+}
+
+export function EventAttendeesTab({ participants: firstPage, eventId }: Props) {
   const exportMutation = useExportAttendees();
   // The participant profile page (/participants/{id}) is a super-admin surface.
   // Client admins / event managers / viewers see the attendee as plain text —
   // no link into platform-wide user records.
-  const { data: meData } = useGetMe();
+  const { data: meData, isLoading: meLoading } = useGetMe();
   const isSuperAdmin = isSuperAdminRole(resolveRole(meData?.data));
+
+  // Paged list: the API returns PAGE_SIZE rows per page, so the tab fetches the
+  // page it shows instead of only ever rendering the first one.
+  const [page, setPage] = useState(0);
+  const adminQ  = useEventAttendees(eventId, page, PAGE_SIZE, "", { enabled: !meLoading && isSuperAdmin });
+  const clientQ = useClientEventAttendees(eventId, "", page, PAGE_SIZE, { enabled: !meLoading && !isSuperAdmin });
+  const q = isSuperAdmin ? adminQ : clientQ;
+  const res: any = q.data;
+  const participants: any[] = res ? rowsOf(res) : (page === 0 ? firstPage : []);
+  const total: number = res?.totalCount ?? res?.totalElements ?? participants.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const from = total === 0 ? 0 : page * PAGE_SIZE + 1;
+  const to = Math.min(total, page * PAGE_SIZE + participants.length);
 
   return (
     <Card className="attend-card overflow-hidden">
@@ -109,7 +131,7 @@ export function EventAttendeesTab({ participants, eventId }: Props) {
         <div>
           <h2 className="font-semibold text-[hsl(var(--foreground))]">Registered Participants</h2>
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-            {participants.length} participant{participants.length !== 1 ? "s" : ""} registered
+            {total.toLocaleString()} participant{total !== 1 ? "s" : ""} registered
           </p>
         </div>
         <Button
@@ -125,7 +147,11 @@ export function EventAttendeesTab({ participants, eventId }: Props) {
       </div>
 
       {/* Empty state */}
-      {participants.length === 0 ? (
+      {q.isLoading && !participants.length ? (
+        <div className="py-14 flex justify-center text-[hsl(var(--muted-foreground))]">
+          <Loader2 className="h-5 w-5 animate-spin" />
+        </div>
+      ) : participants.length === 0 ? (
         <div className="py-14 text-center text-sm text-[hsl(var(--muted-foreground))]">
           <Users className="h-8 w-8 mx-auto mb-3 opacity-25" />
           <p className="font-medium text-[hsl(var(--foreground))]">No attendees yet</p>
@@ -206,6 +232,28 @@ export function EventAttendeesTab({ participants, eventId }: Props) {
             })}
           </tbody>
         </table>
+      )}
+
+      {/* Pagination */}
+      {total > PAGE_SIZE && (
+        <div className="px-5 py-3 border-t border-[hsl(var(--border))] flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">
+            Showing <span className="font-semibold text-[hsl(var(--foreground))]">{from.toLocaleString()}–{to.toLocaleString()}</span> of{" "}
+            <span className="font-semibold text-[hsl(var(--foreground))]">{total.toLocaleString()}</span>
+            {q.isFetching && <Loader2 className="inline h-3 w-3 ml-2 animate-spin" />}
+          </p>
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="outline" className="h-8 gap-1" disabled={page === 0 || q.isFetching} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+              <ChevronLeft className="h-3.5 w-3.5" /> Prev
+            </Button>
+            <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums px-2">
+              Page {page + 1} of {totalPages}
+            </span>
+            <Button size="sm" variant="outline" className="h-8 gap-1" disabled={page + 1 >= totalPages || q.isFetching} onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}>
+              Next <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
       )}
     </Card>
   );

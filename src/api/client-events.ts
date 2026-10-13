@@ -351,6 +351,7 @@ export function useClientEventAttendees(
     },
     enabled: !!eventId && (options?.enabled ?? true),
     staleTime: 30_000,
+    placeholderData: (prev) => prev, // keep the current page visible while the next loads
     // Live screens poll so new registrants appear without a reload.
     refetchInterval: options?.refetchInterval ?? false,
     refetchIntervalInBackground: false,
