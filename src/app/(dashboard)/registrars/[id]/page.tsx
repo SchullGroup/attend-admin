@@ -88,7 +88,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <p className="text-lg font-semibold text-[hsl(var(--foreground))]">Registrar not found</p>
         <Button variant="outline" className="mt-4 gap-2" onClick={() => handleBack(router)}>
-          <ArrowLeft className="h-4 w-4" /> Back to Registrars
+          <ArrowLeft className="h-4 w-4" /> Back
         </Button>
       </div>
     );
@@ -127,7 +127,7 @@ export default function RegistrarDetailPage({ params }: { params: Promise<{ id: 
       {/* ── Back nav ── */}
       <button onClick={() => handleBack(router)}
         className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors w-fit">
-        <ArrowLeft className="h-3.5 w-3.5" /> All Registrars
+        <ArrowLeft className="h-3.5 w-3.5" /> Back
       </button>
 
       {/* ── Header ── */}

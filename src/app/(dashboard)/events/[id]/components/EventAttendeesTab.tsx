@@ -166,6 +166,8 @@ export function EventAttendeesTab({ participants: firstPage, eventId }: Props) {
             </button>
           )}
         </div>
+        {/* Export uses the client-scoped endpoint — not available to super admin. */}
+        {!isSuperAdmin && (
         <Button
           size="sm" variant="outline" className="gap-1.5"
           disabled={exportMutation.isPending}
@@ -176,6 +178,7 @@ export function EventAttendeesTab({ participants: firstPage, eventId }: Props) {
             : <><Download className="h-3.5 w-3.5" /> Export CSV</>
           }
         </Button>
+        )}
         </div>
       </div>
 
