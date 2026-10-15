@@ -5,6 +5,7 @@ import {
   Users, UserPlus, Upload, Trash2, Hash, Mail,
   Check, X, FileText, AlertCircle, Loader2, Pencil, Search,
   ChevronLeft, ChevronRight,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -230,7 +231,8 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
           email:    editForm.email.trim().toLowerCase(),
           phone:    editForm.phone || undefined,
           chn:      withIdPrefix("CHN", editForm.chn) || undefined,
-          units:    editForm.units ? Number(editForm.units) : undefined,
+          // Units are locked for client roles (backend: 403 SHARE_UNITS_LOCKED).
+          // They change only through a register upload, so never send them here.
         },
       },
       { onSuccess: () => cancelEdit() }
@@ -654,12 +656,15 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                           </div>
                           <div className="flex items-end gap-1.5">
                             <div className="flex-1">
-                              <Label className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Units</Label>
-                              <Input
-                                type="number" min={0} value={editForm.units}
-                                onChange={(e) => setEditForm((p) => ({ ...p, units: e.target.value }))}
-                                className="h-8 text-sm mt-1"
-                              />
+                              <Label className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))] inline-flex items-center gap-1">
+                                Units <Lock className="h-2.5 w-2.5" />
+                              </Label>
+                              <div
+                                className="h-8 mt-1 px-3 flex items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted))] text-sm tabular-nums text-[hsl(var(--muted-foreground))] cursor-not-allowed"
+                                title="Share units can't be edited here. They change only through a register upload."
+                              >
+                                {editForm.units ? Number(editForm.units).toLocaleString() : "—"}
+                              </div>
                             </div>
                             <Button size="sm" className="h-8 px-2" disabled={update.isPending} onClick={saveEdit}>
                               {update.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
