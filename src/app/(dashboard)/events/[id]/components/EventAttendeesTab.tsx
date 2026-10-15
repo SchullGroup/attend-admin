@@ -128,6 +128,9 @@ export function EventAttendeesTab({ participants: firstPage, eventId }: Props) {
   const participants: any[] = res ? rowsOf(res) : (page === 0 && !search ? firstPage : []);
   const total: number = res?.totalCount ?? res?.totalElements ?? participants.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // Share units: client roles only (the super-admin endpoint never sends them).
+  const showShares = !isSuperAdmin;
+  const totalShareUnits: number | undefined = showShares ? res?.totalShareUnits : undefined;
   const from = total === 0 ? 0 : page * PAGE_SIZE + 1;
   const to = Math.min(total, page * PAGE_SIZE + participants.length);
 
@@ -141,6 +144,9 @@ export function EventAttendeesTab({ participants: firstPage, eventId }: Props) {
             {search
               ? <>{total.toLocaleString()} matching “{search}”</>
               : <>{total.toLocaleString()} participant{total !== 1 ? "s" : ""} registered</>}
+            {typeof totalShareUnits === "number" && (
+              <> · <span className="font-semibold text-[hsl(var(--foreground))]">{totalShareUnits.toLocaleString()}</span> shares represented</>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -208,6 +214,7 @@ export function EventAttendeesTab({ participants: firstPage, eventId }: Props) {
             <tr className="attend-table-header">
               <th className="px-5 py-3 text-left">Participant</th>
               <th className="px-5 py-3 text-left">Phone</th>
+              {showShares && <th className="px-5 py-3 text-right">Shares</th>}
               <th className="px-5 py-3 text-left">KYC Status</th>
               <th className="px-5 py-3 text-left">Account Status</th>
               <th className="px-5 py-3 text-left">Date Registered</th>
@@ -256,6 +263,15 @@ export function EventAttendeesTab({ participants: firstPage, eventId }: Props) {
                   <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] whitespace-nowrap">
                     {p.phone ?? "—"}
                   </td>
+
+                  {/* Share units — missing key = not a shareholder of this register */}
+                  {showShares && (
+                    <td className="px-5 py-3 text-right text-sm tabular-nums whitespace-nowrap">
+                      {typeof p.shareUnits === "number"
+                        ? <span className="font-medium text-[hsl(var(--foreground))]">{p.shareUnits.toLocaleString()}</span>
+                        : <span className="text-[hsl(var(--muted-foreground))]">—</span>}
+                    </td>
+                  )}
 
                   {/* KYC Status */}
                   <td className="px-5 py-3">
