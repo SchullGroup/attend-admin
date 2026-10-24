@@ -14,6 +14,7 @@ import { useLiveAttendance } from "@/api/client-live";
 import { toEventModule, MODULE_COLORS } from "@/lib/event-module";
 import { CachedImage } from "@/components/custom/cached-image";
 import { WalkInPanel } from "./WalkInPanel";
+import { useWalkInShareholders, useWalkInGuests } from "@/api/client-walk-ins";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -184,12 +185,27 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
     kycStatus: "Unknown",
   }));
 
-  // Merge: local session check-ins on top, then server history for any not already listed
-  const localNames = new Set(checkins.map((c) => c.name));
-  const mergedLog: CheckIn[] = [
-    ...checkins,
-    ...serverRows.filter((r) => !localNames.has(r.name)),
-  ];
+  // Walk-in history from the server, so it survives a page refresh (newest first, up to 100 each).
+  // Walk-ins are refused only on VIRTUAL events, so load history for anything else.
+  const physical = !/virtual/i.test(String(event.format ?? ""));
+  const { data: walkInSh } = useWalkInShareholders(event.id, 0, 100, "", { enabled: physical });
+  const { data: walkInGu } = useWalkInGuests(event.id, 0, 100, "", "", { enabled: physical });
+  const walkInRows: CheckIn[] = [
+    ...(walkInSh?.content ?? []).map((w) => ({ name: w.fullName, at: w.checkedInAt, kycStatus: "Walk-in" })),
+    ...(walkInGu?.content ?? []).map((g) => ({ name: g.fullName, at: g.checkedInAt, kycStatus: "Guest" })),
+  ]
+    .sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0))
+    .map((r) => ({ name: r.name, time: formatTime(r.at), status: "Verified", kycStatus: r.kycStatus }));
+
+  // Merge: local session check-ins on top, then server history (walk-ins + live attendance)
+  // for anyone not already listed.
+  const seen = new Set(checkins.map((c) => c.name));
+  const mergedLog: CheckIn[] = [...checkins];
+  for (const r of [...walkInRows, ...serverRows]) {
+    if (seen.has(r.name)) continue;
+    seen.add(r.name);
+    mergedLog.push(r);
+  }
 
   const { data: attendeeData, isLoading: attendeesLoading } = useClientEventAttendees(event.id, "", 0, 50);
   const attendees = attendeeData?.attendees ?? [];
