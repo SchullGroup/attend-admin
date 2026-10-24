@@ -14,6 +14,7 @@ import { useClientScanQr, useClientEvents, useClientEventAttendees } from "@/api
 import { useLiveAttendance } from "@/api/client-live";
 import { toEventModule, MODULE_COLORS } from "@/lib/event-module";
 import { CachedImage } from "@/components/custom/cached-image";
+import { UserAvatar } from "@/components/custom/user-avatar";
 import { WalkInPanel } from "./WalkInPanel";
 import { useWalkInShareholders, useWalkInGuests } from "@/api/client-walk-ins";
 
@@ -45,6 +46,10 @@ export interface CheckIn {
   time:      string;
   status:    string;
   kycStatus: string;
+  /** Profile photo for registered attendees, when known. */
+  avatarUrl?: string | null;
+  /** Stable id for rows from the server, so two people with the same name both show. */
+  key?:      string;
 }
 
 function initials(name: string) {
@@ -186,6 +191,7 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
     time:      formatTime(a.joinedAt),
     status:    "Verified",
     kycStatus: "Unknown",
+    avatarUrl: a.avatarUrl ?? null,
   }));
 
   // Walk-in history from the server, so it survives a page refresh (newest first, up to 100 each).
@@ -194,23 +200,34 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
   const { data: walkInSh } = useWalkInShareholders(event.id, 0, 100, "", { enabled: physical });
   const { data: walkInGu } = useWalkInGuests(event.id, 0, 100, "", "", { enabled: physical });
   const walkInRows: CheckIn[] = [
-    ...(walkInSh?.content ?? []).map((w) => ({ name: w.fullName, at: w.checkedInAt, kycStatus: "Walk-in" })),
-    ...(walkInGu?.content ?? []).map((g) => ({ name: g.fullName, at: g.checkedInAt, kycStatus: "Guest" })),
+    ...(walkInSh?.content ?? []).map((w) => ({ key: `wsh-${w.id}`, name: w.fullName, at: w.checkedInAt, kycStatus: "Walk-in" })),
+    ...(walkInGu?.content ?? []).map((g) => ({ key: `wgu-${g.id}`, name: g.fullName, at: g.checkedInAt, kycStatus: "Guest" })),
   ]
     .sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0))
-    .map((r) => ({ name: r.name, time: formatTime(r.at), status: "Verified", kycStatus: r.kycStatus }));
-
-  // Merge: local session check-ins on top, then server history (walk-ins + live attendance)
-  // for anyone not already listed.
-  const seen = new Set(checkins.map((c) => c.name));
-  const mergedLog: CheckIn[] = [...checkins];
-  for (const r of [...walkInRows, ...serverRows]) {
-    if (seen.has(r.name)) continue;
-    seen.add(r.name);
-    mergedLog.push(r);
-  }
+    .map((r) => ({ key: r.key, name: r.name, time: formatTime(r.at), status: "Verified", kycStatus: r.kycStatus }));
 
   const { data: attendeeData, isLoading: attendeesLoading } = useClientEventAttendees(event.id, "", 0, 50);
+
+  // Photos for registered attendees, looked up by name from the attendee list.
+  const avatarByName = new Map<string, string>();
+  for (const a of attendeeData?.attendees ?? []) {
+    if ((a as any).avatarUrl && a.fullName) avatarByName.set(a.fullName.trim().toLowerCase(), (a as any).avatarUrl);
+  }
+  const withAvatar = (c: CheckIn): CheckIn =>
+    c.avatarUrl || c.kycStatus === "Walk-in" || c.kycStatus === "Guest"
+      ? c
+      : { ...c, avatarUrl: avatarByName.get(c.name.trim().toLowerCase()) ?? null };
+
+  // Merge: this session's QR check-ins on top, then every walk-in from the server (each keyed
+  // by its own id, so two guests called "John Doe" both show), then live attendance for anyone
+  // not already listed.
+  const seen = new Set([...checkins, ...walkInRows].map((c) => c.name));
+  const mergedLog: CheckIn[] = [
+    ...checkins,
+    ...walkInRows,
+    ...serverRows.filter((r) => !seen.has(r.name)),
+  ].map(withAvatar);
+
   const attendees = attendeeData?.attendees ?? [];
 
   const verified    = mergedLog.filter((c) => c.status === "Verified").length;
@@ -232,6 +249,7 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
             time,
             status:    kycStatus === "None" ? "Pending KYC" : "Verified",
             kycStatus,
+            avatarUrl: data?.avatarUrl ?? null,
           };
           setLastScan({ name, email: data?.email ?? "", seatRef: data?.seatRef ?? "—", kycStatus });
           onCheckin(entry);
@@ -261,10 +279,8 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
           {mergedLog.map((c, i) => {
             const chip = KYC_COLORS[c.kycStatus] ?? { bg: "#9ca3af18", text: "#4b5563" };
             return (
-              <li key={`${c.name}-${i}`} className="flex items-center gap-3 px-5 py-3">
-                <div className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: color }}>
-                  {initials(c.name)}
-                </div>
+              <li key={c.key ?? `${c.name}-${i}`} className="flex items-center gap-3 px-5 py-3">
+                <UserAvatar src={c.avatarUrl ?? null} initials={initials(c.name)} color={color} size={32} />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate" title={c.name}>{c.name}</p>
                   <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -357,14 +373,9 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
             <WalkInPanel
               eventId={event.id}
               color={color}
-              onCheckedIn={(name, kind) =>
-                onCheckin({
-                  name,
-                  time: new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" }),
-                  status: "Verified",
-                  kycStatus: kind === "guest" ? "Guest" : "Walk-in",
-                })
-              }
+              // Walk-ins come back from the server list (refetched after each
+              // check-in), so nothing is added locally — that kept duplicates out.
+              onCheckedIn={() => {}}
             />
           </div>
           <div className="col-span-1">{logCard}</div>
@@ -474,10 +485,12 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
                       <tr key={a.id} className="attend-table-row">
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-2.5">
-                            <div className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                              style={{ backgroundColor: a.avatarColor ?? color }}>
-                              {a.initials ?? initials(a.fullName)}
-                            </div>
+                            <UserAvatar
+                              src={(a as any).avatarUrl ?? null}
+                              initials={a.initials ?? initials(a.fullName)}
+                              color={a.avatarColor ?? color}
+                              size={28}
+                            />
                             <span className="text-sm font-medium text-[hsl(var(--foreground))]">{a.fullName}</span>
                           </div>
                         </td>
