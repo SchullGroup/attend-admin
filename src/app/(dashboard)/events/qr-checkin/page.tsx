@@ -7,8 +7,9 @@ import { Loader } from "@/components/ui/Loader";
 import { toast } from "sonner";
 import {
   QrCode, CheckCircle2, ShieldCheck, Clock, Users, ChevronRight,
-  Camera, CameraOff, XCircle, UserCheck,
+  Camera, CameraOff, XCircle, UserCheck, ExternalLink,
 } from "lucide-react";
+import Link from "next/link";
 import { useClientScanQr, useClientEvents, useClientEventAttendees } from "@/api/client-events";
 import { useLiveAttendance } from "@/api/client-live";
 import { toEventModule, MODULE_COLORS } from "@/lib/event-module";
@@ -26,6 +27,8 @@ const KYC_COLORS: Record<string, { bg: string; text: string }> = {
   "Pending":   { bg: "#f59e0b18", text: "#d97706" },
   "None":      { bg: "#9ca3af18", text: "#6b7280" },
   "Unknown":   { bg: "#9ca3af18", text: "#6b7280" },
+  "Walk-in":   { bg: "#2563eb14", text: "#1d4ed8" },
+  "Guest":     { bg: "#7c22c914", text: "#7c22c9" },
 };
 
 function eventColor(eventType?: string | null): string {
@@ -240,58 +243,46 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
     );
   }, [event.id, processing, scanQr, onCheckin]);
 
+  // Compact rows so the log reads well in the narrow walk-in sidebar and the wide scan view alike.
   const logCard = (
-          <Card className="attend-card overflow-hidden">
-            <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
-              <h2 className="font-semibold text-[hsl(var(--foreground))]">Check-In Log</h2>
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">{mergedLog.length} checked in</span>
-            </div>
-            {mergedLog.length === 0 ? (
-              <div className="py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
-                No check-ins yet — start the camera and scan an attendee&apos;s QR code.
-              </div>
-            ) : (
-              <table className="w-full">
-                <thead>
-                  <tr className="attend-table-header">
-                    <th className="px-5 py-3 text-left">Attendee</th>
-                    <th className="px-5 py-3 text-left">Time</th>
-                    <th className="px-5 py-3 text-left">KYC</th>
-                    <th className="px-5 py-3 text-left">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {mergedLog.map((c, i) => (
-                    <tr key={i} className="attend-table-row">
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: color }}>
-                            {initials(c.name)}
-                          </div>
-                          <span className="text-sm font-medium text-[hsl(var(--foreground))]">{c.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] tabular-nums">{c.time}</td>
-                      <td className="px-5 py-3">
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                          style={{ backgroundColor: KYC_COLORS[c.kycStatus]?.bg ?? "#9ca3af18", color: KYC_COLORS[c.kycStatus]?.text ?? "#6b7280" }}>
-                          {c.kycStatus}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                          style={c.status === "Verified"
-                            ? { backgroundColor: "#16a34a18", color: "#16a34a" }
-                            : { backgroundColor: "#f59e0b18", color: "#d97706" }}>
-                          {c.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
+    <Card className="attend-card overflow-hidden">
+      <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between gap-2">
+        <h2 className="font-semibold text-[hsl(var(--foreground))]">Check-In Log</h2>
+        <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">{mergedLog.length} checked in</span>
+      </div>
+      {mergedLog.length === 0 ? (
+        <div className="px-5 py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
+          {mode === "walkin"
+            ? "No check-ins yet. Walk-ins you check in will appear here."
+            : "No check-ins yet. Start the camera and scan an attendee\u2019s QR code."}
+        </div>
+      ) : (
+        <ul className="divide-y divide-[hsl(var(--border))] max-h-[560px] overflow-y-auto">
+          {mergedLog.map((c, i) => {
+            const chip = KYC_COLORS[c.kycStatus] ?? { bg: "#9ca3af18", text: "#4b5563" };
+            return (
+              <li key={`${c.name}-${i}`} className="flex items-center gap-3 px-5 py-3">
+                <div className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: color }}>
+                  {initials(c.name)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate" title={c.name}>{c.name}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: chip.bg, color: chip.text }}>
+                      {c.kycStatus}
+                    </span>
+                    {c.status !== "Verified" && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-amber-50 text-amber-700">{c.status}</span>
+                    )}
+                  </div>
+                </div>
+                <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums shrink-0">{c.time}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
   );
 
   return (
@@ -311,12 +302,18 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
               {initials(event.registerName ?? event.title)}
             </div>
           )}
-          <div>
+          <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{event.title}</h1>
             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
               {event.organiser || event.registerName} · {event.format}
             </p>
           </div>
+          <Link
+            href={`/events/${event.id}`}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm font-medium text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted)/0.5)] transition-colors"
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> Open event
+          </Link>
         </div>
       </div>
 

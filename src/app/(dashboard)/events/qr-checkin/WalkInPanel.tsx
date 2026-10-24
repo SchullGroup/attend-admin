@@ -16,7 +16,8 @@ import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { popup } from "@/lib/popup-store";
 import {
   useRegisterSearch, useCheckInWalkInShareholder, useUndoWalkInShareholder, useCreateWalkInGuest,
-  apiErrorOf, type RegisterSearchResult, type CheckInMethod,
+  useWalkInGuests, useDeleteWalkInGuest, useWalkInShareholders, GUEST_CATEGORIES,
+  apiErrorOf, type RegisterSearchResult, type CheckInMethod, type WalkInGuest,
 } from "@/api/client-walk-ins";
 import { WalkInGuestForm } from "@/components/walk-ins/WalkInGuestForm";
 
@@ -82,6 +83,9 @@ function ShareholderWalkIn({ eventId, color, onCheckedIn }: { eventId: string; c
   const undo    = useUndoWalkInShareholder();
   const [busyId, setBusyId] = useState<string | null>(null);
   const results = term.length >= 2 ? (data?.content ?? []) : [];
+  // Recent walk-in shareholders, shown while the search box is empty.
+  const { data: recentPage } = useWalkInShareholders(eventId, 0, 20);
+  const recent = recentPage?.content ?? [];
 
   function doCheckIn(r: RegisterSearchResult) {
     setBusyId(r.shareholderId);
@@ -143,9 +147,43 @@ function ShareholderWalkIn({ eventId, color, onCheckedIn }: { eventId: string; c
       </div>
 
       {term.length < 2 ? (
-        <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-6">
-          Type at least 2 letters of the shareholder&apos;s name.
-        </p>
+        <div className="space-y-3">
+          <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-3">
+            Type at least 2 letters of the shareholder&apos;s name.
+          </p>
+          {recent.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Checked in at the gate</h3>
+                <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">
+                  {(recentPage?.totalElements ?? recent.length) > recent.length
+                    ? `Latest ${recent.length} of ${recentPage?.totalElements}`
+                    : `${recent.length} total`}
+                </span>
+              </div>
+              <div className="rounded-xl border border-[hsl(var(--border))] divide-y divide-[hsl(var(--border))] max-h-[320px] overflow-y-auto">
+                {recent.map((w) => (
+                  <div key={w.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{w.fullName}</p>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">
+                        {w.chn ? `CHN ${w.chn}` : "No CHN"}
+                        {typeof w.units === "number" && <> · {w.units.toLocaleString()} units</>}
+                      </p>
+                    </div>
+                    <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums shrink-0">{timeOf(w.checkedInAt)}</span>
+                    <Button
+                      size="sm" variant="ghost" className="h-8 gap-1 text-xs shrink-0" disabled={undo.isPending}
+                      onClick={() => doUndo({ shareholderId: w.shareholderId, fullName: w.fullName, checkedIn: true, method: "WALK_IN", walkInId: w.id })}
+                    >
+                      <Undo2 className="h-3.5 w-3.5" /> Undo
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       ) : isError ? (
         <p className="text-sm text-[hsl(var(--destructive))] text-center py-6">Couldn&apos;t search the register. Please try again.</p>
       ) : results.length === 0 && !isFetching ? (
@@ -194,9 +232,28 @@ function ShareholderWalkIn({ eventId, color, onCheckedIn }: { eventId: string; c
 
 // ── Regulator / guest ──────────────────────────────────────────────────────
 
+const CATEGORY_LABEL = Object.fromEntries(GUEST_CATEGORIES.map((c) => [c.value, c.label])) as Record<string, string>;
+
 function GuestWalkIn({ eventId, onCheckedIn }: { eventId: string; onCheckedIn: (name: string) => void }) {
   const create = useCreateWalkInGuest();
   const [formKey, setFormKey] = useState(0);
+  // Guests already checked in for this event (newest first) — loaded from the server, so it survives a refresh.
+  const { data: guestPage, isLoading: guestsLoading } = useWalkInGuests(eventId, 0, 20);
+  const guests = guestPage?.content ?? [];
+  const totalGuests = guestPage?.totalElements ?? guests.length;
+  const del = useDeleteWalkInGuest();
+
+  function undoGuest(g: WalkInGuest) {
+    popup.confirm(
+      "Undo this check-in?",
+      `${g.fullName} will be removed from the guest list.`,
+      () => del.mutate({ eventId, guestId: g.id }, {
+        onSuccess: () => toast.success(`Check-in undone for ${g.fullName}`),
+        onError: (err) => toast.error(apiErrorOf(err).message ?? "Couldn't undo the check-in."),
+      }),
+      undefined, "Undo check-in", "Cancel",
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -222,6 +279,40 @@ function GuestWalkIn({ eventId, onCheckedIn }: { eventId: string; onCheckedIn: (
           )
         }
       />
+
+      {/* Already checked in */}
+      <div className="pt-4 mt-2 border-t border-[hsl(var(--border))]">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Checked-in guests</h3>
+          <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">
+            {totalGuests > guests.length ? `Latest ${guests.length} of ${totalGuests}` : `${totalGuests} total`}
+          </span>
+        </div>
+        {guestsLoading ? (
+          <div className="py-6 flex justify-center"><Loader2 className="h-4 w-4 animate-spin text-[hsl(var(--muted-foreground))]" /></div>
+        ) : guests.length === 0 ? (
+          <p className="text-sm text-[hsl(var(--muted-foreground))] py-4 text-center">No regulators or guests checked in yet.</p>
+        ) : (
+          <div className="rounded-xl border border-[hsl(var(--border))] divide-y divide-[hsl(var(--border))] max-h-[320px] overflow-y-auto">
+            {guests.map((g) => (
+              <div key={g.id} className="flex items-center gap-3 px-4 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{g.fullName}</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">
+                    <span className="font-semibold">{CATEGORY_LABEL[g.category] ?? g.category}</span> · {g.organisation}
+                    {g.designation ? ` · ${g.designation}` : ""}
+                  </p>
+                </div>
+                <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums shrink-0">{timeOf(g.checkedInAt)}</span>
+                <Button size="sm" variant="ghost" className="h-8 gap-1 text-xs shrink-0" disabled={del.isPending} onClick={() => undoGuest(g)}>
+                  <Undo2 className="h-3.5 w-3.5" /> Undo
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2">To correct a guest&apos;s details or export the list, open the event → Attendees → Walk-in guests.</p>
+      </div>
     </div>
   );
 }
