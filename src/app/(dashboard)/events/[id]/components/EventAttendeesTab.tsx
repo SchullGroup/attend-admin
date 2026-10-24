@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { DateCell } from "@/components/ui/date-cell";
 import { useExportAttendees, useClientEventAttendees } from "@/api/client-events";
 import { useEventAttendees } from "@/api/super-admin";
+import { WalkInShareholdersTable, WalkInGuestsTable } from "./WalkInTables";
 import { useGetMe } from "@/api/auth/hooks";
 import { resolveRole, isSuperAdminRole } from "@/lib/utils";
 
@@ -134,7 +135,13 @@ export function EventAttendeesTab({ participants: firstPage, eventId }: Props) {
   const from = total === 0 ? 0 : page * PAGE_SIZE + 1;
   const to = Math.min(total, page * PAGE_SIZE + participants.length);
 
-  return (
+  // Walk-in tables (client roles only — the endpoints are client-scoped).
+  // Viewers can read and export but not undo or edit.
+  const role = resolveRole(meData?.data);
+  const canEditWalkIns = role !== "viewer";
+  const [view, setView] = useState<"registered" | "shareholders" | "guests">("registered");
+
+  const registeredCard = (
     <Card className="attend-card overflow-hidden">
       {/* Header */}
       <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
@@ -317,5 +324,32 @@ export function EventAttendeesTab({ participants: firstPage, eventId }: Props) {
         </div>
       )}
     </Card>
+  );
+
+  if (isSuperAdmin) return registeredCard;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 self-start" role="tablist" aria-label="Attendee tables">
+        {([
+          ["registered",   "Registered (online)"],
+          ["shareholders", "Walk-in shareholders"],
+          ["guests",       "Walk-in guests"],
+        ] as const).map(([k, label]) => (
+          <button
+            key={k}
+            role="tab"
+            aria-selected={view === k}
+            onClick={() => setView(k)}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${view === k ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {view === "registered"   && registeredCard}
+      {view === "shareholders" && <WalkInShareholdersTable eventId={eventId} canEdit={canEditWalkIns} />}
+      {view === "guests"       && <WalkInGuestsTable eventId={eventId} canEdit={canEditWalkIns} />}
+    </div>
   );
 }

@@ -7,12 +7,13 @@ import { Loader } from "@/components/ui/Loader";
 import { toast } from "sonner";
 import {
   QrCode, CheckCircle2, ShieldCheck, Clock, Users, ChevronRight,
-  Camera, CameraOff, XCircle,
+  Camera, CameraOff, XCircle, UserCheck,
 } from "lucide-react";
 import { useClientScanQr, useClientEvents, useClientEventAttendees } from "@/api/client-events";
 import { useLiveAttendance } from "@/api/client-live";
 import { toEventModule, MODULE_COLORS } from "@/lib/event-module";
 import { CachedImage } from "@/components/custom/cached-image";
+import { WalkInPanel } from "./WalkInPanel";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -165,6 +166,8 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
   const [processing, setProcessing] = useState(false);
   const [hwToken,    setHwToken]    = useState("");
   const hwInputRef                  = useRef<HTMLInputElement>(null);
+  // "scan" = QR scanner; "walkin" = search the register / capture a guest at the gate.
+  const [mode, setMode] = useState<"scan" | "walkin">("scan");
 
   const scanQr     = useClientScanQr();
   const isLive     = event.status === "LIVE";
@@ -221,6 +224,60 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
     );
   }, [event.id, processing, scanQr, onCheckin]);
 
+  const logCard = (
+          <Card className="attend-card overflow-hidden">
+            <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
+              <h2 className="font-semibold text-[hsl(var(--foreground))]">Check-In Log</h2>
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">{mergedLog.length} checked in</span>
+            </div>
+            {mergedLog.length === 0 ? (
+              <div className="py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
+                No check-ins yet — start the camera and scan an attendee&apos;s QR code.
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="attend-table-header">
+                    <th className="px-5 py-3 text-left">Attendee</th>
+                    <th className="px-5 py-3 text-left">Time</th>
+                    <th className="px-5 py-3 text-left">KYC</th>
+                    <th className="px-5 py-3 text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mergedLog.map((c, i) => (
+                    <tr key={i} className="attend-table-row">
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: color }}>
+                            {initials(c.name)}
+                          </div>
+                          <span className="text-sm font-medium text-[hsl(var(--foreground))]">{c.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] tabular-nums">{c.time}</td>
+                      <td className="px-5 py-3">
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                          style={{ backgroundColor: KYC_COLORS[c.kycStatus]?.bg ?? "#9ca3af18", color: KYC_COLORS[c.kycStatus]?.text ?? "#6b7280" }}>
+                          {c.kycStatus}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                          style={c.status === "Verified"
+                            ? { backgroundColor: "#16a34a18", color: "#16a34a" }
+                            : { backgroundColor: "#f59e0b18", color: "#d97706" }}>
+                          {c.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+  );
+
   return (
     <div className="flex flex-col gap-6">
       {/* Back + header */}
@@ -266,7 +323,41 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
         ))}
       </div>
 
-      {/* Main grid */}
+      {/* QR scan vs walk-in */}
+      <div className="flex items-center gap-1 bg-[hsl(var(--muted))] rounded-full p-1 self-start" role="tablist">
+        {([["scan", "Scan QR", QrCode], ["walkin", "Walk-in", UserCheck]] as const).map(([k, label, Icon]) => (
+          <button
+            key={k}
+            role="tab"
+            aria-selected={mode === k}
+            onClick={() => setMode(k)}
+            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${mode === k ? "bg-white shadow-sm text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"}`}
+          >
+            <Icon className="h-3.5 w-3.5" /> {label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "walkin" ? (
+        <div className="grid grid-cols-3 gap-5">
+          <div className="col-span-2">
+            <WalkInPanel
+              eventId={event.id}
+              color={color}
+              onCheckedIn={(name, kind) =>
+                onCheckin({
+                  name,
+                  time: new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" }),
+                  status: "Verified",
+                  kycStatus: kind === "guest" ? "Guest" : "Walk-in",
+                })
+              }
+            />
+          </div>
+          <div className="col-span-1">{logCard}</div>
+        </div>
+      ) : (
+      /* Main grid */
       <div className="grid grid-cols-3 gap-5">
 
         {/* Left: camera + last scan + hardware input */}
@@ -343,57 +434,7 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
 
         {/* Right: check-in log + RSVP list */}
         <div className="col-span-2 flex flex-col gap-5">
-          <Card className="attend-card overflow-hidden">
-            <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
-              <h2 className="font-semibold text-[hsl(var(--foreground))]">Check-In Log</h2>
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">{mergedLog.length} checked in</span>
-            </div>
-            {mergedLog.length === 0 ? (
-              <div className="py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
-                No check-ins yet — start the camera and scan an attendee&apos;s QR code.
-              </div>
-            ) : (
-              <table className="w-full">
-                <thead>
-                  <tr className="attend-table-header">
-                    <th className="px-5 py-3 text-left">Attendee</th>
-                    <th className="px-5 py-3 text-left">Time</th>
-                    <th className="px-5 py-3 text-left">KYC</th>
-                    <th className="px-5 py-3 text-left">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {mergedLog.map((c, i) => (
-                    <tr key={i} className="attend-table-row">
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="h-7 w-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: color }}>
-                            {initials(c.name)}
-                          </div>
-                          <span className="text-sm font-medium text-[hsl(var(--foreground))]">{c.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))] tabular-nums">{c.time}</td>
-                      <td className="px-5 py-3">
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                          style={{ backgroundColor: KYC_COLORS[c.kycStatus]?.bg ?? "#9ca3af18", color: KYC_COLORS[c.kycStatus]?.text ?? "#6b7280" }}>
-                          {c.kycStatus}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                          style={c.status === "Verified"
-                            ? { backgroundColor: "#16a34a18", color: "#16a34a" }
-                            : { backgroundColor: "#f59e0b18", color: "#d97706" }}>
-                          {c.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Card>
+          {logCard}
 
           <Card className="attend-card overflow-hidden">
             <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
@@ -442,6 +483,7 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
           </Card>
         </div>
       </div>
+      )}
     </div>
   );
 }
