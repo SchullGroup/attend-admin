@@ -107,11 +107,14 @@ function LiveQrScanner({ color, onScan, disabled }: QrScannerProps) {
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 220, height: 220 } },
         (decodedText: string) => {
+          // A short pause after every read stops one code firing many times while it's
+          // in view. After that the SAME code can be read again — previously it was
+          // blocked until a different code was scanned, so a repeat (already-checked-in)
+          // attempt got no feedback the second time.
           if (cooldownRef.current) return;
-          if (decodedText === lastTokenRef.current) return;
           lastTokenRef.current = decodedText;
           cooldownRef.current  = true;
-          setTimeout(() => { cooldownRef.current = false; }, 3000);
+          setTimeout(() => { cooldownRef.current = false; }, 2500);
           onScan(decodedText);
         },
         () => {}
@@ -191,7 +194,7 @@ interface ScannerViewProps {
 
 function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewProps) {
   const [lastScan,   setLastScan]   = useState<{ name: string; email: string; seatRef: string; kycStatus: string; already?: string | null } | null>(null);
-  // A camera keeps seeing the same code for a second or two — ignore repeats of one token.
+  // Ignore the same code read twice within 2 s (a double read, not a real retry).
   const lastTokenRef = useRef<{ token: string; at: number } | null>(null);
   const [processing, setProcessing] = useState(false);
   const [hwToken,    setHwToken]    = useState("");
@@ -286,7 +289,7 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
   const handleTokenScanned = useCallback((token: string) => {
     if (processing) return;
     const now = Date.now();
-    if (lastTokenRef.current && lastTokenRef.current.token === token && now - lastTokenRef.current.at < 5000) return;
+    if (lastTokenRef.current && lastTokenRef.current.token === token && now - lastTokenRef.current.at < 2000) return;
     lastTokenRef.current = { token, at: now };
     setProcessing(true);
 
