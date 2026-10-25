@@ -309,7 +309,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           onClick={() => handleBack(router)}
           className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-4 transition-colors"
         >
-          <ArrowLeft className="h-3.5 w-3.5" /> All Events
+          <ArrowLeft className="h-3.5 w-3.5" /> Back
         </button>
         <div className="flex items-start justify-between gap-4">
           <div>

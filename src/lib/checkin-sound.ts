@@ -1,8 +1,11 @@
 /**
- * Short confirmation tones for the gate: a bright two-note "ding" when someone
- * is checked in, and a low buzz when a check-in is refused. Generated with the
- * Web Audio API, so there's no audio file to load. Fails silently where audio
- * is unavailable or blocked.
+ * Check-in tones for the gate, synthesised with the Web Audio API (no audio
+ * file to load). Fails silently where audio is unavailable or blocked.
+ *
+ * - Success: two warm marimba notes rising (C5 → G5) — friendly, and soft
+ *   enough for a quiet hall.
+ * - Refused / already checked in: two soft falling notes — clearly "no", but
+ *   not harsh in a quiet hall.
  */
 
 let ctx: AudioContext | null = null;
@@ -18,31 +21,65 @@ function audio(): AudioContext | null {
   }
 }
 
-function tone(c: AudioContext, freq: number, start: number, dur: number, type: OscillatorType = "sine", peak = 0.25) {
-  const osc = c.createOscillator();
-  const gain = c.createGain();
-  osc.type = type;
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(peak, start + 0.015);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-  osc.connect(gain).connect(c.destination);
-  osc.start(start);
-  osc.stop(start + dur + 0.02);
+function master(c: AudioContext): AudioNode {
+  // Gentle low-pass keeps the top partials from sounding tinny on laptop speakers.
+  const lp = c.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = 6000;
+  lp.connect(c.destination);
+  return lp;
 }
 
-/** Success: two rising notes (E5 → A5). */
+/**
+ * One marimba strike: a sine fundamental plus the bar's characteristic overtones
+ * (≈3.93× and ≈9.2×), each dying away quickly — a warm, wooden "tok".
+ */
+function marimba(c: AudioContext, out: AudioNode, freq: number, start: number, level: number, decay: number) {
+  const partials: [ratio: number, gain: number, decay: number][] = [
+    [1,    1.0,  decay],
+    [3.93, 0.25, decay * 0.35],
+    [9.2,  0.06, decay * 0.15],
+  ];
+  for (const [ratio, g, d] of partials) {
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq * ratio;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(level * g, start + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + d);
+    osc.connect(gain).connect(out);
+    osc.start(start);
+    osc.stop(start + d + 0.03);
+  }
+}
+
+/** Success: two warm marimba notes rising (C5 → G5). */
 export function playCheckInSuccess() {
   const c = audio();
   if (!c) return;
-  const t = c.currentTime;
-  tone(c, 659.25, t, 0.14);
-  tone(c, 880, t + 0.12, 0.22);
+  const out = master(c);
+  const t = c.currentTime + 0.01;
+  marimba(c, out, 523.25, t,        0.3, 0.45);
+  marimba(c, out, 783.99, t + 0.13, 0.3, 0.6);
 }
 
-/** Refused / already checked in: one short low buzz. */
+/** Refused / already checked in: two soft falling notes (E4 → C4). */
 export function playCheckInError() {
   const c = audio();
   if (!c) return;
-  tone(c, 196, c.currentTime, 0.28, "square", 0.08);
+  const out = master(c);
+  const t = c.currentTime + 0.01;
+  for (const [freq, at] of [[329.63, 0], [261.63, 0.16]] as const) {
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, t + at);
+    gain.gain.exponentialRampToValueAtTime(0.16, t + at + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.32);
+    osc.connect(gain).connect(out);
+    osc.start(t + at);
+    osc.stop(t + at + 0.36);
+  }
 }
