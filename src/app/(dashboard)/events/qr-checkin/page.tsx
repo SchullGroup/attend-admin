@@ -7,7 +7,7 @@ import { Loader } from "@/components/ui/Loader";
 import { toast } from "sonner";
 import {
   QrCode, CheckCircle2, ShieldCheck, Clock, Users, ChevronRight,
-  Camera, CameraOff, XCircle, UserCheck, ExternalLink,
+  Camera, CameraOff, XCircle, UserCheck, ExternalLink, Volume2, VolumeX,
 } from "lucide-react";
 import Link from "next/link";
 import { useClientScanQr, useClientEvents, useClientEventAttendees } from "@/api/client-events";
@@ -15,7 +15,7 @@ import { useLiveAttendance } from "@/api/client-live";
 import { toEventModule, MODULE_COLORS } from "@/lib/event-module";
 import { CachedImage } from "@/components/custom/cached-image";
 import { UserAvatar } from "@/components/custom/user-avatar";
-import { playCheckInSuccess, playCheckInError } from "@/lib/checkin-sound";
+import { playCheckInSuccess, playCheckInError, isCheckInSoundOn, setCheckInSoundOn } from "@/lib/checkin-sound";
 import { WalkInPanel } from "./WalkInPanel";
 import { useWalkInShareholders, useWalkInGuests } from "@/api/client-walk-ins";
 
@@ -52,7 +52,14 @@ export interface CheckIn {
   avatarUrl?: string | null;
   /** Stable id for rows from the server, so two people with the same name both show. */
   key?:      string;
+  /** ISO time of the check-in, for ordering the log newest first. */
+  at?:       string;
 }
+
+/** Walk-ins loaded for the log (the API's page maximum). The log lists everything loaded and scrolls. */
+const WALK_IN_LOG_SIZE = 100;
+/** Registered Attendees card shows the latest few registrations. */
+const REGISTERED_LIMIT = 10;
 
 /** "FULL_KYC" / "full_kyc" / "Full KYC" → the label KYC_COLORS uses. */
 function kycLabel(raw?: string | null): string {
@@ -189,6 +196,15 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
   const hwInputRef                  = useRef<HTMLInputElement>(null);
   // "scan" = QR scanner; "walkin" = search the register / capture a guest at the gate.
   const [mode, setMode] = useState<"scan" | "walkin">("scan");
+  // Check-in sounds on/off — remembered on this browser.
+  const [soundOn, setSoundOn] = useState(true);
+  useEffect(() => { setSoundOn(isCheckInSoundOn()); }, []);
+  function toggleSound() {
+    const next = !soundOn;
+    setSoundOn(next);
+    setCheckInSoundOn(next);
+    if (next) playCheckInSuccess(); // a quick preview so staff hear it's back on
+  }
 
   const scanQr     = useClientScanQr();
   const isLive     = event.status === "LIVE";
@@ -204,19 +220,21 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
     status:    "Verified",
     kycStatus: "Unknown",
     avatarUrl: a.avatarUrl ?? null,
+    at:        a.joinedAt,
   }));
 
-  // Walk-in history from the server, so it survives a page refresh (newest first, up to 100 each).
+  // Walk-in history from the server, so it survives a page refresh. Only the latest few are
+  // needed for the log; the totals come from the server's counts.
   // Walk-ins are refused only on VIRTUAL events, so load history for anything else.
   const physical = !/virtual/i.test(String(event.format ?? ""));
-  const { data: walkInSh } = useWalkInShareholders(event.id, 0, 100, "", { enabled: physical });
-  const { data: walkInGu } = useWalkInGuests(event.id, 0, 100, "", "", { enabled: physical });
+  const { data: walkInSh } = useWalkInShareholders(event.id, 0, WALK_IN_LOG_SIZE, "", { enabled: physical });
+  const { data: walkInGu } = useWalkInGuests(event.id, 0, WALK_IN_LOG_SIZE, "", "", { enabled: physical });
   const walkInRows: CheckIn[] = [
     ...(walkInSh?.content ?? []).map((w) => ({ key: `wsh-${w.id}`, name: w.fullName, at: w.checkedInAt, kycStatus: "Walk-in" })),
     ...(walkInGu?.content ?? []).map((g) => ({ key: `wgu-${g.id}`, name: g.fullName, at: g.checkedInAt, kycStatus: "Guest" })),
   ]
     .sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0))
-    .map((r) => ({ key: r.key, name: r.name, time: formatTime(r.at), status: "Verified", kycStatus: r.kycStatus }));
+    .map((r) => ({ key: r.key, name: r.name, time: formatTime(r.at), status: "Verified", kycStatus: r.kycStatus, at: r.at }));
 
   const { data: attendeeData, isLoading: attendeesLoading } = useClientEventAttendees(event.id, "", 0, 50);
 
@@ -241,17 +259,27 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
   // by its own id, so two guests called "John Doe" both show), then live attendance for anyone
   // not already listed.
   const seen = new Set([...checkins, ...walkInRows].map((c) => c.name));
-  const mergedLog: CheckIn[] = [
-    ...checkins,
-    ...walkInRows,
-    ...serverRows.filter((r) => !seen.has(r.name)),
-  ].map(withAvatar);
+  const liveExtra = serverRows.filter((r) => !seen.has(r.name));
+  const allLog: CheckIn[] = [...checkins, ...walkInRows, ...liveExtra]
+    .map(withAvatar)
+    .sort((a, b) => (Date.parse(b.at ?? "") || 0) - (Date.parse(a.at ?? "") || 0));
+  // Everything loaded, newest first — the card scrolls, about five rows tall.
+  const mergedLog = allLog;
+  // Real total: walk-ins from the server's counts (not just the rows loaded) + QR / online check-ins.
+  const totalCheckIns =
+    checkins.length + liveExtra.length +
+    (walkInSh?.totalElements ?? walkInSh?.content.length ?? 0) +
+    (walkInGu?.totalElements ?? walkInGu?.content.length ?? 0);
 
-  const attendees = attendeeData?.attendees ?? [];
+  // Latest registrations first; only a handful are shown here.
+  const allAttendees = attendeeData?.attendees ?? [];
+  const regTime = (a: any) => Date.parse(a.registeredAt ?? a.rsvpDate ?? a.joinedAt ?? a.createdAt ?? "") || 0;
+  const attendees = [...allAttendees].sort((a, b) => regTime(b) - regTime(a)).slice(0, REGISTERED_LIMIT);
+  const totalRegistered: number = (attendeeData as any)?.totalCount ?? (attendeeData as any)?.totalElements ?? allAttendees.length;
 
-  const verified    = mergedLog.filter((c) => c.status === "Verified").length;
-  const pending     = mergedLog.filter((c) => c.status !== "Verified").length;
-  const verifiedPct = mergedLog.length > 0 ? Math.round((verified / mergedLog.length) * 100) : null;
+  const verified    = allLog.filter((c) => c.status === "Verified").length;
+  const pending     = allLog.filter((c) => c.status !== "Verified").length;
+  const verifiedPct = allLog.length > 0 ? Math.round((verified / allLog.length) * 100) : null;
 
   const handleTokenScanned = useCallback((token: string) => {
     if (processing) return;
@@ -266,6 +294,7 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
           const entry: CheckIn = {
             name,
             time,
+            at:        new Date().toISOString(),
             status:    kycStatus === "None" ? "Pending KYC" : "Verified",
             kycStatus,
             avatarUrl: data?.avatarUrl ?? null,
@@ -286,7 +315,7 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
     <Card className="attend-card overflow-hidden">
       <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between gap-2">
         <h2 className="font-semibold text-[hsl(var(--foreground))]">Check-In Log</h2>
-        <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">{mergedLog.length} checked in</span>
+        <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">{totalCheckIns.toLocaleString()} checked in</span>
       </div>
       {mergedLog.length === 0 ? (
         <div className="px-5 py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
@@ -295,7 +324,7 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
             : "No check-ins yet. Start the camera and scan an attendee\u2019s QR code."}
         </div>
       ) : (
-        <ul className="divide-y divide-[hsl(var(--border))] max-h-[560px] overflow-y-auto">
+        <ul className="divide-y divide-[hsl(var(--border))] max-h-[340px] overflow-y-auto overscroll-contain">
           {mergedLog.map((c, i) => {
             const chip = KYC_COLORS[c.kycStatus] ?? { bg: "#9ca3af18", text: "#4b5563" };
             return (
@@ -317,6 +346,15 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
             );
           })}
         </ul>
+      )}
+      {totalCheckIns > 0 && (
+        <div className="px-5 py-3 border-t border-[hsl(var(--border))] text-xs">
+          <span className="text-[hsl(var(--muted-foreground))] tabular-nums">
+            {totalCheckIns > mergedLog.length
+              ? `Showing the latest ${mergedLog.length.toLocaleString()} of ${totalCheckIns.toLocaleString()}`
+              : `${totalCheckIns.toLocaleString()} total`}{mergedLog.length > 5 ? " · scroll for more" : ""}
+          </span>
+        </div>
       )}
     </Card>
   );
@@ -344,6 +382,16 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
               {event.organiser || event.registerName} · {event.format}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={toggleSound}
+            aria-pressed={!soundOn}
+            title={soundOn ? "Turn check-in sounds off" : "Turn check-in sounds on"}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm font-medium text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted)/0.5)] transition-colors"
+          >
+            {soundOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />}
+            {soundOn ? "Sound on" : "Sound off"}
+          </button>
           <Link
             href={`/events/${event.id}`}
             className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm font-medium text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted)/0.5)] transition-colors"
@@ -356,7 +404,7 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: "Check-Ins",   value: mergedLog.length,                                icon: Users,       accent: color     },
+          { label: "Check-Ins",   value: totalCheckIns,                                icon: Users,       accent: color     },
           { label: "Verified %",  value: verifiedPct != null ? `${verifiedPct}%` : "—",  icon: ShieldCheck, accent: "#16a34a" },
           { label: "Pending KYC", value: pending,                                          icon: Clock,       accent: "#f59e0b" },
         ].map((s) => (
@@ -483,7 +531,11 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
           <Card className="attend-card overflow-hidden">
             <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center justify-between">
               <h2 className="font-semibold text-[hsl(var(--foreground))]">Registered Attendees</h2>
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">{attendees.length} registered</span>
+              <span className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">
+                {totalRegistered > attendees.length
+                  ? `Latest ${attendees.length} of ${totalRegistered.toLocaleString()}`
+                  : `${totalRegistered.toLocaleString()} registered`}
+              </span>
             </div>
             {attendeesLoading ? (
               <div className="py-8 flex items-center justify-center"><Loader variant="inline" text="Loading…" /></div>

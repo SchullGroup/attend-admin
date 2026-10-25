@@ -10,6 +10,20 @@
 
 let ctx: AudioContext | null = null;
 
+// ── On / off (remembered per browser) ──────────────────────────────────────
+
+const SOUND_KEY = "attend.checkinSound";
+
+/** True unless the gate staff turned check-in sounds off on this browser. */
+export function isCheckInSoundOn(): boolean {
+  if (typeof window === "undefined") return true;
+  try { return window.localStorage.getItem(SOUND_KEY) !== "off"; } catch { return true; }
+}
+
+export function setCheckInSoundOn(on: boolean) {
+  try { window.localStorage.setItem(SOUND_KEY, on ? "on" : "off"); } catch { /* storage blocked — just this session */ }
+}
+
 function audio(): AudioContext | null {
   if (typeof window === "undefined") return null;
   try {
@@ -56,6 +70,7 @@ function marimba(c: AudioContext, out: AudioNode, freq: number, start: number, l
 
 /** Success: two warm marimba notes rising (C5 → G5). */
 export function playCheckInSuccess() {
+  if (!isCheckInSoundOn()) return;
   const c = audio();
   if (!c) return;
   const out = master(c);
@@ -66,6 +81,7 @@ export function playCheckInSuccess() {
 
 /** Refused / already checked in: two soft falling notes (E4 → C4). */
 export function playCheckInError() {
+  if (!isCheckInSoundOn()) return;
   const c = audio();
   if (!c) return;
   const out = master(c);
