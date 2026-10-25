@@ -2300,6 +2300,11 @@ export function useClientScanQr() {
       );
       return (res.data as any).data ?? res.data;
     },
-    onError: (error: any) => parseAndToastApiError(error, "QR scan failed."),
+    // "Already checked in" (409 / ALREADY_CHECKED_IN) is shown by the scanner page itself.
+    onError: (error: any) => {
+      const r = error?.response;
+      const dup = r?.status === 409 || /ALREADY_CHECKED_IN/i.test(String(r?.data?.code ?? ""));
+      if (!dup) parseAndToastApiError(error, "QR scan failed.");
+    },
   });
 }
