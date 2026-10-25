@@ -20,6 +20,7 @@ import {
   apiErrorOf, type RegisterSearchResult, type CheckInMethod, type WalkInGuest,
 } from "@/api/client-walk-ins";
 import { WalkInGuestForm } from "@/components/walk-ins/WalkInGuestForm";
+import { playCheckInSuccess, playCheckInError } from "@/lib/checkin-sound";
 
 const METHOD_LABEL: Record<string, string> = {
   QR_SCAN: "QR scan", SELF: "online", WALK_IN: "walk-in", UNRECORDED: "earlier",
@@ -93,10 +94,12 @@ function ShareholderWalkIn({ eventId, color, onCheckedIn }: { eventId: string; c
       { eventId, shareholderId: r.shareholderId },
       {
         onSuccess: ({ message }) => {
+          playCheckInSuccess();
           toast.success(message ?? `Checked in. Welcome, ${r.fullName}!`);
           onCheckedIn(r.fullName);
         },
         onError: (err) => {
+          playCheckInError();
           const e = apiErrorOf(err);
           if (e.status === 409) {
             toast.error(e.message ?? `${r.fullName} is already checked in.`);
@@ -270,6 +273,7 @@ function GuestWalkIn({ eventId, onCheckedIn }: { eventId: string; onCheckedIn: (
             { eventId, body },
             {
               onSuccess: (g) => {
+                playCheckInSuccess();
                 toast.success(`${g?.fullName ?? body.fullName} checked in`);
                 onCheckedIn(g?.fullName ?? body.fullName);
                 setFormKey((k) => k + 1); // clear the form for the next person

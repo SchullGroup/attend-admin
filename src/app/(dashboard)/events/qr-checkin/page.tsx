@@ -15,6 +15,7 @@ import { useLiveAttendance } from "@/api/client-live";
 import { toEventModule, MODULE_COLORS } from "@/lib/event-module";
 import { CachedImage } from "@/components/custom/cached-image";
 import { UserAvatar } from "@/components/custom/user-avatar";
+import { playCheckInSuccess, playCheckInError } from "@/lib/checkin-sound";
 import { WalkInPanel } from "./WalkInPanel";
 import { useWalkInShareholders, useWalkInGuests } from "@/api/client-walk-ins";
 
@@ -30,6 +31,7 @@ const KYC_COLORS: Record<string, { bg: string; text: string }> = {
   "Unknown":   { bg: "#9ca3af18", text: "#6b7280" },
   "Walk-in":   { bg: "#2563eb14", text: "#1d4ed8" },
   "Guest":     { bg: "#7c22c914", text: "#7c22c9" },
+  "Registered":{ bg: "#16a34a18", text: "#16a34a" },
 };
 
 function eventColor(eventType?: string | null): string {
@@ -50,6 +52,16 @@ export interface CheckIn {
   avatarUrl?: string | null;
   /** Stable id for rows from the server, so two people with the same name both show. */
   key?:      string;
+}
+
+/** "FULL_KYC" / "full_kyc" / "Full KYC" → the label KYC_COLORS uses. */
+function kycLabel(raw?: string | null): string {
+  const k = (raw ?? "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (k === "FULL_KYC") return "Full KYC";
+  if (k === "BASIC_KYC") return "Basic KYC";
+  if (k === "PENDING" || k === "PENDING_REVIEW") return "Pending";
+  if (!k || k === "NO_KYC" || k === "NONE") return "None";
+  return raw ?? "None";
 }
 
 function initials(name: string) {
@@ -208,15 +220,22 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
 
   const { data: attendeeData, isLoading: attendeesLoading } = useClientEventAttendees(event.id, "", 0, 50);
 
-  // Photos for registered attendees, looked up by name from the attendee list.
-  const avatarByName = new Map<string, string>();
+  // Photo + KYC for registered attendees, looked up by name from the attendee list.
+  // (Live attendance rows carry neither KYC nor always a photo — that's why they
+  // showed "Unknown".)
+  const attendeeByName = new Map<string, { avatarUrl?: string | null; kycStatus?: string }>();
   for (const a of attendeeData?.attendees ?? []) {
-    if ((a as any).avatarUrl && a.fullName) avatarByName.set(a.fullName.trim().toLowerCase(), (a as any).avatarUrl);
+    if (a.fullName) attendeeByName.set(a.fullName.trim().toLowerCase(), { avatarUrl: (a as any).avatarUrl, kycStatus: a.kycStatus });
   }
-  const withAvatar = (c: CheckIn): CheckIn =>
-    c.avatarUrl || c.kycStatus === "Walk-in" || c.kycStatus === "Guest"
-      ? c
-      : { ...c, avatarUrl: avatarByName.get(c.name.trim().toLowerCase()) ?? null };
+  const withAvatar = (c: CheckIn): CheckIn => {
+    if (c.kycStatus === "Walk-in" || c.kycStatus === "Guest") return c;
+    const hit = attendeeByName.get(c.name.trim().toLowerCase());
+    return {
+      ...c,
+      avatarUrl: c.avatarUrl || hit?.avatarUrl || null,
+      kycStatus: c.kycStatus === "Unknown" ? (hit?.kycStatus ? kycLabel(hit.kycStatus) : "Registered") : kycLabel(c.kycStatus),
+    };
+  };
 
   // Merge: this session's QR check-ins on top, then every walk-in from the server (each keyed
   // by its own id, so two guests called "John Doe" both show), then live attendance for anyone
@@ -253,10 +272,11 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
           };
           setLastScan({ name, email: data?.email ?? "", seatRef: data?.seatRef ?? "—", kycStatus });
           onCheckin(entry);
+          playCheckInSuccess();
           toast.success(`✓ ${name} checked in`);
           setProcessing(false);
         },
-        onError: () => setProcessing(false),
+        onError: () => { playCheckInError(); setProcessing(false); },
       }
     );
   }, [event.id, processing, scanQr, onCheckin]);
@@ -480,7 +500,8 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
                 </thead>
                 <tbody>
                   {attendees.map((a) => {
-                    const kyc = KYC_COLORS[a.kycStatus] ?? KYC_COLORS["Unknown"];
+                    const kycText = kycLabel(a.kycStatus);
+                    const kyc = KYC_COLORS[kycText] ?? KYC_COLORS["Unknown"];
                     return (
                       <tr key={a.id} className="attend-table-row">
                         <td className="px-5 py-3">
@@ -497,7 +518,7 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
                         <td className="px-5 py-3 text-sm text-[hsl(var(--muted-foreground))]">{a.email}</td>
                         <td className="px-5 py-3">
                           <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: kyc.bg, color: kyc.text }}>
-                            {a.kycStatus}
+                            {kycText}
                           </span>
                         </td>
                       </tr>
