@@ -190,7 +190,9 @@ interface ScannerViewProps {
 }
 
 function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewProps) {
-  const [lastScan,   setLastScan]   = useState<{ name: string; email: string; seatRef: string; kycStatus: string } | null>(null);
+  const [lastScan,   setLastScan]   = useState<{ name: string; email: string; seatRef: string; kycStatus: string; already?: string | null } | null>(null);
+  // A camera keeps seeing the same code for a second or two — ignore repeats of one token.
+  const lastTokenRef = useRef<{ token: string; at: number } | null>(null);
   const [processing, setProcessing] = useState(false);
   const [hwToken,    setHwToken]    = useState("");
   const hwInputRef                  = useRef<HTMLInputElement>(null);
@@ -283,7 +285,19 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
 
   const handleTokenScanned = useCallback((token: string) => {
     if (processing) return;
+    const now = Date.now();
+    if (lastTokenRef.current && lastTokenRef.current.token === token && now - lastTokenRef.current.at < 5000) return;
+    lastTokenRef.current = { token, at: now };
     setProcessing(true);
+
+    // Someone scanned again after they were already in: amber card + warning, nothing added to the log.
+    const showAlready = (name: string, email: string, kycStatus: string, atIso?: string | null, msg?: string) => {
+      const at = atIso ? formatTime(atIso) : null;
+      setLastScan({ name, email, seatRef: "—", kycStatus, already: at ?? "earlier" });
+      playCheckInError();
+      toast.warning(msg ?? `${name} is already checked in${at ? ` (since ${at})` : ""}.`);
+    };
+
     scanQr.mutate(
       { eventId: event.id, qrToken: token },
       {
@@ -291,7 +305,24 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
           const name      = data?.fullName  ?? "Attendee";
           const kycStatus = data?.kycStatus ?? "Unknown";
           const time      = new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" });
+          // The backend may answer a repeat scan with 200: spot it by an explicit flag,
+          // success:false, a check-in time older than a minute, or a name already in the log.
+          const prevAt  = data?.checkedInAt ? Date.parse(data.checkedInAt) : NaN;
+          const isRepeat =
+            data?.alreadyCheckedIn === true ||
+            data?.success === false ||
+            (!Number.isNaN(prevAt) && Date.now() - prevAt > 60_000) ||
+            // Same attendee scanned earlier on this computer (matched by id, not name).
+            (!!data?.attendeeId && checkins.some((c) => c.key === `att-${data.attendeeId}`)) ||
+            // Or already on the server's live attendance list.
+            serverRows.some((r) => r.name === name);
+          if (isRepeat) {
+            showAlready(name, data?.email ?? "", kycLabel(kycStatus), data?.checkedInAt, data?.success === false ? data?.message : undefined);
+            setProcessing(false);
+            return;
+          }
           const entry: CheckIn = {
+            key:       data?.attendeeId ? `att-${data.attendeeId}` : undefined,
             name,
             time,
             at:        new Date().toISOString(),
@@ -299,16 +330,26 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
             kycStatus,
             avatarUrl: data?.avatarUrl ?? null,
           };
-          setLastScan({ name, email: data?.email ?? "", seatRef: data?.seatRef ?? "—", kycStatus });
+          setLastScan({ name, email: data?.email ?? "", seatRef: data?.seatRef ?? "—", kycStatus, already: null });
           onCheckin(entry);
           playCheckInSuccess();
           toast.success(`✓ ${name} checked in`);
           setProcessing(false);
         },
-        onError: () => { playCheckInError(); setProcessing(false); },
+        onError: (err: any) => {
+          const r = err?.response;
+          const dup = r?.status === 409 || /ALREADY_CHECKED_IN/i.test(String(r?.data?.code ?? ""));
+          if (dup) {
+            const d = r?.data?.data ?? {};
+            showAlready(d.fullName ?? d.name ?? "This attendee", d.email ?? "", kycLabel(d.kycStatus), d.checkedInAt, r?.data?.message);
+          } else {
+            playCheckInError();
+          }
+          setProcessing(false);
+        },
       }
     );
-  }, [event.id, processing, scanQr, onCheckin]);
+  }, [event.id, processing, scanQr, onCheckin, checkins, serverRows]);
 
   // Compact rows so the log reads well in the narrow walk-in sidebar and the wide scan view alike.
   const logCard = (
@@ -324,7 +365,7 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
             : "No check-ins yet. Start the camera and scan an attendee\u2019s QR code."}
         </div>
       ) : (
-        <ul className="divide-y divide-[hsl(var(--border))] max-h-[340px] overflow-y-auto overscroll-contain">
+        <ul className="divide-y divide-[hsl(var(--border))] max-h-[340px] overflow-y-auto overscroll-contain no-scrollbar">
           {mergedLog.map((c, i) => {
             const chip = KYC_COLORS[c.kycStatus] ?? { bg: "#9ca3af18", text: "#4b5563" };
             return (
@@ -498,8 +539,10 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
           {lastScan && (
             <Card className="attend-card overflow-hidden">
               <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <h2 className="font-semibold text-[hsl(var(--foreground))]">Last Check-In</h2>
+                {lastScan.already
+                  ? <XCircle className="h-4 w-4 text-amber-600" />
+                  : <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                <h2 className="font-semibold text-[hsl(var(--foreground))]">{lastScan.already ? "Already Checked In" : "Last Check-In"}</h2>
               </div>
               <div className="px-5 py-4 flex flex-col gap-2">
                 <div className="flex items-center justify-between">
@@ -516,9 +559,15 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
                     <span className="font-semibold text-[hsl(var(--foreground))]">{lastScan.seatRef}</span>
                   </p>
                 )}
-                <div className="mt-1 flex items-center gap-1.5 text-xs text-green-600 font-medium">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> Checked in successfully
-                </div>
+                {lastScan.already ? (
+                  <div className="mt-1 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-xs text-amber-800 font-medium">
+                    Already checked in{lastScan.already !== "earlier" ? ` at ${lastScan.already}` : ""}. Don&apos;t admit them twice.
+                  </div>
+                ) : (
+                  <div className="mt-1 flex items-center gap-1.5 text-xs text-green-600 font-medium">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Checked in successfully
+                  </div>
+                )}
               </div>
             </Card>
           )}
