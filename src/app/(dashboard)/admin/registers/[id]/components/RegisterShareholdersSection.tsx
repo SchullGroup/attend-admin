@@ -20,6 +20,7 @@ import {
   useDeleteShareholder,
   useBulkDeleteShareholders,
   type Shareholder,
+  type ShareholderUpdatePayload,
 } from "@/api/registers";
 import { cn, digitsOnly, withIdPrefix, resolveRole } from "@/lib/utils";
 import { popup } from "@/lib/popup-store";
@@ -35,6 +36,8 @@ interface CsvRow {
   phone?:    string;
   chn?:      string;
   units?:    number;
+  accountNo?: string;
+  address?:  string;
   status?:   "ACTIVE" | "INACTIVE";
   _error?:   string;
 }
@@ -60,6 +63,8 @@ function mapCsvRow(raw: Record<string, string>): CsvRow {
   const chnRaw    = norm["chn"]      ?? norm["holdernumber"] ?? norm["shareholderno"] ?? norm["ref"] ?? "";
   const unitsRaw  = norm["units"]    ?? norm["shares"]       ?? norm["shareunits"] ?? "";
   const units     = unitsRaw ? Number(unitsRaw.replace(/,/g, "")) : undefined;
+  const accountNo = norm["accountno"] ?? norm["accountnumber"] ?? norm["acctno"] ?? norm["account"] ?? "";
+  const address   = norm["address"]   ?? norm["residentialaddress"] ?? norm["postaladdress"] ?? "";
   const rawStatus = (norm["status"] ?? "").toUpperCase();
   const status: "ACTIVE" | "INACTIVE" | undefined =
     rawStatus === "INACTIVE" ? "INACTIVE" : rawStatus === "ACTIVE" ? "ACTIVE" : undefined;
@@ -87,6 +92,8 @@ function mapCsvRow(raw: Record<string, string>): CsvRow {
     phone:  phone  || undefined,
     chn:    chn    || undefined,
     units:  units  || undefined,
+    accountNo: accountNo || undefined,
+    address:   address   || undefined,
     status: status ?? "ACTIVE",
     _error: missingEmail ? "Invalid email" : missingName ? "Name missing" : undefined,
   };
@@ -113,8 +120,10 @@ interface AddForm {
   phone:    string;
   chn:      string;
   units:    string;
+  accountNo: string;
+  address:  string;
 }
-const EMPTY_FORM: AddForm = { fullName: "", email: "", phone: "", chn: "", units: "" };
+const EMPTY_FORM: AddForm = { fullName: "", email: "", phone: "", chn: "", units: "", accountNo: "", address: "" };
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -212,6 +221,8 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
       phone:    s.phone ?? "",
       chn:      digitsOnly(s.chn ?? ""),
       units:    s.units != null ? String(s.units) : "",
+      accountNo: s.accountNo ?? "",
+      address:  s.address ?? "",
     });
   }
 
@@ -222,19 +233,25 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
 
   function saveEdit() {
     if (!editingId) return;
+    const original = shareholders.find((x) => x.id === editingId);
+    // Send only what changed. Prod registers store CHN as plain digits
+    // ("73"), so re-sending an untouched CHN would rewrite it as "CHN73".
+    // Units are locked for client roles (backend: 403 SHARE_UNITS_LOCKED)
+    // and change only through a register upload, so they're never sent.
+    const updates: ShareholderUpdatePayload = {};
+    const name    = editForm.fullName.trim();
+    const email   = editForm.email.trim().toLowerCase();
+    const acct    = editForm.accountNo.trim();
+    const address = editForm.address.trim();
+    if (!original || name !== displayName(original)) updates.fullName = name;
+    if (!original || email !== (original.email ?? "").toLowerCase()) updates.email = email;
+    if (!original || editForm.phone !== (original.phone ?? "")) updates.phone = editForm.phone || undefined;
+    if (!original || editForm.chn !== digitsOnly(original.chn ?? "")) updates.chn = withIdPrefix("CHN", editForm.chn) || undefined;
+    if (!original || acct !== (original.accountNo ?? "")) updates.accountNo = acct;
+    if (!original || address !== (original.address ?? "")) updates.address = address;
+    if (Object.keys(updates).length === 0) { cancelEdit(); return; }
     update.mutate(
-      {
-        registerId,
-        shareholderId: editingId,
-        updates: {
-          fullName: editForm.fullName.trim(),
-          email:    editForm.email.trim().toLowerCase(),
-          phone:    editForm.phone || undefined,
-          chn:      withIdPrefix("CHN", editForm.chn) || undefined,
-          // Units are locked for client roles (backend: 403 SHARE_UNITS_LOCKED).
-          // They change only through a register upload, so never send them here.
-        },
-      },
+      { registerId, shareholderId: editingId, updates },
       { onSuccess: () => cancelEdit() }
     );
   }
@@ -270,6 +287,8 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
           phone:    form.phone || undefined,
           chn:      withIdPrefix("CHN", form.chn) || undefined,
           units:    form.units ? Number(form.units) : undefined,
+          accountNo: form.accountNo.trim() || undefined,
+          address:  form.address.trim() || undefined,
           status:   "ACTIVE",
         },
       },
@@ -308,6 +327,8 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
           phone:    r.phone,
           chn:      r.chn,
           units:    r.units,
+          accountNo: r.accountNo,
+          address:  r.address,
           status:   r.status ?? "ACTIVE",
         })),
       },
@@ -373,7 +394,7 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
 
         {isClientAdmin && (
           <p className="text-xs text-[hsl(var(--muted-foreground))] mt-3">
-            <span className="font-medium">CSV columns: Full Name and Email are required; CHN, Phone, Units, and Status are optional.</span>
+            <span className="font-medium">CSV columns: Full Name and Email are required; CHN, Account No, Address, Phone, Units, and Status are optional.</span>
             {" "}When supplied, CHN is used for upsert deduplication.
           </p>
         )}
@@ -428,6 +449,8 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                   <th className="px-4 py-2.5 text-left">Name</th>
                   <th className="px-4 py-2.5 text-left">Email</th>
                   <th className="px-4 py-2.5 text-left">CHN</th>
+                  <th className="px-4 py-2.5 text-left">Account No</th>
+                  <th className="px-4 py-2.5 text-left">Address</th>
                   <th className="px-4 py-2.5 text-left">Units</th>
                   <th className="px-4 py-2.5 text-left">Status</th>
                 </tr>
@@ -441,6 +464,8 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                     </td>
                     <td className="px-4 py-2.5 text-[hsl(var(--muted-foreground))]">{row.email || "—"}</td>
                     <td className="px-4 py-2.5 font-mono text-xs text-[hsl(var(--muted-foreground))]">{row.chn || "—"}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-[hsl(var(--muted-foreground))]">{row.accountNo || "—"}</td>
+                    <td className="px-4 py-2.5 text-xs text-[hsl(var(--muted-foreground))] max-w-[220px] truncate" title={row.address}>{row.address || "—"}</td>
                     <td className="px-4 py-2.5 tabular-nums text-[hsl(var(--muted-foreground))]">{row.units?.toLocaleString() ?? "—"}</td>
                     <td className="px-4 py-2.5">
                       {row._error
@@ -523,6 +548,26 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                 type="number" min={0} value={form.units}
                 onChange={(e) => setForm((p) => ({ ...p, units: e.target.value }))}
                 placeholder="150000"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                Account No <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span>
+              </Label>
+              <Input
+                value={form.accountNo}
+                onChange={(e) => setForm((p) => ({ ...p, accountNo: e.target.value }))}
+                placeholder="42" className="font-mono"
+              />
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                Address <span className="font-normal normal-case text-[hsl(var(--muted-foreground))]">(optional)</span>
+              </Label>
+              <Input
+                value={form.address}
+                onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
+                placeholder="15 Mungo Park Crescent, Asokoro, Abuja"
               />
             </div>
           </div>
@@ -610,6 +655,8 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                 <th className="px-5 py-3 text-left">Shareholder</th>
                 <th className="px-5 py-3 text-left hidden sm:table-cell">Phone</th>
                 <th className="px-5 py-3 text-left">CHN</th>
+                <th className="px-5 py-3 text-left hidden md:table-cell">Account No</th>
+                <th className="px-5 py-3 text-left hidden lg:table-cell">Address</th>
                 <th className="px-5 py-3 text-right">Units</th>
                 <th className="px-5 py-3 w-20" />
               </tr>
@@ -619,8 +666,8 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                 if (editingId === s.id) {
                   return (
                     <tr key={s.id} className="attend-table-row bg-[hsl(var(--primary)/0.03)]">
-                      <td className="px-5 py-3" colSpan={isClientAdmin ? 6 : 5}>
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">
+                      <td className="px-5 py-3" colSpan={isClientAdmin ? 8 : 7}>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
                           <div className="sm:col-span-1">
                             <Label className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Name</Label>
                             <Input
@@ -652,6 +699,22 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                               onChange={(e) => setEditForm((p) => ({ ...p, chn: digitsOnly(e.target.value) }))}
                               inputMode="numeric"
                               className="h-8 text-sm mt-1 font-mono"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Account No</Label>
+                            <Input
+                              value={editForm.accountNo}
+                              onChange={(e) => setEditForm((p) => ({ ...p, accountNo: e.target.value }))}
+                              className="h-8 text-sm mt-1 font-mono"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Label className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Address</Label>
+                            <Input
+                              value={editForm.address}
+                              onChange={(e) => setEditForm((p) => ({ ...p, address: e.target.value }))}
+                              className="h-8 text-sm mt-1"
                             />
                           </div>
                           <div className="flex items-end gap-1.5">
@@ -710,6 +773,14 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                       ? <span className="inline-flex items-center gap-1 text-xs font-mono bg-[hsl(var(--muted))] px-2 py-0.5 rounded-md"><Hash className="h-3 w-3 text-[hsl(var(--muted-foreground))]" />{s.chn}</span>
                       : <span className="italic text-sm text-[hsl(var(--muted-foreground))]">—</span>
                     }
+                  </td>
+                  <td className="px-5 py-3.5 text-xs font-mono text-[hsl(var(--muted-foreground))] hidden md:table-cell">
+                    {s.accountNo || <span className="italic font-sans text-sm">—</span>}
+                  </td>
+                  <td className="px-5 py-3.5 hidden lg:table-cell">
+                    {s.address
+                      ? <p className="text-xs text-[hsl(var(--muted-foreground))] max-w-[240px] truncate" title={s.address}>{s.address}</p>
+                      : <span className="italic text-sm text-[hsl(var(--muted-foreground))]">—</span>}
                   </td>
                   <td className="px-5 py-3.5 text-right text-sm tabular-nums text-[hsl(var(--foreground))]">
                     {s.units != null ? s.units.toLocaleString() : <span className="italic text-[hsl(var(--muted-foreground))]">—</span>}
