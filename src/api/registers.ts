@@ -523,6 +523,8 @@ export interface Shareholder {
   phone?:     string;
   chn?:       string;   // Central Securities Clearing System Holder Number
   units?:     number;   // Share units owned
+  accountNo?: string;   // Registrar account number (new on prod)
+  address?:   string;   // Postal / residential address (new on prod)
   status?:    "ACTIVE" | "INACTIVE";
 }
 
@@ -533,6 +535,8 @@ export interface ShareholderUploadItem {
   phone?:    string;
   chn?:      string;
   units?:    number;
+  accountNo?: string;
+  address?:  string;
   status?:   "ACTIVE" | "INACTIVE";
 }
 
@@ -706,6 +710,8 @@ export interface ShareholderUpdatePayload {
   email?:    string;
   phone?:    string;
   units?:    number;
+  accountNo?: string;
+  address?:  string;
   status?:   "ACTIVE" | "INACTIVE";
 }
 
