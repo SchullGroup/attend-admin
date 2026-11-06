@@ -150,6 +150,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     if (tab !== current) {
       const params = new URLSearchParams(Array.from(searchParams.entries()));
       params.set("tab", tab);
+      params.delete("view"); // Attendees' sub-table belongs to that tab only
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     }
   }, [tab, searchParams, pathname, router]);

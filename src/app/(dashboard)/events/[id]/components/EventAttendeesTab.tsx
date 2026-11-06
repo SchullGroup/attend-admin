@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { useUrlEnumState } from "@/lib/use-url-state";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/custom/user-avatar";
 import { Users, Download, Loader2, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
@@ -139,7 +140,8 @@ export function EventAttendeesTab({ participants: firstPage, eventId }: Props) {
   // Viewers can read and export but not undo or edit.
   const role = resolveRole(meData?.data);
   const canEditWalkIns = role !== "viewer";
-  const [view, setView] = useState<"registered" | "shareholders" | "guests">("registered");
+  // In the URL (?view=…) so a reload stays on the same table.
+  const [view, setView] = useUrlEnumState("view", ["registered", "shareholders", "guests"] as const, "registered");
 
   const registeredCard = (
     <Card className="attend-card overflow-hidden">

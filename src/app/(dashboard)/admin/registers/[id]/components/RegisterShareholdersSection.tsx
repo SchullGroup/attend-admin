@@ -638,6 +638,7 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
             </p>
           </div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="attend-table-header">
@@ -655,8 +656,8 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                 <th className="px-5 py-3 text-left">Shareholder</th>
                 <th className="px-5 py-3 text-left hidden sm:table-cell">Phone</th>
                 <th className="px-5 py-3 text-left">CHN</th>
-                <th className="px-5 py-3 text-left hidden md:table-cell">Account No</th>
-                <th className="px-5 py-3 text-left hidden lg:table-cell">Address</th>
+                <th className="px-5 py-3 text-left whitespace-nowrap hidden md:table-cell">Account No</th>
+                <th className="px-5 py-3 text-left hidden xl:table-cell">Address</th>
                 <th className="px-5 py-3 text-right">Units</th>
                 <th className="px-5 py-3 w-20" />
               </tr>
@@ -754,35 +755,35 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
                       />
                     </td>
                   )}
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-2.5">
+                  <td className="px-5 py-3.5 max-w-[300px]">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <div className="h-7 w-7 rounded-full bg-[hsl(var(--primary)/0.1)] flex items-center justify-center text-xs font-bold text-[hsl(var(--primary))] shrink-0">
                         {avatarInitials(s)}
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{displayName(s)}</p>
-                        <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{s.email}</p>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))] truncate" title={s.email}>{s.email}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 text-sm text-[hsl(var(--muted-foreground))] hidden sm:table-cell">
+                  <td className="px-5 py-3.5 text-sm text-[hsl(var(--muted-foreground))] whitespace-nowrap hidden sm:table-cell">
                     {s.phone || <span className="italic">—</span>}
                   </td>
                   <td className="px-5 py-3.5">
                     {s.chn
-                      ? <span className="inline-flex items-center gap-1 text-xs font-mono bg-[hsl(var(--muted))] px-2 py-0.5 rounded-md"><Hash className="h-3 w-3 text-[hsl(var(--muted-foreground))]" />{s.chn}</span>
+                      ? <span className="inline-flex items-center gap-1 text-xs font-mono bg-[hsl(var(--muted))] px-2 py-0.5 rounded-md whitespace-nowrap"><Hash className="h-3 w-3 text-[hsl(var(--muted-foreground))]" />{s.chn}</span>
                       : <span className="italic text-sm text-[hsl(var(--muted-foreground))]">—</span>
                     }
                   </td>
                   <td className="px-5 py-3.5 text-xs font-mono text-[hsl(var(--muted-foreground))] hidden md:table-cell">
                     {s.accountNo || <span className="italic font-sans text-sm">—</span>}
                   </td>
-                  <td className="px-5 py-3.5 hidden lg:table-cell">
+                  <td className="px-5 py-3.5 hidden xl:table-cell">
                     {s.address
-                      ? <p className="text-xs text-[hsl(var(--muted-foreground))] max-w-[240px] truncate" title={s.address}>{s.address}</p>
+                      ? <p className="text-xs text-[hsl(var(--muted-foreground))] max-w-[200px] truncate" title={s.address}>{s.address}</p>
                       : <span className="italic text-sm text-[hsl(var(--muted-foreground))]">—</span>}
                   </td>
-                  <td className="px-5 py-3.5 text-right text-sm tabular-nums text-[hsl(var(--foreground))]">
+                  <td className="px-5 py-3.5 text-right text-sm tabular-nums whitespace-nowrap text-[hsl(var(--foreground))]">
                     {s.units != null ? s.units.toLocaleString() : <span className="italic text-[hsl(var(--muted-foreground))]">—</span>}
                   </td>
                   <td className="px-5 py-3.5">
@@ -812,6 +813,7 @@ export function RegisterShareholdersSection({ registerId }: { registerId: string
               })}
             </tbody>
           </table>
+          </div>
         )}
         {!isLoading && (data?.totalPages ?? 1) > 1 && (
           <div className="flex items-center justify-between border-t border-[hsl(var(--border))] px-5 py-3">
