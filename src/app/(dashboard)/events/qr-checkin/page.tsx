@@ -405,6 +405,7 @@ function ScannerView({ event, color, checkins, onCheckin, onBack }: ScannerViewP
 
   return (
     <div className="flex flex-col gap-6">
+
       {/* Back + header */}
       <div>
         <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mb-4 transition-colors">

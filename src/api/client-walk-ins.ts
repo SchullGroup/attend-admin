@@ -33,6 +33,10 @@ export interface RegisterSearchResult {
   fullName:      string;
   chn?:          string | null;
   units?:        number | null;
+  accountNo?:    string | null;
+  address?:      string | null;
+  email?:        string | null;
+  phone?:        string | null;
   checkedIn:     boolean;
   checkedInAt?:  string | null;
   method?:       CheckInMethod;
@@ -46,6 +50,10 @@ export interface WalkInShareholder {
   fullName:         string;
   chn?:             string | null;
   units?:           number | null;
+  accountNo?:       string | null;
+  address?:         string | null;
+  email?:           string | null;
+  phone?:           string | null;
   registeredOnline: boolean;
   notes?:           string | null;
   checkedInAt:      string;
