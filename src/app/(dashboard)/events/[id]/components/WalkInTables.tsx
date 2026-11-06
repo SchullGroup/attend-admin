@@ -165,7 +165,15 @@ export function WalkInShareholdersTable({ eventId, canEdit }: { eventId: string;
                 <tr key={r.id} className="attend-table-row">
                   <td className="px-5 py-3 max-w-[260px]">
                     <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{r.fullName}</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))] truncate font-mono">{r.chn ? `CHN ${r.chn}` : "—"}</p>
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] truncate font-mono">
+                      {[r.accountNo ? `Acct ${r.accountNo}` : null, r.chn ? `CHN ${r.chn}` : null].filter(Boolean).join(" · ") || "—"}
+                    </p>
+                    {r.address && <p className="text-xs text-[hsl(var(--muted-foreground))] truncate" title={r.address}>{r.address}</p>}
+                    {(r.email || r.phone) && (
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] truncate" title={[r.email, r.phone].filter(Boolean).join(" · ")}>
+                        {[r.email, r.phone].filter(Boolean).join(" · ")}
+                      </p>
+                    )}
                     {r.notes && <p className="text-xs text-[hsl(var(--muted-foreground))] truncate" title={r.notes}>{r.notes}</p>}
                   </td>
                   <td className="px-5 py-3 text-right text-sm tabular-nums">{typeof r.units === "number" ? r.units.toLocaleString() : "—"}</td>

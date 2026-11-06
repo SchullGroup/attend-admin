@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Search, UserCheck, Undo2, Loader2, IdCard, Building2, CheckCircle2 } from "lucide-react";
+import { Search, UserCheck, Undo2, Loader2, IdCard, Building2, CheckCircle2, MapPin, Mail, Phone } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,12 @@ import {
 } from "@/api/client-walk-ins";
 import { WalkInGuestForm } from "@/components/walk-ins/WalkInGuestForm";
 import { playCheckInSuccess, playCheckInError } from "@/lib/checkin-sound";
+
+/** "Acct 10421 · CHN 73019482" — account number first, it's what the registrar's lists use. */
+function idsOf(r: { accountNo?: string | null; chn?: string | null }) {
+  const parts = [r.accountNo ? `Acct ${r.accountNo}` : null, r.chn ? `CHN ${r.chn}` : null].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "No account no. or CHN";
+}
 
 const METHOD_LABEL: Record<string, string> = {
   QR_SCAN: "QR scan", SELF: "online", WALK_IN: "walk-in", UNRECORDED: "earlier",
@@ -44,6 +50,7 @@ export function WalkInPanel({
 
   return (
     <Card className="attend-card overflow-hidden">
+
       <div className="px-5 py-4 border-b border-[hsl(var(--border))] flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-semibold text-[hsl(var(--foreground))]">Walk-in check-in</h2>
@@ -169,8 +176,8 @@ function ShareholderWalkIn({ eventId, color, onCheckedIn }: { eventId: string; c
                   <div key={w.id} className="flex items-center gap-3 px-4 py-2.5">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{w.fullName}</p>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">
-                        {w.chn ? `CHN ${w.chn}` : "No CHN"}
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums truncate">
+                        {idsOf(w)}
                         {typeof w.units === "number" && <> · {w.units.toLocaleString()} units</>}
                       </p>
                     </div>
@@ -202,10 +209,29 @@ function ShareholderWalkIn({ eventId, color, onCheckedIn }: { eventId: string; c
               <div key={r.shareholderId} className="flex items-center gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">{r.fullName}</p>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums">
-                    {r.chn ? <>CHN {r.chn}</> : "No CHN"}
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] tabular-nums truncate">
+                    {idsOf(r)}
                     {typeof r.units === "number" && <> · {r.units.toLocaleString()} units</>}
                   </p>
+                  {r.address && (
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] truncate flex items-center gap-1 mt-0.5" title={r.address}>
+                      <MapPin className="h-3 w-3 shrink-0" /> {r.address}
+                    </p>
+                  )}
+                  {(r.email || r.phone) && (
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] flex items-center gap-x-3 gap-y-0.5 flex-wrap mt-0.5 min-w-0">
+                      {r.email && (
+                        <span className="inline-flex items-center gap-1 min-w-0 max-w-full" title={r.email}>
+                          <Mail className="h-3 w-3 shrink-0" /> <span className="truncate">{r.email}</span>
+                        </span>
+                      )}
+                      {r.phone && (
+                        <span className="inline-flex items-center gap-1 tabular-nums">
+                          <Phone className="h-3 w-3 shrink-0" /> {r.phone}
+                        </span>
+                      )}
+                    </p>
+                  )}
                 </div>
                 {r.checkedIn ? (
                   <div className="flex items-center gap-2 shrink-0">
