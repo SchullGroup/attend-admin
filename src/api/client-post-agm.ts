@@ -10,11 +10,13 @@
  * GET  /api/v1/client/events/{eventId}/post-agm/certificates/eligibility
  * POST /api/v1/client/events/{eventId}/post-agm/certificates/send          → async, returns queued count
  * GET  /api/v1/client/events/{eventId}/post-agm/export/attendance          → raw CSV text
+ * GET  /api/v1/client/events/{eventId}/post-agm/export/attendance-report   → CSV, Meristem's 7-line attendance report
  * GET  /api/v1/client/events/{eventId}/post-agm/export/vote-audit          → raw CSV text
  * GET  /api/v1/client/events/{eventId}/post-agm/statutory-return           → structured JSON (fields TBD)
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { QuorumFields } from "@/lib/quorum";
 import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
@@ -24,7 +26,7 @@ import { ApiResponse } from "@/types/api";
 // Types
 // ---------------------------------------------------------------------------
 
-export interface PostAgmSummary {
+export interface PostAgmSummary extends QuorumFields {
   totalRegistered:             number;
   totalCheckedIn:               number;
   totalEligibleForCertificate:  number;
@@ -87,7 +89,7 @@ export interface StatutoryReturnResolution {
 }
 
 /** Confirmed shape — vote/share totals already fold in offline (paper/proxy) votes. */
-export interface StatutoryReturn {
+export interface StatutoryReturn extends QuorumFields {
   eventName:            string;
   eventDate:             string;
   eventVenue:            string;
@@ -114,6 +116,7 @@ export const postAgmKeys = {
   minutes:            (eventId: string) => ["postAgm", eventId, "minutes"] as const,
   certEligibility:    (eventId: string) => ["postAgm", eventId, "certEligibility"] as const,
   exportAttendance:   (eventId: string) => ["postAgm", eventId, "export", "attendance"] as const,
+  exportAttendanceReport: (eventId: string) => ["postAgm", eventId, "export", "attendanceReport"] as const,
   exportVoteAudit:    (eventId: string) => ["postAgm", eventId, "export", "voteAudit"] as const,
   statutoryReturn:    (eventId: string) => ["postAgm", eventId, "statutoryReturn"] as const,
 };
@@ -179,6 +182,26 @@ export function useExportAttendanceRegister(eventId: string) {
     queryFn: async () => {
       const res = await apiClient.get<string>(
         `/api/v1/client/events/${eventId}/post-agm/export/attendance`,
+        { responseType: "text", transformResponse: (data) => data }
+      );
+      return typeof res.data === "string" ? res.data : (res.data == null ? "" : JSON.stringify(res.data));
+    },
+    enabled: false,
+    staleTime: 0,
+  });
+}
+
+/**
+ * Attendance report CSV (2026-11-11) — the seven lines Meristem files: issued share
+ * capital, shareholders/proxies present and their shares, and attendance % to share
+ * capital (the quorum figure). enabled:false — caller calls refetch().
+ */
+export function useExportAttendanceReport(eventId: string) {
+  return useQuery({
+    queryKey: postAgmKeys.exportAttendanceReport(eventId),
+    queryFn: async () => {
+      const res = await apiClient.get<string>(
+        `/api/v1/client/events/${eventId}/post-agm/export/attendance-report`,
         { responseType: "text", transformResponse: (data) => data }
       );
       return typeof res.data === "string" ? res.data : (res.data == null ? "" : JSON.stringify(res.data));

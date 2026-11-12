@@ -1,5 +1,6 @@
 "use client";
 import { Vote } from "lucide-react";
+import { QuorumFigure, QuorumBreakdown } from "@/components/quorum/QuorumBreakdown";
 import { voteOutcome } from "@/lib/vote-outcome";
 import { Card } from "@/components/ui/card";
 import { StatusBadge } from "@/components/custom/status-badge";
@@ -155,10 +156,8 @@ export function EventVoteResultsTab({ voteResults }: Props) {
           </Card>
           <Card className="attend-card p-4">
             <div className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Quorum</div>
-            <div className="text-xl font-bold tabular-nums">{Math.round(voteResults.quorumPercentage ?? 0)}%</div>
-            <div className={`text-xs font-semibold mt-0.5 ${voteResults.quorumMet ? "text-green-600" : "text-red-500"}`}>
-              {voteResults.quorumMet ? "Quorum met" : "Quorum not met"}
-            </div>
+            <QuorumFigure q={voteResults} size="md" />
+            <QuorumBreakdown q={voteResults} />
           </Card>
           <Card className="attend-card p-4">
             <div className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Resolutions Passed</div>

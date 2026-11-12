@@ -1,5 +1,6 @@
 import { Building2, Users, UserCheck, Vote, Clock } from "lucide-react";
 import type { LiveRoomDetail } from "@/api/client-live";
+import { formatQuorumPct, formatThreshold } from "@/lib/quorum";
 import { formatElapsed } from "./helpers";
 import { toEventModule } from "@/lib/event-module";
 
@@ -81,10 +82,11 @@ export function LiveHeaderCard({ room, color, organiserName }: { room: LiveRoomD
       {room.quorumPct != null && (
         <div className="mt-4 bg-white/10 rounded-xl p-3">
           <div className="flex items-center justify-between mb-2 text-xs font-medium opacity-80">
-            <span>Quorum Progress</span>
+            <span>Quorum (share capital present)</span>
             <span className="tabular-nums">
-              {room.quorumPct}%
-              {room.requiredQuorumPct != null && ` / ${room.requiredQuorumPct}% required`}
+              {formatQuorumPct(room.quorumPct)}
+              {room.requiredQuorumPct != null && ` / ${formatThreshold(room.requiredQuorumPct)} required`}
+              {room.quorumMet != null && <span className="ml-1.5 font-semibold">{room.quorumMet ? "· met" : "· not met"}</span>}
             </span>
           </div>
           <div className="h-2 rounded-full bg-white/20 overflow-hidden">
@@ -93,12 +95,19 @@ export function LiveHeaderCard({ room, color, organiserName }: { room: LiveRoomD
               style={{
                 width: `${Math.min(room.quorumPct, 100)}%`,
                 backgroundColor:
-                  room.requiredQuorumPct != null && room.quorumPct >= room.requiredQuorumPct
+                  (room.quorumMet ?? (room.requiredQuorumPct != null && room.quorumPct >= room.requiredQuorumPct))
                     ? "#4ade80"
                     : "#fbbf24",
               }}
             />
           </div>
+          {room.registerShares != null && room.presentShares != null && (
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] opacity-75 tabular-nums">
+              <span>{room.presentShares.toLocaleString("en-NG")} of {room.registerShares.toLocaleString("en-NG")} shares</span>
+              {room.shareholdersPresent != null && <span>{room.shareholdersPresent.toLocaleString("en-NG")} shareholders · {(room.shareholdersShares ?? 0).toLocaleString("en-NG")} shares</span>}
+              {room.proxiesPresent != null && <span>{room.proxiesPresent.toLocaleString("en-NG")} proxies · {(room.proxiesShares ?? 0).toLocaleString("en-NG")} shares</span>}
+            </div>
+          )}
         </div>
       )}
     </div>

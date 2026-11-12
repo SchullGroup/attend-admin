@@ -72,6 +72,17 @@ export type LiveWsMessage =
   | {
       type: "RESOLUTION_TALLY_UPDATED";
       payload: LiveResolution;
+    }
+  // Quorum by shares (2026-11-11) — sent after any attendance change. No share
+  // counts in the payload (proxy guests can subscribe); refetch the snapshot for those.
+  | {
+      type: "QUORUM_UPDATED";
+      payload: {
+        quorumPercentage:         number | null;
+        requiredQuorumPercentage: number | null;
+        quorumMet:                boolean;
+        quorumBasis:              string;
+      };
     };
 
 // ---------------------------------------------------------------------------

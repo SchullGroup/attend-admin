@@ -166,8 +166,18 @@ export interface LiveRoomDetail {
   checkedInCount:    number;
   capacity?:         number;
   elapsedMinutes:    number;
-  quorumPct?:        number;
-  requiredQuorumPct?: number;
+  /** Quorum by shares (2026-11-11): shares present ÷ register shares, 2 dp. */
+  quorumPct?:        number | null;
+  requiredQuorumPct?: number | null;
+  quorumMet?:        boolean;
+  quorumBasis?:      string | null;
+  /** Share breakdown — client roles only. */
+  registerShares?:      number | null;
+  presentShares?:       number | null;
+  shareholdersPresent?: number | null;
+  shareholdersShares?:  number | null;
+  proxiesPresent?:      number | null;
+  proxiesShares?:       number | null;
   resolutions:       LiveResolution[];
   /** All questions (PENDING / APPROVED / ANSWERED). Filter by status client-side. */
   questions:         LiveQuestion[];

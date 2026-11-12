@@ -12,6 +12,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { QuorumFields } from "@/lib/quorum";
 import { apiClient } from "@/lib/api-client";
 import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
@@ -156,7 +157,7 @@ export interface ResolutionResult {
   shareWeightedTalliesEnabled?: boolean;
 }
 
-export interface VoteResultsResponse {
+export interface VoteResultsResponse extends QuorumFields {
   eventId:          string;
   title:            string;
   stakeholderName:  string;
@@ -165,10 +166,12 @@ export interface VoteResultsResponse {
   date:             string;
   status:           string;
   totalVotesCast:   number;
-  quorumPercentage: number;
+  /** Achieved: shares present ÷ register shares × 100, 2 dp. null when the register has no units. */
+  quorumPercentage: number | null;
+  /** Worked out on the exact figure — use it as is, don't recompute from the rounded %. */
   quorumMet:        boolean;
-  /** The configured required check-in % for quorum (editable via useSetQuorum). */
-  requiredQuorumPercentage?: number;
+  /** The configured threshold, % of the register's units (editable via useSetQuorum). */
+  requiredQuorumPercentage?: number | null;
   resolutions:      ResolutionResult[];
 }
 
@@ -322,11 +325,10 @@ export function useVoteResults(eventId: string) {
       );
       const raw = res.data.data as any;
       if (!raw) return raw as VoteResultsResponse;
-      // Backend confirmed (2026-07-15) the configured threshold is returned as
-      // `quorumPercentage` (alongside a boolean `quorumMet`) — read it first;
-      // older alias guesses kept as fallbacks.
+      // Quorum by shares (backend 2026-11-11): `quorumPercentage` is the achieved
+      // figure and `requiredQuorumPercentage` the configured threshold.
       const requiredQuorumPercentage =
-        raw.quorumPercentage ?? raw.requiredQuorumPercentage ?? raw.quorumRequiredPercentage ?? raw.quorumThreshold ?? undefined;
+        raw.requiredQuorumPercentage ?? raw.quorumRequiredPercentage ?? undefined; // threshold; quorumPercentage is now the ACHIEVED % (2026-11-11)
       const resolutions: ResolutionResult[] = (raw.resolutions ?? []).map((r: any) => ({
         ...r,
         // Normalize whichever alias the backend uses for the per-resolution share-weighted toggle.
@@ -406,7 +408,7 @@ export function useSetResolutionShareWeightedTallies() {
 
 /**
  * PATCH /api/v1/client/votes/{eventId}/config/quorum
- * Sets the required check-in percentage for quorum (0–100). Rejected (409) if the
+ * Sets the required quorum: % of the register's share units present (0–100). Rejected (409) if the
  * event is LIVE and voting has already started on any resolution.
  */
 export function useSetQuorum() {
@@ -415,7 +417,7 @@ export function useSetQuorum() {
     mutationFn: async ({ eventId, quorumPercentage }: { eventId: string; quorumPercentage: number }) => {
       const res = await apiClient.patch<ApiResponse<any>>(
         `/api/v1/client/votes/${eventId}/config/quorum`,
-        { quorumPercentage }
+        { requiredQuorumPercentage: quorumPercentage }
       );
       return res.data.data;
     },
