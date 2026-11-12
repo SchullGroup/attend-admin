@@ -1,5 +1,6 @@
 "use client";
 import { use, useState } from "react";
+import { QuorumFigure, QuorumBreakdown } from "@/components/quorum/QuorumBreakdown";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, CheckCircle2, XCircle, Radio,
@@ -901,7 +902,7 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
   const quorumLocked  = isLive && votingStarted;
 
   function startEditQuorum() {
-    setQuorumInput(String(Math.round(data!.requiredQuorumPercentage ?? data!.quorumPercentage ?? 0)));
+    setQuorumInput(String(data!.requiredQuorumPercentage ?? 0));
     setEditingQuorum(true);
   }
 
@@ -989,11 +990,7 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
             </div>
           ) : (
             <>
-              <div className="text-2xl font-bold tabular-nums">{Math.round(data.quorumPercentage ?? 0)}%</div>
-              <div className={`text-xs font-semibold mt-1 ${data.quorumMet ? "text-green-600" : "text-red-500"}`}>
-                {data.quorumMet ? "Quorum met" : "Quorum not met"}
-                {data.requiredQuorumPercentage != null && ` · required ${Math.round(data.requiredQuorumPercentage)}%`}
-              </div>
+              <QuorumFigure q={data} />
             </>
           )}
         </Card>
@@ -1003,6 +1000,8 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
           <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{data.status}</div>
         </Card>
       </div>
+
+      <QuorumBreakdown q={data} />
 
       {/* Resolutions */}
       <div data-tour="vote-resolutions">

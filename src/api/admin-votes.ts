@@ -149,7 +149,7 @@ export function useAdminVoteResults(eventId: string) {
       const raw = res.data.data as any;
       if (!raw) return raw as VoteResultsResponse;
       const requiredQuorumPercentage =
-        raw.quorumPercentage ?? raw.requiredQuorumPercentage ?? raw.quorumRequiredPercentage ?? raw.quorumThreshold ?? undefined;
+        raw.requiredQuorumPercentage ?? raw.quorumRequiredPercentage ?? undefined; // threshold; quorumPercentage is now the ACHIEVED % (2026-11-11)
       const resolutions: ResolutionResult[] = (raw.resolutions ?? []).map((r: any) => ({
         ...r,
         shareWeightedTalliesEnabled:

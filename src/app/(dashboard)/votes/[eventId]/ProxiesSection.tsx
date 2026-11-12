@@ -17,7 +17,7 @@ import {
   Upload, X, FileText, AlertCircle,
 } from "lucide-react";
 import {
-  useEventProxies, useMarkProxyAttended, useUploadProxyVotes,
+  useEventProxies, useMarkProxyAttended, useUnmarkProxyAttended, useUploadProxyVotes,
   type ProxyStatus, type ProxyVoteInput,
 } from "@/api/client-proxies";
 import type { ResolutionResult } from "@/api/client-votes";
@@ -105,6 +105,7 @@ export function ProxiesSection({
     size,
   });
   const markMutation = useMarkProxyAttended();
+  const unmarkMutation = useUnmarkProxyAttended();
   const uploadVotes   = useUploadProxyVotes();
 
   // ── Bulk in-person proxy vote upload (F10) ─────────────────────────────────
@@ -388,6 +389,18 @@ export function ProxiesSection({
                           onClick={() => markMutation.mutate({ eventId, proxyId: p.id })}
                         >
                           Mark Attended
+                        </Button>
+                      )}
+                      {p.status === "ATTENDED" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={unmarkMutation.isPending}
+                          title="Marked attended by mistake? Their shares leave quorum. Votes already cast stay."
+                          onClick={() => unmarkMutation.mutate({ eventId, proxyId: p.id })}
+                        >
+                          Undo
                         </Button>
                       )}
                     </td>

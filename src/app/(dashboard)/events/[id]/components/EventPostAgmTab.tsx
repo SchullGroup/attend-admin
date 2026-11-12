@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Vote, CheckCircle2, Users, BookOpen, Award, Download, Lock, Loader2, FileSpreadsheet, FileText } from "lucide-react";
+import { Vote, CheckCircle2, Users, BookOpen, Award, Download, Lock, Loader2, FileSpreadsheet, FileText, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useExportResolutions } from "@/api/client-votes";
@@ -11,6 +11,7 @@ import {
   useSaveDraftMinutes,
   useFinaliseMinutes,
   useExportAttendanceRegister,
+  useExportAttendanceReport,
   useExportVoteAuditLog,
   useStatutoryReturn,
   downloadCsvText,
@@ -18,6 +19,7 @@ import {
   formatStatutoryReturnCsv,
 } from "@/api/client-post-agm";
 import type { EventShim } from "./types";
+import { QuorumBreakdown } from "@/components/quorum/QuorumBreakdown";
 
 interface Props {
   event:        EventShim;
@@ -62,6 +64,8 @@ export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
   const [exportingLegacy, setExportingLegacy] = useState(false);
   const { refetch: fetchVoteAuditCsv }   = useExportVoteAuditLog(eventId);
   const { refetch: fetchAttendanceCsv }  = useExportAttendanceRegister(eventId);
+  const { refetch: fetchAttendanceReport } = useExportAttendanceReport(eventId);
+  const [exportingReport, setExportingReport] = useState(false);
   const { refetch: fetchStatutoryReturn } = useStatutoryReturn(eventId);
   const { refetch: fetchExportLegacy }   = useExportResolutions(eventId); // fallback if post-agm route 404s
   const [exportingVotes,      setExportingVotes]      = useState(false);
@@ -103,6 +107,16 @@ export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
       if (result.data) downloadCsvText(`${event.title ?? eventId}-attendance-register.csv`, result.data);
     } finally {
       setExportingAttendance(false);
+    }
+  }
+
+  async function handleExportAttendanceReport() {
+    setExportingReport(true);
+    try {
+      const result = await fetchAttendanceReport();
+      if (result.data) downloadCsvText(`${event.title ?? eventId}-attendance-report.csv`, result.data);
+    } finally {
+      setExportingReport(false);
     }
   }
 
@@ -179,6 +193,11 @@ export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
         </div>
       )}
 
+      {/* Quorum — one full-width card: figure + bar, then both tables */}
+      {summary && (summary.quorumPercentage !== undefined || summary.registerShares != null) && (
+        <QuorumBreakdown q={summary} showFigure />
+      )}
+
       {/* Draft minutes */}
       <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
         <div className="flex items-center justify-between mb-4">
@@ -222,7 +241,7 @@ export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
       </div>
 
       {/* Export cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
           <div className="h-9 w-9 rounded-xl bg-[hsl(var(--primary)/0.1)] flex items-center justify-center mb-3">
             <Vote className="h-4 w-4 text-[hsl(var(--primary))]" />
@@ -250,6 +269,21 @@ export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
             className="flex items-center gap-1.5 w-full justify-center px-3 py-2 rounded-lg text-sm font-medium border border-[hsl(var(--border))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-50"
           >
             <Download className="h-3.5 w-3.5" /> {exportingAttendance ? "Exporting…" : "Export CSV"}
+          </button>
+        </div>
+
+        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
+          <div className="h-9 w-9 rounded-xl bg-[hsl(var(--primary)/0.1)] flex items-center justify-center mb-3">
+            <Scale className="h-4 w-4 text-[hsl(var(--primary))]" />
+          </div>
+          <div className="text-sm font-semibold text-[hsl(var(--foreground))] mb-1">Attendance Report</div>
+          <div className="text-xs text-[hsl(var(--muted-foreground))] mb-4">Share capital, shareholders and proxies present, and attendance % to share capital</div>
+          <button
+            disabled={exportingReport}
+            onClick={handleExportAttendanceReport}
+            className="flex items-center gap-1.5 w-full justify-center px-3 py-2 rounded-lg text-sm font-medium border border-[hsl(var(--border))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-50"
+          >
+            <Download className="h-3.5 w-3.5" /> {exportingReport ? "Exporting…" : "Export CSV"}
           </button>
         </div>
 

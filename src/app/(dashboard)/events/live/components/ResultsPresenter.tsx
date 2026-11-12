@@ -151,8 +151,10 @@ export function ResultsPresenter({
   const tV = fV + aV + bV;
   const fS = res.forShares ?? 0, aS = res.againstShares ?? 0, bS = res.abstainShares ?? 0;
   const tS = fS + aS + bS;
-  const shareWeighted = tS > 0 || !!(res as any).shareWeightedTalliesEnabled;
-  // Share-weighted AGMs are decided by shares, so percentages follow shares there.
+  // Percentages follow shares when there are shares to count. When the votes carry
+  // no shares (e.g. voters with no units on the register), fall back to vote counts
+  // and hide the share figures — otherwise every bar reads 0%.
+  const shareWeighted = tS > 0;
   const base = shareWeighted ? tS : tV;
   const pct = (s: number, v: number) => (base > 0 ? ((shareWeighted ? s : v) / base) * 100 : 0);
 
@@ -224,7 +226,7 @@ export function ResultsPresenter({
             {(res.candidates ?? []).map((c, ci) => {
               const cfV = c.forCount ?? 0, caV = c.againstCount ?? 0, cbV = c.abstainCount ?? 0;
               const cfS = c.forShares ?? 0, caS = c.againstShares ?? 0, cbS = c.abstainShares ?? 0;
-              const cSW = shareWeighted || cfS + caS + cbS > 0;
+              const cSW = cfS + caS + cbS > 0;
               const cBase = cSW ? cfS + caS + cbS : cfV + caV + cbV;
               const cp = (s: number, v: number) => (cBase > 0 ? ((cSW ? s : v) / cBase) * 100 : 0);
               return (

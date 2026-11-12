@@ -137,6 +137,29 @@ export function useMarkProxyAttended() {
   });
 }
 
+/**
+ * DELETE /api/v1/client/votes/{eventId}/proxies/{proxyId}/attended (2026-11-11)
+ * Undo "Mark Attended" — back to PENDING, attendedAt cleared, their shares leave
+ * quorum straight away. Votes already cast are not touched. Safe to repeat.
+ */
+export function useUnmarkProxyAttended() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, proxyId }: { eventId: string; proxyId: string }) => {
+      const res = await apiClient.delete<ApiResponse<any>>(
+        `/api/v1/client/votes/${eventId}/proxies/${proxyId}/attended`
+      );
+      return res.data.data;
+    },
+    onSuccess: (_d, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["proxies", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["live", "detail", eventId] });
+      popup.success("Attendance Undone", "The proxy is no longer marked as attended. Their shares no longer count toward quorum.", 3000);
+    },
+    onError: (e) => parseAndToastApiError(e, "Failed to undo the proxy's attendance."),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Bulk in-person proxy vote upload (AGM handoff #10)
 //
