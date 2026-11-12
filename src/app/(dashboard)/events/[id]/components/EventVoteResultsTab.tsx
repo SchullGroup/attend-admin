@@ -157,7 +157,6 @@ export function EventVoteResultsTab({ voteResults }: Props) {
           <Card className="attend-card p-4">
             <div className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Quorum</div>
             <QuorumFigure q={voteResults} size="md" />
-            <QuorumBreakdown q={voteResults} />
           </Card>
           <Card className="attend-card p-4">
             <div className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Resolutions Passed</div>
@@ -174,6 +173,8 @@ export function EventVoteResultsTab({ voteResults }: Props) {
           </Card>
         </div>
       )}
+
+      <QuorumBreakdown q={voteResults} />
 
       {/* Resolution cards */}
       {resolutions.map((r, i) => (

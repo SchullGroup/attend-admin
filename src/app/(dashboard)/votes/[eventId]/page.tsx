@@ -991,7 +991,6 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
           ) : (
             <>
               <QuorumFigure q={data} />
-              <QuorumBreakdown q={data} />
             </>
           )}
         </Card>
@@ -1001,6 +1000,8 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
           <div className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{data.status}</div>
         </Card>
       </div>
+
+      <QuorumBreakdown q={data} />
 
       {/* Resolutions */}
       <div data-tour="vote-resolutions">

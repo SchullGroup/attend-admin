@@ -19,7 +19,7 @@ import {
   formatStatutoryReturnCsv,
 } from "@/api/client-post-agm";
 import type { EventShim } from "./types";
-import { QuorumFigure, QuorumBreakdown } from "@/components/quorum/QuorumBreakdown";
+import { QuorumBreakdown } from "@/components/quorum/QuorumBreakdown";
 
 interface Props {
   event:        EventShim;
@@ -193,17 +193,9 @@ export function EventPostAgmTab({ event, voteResults, eventId }: Props) {
         </div>
       )}
 
-      {/* Quorum by shares — Meristem's attendance report lines */}
+      {/* Quorum — one full-width card: figure + bar, then both tables */}
       {summary && (summary.quorumPercentage !== undefined || summary.registerShares != null) && (
-        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 grid gap-5 md:grid-cols-[220px_1fr]">
-          <div>
-            <p className="text-xs font-medium text-[hsl(var(--muted-foreground))] mb-1 flex items-center gap-1.5">
-              <Scale className="h-3.5 w-3.5" /> Quorum
-            </p>
-            <QuorumFigure q={summary} />
-          </div>
-          <QuorumBreakdown q={summary} defaultOpen />
-        </div>
+        <QuorumBreakdown q={summary} showFigure />
       )}
 
       {/* Draft minutes */}
