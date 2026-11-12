@@ -78,59 +78,99 @@ export function LiveHeaderCard({ room, color, organiserName }: { room: LiveRoomD
         ))}
       </div>
 
-      {/* Quorum bar (AGM only) */}
-      {room.quorumPct != null && (
-        <div className="mt-4 bg-white/10 rounded-xl p-3">
-          <div className="flex items-center justify-between mb-2 text-xs font-medium opacity-80">
-            <span>Quorum (registered + walk-in + proxy)</span>
-            <span className="tabular-nums">
-              {formatQuorumPct(room.quorumPct)}
-              {room.requiredQuorumPct != null && ` / ${formatThreshold(room.requiredQuorumPct)} required`}
-              {room.quorumMet != null && <span className="ml-1.5 font-semibold">{room.quorumMet ? "· met" : "· not met"}</span>}
+      {/* Quorum (AGM only) */}
+      {room.quorumPct != null && <QuorumPanel room={room} />}
+    </div>
+  );
+}
+
+/**
+ * One quorum panel: the deciding figure big, one bar with a marker at the
+ * required %, and checked-in shown as the solid part of that same bar
+ * (checked-in shares are always a subset of the quorum shares).
+ */
+function QuorumPanel({ room }: { room: LiveRoomDetail }) {
+  const pct      = room.quorumPct ?? 0;
+  const required = room.requiredQuorumPct;
+  const checked  = room.checkedInQuorumPct;
+  const met      = room.quorumMet ?? (required != null && pct >= required);
+  const accent   = met ? "#4ade80" : "#fbbf24";
+  const fmt      = (v?: number | null) => (v == null ? "—" : v.toLocaleString("en-NG"));
+
+  const parts = [
+    { label: "Registered", value: room.registeredHoldingsShares },
+    { label: "Walk-in",    value: room.walkInShares },
+    ...(room.proxyShares ? [{ label: "Proxy", value: room.proxyShares }] : []),
+  ].filter((x) => x.value != null);
+
+  return (
+    <div className="mt-4 bg-white/10 rounded-xl px-4 py-3.5">
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider opacity-60">Quorum</div>
+          <div className="flex items-center gap-2.5 mt-0.5">
+            <span className="text-3xl font-bold tabular-nums leading-none">{formatQuorumPct(pct)}</span>
+            <span
+              className="text-xs font-semibold rounded-full px-2.5 py-0.5"
+              style={{ backgroundColor: accent + "26", color: accent }}
+            >
+              {met ? "Met" : "Not met"}
             </span>
           </div>
-          <div className="h-2 rounded-full bg-white/20 overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${Math.min(room.quorumPct, 100)}%`,
-                backgroundColor:
-                  (room.quorumMet ?? (room.requiredQuorumPct != null && room.quorumPct >= room.requiredQuorumPct))
-                    ? "#4ade80"
-                    : "#fbbf24",
-              }}
-            />
+          <div className="text-xs opacity-60 mt-1">
+            of share capital{required != null && <> · {formatThreshold(required)} required</>}
           </div>
-          {room.registerShares != null && room.quorumShares != null && (
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] opacity-75 tabular-nums">
-              <span>{room.quorumShares.toLocaleString("en-NG")} of {room.registerShares.toLocaleString("en-NG")} shares</span>
-              {room.registeredHoldingsShares != null && <span>Registered {room.registeredHoldingsShares.toLocaleString("en-NG")}</span>}
-              {room.walkInShares != null && <span>Walk-in {room.walkInShares.toLocaleString("en-NG")}</span>}
-              {!!room.proxyShares && <span>Proxy {room.proxyShares.toLocaleString("en-NG")}</span>}
-            </div>
-          )}
+        </div>
 
-          {/* Checked in — information only, doesn't decide quorum */}
-          {room.checkedInQuorumPct != null && (
-            <div className="mt-3 pt-3 border-t border-white/15">
-              <div className="flex items-center justify-between mb-1.5 text-[11px] font-medium opacity-75">
-                <span>Checked in (information only)</span>
-                <span className="tabular-nums">{formatQuorumPct(room.checkedInQuorumPct)}</span>
-              </div>
-              <div className="h-1 rounded-full bg-white/20 overflow-hidden">
-                <div className="h-full rounded-full bg-white/70 transition-all duration-500" style={{ width: `${Math.min(room.checkedInQuorumPct, 100)}%` }} />
-              </div>
-              {room.presentShares != null && (
-                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] opacity-65 tabular-nums">
-                  <span>{room.presentShares.toLocaleString("en-NG")} shares present</span>
-                  {room.shareholdersPresent != null && <span>{room.shareholdersPresent.toLocaleString("en-NG")} shareholders · {(room.shareholdersShares ?? 0).toLocaleString("en-NG")}</span>}
-                  {room.proxiesPresent != null && <span>{room.proxiesPresent.toLocaleString("en-NG")} proxies · {(room.proxiesShares ?? 0).toLocaleString("en-NG")}</span>}
-                </div>
-              )}
+        <div className="flex flex-wrap gap-2">
+          {parts.map((x) => (
+            <div key={x.label} className="rounded-lg bg-white/10 px-3 py-1.5">
+              <div className="text-[10px] uppercase tracking-wider opacity-60">{x.label}</div>
+              <div className="text-sm font-semibold tabular-nums">{fmt(x.value)}</div>
+            </div>
+          ))}
+          {checked != null && (
+            <div className="rounded-lg bg-white/10 px-3 py-1.5" title="Shareholders actually present plus proxies marked attended. Information only.">
+              <div className="text-[10px] uppercase tracking-wider opacity-60">Checked in</div>
+              <div className="text-sm font-semibold tabular-nums">{formatQuorumPct(checked)}</div>
             </div>
           )}
         </div>
-      )}
+      </div>
+
+      {/* Bar: faint = counted for quorum, solid = checked in, tick = required */}
+      <div className="relative mt-4">
+        <div className="h-2.5 rounded-full bg-white/15 overflow-hidden relative">
+          <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-500" style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: accent, opacity: 0.45 }} />
+          {checked != null && (
+            <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-500" style={{ width: `${Math.min(checked, 100)}%`, backgroundColor: accent }} />
+          )}
+        </div>
+        {required != null && (
+          <div className="absolute -top-1 -bottom-1 w-0.5 rounded bg-white/80" style={{ left: `calc(${Math.min(required, 100)}% - 1px)` }} title={`${formatThreshold(required)} required`} />
+        )}
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] opacity-60">
+        <div className="flex items-center gap-3">
+          {checked != null && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: accent }} /> Checked in
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: accent, opacity: 0.45 }} /> Registered + walk-in{room.proxyShares ? " + proxy" : ""}
+          </span>
+          {required != null && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-0.5 rounded bg-white/80" /> Required
+            </span>
+          )}
+        </div>
+        {room.quorumShares != null && room.registerShares != null && (
+          <span className="tabular-nums">{fmt(room.quorumShares)} of {fmt(room.registerShares)} shares</span>
+        )}
+      </div>
     </div>
   );
 }
