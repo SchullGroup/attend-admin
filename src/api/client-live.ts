@@ -166,13 +166,23 @@ export interface LiveRoomDetail {
   checkedInCount:    number;
   capacity?:         number;
   elapsedMinutes:    number;
-  /** Quorum by shares (2026-11-11): shares present ÷ register shares, 2 dp. */
+  /** Main quorum (2026-11-12): registered + walk-in + proxy shares ÷ register shares, 2 dp. Decides quorum. */
   quorumPct?:        number | null;
+  /** Shareholders actually present + proxies attended ÷ register shares. Information only. */
+  checkedInQuorumPct?: number | null;
   requiredQuorumPct?: number | null;
   quorumMet?:        boolean;
   quorumBasis?:      string | null;
   /** Share breakdown — client roles only. */
   registerShares?:      number | null;
+  quorumShares?:        number | null;
+  registeredHoldings?:  number | null;
+  registeredHoldingsShares?: number | null;
+  walkInHoldings?:      number | null;
+  walkInShares?:        number | null;
+  proxiesCount?:        number | null;
+  proxyHoldings?:       number | null;
+  proxyShares?:         number | null;
   presentShares?:       number | null;
   shareholdersPresent?: number | null;
   shareholdersShares?:  number | null;

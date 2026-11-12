@@ -78,7 +78,10 @@ export type LiveWsMessage =
   | {
       type: "QUORUM_UPDATED";
       payload: {
+        /** Main tally (registered + walk-in + proxy). */
         quorumPercentage:         number | null;
+        /** Information only. */
+        checkedInQuorumPercentage?: number | null;
         requiredQuorumPercentage: number | null;
         quorumMet:                boolean;
         quorumBasis:              string;

@@ -1,18 +1,18 @@
 "use client";
 
 /**
- * Quorum by shares — the headline figure plus Meristem's attendance-report
- * breakdown. The breakdown only renders when the response carries share
- * counts (client roles); super admin sees the percentage and status only.
+ * Quorum (registered basis) — the deciding figure, the checked-in figure under
+ * it, and a breakdown of both. The breakdown only renders when the response
+ * carries share counts (client roles); super admin sees percentages only.
  */
 
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import {
-  type QuorumFields, formatQuorumPct, formatThreshold, hasQuorumBreakdown, quorumReportRows, registeredPct,
+  type QuorumFields, type QuorumRow, formatQuorumPct, formatThreshold, hasQuorumBreakdown, mainTallyRows, checkedInRows,
 } from "@/lib/quorum";
 
-/** "81.24%" with "Quorum met · required 25% of share capital" under it. */
+/** "84.10%" + met/not met + required, then "Checked in: 81.24%" as a smaller line. */
 export function QuorumFigure({ q, size = "lg" }: { q: QuorumFields; size?: "lg" | "md" }) {
   const noUnits = q.quorumPercentage == null;
   return (
@@ -22,16 +22,42 @@ export function QuorumFigure({ q, size = "lg" }: { q: QuorumFields; size?: "lg" 
         {noUnits ? "No share units on the register" : q.quorumMet ? "Quorum met" : "Quorum not met"}
         {q.requiredQuorumPercentage != null && ` · required ${formatThreshold(q.requiredQuorumPercentage)}`}
       </div>
-      <div className="text-[11px] text-[hsl(var(--muted-foreground))] mt-0.5">of share capital present</div>
+      <div className="text-[11px] text-[hsl(var(--muted-foreground))] mt-0.5">of share capital · registered + walk-in + proxy</div>
+      {q.checkedInQuorumPercentage != null && (
+        <div className="text-xs text-[hsl(var(--muted-foreground))] mt-1.5 tabular-nums" title="Shareholders actually present plus proxies marked attended. Information only, doesn't decide quorum.">
+          Checked in: <span className="font-semibold text-[hsl(var(--foreground))]">{formatQuorumPct(q.checkedInQuorumPercentage)}</span>
+        </div>
+      )}
     </>
   );
 }
 
-/** Collapsible table with the seven report lines, plus the registered-shares forecast. */
+function Rows({ title, note, rows }: { title: string; note?: string; rows: QuorumRow[] }) {
+  return (
+    <div className="rounded-lg border border-[hsl(var(--border))] overflow-hidden text-xs">
+      <div className="px-3 py-1.5 bg-[hsl(var(--muted)/0.5)] font-semibold text-[hsl(var(--foreground))] flex items-center justify-between gap-2">
+        <span>{title}</span>
+        {note && <span className="font-normal text-[hsl(var(--muted-foreground))]">{note}</span>}
+      </div>
+      <div className="divide-y divide-[hsl(var(--border))]">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-center justify-between gap-4 px-3 py-1.5">
+            <span className="text-[hsl(var(--muted-foreground))]">
+              {r.label}
+              {r.sub && <span className="ml-1.5 opacity-80">({r.sub})</span>}
+            </span>
+            <span className={`tabular-nums text-[hsl(var(--foreground))] ${r.strong ? "font-bold" : "font-medium"}`}>{r.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Collapsible: main tally by route, then the checked-in (attendance report) lines. */
 export function QuorumBreakdown({ q, defaultOpen = false }: { q: QuorumFields; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
   if (!hasQuorumBreakdown(q)) return null;
-  const forecast = registeredPct(q);
   return (
     <div className="mt-3">
       <button
@@ -44,24 +70,9 @@ export function QuorumBreakdown({ q, defaultOpen = false }: { q: QuorumFields; d
         {open ? "Hide breakdown" : "Show breakdown"}
       </button>
       {open && (
-        <div className="mt-2 rounded-lg border border-[hsl(var(--border))] divide-y divide-[hsl(var(--border))] text-xs">
-          {quorumReportRows(q).map((r) => (
-            <div key={r.label} className="flex items-center justify-between gap-4 px-3 py-1.5">
-              <span className="text-[hsl(var(--muted-foreground))]">{r.label}</span>
-              <span className={`tabular-nums text-[hsl(var(--foreground))] ${r.strong ? "font-bold" : "font-medium"}`}>{r.value}</span>
-            </div>
-          ))}
-          {q.registeredShares != null && (
-            <div className="flex items-center justify-between gap-4 px-3 py-1.5 bg-[hsl(var(--muted)/0.4)]">
-              <span className="text-[hsl(var(--muted-foreground))]">
-                Registered shares <span className="italic">(forecast, doesn&apos;t decide quorum)</span>
-              </span>
-              <span className="tabular-nums font-medium text-[hsl(var(--foreground))]">
-                {Number(q.registeredShares).toLocaleString("en-NG")}
-                {forecast != null && <span className="text-[hsl(var(--muted-foreground))]"> · {formatQuorumPct(forecast)}</span>}
-              </span>
-            </div>
-          )}
+        <div className="mt-2 grid gap-2">
+          {q.quorumShares != null && <Rows title="Quorum" note="decides quorum" rows={mainTallyRows(q)} />}
+          {q.presentShares != null && <Rows title="Checked in" note="information only" rows={checkedInRows(q)} />}
         </div>
       )}
     </div>

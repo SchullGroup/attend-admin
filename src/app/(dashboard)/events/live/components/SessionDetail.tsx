@@ -143,7 +143,7 @@ export function SessionDetail({ eventId, onBack }: { eventId: string; onBack: ()
       // Move the bar straight away, then refetch the snapshot for the share breakdown.
       const p = msg.payload;
       queryClient.setQueryData(liveKeys.detail(eventId ?? ""), (old: any) =>
-        old ? { ...old, quorumPct: p.quorumPercentage, requiredQuorumPct: p.requiredQuorumPercentage, quorumMet: p.quorumMet, quorumBasis: p.quorumBasis } : old,
+        old ? { ...old, quorumPct: p.quorumPercentage, checkedInQuorumPct: p.checkedInQuorumPercentage ?? old.checkedInQuorumPct, requiredQuorumPct: p.requiredQuorumPercentage, quorumMet: p.quorumMet, quorumBasis: p.quorumBasis } : old,
       );
       queryClient.invalidateQueries({ queryKey: liveKeys.detail(eventId ?? "") });
     }

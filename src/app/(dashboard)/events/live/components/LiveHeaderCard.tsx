@@ -82,7 +82,7 @@ export function LiveHeaderCard({ room, color, organiserName }: { room: LiveRoomD
       {room.quorumPct != null && (
         <div className="mt-4 bg-white/10 rounded-xl p-3">
           <div className="flex items-center justify-between mb-2 text-xs font-medium opacity-80">
-            <span>Quorum (share capital present)</span>
+            <span>Quorum (registered + walk-in + proxy)</span>
             <span className="tabular-nums">
               {formatQuorumPct(room.quorumPct)}
               {room.requiredQuorumPct != null && ` / ${formatThreshold(room.requiredQuorumPct)} required`}
@@ -101,11 +101,32 @@ export function LiveHeaderCard({ room, color, organiserName }: { room: LiveRoomD
               }}
             />
           </div>
-          {room.registerShares != null && room.presentShares != null && (
+          {room.registerShares != null && room.quorumShares != null && (
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] opacity-75 tabular-nums">
-              <span>{room.presentShares.toLocaleString("en-NG")} of {room.registerShares.toLocaleString("en-NG")} shares</span>
-              {room.shareholdersPresent != null && <span>{room.shareholdersPresent.toLocaleString("en-NG")} shareholders · {(room.shareholdersShares ?? 0).toLocaleString("en-NG")} shares</span>}
-              {room.proxiesPresent != null && <span>{room.proxiesPresent.toLocaleString("en-NG")} proxies · {(room.proxiesShares ?? 0).toLocaleString("en-NG")} shares</span>}
+              <span>{room.quorumShares.toLocaleString("en-NG")} of {room.registerShares.toLocaleString("en-NG")} shares</span>
+              {room.registeredHoldingsShares != null && <span>Registered {room.registeredHoldingsShares.toLocaleString("en-NG")}</span>}
+              {room.walkInShares != null && <span>Walk-in {room.walkInShares.toLocaleString("en-NG")}</span>}
+              {!!room.proxyShares && <span>Proxy {room.proxyShares.toLocaleString("en-NG")}</span>}
+            </div>
+          )}
+
+          {/* Checked in — information only, doesn't decide quorum */}
+          {room.checkedInQuorumPct != null && (
+            <div className="mt-3 pt-3 border-t border-white/15">
+              <div className="flex items-center justify-between mb-1.5 text-[11px] font-medium opacity-75">
+                <span>Checked in (information only)</span>
+                <span className="tabular-nums">{formatQuorumPct(room.checkedInQuorumPct)}</span>
+              </div>
+              <div className="h-1 rounded-full bg-white/20 overflow-hidden">
+                <div className="h-full rounded-full bg-white/70 transition-all duration-500" style={{ width: `${Math.min(room.checkedInQuorumPct, 100)}%` }} />
+              </div>
+              {room.presentShares != null && (
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] opacity-65 tabular-nums">
+                  <span>{room.presentShares.toLocaleString("en-NG")} shares present</span>
+                  {room.shareholdersPresent != null && <span>{room.shareholdersPresent.toLocaleString("en-NG")} shareholders · {(room.shareholdersShares ?? 0).toLocaleString("en-NG")}</span>}
+                  {room.proxiesPresent != null && <span>{room.proxiesPresent.toLocaleString("en-NG")} proxies · {(room.proxiesShares ?? 0).toLocaleString("en-NG")}</span>}
+                </div>
+              )}
             </div>
           )}
         </div>
