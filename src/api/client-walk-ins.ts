@@ -37,6 +37,10 @@ export interface RegisterSearchResult {
   address?:      string | null;
   email?:        string | null;
   phone?:        string | null;
+  /** Any matching registration, checked in or not (2026-11-23). */
+  registered?:   boolean;
+  /** Resolutions with a counted vote for this holding, by the holder or a proxy. */
+  votedResolutionIds?: string[];
   checkedIn:     boolean;
   checkedInAt?:  string | null;
   method?:       CheckInMethod;

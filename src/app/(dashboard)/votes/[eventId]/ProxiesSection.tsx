@@ -14,11 +14,14 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Users, Search, Loader2, CheckCircle2, Copy, Check,
-  Upload, X, FileText, AlertCircle,
+  Upload, X, FileText, AlertCircle, FilePlus2, Download, Pencil, Trash2, Gavel,
 } from "lucide-react";
+import { popup } from "@/lib/popup-store";
+import { ProxyFormDialog } from "./ProxyFormDialog";
 import {
   useEventProxies, useMarkProxyAttended, useUnmarkProxyAttended, useUploadProxyVotes,
-  type ProxyStatus, type ProxyVoteInput,
+  useDeleteProxyForm, exportProxyRegister,
+  type EventProxy, type ProxyStatus, type ProxyVoteInput,
 } from "@/api/client-proxies";
 import type { ResolutionResult } from "@/api/client-votes";
 import Papa from "papaparse";
@@ -72,10 +75,18 @@ function CopyableCode({ code }: { code: string }) {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  PENDING:  "bg-amber-100 text-amber-700",
-  ACCEPTED: "bg-blue-100 text-blue-700",
-  ATTENDED: "bg-green-100 text-green-700",
+  PENDING:    "bg-amber-100 text-amber-700",
+  ACCEPTED:   "bg-blue-100 text-blue-700",
+  ATTENDED:   "bg-green-100 text-green-700",
+  SUPERSEDED: "bg-slate-100 text-slate-500",
+  LODGED:     "bg-blue-100 text-blue-700",
 };
+
+const SOURCE_FILTERS = [
+  { key: "",     label: "All sources" },
+  { key: "APP",  label: "App" },
+  { key: "FORM", label: "Paper form" },
+] as const;
 
 function fmtWhen(iso?: string | null) {
   if (!iso) return "—";
@@ -83,10 +94,12 @@ function fmtWhen(iso?: string | null) {
 }
 
 export function ProxiesSection({
-  eventId, canMark, resolutions = [],
+  eventId, canMark, canEnterForms = false, resolutions = [],
 }: {
   eventId: string;
   canMark: boolean;
+  /** CLIENT_ADMIN / ADMIN / EVENT_MANAGER — enter, correct and remove paper proxy forms. */
+  canEnterForms?: boolean;
   /** Event's resolutions (from useVoteResults) — powers the bulk proxy-vote upload's resolution/candidate picker. */
   resolutions?: ResolutionResult[];
 }) {
@@ -96,6 +109,7 @@ export function ProxiesSection({
   const [tab]  = useUrlState("ptab", "ALL");
   const [page, setPage] = useUrlPageState("ppage");
   const [searchInput, setSearchInput, search] = useUrlSearchState("pq", 400, { ppage: null });
+  const [source] = useUrlState("psrc", "");
   const size = 20;
 
   const { data, isLoading, isFetching } = useEventProxies(eventId, {
@@ -103,7 +117,23 @@ export function ProxiesSection({
     status: tab === "ALL" ? "" : tab,
     page,
     size,
+    source,
   });
+  const deleteForm = useDeleteProxyForm();
+  const [formOpen, setFormOpen]     = useState(false);
+  const [formEditing, setFormEditing] = useState<EventProxy | null>(null);
+  const [exporting, setExporting]   = useState(false);
+
+  function openNewForm()            { setFormEditing(null); setFormOpen(true); }
+  function openEditForm(p: EventProxy) { setFormEditing(p); setFormOpen(true); }
+  function confirmRemoveForm(p: EventProxy) {
+    popup.confirm(
+      "Remove this proxy form?",
+      `${p.grantorName}'s form (proxy: ${p.proxyName}) will be removed. Their shares stop counting toward quorum through it.`,
+      () => deleteForm.mutate({ eventId, proxyId: p.id }),
+      undefined, "Remove form", "Cancel",
+    );
+  }
   const markMutation = useMarkProxyAttended();
   const unmarkMutation = useUnmarkProxyAttended();
   const uploadVotes   = useUploadProxyVotes();
@@ -175,8 +205,21 @@ export function ProxiesSection({
         {data && (
           <span className="text-xs text-[hsl(var(--muted-foreground))]">
             {data.summary.total} total · {data.summary.pending} pending · {data.summary.attended} attended
+            {!!data.summary.forms && <> · {data.summary.forms} paper forms</>}
+            {!!data.summary.superseded && <> · {data.summary.superseded} superseded</>}
           </span>
         )}
+        {canEnterForms && (
+          <Button size="sm" className="h-7 gap-1.5 text-xs" onClick={openNewForm}>
+            <FilePlus2 className="h-3.5 w-3.5" /> Add proxy form
+          </Button>
+        )}
+        <Button
+          size="sm" variant="outline" className="h-7 gap-1.5 text-xs" disabled={exporting}
+          onClick={async () => { setExporting(true); await exportProxyRegister(eventId); setExporting(false); }}
+        >
+          {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Export
+        </Button>
         {canMark && resolutions.length > 0 && (
           <Button
             size="sm" variant="outline" className="h-7 gap-1.5 text-xs"
@@ -192,7 +235,7 @@ export function ProxiesSection({
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search proxy, grantor, email…"
+            placeholder="Search proxy, holder, CHN, form ref…"
             className="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] w-56 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
           />
         </div>
@@ -319,6 +362,14 @@ export function ProxiesSection({
           </button>
         ))}
         {isFetching && !isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-[hsl(var(--muted-foreground))]" />}
+        <NativeSelect
+          value={source}
+          onChange={(e) => writeParams({ psrc: e.target.value || null, ppage: null })}
+          className="h-7 text-xs" wrapperClassName="ml-auto"
+          aria-label="Filter by source"
+        >
+          {SOURCE_FILTERS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+        </NativeSelect>
       </div>
 
       {/* Table */}
@@ -338,17 +389,29 @@ export function ProxiesSection({
                 <th className="px-5 py-2.5 font-semibold">Proxy</th>
                 <th className="px-3 py-2.5 font-semibold">On behalf of</th>
                 <th className="px-3 py-2.5 font-semibold text-right">Shares</th>
-                <th className="px-3 py-2.5 font-semibold">Assigned</th>
+                <th className="px-3 py-2.5 font-semibold">Source</th>
+                <th className="px-3 py-2.5 font-semibold">Lodged</th>
                 <th className="px-3 py-2.5 font-semibold">Proxy Code</th>
                 <th className="px-3 py-2.5 font-semibold">Status</th>
-                {canMark && <th className="px-5 py-2.5" />}
+                {(canMark || canEnterForms) && <th className="px-5 py-2.5" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-[hsl(var(--border))]">
-              {(data?.proxies ?? []).map((p) => (
-                <tr key={p.id}>
+              {(data?.proxies ?? []).map((p) => {
+                const isForm = p.source === "FORM";
+                const superseded = p.status === "SUPERSEDED";
+                // A form's attendance comes from the event being LIVE, not its status.
+                // The holder covers the holding themselves (registered / walk-in): the form is on file but adds nothing.
+                const coveredByHolder = !superseded && (p.countedVia === "REGISTERED" || p.countedVia === "WALK_IN");
+                const statusKey = superseded ? "SUPERSEDED" : coveredByHolder ? "SUPERSEDED" : isForm ? "LODGED" : p.status;
+                const statusLabel = superseded ? "Superseded" : coveredByHolder ? "On file" : isForm ? "Lodged" : p.status.charAt(0) + p.status.slice(1).toLowerCase();
+                return (
+                <tr key={p.id} className={superseded ? "opacity-60" : undefined}>
                   <td className="px-5 py-3">
-                    <p className="font-medium text-[hsl(var(--foreground))]">{p.proxyName}</p>
+                    <p className="font-medium text-[hsl(var(--foreground))] inline-flex items-center gap-1.5">
+                      {p.proxyType === "CHAIRMAN" && <Gavel className="h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />}
+                      {p.proxyName}
+                    </p>
                     <p className="text-xs text-[hsl(var(--muted-foreground))]">
                       {[p.proxyEmail, p.proxyPhone].filter(Boolean).join(" · ")}
                     </p>
@@ -358,11 +421,24 @@ export function ProxiesSection({
                     {p.grantorEmail && (
                       <p className="text-xs text-[hsl(var(--muted-foreground))]">{p.grantorEmail}</p>
                     )}
+                    {p.chn && <p className="text-xs text-[hsl(var(--muted-foreground))] font-mono truncate max-w-[220px]" title={p.chn}>CHN {p.chn}</p>}
                   </td>
-                  <td className="px-3 py-3 text-right tabular-nums text-[hsl(var(--foreground))]">
+                  <td
+                    className={`px-3 py-3 text-right tabular-nums ${coveredByHolder ? "text-[hsl(var(--muted-foreground))]" : "text-[hsl(var(--foreground))]"}`}
+                    title={coveredByHolder ? "Counted once, as the shareholder. Not added again through this proxy." : undefined}
+                  >
                     {p.sharesRepresented != null ? p.sharesRepresented.toLocaleString() : "—"}
                   </td>
-                  <td className="px-3 py-3 text-xs text-[hsl(var(--muted-foreground))]">{fmtWhen(p.assignedAt)}</td>
+                  <td className="px-3 py-3">
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${isForm ? "bg-violet-100 text-violet-700" : "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"}`}>
+                      {isForm ? "Paper form" : "App"}
+                    </span>
+                    {isForm && p.formReference && <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5 font-mono">{p.formReference}</p>}
+                  </td>
+                  <td className="px-3 py-3 text-xs text-[hsl(var(--muted-foreground))]">
+                    {fmtWhen(isForm ? (p.enteredAt ?? p.assignedAt) : p.assignedAt)}
+                    {isForm && p.enteredBy && <p className="text-[10px] mt-0.5">by {p.enteredBy}</p>}
+                  </td>
                   <td className="px-3 py-3">
                     {p.proxyCode
                       ? <CopyableCode code={p.proxyCode} />
@@ -370,17 +446,46 @@ export function ProxiesSection({
                     }
                   </td>
                   <td className="px-3 py-3">
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[p.status] ?? "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"}`}>
-                      {p.status === "ATTENDED" && <CheckCircle2 className="h-3 w-3" />}
-                      {p.status.charAt(0) + p.status.slice(1).toLowerCase()}
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[statusKey] ?? "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"}`}
+                      title={superseded ? "Replaced by a paper proxy form. No longer counts." : isForm ? "Counts toward quorum now, and as checked in once the event is live." : undefined}
+                    >
+                      {p.status === "ATTENDED" && !isForm && <CheckCircle2 className="h-3 w-3" />}
+                      {statusLabel}
                     </span>
+                    {superseded && p.supersededAt && (
+                      <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5">by paper form · {fmtWhen(p.supersededAt)}</p>
+                    )}
+                    {coveredByHolder && (
+                      <p
+                        className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5"
+                        title="The shareholder is registered or checked in, so they count as themselves. This proxy adds nothing to quorum and can't vote resolutions the holder voted."
+                      >
+                        Counted as holder{p.countedVia === "WALK_IN" ? " (walk-in)" : ""}
+                        {!!p.holderVotedResolutions && <> · holder voted {p.holderVotedResolutions}</>}
+                      </p>
+                    )}
                     {p.status === "ATTENDED" && p.attendedAt && (
                       <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5">{fmtWhen(p.attendedAt)}</p>
                     )}
                   </td>
-                  {canMark && (
-                    <td className="px-5 py-3 text-right">
-                      {p.status !== "ATTENDED" && (
+                  {(canMark || canEnterForms) && (
+                    <td className="px-5 py-3 text-right whitespace-nowrap">
+                      {isForm && (
+                        <div className="inline-flex items-center gap-1">
+                          {canEnterForms && (
+                            <>
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEditForm(p)} title="Correct this form">
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 hover:text-red-600 hover:bg-red-50" disabled={deleteForm.isPending} onClick={() => confirmRemoveForm(p)} title="Remove this form">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                      {canMark && !isForm && !superseded && p.status !== "ATTENDED" && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -391,7 +496,7 @@ export function ProxiesSection({
                           Mark Attended
                         </Button>
                       )}
-                      {p.status === "ATTENDED" && (
+                      {canMark && !isForm && !superseded && p.status === "ATTENDED" && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -406,7 +511,8 @@ export function ProxiesSection({
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -428,6 +534,13 @@ export function ProxiesSection({
           </div>
         </div>
       )}
+      <ProxyFormDialog
+        eventId={eventId}
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        editing={formEditing}
+        onEditExisting={(existing) => { setFormEditing(existing); }}
+      />
     </Card>
   );
 }
