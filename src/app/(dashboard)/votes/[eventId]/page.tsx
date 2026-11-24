@@ -1036,7 +1036,7 @@ export default function VoteDetailPage({ params }: { params: Promise<{ eventId: 
 
         {/* ── Proxy Register (AGM milestone #5) ── */}
         <div data-tour="vote-proxies">
-          <ProxiesSection eventId={eventId} canMark={canMarkProxies} resolutions={resolutions} />
+          <ProxiesSection eventId={eventId} canMark={canMarkProxies} canEnterForms={canMarkProxies || roleForProxies === "event_manager"} resolutions={resolutions} />
         </div>
       </div>
     </div>

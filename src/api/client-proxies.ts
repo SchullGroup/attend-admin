@@ -8,6 +8,15 @@
  *   PATCH /api/v1/client/votes/{eventId}/proxies/{proxyId}/attended
  *         Roles: CLIENT_ADMIN / ADMIN only
  *
+ * Paper proxy forms (2026-11-20) — entered by staff for shareholders with no
+ * Attend account. CLIENT_ADMIN / ADMIN / EVENT_MANAGER write; VIEWER reads.
+ *   POST   …/proxies                      enter a form (409 PROXY_EXISTS)
+ *   PUT    …/proxies/{proxyId}            correct a form (replaces every field)
+ *   DELETE …/proxies/{proxyId}            remove a form
+ *   GET    …/proxies/export               proxy register .xlsx
+ * A form counts in the main quorum straight away, and as checked in once the
+ * event is LIVE. A form supersedes an app proxy for the same holding.
+ *
  * Notes from the backend handoff:
  * - status is only ever PENDING or ATTENDED in practice today; ACCEPTED is
  *   modeled for a future confirmation flow — don't build UI that assumes
@@ -22,7 +31,9 @@ import { popup } from "@/lib/popup-store";
 import { parseAndToastApiError } from "@/lib/api-error";
 import { ApiResponse } from "@/types/api";
 
-export type ProxyStatus = "PENDING" | "ACCEPTED" | "ATTENDED";
+export type ProxyStatus = "PENDING" | "ACCEPTED" | "ATTENDED" | "SUPERSEDED";
+export type ProxySource = "APP" | "FORM";
+export type ProxyType   = "CHAIRMAN" | "NAMED";
 
 export interface EventProxy {
   id:                string;
@@ -42,6 +53,23 @@ export interface EventProxy {
    * endpoint yet, so it's optional here and only rendered when actually present.
    */
   proxyCode?:        string;
+  // ── paper proxy forms (2026-11-20) ──
+  source:            ProxySource;
+  proxyType?:        ProxyType;
+  shareholderId?:    string;
+  chn?:              string | null;
+  units?:            number | null;
+  formReference?:    string | null;
+  notes?:            string | null;
+  enteredBy?:        string | null;
+  enteredAt?:        string | null;
+  editedBy?:         string | null;
+  editedAt?:         string | null;
+  supersededAt?:     string | null;
+  /** How quorum counts the holding (2026-11-23). REGISTERED / WALK_IN = the holder covers it; the form is on file but adds nothing. */
+  countedVia?:       "REGISTERED" | "WALK_IN" | "PROXY" | null;
+  /** Resolutions the holder voted on themselves — the proxy can't vote those. */
+  holderVotedResolutions?: number | null;
 }
 
 export interface ProxyTab {
@@ -53,7 +81,7 @@ export interface ProxyTab {
 export interface ProxyListResponse {
   eventId:    string;
   eventTitle: string;
-  summary:    { total: number; pending: number; accepted: number; attended: number };
+  summary:    { total: number; pending: number; accepted: number; attended: number; superseded?: number; forms?: number };
   tabs:       ProxyTab[];
   totalCount: number;
   page:       number;
@@ -74,6 +102,20 @@ function normalize(raw: any): ProxyListResponse {
     assignedAt:        p?.assignedAt ?? undefined,
     attendedAt:        p?.attendedAt ?? null,
     proxyCode:         p?.proxyCode ?? undefined,
+    source:            (String(p?.source ?? "APP").toUpperCase() as ProxySource),
+    proxyType:         p?.proxyType ?? undefined,
+    shareholderId:     p?.shareholderId ?? undefined,
+    chn:               p?.chn ?? null,
+    units:             p?.units ?? null,
+    formReference:     p?.formReference ?? null,
+    notes:             p?.notes ?? null,
+    enteredBy:         p?.enteredBy ?? null,
+    enteredAt:         p?.enteredAt ?? null,
+    editedBy:          p?.editedBy ?? null,
+    editedAt:          p?.editedAt ?? null,
+    supersededAt:      p?.supersededAt ?? null,
+    countedVia:        p?.countedVia ?? null,
+    holderVotedResolutions: p?.holderVotedResolutions ?? null,
   }));
   return {
     eventId:    raw?.eventId ?? "",
@@ -88,20 +130,22 @@ function normalize(raw: any): ProxyListResponse {
 }
 
 export const proxyKeys = {
-  list: (eventId: string, search: string, status: string, page: number, size: number) =>
-    ["proxies", "list", eventId, { search, status, page, size }] as const,
+  list: (eventId: string, search: string, status: string, page: number, size: number, source = "") =>
+    ["proxies", "list", eventId, { search, status, page, size, source }] as const,
 };
 
 export function useEventProxies(
   eventId: string | null | undefined,
-  { search = "", status = "", page = 0, size = 20 }: { search?: string; status?: string; page?: number; size?: number } = {},
+  { search = "", status = "", page = 0, size = 20, source = "", enabled = true }:
+    { search?: string; status?: string; page?: number; size?: number; source?: string; enabled?: boolean } = {},
 ) {
   return useQuery({
-    queryKey: proxyKeys.list(eventId ?? "", search, status, page, size),
+    queryKey: proxyKeys.list(eventId ?? "", search, status, page, size, source),
     queryFn: async () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (status && status !== "ALL") params.set("status", status);
+      if (source) params.set("source", source);
       params.set("page", String(page));
       params.set("size", String(size));
       const res = await apiClient.get<ApiResponse<any>>(
@@ -109,7 +153,7 @@ export function useEventProxies(
       );
       return normalize(res.data.data);
     },
-    enabled: !!eventId,
+    enabled: !!eventId && enabled,
     staleTime: 10_000,
     placeholderData: (prev) => prev, // keep the table stable while refetching
   });
@@ -209,12 +253,103 @@ export function useUploadProxyVotes() {
       queryClient.invalidateQueries({ queryKey: ["clientVotes", "results", eventId] });
       const recorded = data?.recorded ?? 0;
       const skipped  = data?.skipped ?? 0;
+      // Rows for a holding that already has a counted vote are skipped, not
+      // overwritten (2026-11-23) — say why, so staff don't re-upload them.
+      const reasons  = (data?.errors ?? []).slice(0, 3).join(" ");
+      const more     = (data?.errors?.length ?? 0) > 3 ? ` …and ${(data!.errors.length - 3)} more.` : "";
       popup.success(
         "Proxy Votes Recorded",
-        `${recorded} vote${recorded === 1 ? "" : "s"} recorded${skipped ? ` · ${skipped} skipped` : ""}.`,
-        3500
+        `${recorded} vote${recorded === 1 ? "" : "s"} recorded${skipped ? ` · ${skipped} skipped` : ""}.` +
+          (skipped && reasons ? ` ${reasons}${more}` : ""),
+        skipped ? 8000 : 3500
       );
     },
     onError: (e) => parseAndToastApiError(e, "Failed to upload proxy votes."),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Paper proxy forms (2026-11-20)
+// ---------------------------------------------------------------------------
+
+export interface ProxyFormInput {
+  shareholderId:  string;
+  proxyType:      ProxyType;
+  proxy?:         { fullName: string; email?: string; phone?: string };
+  formReference?: string;
+  notes?:         string;
+}
+
+export interface ProxyFormSaved {
+  message?:   string;
+  proxy:      EventProxy;
+  superseded: { proxyId: string; proxyName: string; source: "APP" } | null;
+}
+
+function cleanForm(body: ProxyFormInput) {
+  const opt = (v?: string) => (v && v.trim() ? v.trim() : undefined);
+  return {
+    shareholderId: body.shareholderId,
+    proxyType:     body.proxyType,
+    proxy: body.proxyType === "NAMED" && body.proxy
+      ? { fullName: body.proxy.fullName.trim(), email: opt(body.proxy.email)?.toLowerCase(), phone: opt(body.proxy.phone) }
+      : undefined,
+    formReference: opt(body.formReference),
+    notes:         opt(body.notes),
+  };
+}
+
+/** Create (no proxyId) or correct (with proxyId) a paper proxy form. Errors are left to the caller (409 PROXY_EXISTS carries data.proxy). */
+export function useSaveProxyForm() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, proxyId, body }: { eventId: string; proxyId?: string; body: ProxyFormInput }): Promise<ProxyFormSaved> => {
+      const url = `/api/v1/client/votes/${eventId}/proxies${proxyId ? `/${proxyId}` : ""}`;
+      const res = proxyId
+        ? await apiClient.put<ApiResponse<any>>(url, cleanForm(body))
+        : await apiClient.post<ApiResponse<any>>(url, cleanForm(body));
+      const d = (res.data as any)?.data ?? {};
+      return {
+        message:    (res.data as any)?.message,
+        proxy:      normalize({ proxies: [d.proxy ?? d] }).proxies[0],
+        superseded: d.superseded ?? null,
+      };
+    },
+    onSettled: (_d, _e, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["proxies", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["live", "detail", eventId] });
+    },
+  });
+}
+
+export function useDeleteProxyForm() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ eventId, proxyId }: { eventId: string; proxyId: string }) => {
+      await apiClient.delete(`/api/v1/client/votes/${eventId}/proxies/${proxyId}`);
+    },
+    onSuccess: (_d, { eventId }) => {
+      queryClient.invalidateQueries({ queryKey: ["proxies", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["live", "detail", eventId] });
+      popup.success("Proxy Form Removed", "Its shares no longer count toward quorum through this form.", 2500);
+    },
+    onError: (e) => parseAndToastApiError(e, "Failed to remove the proxy form."),
+  });
+}
+
+export async function exportProxyRegister(eventId: string) {
+  try {
+    const res = await apiClient.get<Blob>(`/api/v1/client/votes/${eventId}/proxies/export`, { responseType: "blob" });
+    const cd: string | undefined = (res.headers as any)["content-disposition"];
+    const encoded = cd?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    const plain   = cd?.match(/filename="?([^";]+)"?/i)?.[1];
+    const filename = decodeURIComponent(encoded ?? plain ?? `proxy-register-${eventId}.xlsx`);
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) {
+    parseAndToastApiError(e, "Couldn't export the proxy register.");
+  }
 }
